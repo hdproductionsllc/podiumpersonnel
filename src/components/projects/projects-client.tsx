@@ -187,7 +187,22 @@ export function ProjectsClient({
   // Expandable row state
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
+  // Filter state
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+
   const canManage = userRole === 'owner' || userRole === 'admin'
+
+  const hasFilters = search !== '' || statusFilter !== ''
+
+  const filteredProjects = projects.filter((p) => {
+    if (search) {
+      const q = search.toLowerCase()
+      if (!p.name.toLowerCase().includes(q)) return false
+    }
+    if (statusFilter && p.status !== statusFilter) return false
+    return true
+  })
 
   function toggleRow(projectId: string) {
     setExpandedRows((prev) => {
@@ -262,6 +277,41 @@ export function ProjectsClient({
 
       <Separator />
 
+      {projects.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="text"
+            placeholder="Search projects..."
+            className="rounded-md border bg-background px-3 py-2 text-sm w-64"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <select
+            className="rounded-md border bg-background px-3 py-2 text-sm"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="active">Active</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          {hasFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setSearch(''); setStatusFilter('') }}
+            >
+              Clear
+            </Button>
+          )}
+          <span className="text-xs text-muted-foreground ml-auto">
+            {filteredProjects.length} of {projects.length} projects
+          </span>
+        </div>
+      )}
+
       {projects.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <p className="text-muted-foreground mb-4">
@@ -270,6 +320,10 @@ export function ProjectsClient({
           {canManage && (
             <Button onClick={handleAddProject}>Add Your First Project</Button>
           )}
+        </div>
+      ) : filteredProjects.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <p className="text-muted-foreground">No projects match your filters.</p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-md border">
@@ -287,7 +341,7 @@ export function ProjectsClient({
               </tr>
             </thead>
             <tbody className="divide-y">
-              {projects.map((project) => {
+              {filteredProjects.map((project) => {
                 const isExpanded = expandedRows.has(project.id)
                 return (
                   <Fragment key={project.id}>

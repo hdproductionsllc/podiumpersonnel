@@ -70,7 +70,32 @@ export function MusiciansClient({
   const [deletingSchedule, setDeletingSchedule] = useState<CompetingSchedule | null>(null)
   const [scheduleMusician, setScheduleMusician] = useState<MusicianWithInstruments | null>(null)
 
+  // Filter state
+  const [search, setSearch] = useState('')
+  const [instrumentFilter, setInstrumentFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'' | 'active' | 'inactive'>('')
+
   const canManage = userRole === 'owner' || userRole === 'admin'
+
+  const hasFilters = search !== '' || instrumentFilter !== '' || statusFilter !== ''
+
+  const filteredMusicians = musicians.filter((m) => {
+    if (search) {
+      const q = search.toLowerCase()
+      const nameMatch = `${m.first_name} ${m.last_name}`.toLowerCase().includes(q)
+        || `${m.last_name}, ${m.first_name}`.toLowerCase().includes(q)
+      const emailMatch = m.email?.toLowerCase().includes(q)
+      if (!nameMatch && !emailMatch) return false
+    }
+    if (instrumentFilter) {
+      if (!m.musician_instruments.some((mi) => mi.instrument_id === instrumentFilter)) return false
+    }
+    if (statusFilter) {
+      if (statusFilter === 'active' && !m.is_active) return false
+      if (statusFilter === 'inactive' && m.is_active) return false
+    }
+    return true
+  })
 
   function toggleRow(musicianId: string) {
     setExpandedRows((prev) => {
@@ -148,6 +173,49 @@ export function MusiciansClient({
 
       <Separator />
 
+      {musicians.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="text"
+            placeholder="Search by name or email..."
+            className="rounded-md border bg-background px-3 py-2 text-sm w-64"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <select
+            className="rounded-md border bg-background px-3 py-2 text-sm"
+            value={instrumentFilter}
+            onChange={(e) => setInstrumentFilter(e.target.value)}
+          >
+            <option value="">All instruments</option>
+            {instruments.map((inst) => (
+              <option key={inst.id} value={inst.id}>{inst.name}</option>
+            ))}
+          </select>
+          <select
+            className="rounded-md border bg-background px-3 py-2 text-sm"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as '' | 'active' | 'inactive')}
+          >
+            <option value="">All statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          {hasFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setSearch(''); setInstrumentFilter(''); setStatusFilter('') }}
+            >
+              Clear
+            </Button>
+          )}
+          <span className="text-xs text-muted-foreground ml-auto">
+            {filteredMusicians.length} of {musicians.length} musicians
+          </span>
+        </div>
+      )}
+
       {musicians.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <p className="text-muted-foreground mb-4">
@@ -156,6 +224,10 @@ export function MusiciansClient({
           {canManage && (
             <Button onClick={handleAdd}>Add Your First Musician</Button>
           )}
+        </div>
+      ) : filteredMusicians.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <p className="text-muted-foreground">No musicians match your filters.</p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-md border">
@@ -174,7 +246,7 @@ export function MusiciansClient({
               </tr>
             </thead>
             <tbody className="divide-y">
-              {musicians.map((musician) => {
+              {filteredMusicians.map((musician) => {
                 const isExpanded = expandedRows.has(musician.id)
                 const upcomingSchedules = (musician.competing_schedules || [])
                   .filter((s) => new Date(s.end_time) >= new Date())

@@ -28,10 +28,25 @@ export function InstrumentsClient({
   const [editingInstrument, setEditingInstrument] = useState<Instrument | null>(null)
   const [deletingInstrument, setDeletingInstrument] = useState<Instrument | null>(null)
 
+  // Filter state
+  const [search, setSearch] = useState('')
+  const [sectionFilter, setSectionFilter] = useState('')
+
   const canManage = userRole === 'owner' || userRole === 'admin'
 
+  const hasFilters = search !== '' || sectionFilter !== ''
+
+  const filteredInstruments = instruments.filter((i) => {
+    if (search) {
+      const q = search.toLowerCase()
+      if (!i.name.toLowerCase().includes(q) && !(i.abbreviation || '').toLowerCase().includes(q)) return false
+    }
+    if (sectionFilter && (i.section || 'other') !== sectionFilter) return false
+    return true
+  })
+
   const grouped = INSTRUMENT_SECTIONS.reduce((acc, section) => {
-    acc[section] = instruments.filter(
+    acc[section] = filteredInstruments.filter(
       (i) => (i.section || 'other') === section
     )
     return acc
@@ -84,6 +99,40 @@ export function InstrumentsClient({
 
       <Separator />
 
+      {instruments.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="text"
+            placeholder="Search instruments..."
+            className="rounded-md border bg-background px-3 py-2 text-sm w-64"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <select
+            className="rounded-md border bg-background px-3 py-2 text-sm"
+            value={sectionFilter}
+            onChange={(e) => setSectionFilter(e.target.value)}
+          >
+            <option value="">All sections</option>
+            {INSTRUMENT_SECTIONS.map((s) => (
+              <option key={s} value={s}>{SECTION_LABELS[s]}</option>
+            ))}
+          </select>
+          {hasFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setSearch(''); setSectionFilter('') }}
+            >
+              Clear
+            </Button>
+          )}
+          <span className="text-xs text-muted-foreground ml-auto">
+            {filteredInstruments.length} of {instruments.length} instruments
+          </span>
+        </div>
+      )}
+
       {instruments.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <p className="text-muted-foreground mb-4">
@@ -95,6 +144,10 @@ export function InstrumentsClient({
               onSuccess={handleSuccess}
             />
           )}
+        </div>
+      ) : filteredInstruments.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <p className="text-muted-foreground">No instruments match your filters.</p>
         </div>
       ) : (
         <div className="space-y-8">

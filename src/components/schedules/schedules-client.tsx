@@ -35,6 +35,21 @@ export function SchedulesClient({
   const [editingSchedule, setEditingSchedule] = useState<CompetingSchedule | null>(null)
   const [deletingSchedule, setDeletingSchedule] = useState<CompetingSchedule | null>(null)
 
+  // Filter state
+  const [search, setSearch] = useState('')
+  const [musicianFilter, setMusicianFilter] = useState('')
+
+  const hasFilters = search !== '' || musicianFilter !== ''
+
+  const filteredSchedules = schedules.filter((s) => {
+    if (search) {
+      const q = search.toLowerCase()
+      if (!s.title.toLowerCase().includes(q) && !(s.notes || '').toLowerCase().includes(q)) return false
+    }
+    if (musicianFilter && s.musician_id !== musicianFilter) return false
+    return true
+  })
+
   function handleAdd() {
     setEditingSchedule(null)
     setFormOpen(true)
@@ -59,7 +74,7 @@ export function SchedulesClient({
   }
 
   // Sort: upcoming first, then past
-  const sorted = [...schedules].sort(
+  const sorted = [...filteredSchedules].sort(
     (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
   )
 
@@ -83,6 +98,40 @@ export function SchedulesClient({
 
       <Separator />
 
+      {schedules.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="text"
+            placeholder="Search by title or notes..."
+            className="rounded-md border bg-background px-3 py-2 text-sm w-64"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <select
+            className="rounded-md border bg-background px-3 py-2 text-sm"
+            value={musicianFilter}
+            onChange={(e) => setMusicianFilter(e.target.value)}
+          >
+            <option value="">All musicians</option>
+            {musicians.map((m) => (
+              <option key={m.id} value={m.id}>{m.last_name}, {m.first_name}</option>
+            ))}
+          </select>
+          {hasFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setSearch(''); setMusicianFilter('') }}
+            >
+              Clear
+            </Button>
+          )}
+          <span className="text-xs text-muted-foreground ml-auto">
+            {filteredSchedules.length} of {schedules.length} entries
+          </span>
+        </div>
+      )}
+
       {schedules.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <p className="text-muted-foreground mb-4">
@@ -91,6 +140,10 @@ export function SchedulesClient({
           {canManage && (
             <Button onClick={handleAdd}>Add First Entry</Button>
           )}
+        </div>
+      ) : filteredSchedules.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <p className="text-muted-foreground">No schedule entries match your filters.</p>
         </div>
       ) : (
         <div className="space-y-6">

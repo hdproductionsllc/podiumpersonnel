@@ -61,7 +61,21 @@ export function BooksClient({
   const [editingBook, setEditingBook] = useState<BookWithEntries | null>(null)
   const [deletingBook, setDeletingBook] = useState<BookWithEntries | null>(null)
 
+  // Filter state
+  const [search, setSearch] = useState('')
+
   const canManage = userRole === 'owner' || userRole === 'admin'
+
+  const hasFilters = search !== ''
+
+  const filteredBooks = books.filter((b) => {
+    if (search) {
+      const q = search.toLowerCase()
+      if (!b.name.toLowerCase().includes(q) && !(b.description || '').toLowerCase().includes(q)) return false
+    }
+    return true
+  })
+
   const selectedBook = books.find((b) => b.id === selectedBookId) ?? null
 
   function handleAdd() {
@@ -110,6 +124,30 @@ export function BooksClient({
 
       <Separator />
 
+      {books.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="text"
+            placeholder="Search books..."
+            className="rounded-md border bg-background px-3 py-2 text-sm w-64"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {hasFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSearch('')}
+            >
+              Clear
+            </Button>
+          )}
+          <span className="text-xs text-muted-foreground ml-auto">
+            {filteredBooks.length} of {books.length} books
+          </span>
+        </div>
+      )}
+
       {books.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <p className="text-muted-foreground mb-4">
@@ -118,6 +156,10 @@ export function BooksClient({
           {canManage && (
             <Button onClick={handleAdd}>Add Your First Book</Button>
           )}
+        </div>
+      ) : filteredBooks.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <p className="text-muted-foreground">No books match your search.</p>
         </div>
       ) : (
         <>
@@ -135,7 +177,7 @@ export function BooksClient({
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {books.map((book) => (
+                {filteredBooks.map((book) => (
                   <tr
                     key={book.id}
                     className={`hover:bg-muted/50 cursor-pointer ${
