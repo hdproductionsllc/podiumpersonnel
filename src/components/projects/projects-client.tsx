@@ -11,6 +11,8 @@ import { DeleteServiceDialog } from './delete-service-dialog'
 import { ProjectPositions } from './project-positions'
 import { ProjectOffers } from './project-offers'
 import { SubRequests } from './sub-requests'
+import { ConflictsSummary } from './conflicts-summary'
+import { detectConflicts } from './project-positions'
 import type { PositionJoined, BookForImport } from './project-positions'
 import type { MusicianForOffer } from './send-offer-dialog'
 import type { Project, Service } from '@/types'
@@ -377,6 +379,9 @@ export function ProjectsClient({
                             musicians={musicians}
                             canManage={canManage}
                             onRequestChange={handleSuccess}
+                          />
+                          <ConflictsSummary
+                            conflicts={detectConflicts(project.project_positions, musicians, project.services)}
                           />
                         </td>
                       </tr>

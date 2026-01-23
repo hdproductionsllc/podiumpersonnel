@@ -62,12 +62,13 @@ export default async function ProjectsPage() {
     .eq('organization_id', organization!.id)
     .order('name', { ascending: true })
 
-  // Fetch active musicians with instrument assignments for offer dialog
+  // Fetch active musicians with instrument assignments and schedules for offer dialog + conflict detection
   const { data: musicians } = await supabase
     .from('musicians')
     .select(`
       id, first_name, last_name,
-      musician_instruments(instrument_id)
+      musician_instruments(instrument_id),
+      competing_schedules(id, title, start_time, end_time)
     `)
     .eq('organization_id', organization!.id)
     .eq('is_active', true)

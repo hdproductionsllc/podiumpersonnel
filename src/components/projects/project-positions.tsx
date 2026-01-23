@@ -4,7 +4,7 @@ import { useState, Fragment } from 'react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { ImportFromBookDialog } from './import-from-book-dialog'
-import { SendOfferDialog, type MusicianForOffer } from './send-offer-dialog'
+import { SendOfferDialog, type MusicianForOffer, type MusicianScheduleEntry } from './send-offer-dialog'
 import { RequestSubDialog } from './request-sub-dialog'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
 import type { Service } from '@/types'
@@ -78,6 +78,45 @@ const STATUS_LABELS: Record<string, string> = {
   offered: 'Offered',
   confirmed: 'Confirmed',
   declined: 'Declined',
+}
+
+export type ConflictInfo = {
+  musicianName: string
+  positionLabel: string
+  schedule: MusicianScheduleEntry
+  service: Service
+}
+
+export function detectConflicts(
+  positions: PositionJoined[],
+  musicians: MusicianForOffer[],
+  services: Service[]
+): ConflictInfo[] {
+  const conflicts: ConflictInfo[] = []
+  for (const position of positions) {
+    if (!position.musician_id) continue
+    const musician = musicians.find((m) => m.id === position.musician_id)
+    if (!musician || !musician.competing_schedules) continue
+    for (const schedule of musician.competing_schedules) {
+      const schedStart = new Date(schedule.start_time).getTime()
+      const schedEnd = new Date(schedule.end_time).getTime()
+      for (const service of services) {
+        const svcStart = new Date(service.start_time).getTime()
+        const svcEnd = service.end_time
+          ? new Date(service.end_time).getTime()
+          : svcStart + 3600000
+        if (schedStart < svcEnd && schedEnd > svcStart) {
+          conflicts.push({
+            musicianName: `${musician.first_name} ${musician.last_name}`,
+            positionLabel: `${position.instrument?.name} ${position.chair_number}`,
+            schedule,
+            service,
+          })
+        }
+      }
+    }
+  }
+  return conflicts
 }
 
 export function ProjectPositions({
@@ -220,7 +259,33 @@ export function ProjectPositions({
                         <td className="px-3 py-2 text-muted-foreground">{position.chair_number}</td>
                         <td className="px-3 py-2">
                           {position.musician
-                            ? `${position.musician.first_name} ${position.musician.last_name}`
+                            ? (() => {
+                                const m = musicians.find((mu) => mu.id === position.musician_id)
+                                const hasConflict = m?.competing_schedules?.some((sched) => {
+                                  const schedStart = new Date(sched.start_time).getTime()
+                                  const schedEnd = new Date(sched.end_time).getTime()
+                                  return services.some((svc) => {
+                                    const svcStart = new Date(svc.start_time).getTime()
+                                    const svcEnd = svc.end_time ? new Date(svc.end_time).getTime() : svcStart + 3600000
+                                    return schedStart < svcEnd && schedEnd > svcStart
+                                  })
+                                })
+                                return (
+                                  <span className="flex items-center gap-1">
+                                    {position.musician.first_name} {position.musician.last_name}
+                                    {hasConflict && (
+                                      <span
+                                        className="inline-flex items-center text-amber-600 dark:text-amber-400"
+                                        title="Schedule conflict detected"
+                                      >
+                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                                        </svg>
+                                      </span>
+                                    )}
+                                  </span>
+                                )
+                              })()
                             : <span className="text-muted-foreground italic">Unassigned</span>
                           }
                         </td>

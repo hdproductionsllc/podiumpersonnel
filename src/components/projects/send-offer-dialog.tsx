@@ -4,11 +4,19 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 
+export type MusicianScheduleEntry = {
+  id: string
+  title: string
+  start_time: string
+  end_time: string
+}
+
 export type MusicianForOffer = {
   id: string
   first_name: string
   last_name: string
   musician_instruments: { instrument_id: string }[]
+  competing_schedules: MusicianScheduleEntry[]
 }
 
 interface SendOfferDialogProps {
