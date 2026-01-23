@@ -27,7 +27,7 @@ export default async function ProjectsPage() {
     slug: string
   } | null
 
-  // Fetch projects with their services and positions
+  // Fetch projects with their services, positions, and offers
   const { data: projects } = await supabase
     .from('projects')
     .select(`
@@ -42,7 +42,8 @@ export default async function ProjectsPage() {
         status,
         notes,
         instrument:instruments(id, name, section, sort_order),
-        musician:musicians(id, first_name, last_name)
+        musician:musicians(id, first_name, last_name),
+        contract_offers(id, musician_id, status, sent_at, expires_at, responded_at, token, musician:musicians(id, first_name, last_name))
       )
     `)
     .eq('organization_id', organization!.id)
@@ -60,10 +61,23 @@ export default async function ProjectsPage() {
     .eq('organization_id', organization!.id)
     .order('name', { ascending: true })
 
+  // Fetch active musicians with instrument assignments for offer dialog
+  const { data: musicians } = await supabase
+    .from('musicians')
+    .select(`
+      id, first_name, last_name,
+      musician_instruments(instrument_id)
+    `)
+    .eq('organization_id', organization!.id)
+    .eq('is_active', true)
+    .order('last_name', { ascending: true })
+    .order('first_name', { ascending: true })
+
   return (
     <ProjectsClient
       projects={(projects as any) ?? []}
       books={(books as any) ?? []}
+      musicians={(musicians as any) ?? []}
       organizationId={organization!.id}
       userRole={membership!.role}
     />

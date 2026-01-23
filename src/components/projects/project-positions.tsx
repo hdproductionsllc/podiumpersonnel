@@ -4,7 +4,19 @@ import { useState, Fragment } from 'react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { ImportFromBookDialog } from './import-from-book-dialog'
+import { SendOfferDialog, type MusicianForOffer } from './send-offer-dialog'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
+
+export type PositionOfferJoined = {
+  id: string
+  musician_id: string
+  status: string
+  sent_at: string | null
+  expires_at: string | null
+  responded_at: string | null
+  token: string
+  musician: { id: string; first_name: string; last_name: string }
+}
 
 export type PositionJoined = {
   id: string
@@ -16,6 +28,7 @@ export type PositionJoined = {
   notes: string | null
   instrument: { id: string; name: string; section: string | null; sort_order: number }
   musician: { id: string; first_name: string; last_name: string } | null
+  contract_offers: PositionOfferJoined[]
 }
 
 export type BookForImport = {
@@ -32,6 +45,7 @@ interface ProjectPositionsProps {
   positions: PositionJoined[]
   projectId: string
   books: BookForImport[]
+  musicians: MusicianForOffer[]
   canManage: boolean
   onPositionChange: () => void
 }
@@ -54,11 +68,24 @@ export function ProjectPositions({
   positions,
   projectId,
   books,
+  musicians,
   canManage,
   onPositionChange,
 }: ProjectPositionsProps) {
   const [importOpen, setImportOpen] = useState(false)
   const [clearing, setClearing] = useState(false)
+  const [offerPositionId, setOfferPositionId] = useState<string | null>(null)
+  const [offerInstrumentId, setOfferInstrumentId] = useState<string | null>(null)
+  const [offerExistingIds, setOfferExistingIds] = useState<string[]>([])
+
+  function handleSendOffer(position: PositionJoined) {
+    const existingMusicianIds = position.contract_offers
+      .filter((o) => o.status === 'pending' || o.status === 'viewed' || o.status === 'accepted')
+      .map((o) => o.musician_id)
+    setOfferPositionId(position.id)
+    setOfferInstrumentId(position.instrument_id)
+    setOfferExistingIds(existingMusicianIds)
+  }
 
   // Group positions by section
   const grouped = INSTRUMENT_SECTIONS.reduce((acc, section) => {
@@ -200,6 +227,15 @@ export function ProjectPositions({
                         {canManage && (
                           <td className="px-3 py-2 text-right">
                             <div className="flex items-center justify-end gap-1">
+                              {position.status !== 'confirmed' && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleSendOffer(position)}
+                                >
+                                  Offer
+                                </Button>
+                              )}
                               {position.musician_id && (
                                 <Button
                                   variant="ghost"
@@ -235,6 +271,16 @@ export function ProjectPositions({
         onOpenChange={setImportOpen}
         books={books}
         projectId={projectId}
+        onSuccess={onPositionChange}
+      />
+
+      <SendOfferDialog
+        open={offerPositionId !== null}
+        onOpenChange={(open) => { if (!open) { setOfferPositionId(null); setOfferInstrumentId(null); setOfferExistingIds([]) } }}
+        positionId={offerPositionId ?? ''}
+        instrumentId={offerInstrumentId ?? ''}
+        musicians={musicians}
+        existingOfferMusicianIds={offerExistingIds}
         onSuccess={onPositionChange}
       />
     </div>

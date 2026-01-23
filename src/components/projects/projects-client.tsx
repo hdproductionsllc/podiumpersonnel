@@ -9,7 +9,9 @@ import { DeleteProjectDialog } from './delete-project-dialog'
 import { ServiceFormDialog } from './service-form-dialog'
 import { DeleteServiceDialog } from './delete-service-dialog'
 import { ProjectPositions } from './project-positions'
+import { ProjectOffers } from './project-offers'
 import type { PositionJoined, BookForImport } from './project-positions'
+import type { MusicianForOffer } from './send-offer-dialog'
 import type { Project, Service } from '@/types'
 import {
   PROJECT_STATUS_LABELS,
@@ -26,6 +28,7 @@ export type ProjectWithServices = Project & {
 interface ProjectsClientProps {
   projects: ProjectWithServices[]
   books: BookForImport[]
+  musicians: MusicianForOffer[]
   organizationId: string
   userRole: string
 }
@@ -159,6 +162,7 @@ function ServicesList({
 export function ProjectsClient({
   projects,
   books,
+  musicians,
   organizationId,
   userRole,
 }: ProjectsClientProps) {
@@ -342,8 +346,21 @@ export function ProjectsClient({
                             positions={project.project_positions}
                             projectId={project.id}
                             books={books}
+                            musicians={musicians}
                             canManage={canManage}
                             onPositionChange={handleSuccess}
+                          />
+                          <ProjectOffers
+                            offers={project.project_positions.flatMap((p) =>
+                              (p.contract_offers || []).map((o) => ({
+                                ...o,
+                                project_position_id: p.id,
+                                position_instrument: p.instrument?.name ?? '',
+                                position_chair: p.chair_number,
+                              }))
+                            )}
+                            canManage={canManage}
+                            onOfferChange={handleSuccess}
                           />
                         </td>
                       </tr>
