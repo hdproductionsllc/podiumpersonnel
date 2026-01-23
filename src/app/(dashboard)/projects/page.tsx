@@ -27,20 +27,43 @@ export default async function ProjectsPage() {
     slug: string
   } | null
 
-  // Fetch projects with their services
+  // Fetch projects with their services and positions
   const { data: projects } = await supabase
     .from('projects')
     .select(`
       *,
-      services(*)
+      services(*),
+      project_positions(
+        id,
+        project_id,
+        instrument_id,
+        chair_number,
+        musician_id,
+        status,
+        notes,
+        instrument:instruments(id, name, section, sort_order),
+        musician:musicians(id, first_name, last_name)
+      )
     `)
     .eq('organization_id', organization!.id)
     .order('start_date', { ascending: false, nullsFirst: false })
     .order('name', { ascending: true })
 
+  // Fetch books with entries for import dialog
+  const { data: books } = await supabase
+    .from('books')
+    .select(`
+      id,
+      name,
+      book_entries(instrument_id, chair_number, musician_id)
+    `)
+    .eq('organization_id', organization!.id)
+    .order('name', { ascending: true })
+
   return (
     <ProjectsClient
       projects={(projects as any) ?? []}
+      books={(books as any) ?? []}
       organizationId={organization!.id}
       userRole={membership!.role}
     />

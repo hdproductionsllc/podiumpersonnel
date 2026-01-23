@@ -8,6 +8,8 @@ import { ProjectFormDialog } from './project-form-dialog'
 import { DeleteProjectDialog } from './delete-project-dialog'
 import { ServiceFormDialog } from './service-form-dialog'
 import { DeleteServiceDialog } from './delete-service-dialog'
+import { ProjectPositions } from './project-positions'
+import type { PositionJoined, BookForImport } from './project-positions'
 import type { Project, Service } from '@/types'
 import {
   PROJECT_STATUS_LABELS,
@@ -18,10 +20,12 @@ import {
 
 export type ProjectWithServices = Project & {
   services: Service[]
+  project_positions: PositionJoined[]
 }
 
 interface ProjectsClientProps {
   projects: ProjectWithServices[]
+  books: BookForImport[]
   organizationId: string
   userRole: string
 }
@@ -154,6 +158,7 @@ function ServicesList({
 
 export function ProjectsClient({
   projects,
+  books,
   organizationId,
   userRole,
 }: ProjectsClientProps) {
@@ -324,7 +329,7 @@ export function ProjectsClient({
 
                     {isExpanded && (
                       <tr>
-                        <td colSpan={colCount} className="bg-muted/20 px-4 py-4">
+                        <td colSpan={colCount} className="bg-muted/20 px-4 py-4 space-y-6">
                           <ServicesList
                             services={project.services}
                             projectId={project.id}
@@ -332,6 +337,13 @@ export function ProjectsClient({
                             onAddService={handleAddService}
                             onEditService={handleEditService}
                             onDeleteService={handleDeleteService}
+                          />
+                          <ProjectPositions
+                            positions={project.project_positions}
+                            projectId={project.id}
+                            books={books}
+                            canManage={canManage}
+                            onPositionChange={handleSuccess}
                           />
                         </td>
                       </tr>
