@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { ImportFromBookDialog } from './import-from-book-dialog'
 import { SendOfferDialog, type MusicianForOffer } from './send-offer-dialog'
+import { RequestSubDialog } from './request-sub-dialog'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
+import type { Service } from '@/types'
 
 export type PositionOfferJoined = {
   id: string
@@ -16,6 +18,18 @@ export type PositionOfferJoined = {
   responded_at: string | null
   token: string
   musician: { id: string; first_name: string; last_name: string }
+}
+
+export type PositionSubRequestJoined = {
+  id: string
+  requesting_musician_id: string
+  service_id: string | null
+  reason: string | null
+  status: string
+  substitute_musician_id: string | null
+  requesting_musician: { id: string; first_name: string; last_name: string }
+  substitute_musician: { id: string; first_name: string; last_name: string } | null
+  service: { id: string; name: string; start_time: string } | null
 }
 
 export type PositionJoined = {
@@ -29,6 +43,7 @@ export type PositionJoined = {
   instrument: { id: string; name: string; section: string | null; sort_order: number }
   musician: { id: string; first_name: string; last_name: string } | null
   contract_offers: PositionOfferJoined[]
+  substitution_requests: PositionSubRequestJoined[]
 }
 
 export type BookForImport = {
@@ -46,6 +61,7 @@ interface ProjectPositionsProps {
   projectId: string
   books: BookForImport[]
   musicians: MusicianForOffer[]
+  services: Service[]
   canManage: boolean
   onPositionChange: () => void
 }
@@ -69,6 +85,7 @@ export function ProjectPositions({
   projectId,
   books,
   musicians,
+  services,
   canManage,
   onPositionChange,
 }: ProjectPositionsProps) {
@@ -77,6 +94,7 @@ export function ProjectPositions({
   const [offerPositionId, setOfferPositionId] = useState<string | null>(null)
   const [offerInstrumentId, setOfferInstrumentId] = useState<string | null>(null)
   const [offerExistingIds, setOfferExistingIds] = useState<string[]>([])
+  const [subRequestPosition, setSubRequestPosition] = useState<PositionJoined | null>(null)
 
   function handleSendOffer(position: PositionJoined) {
     const existingMusicianIds = position.contract_offers
@@ -236,6 +254,15 @@ export function ProjectPositions({
                                   Offer
                                 </Button>
                               )}
+                              {position.status === 'confirmed' && position.musician_id && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setSubRequestPosition(position)}
+                                >
+                                  Sub
+                                </Button>
+                              )}
                               {position.musician_id && (
                                 <Button
                                   variant="ghost"
@@ -281,6 +308,16 @@ export function ProjectPositions({
         instrumentId={offerInstrumentId ?? ''}
         musicians={musicians}
         existingOfferMusicianIds={offerExistingIds}
+        onSuccess={onPositionChange}
+      />
+
+      <RequestSubDialog
+        open={subRequestPosition !== null}
+        onOpenChange={(open) => { if (!open) setSubRequestPosition(null) }}
+        positionId={subRequestPosition?.id ?? ''}
+        musicianId={subRequestPosition?.musician_id ?? ''}
+        musicianName={subRequestPosition?.musician ? `${subRequestPosition.musician.first_name} ${subRequestPosition.musician.last_name}` : ''}
+        services={services}
         onSuccess={onPositionChange}
       />
     </div>

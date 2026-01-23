@@ -43,7 +43,8 @@ export default async function ProjectsPage() {
         notes,
         instrument:instruments(id, name, section, sort_order),
         musician:musicians(id, first_name, last_name),
-        contract_offers(id, musician_id, status, sent_at, expires_at, responded_at, token, musician:musicians(id, first_name, last_name))
+        contract_offers(id, musician_id, status, sent_at, expires_at, responded_at, token, musician:musicians(id, first_name, last_name)),
+        substitution_requests(id, requesting_musician_id, service_id, reason, status, substitute_musician_id, requesting_musician:musicians!substitution_requests_requesting_musician_id_fkey(id, first_name, last_name), substitute_musician:musicians!substitution_requests_substitute_musician_id_fkey(id, first_name, last_name), service:services(id, name, start_time))
       )
     `)
     .eq('organization_id', organization!.id)

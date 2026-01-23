@@ -10,6 +10,7 @@ import { ServiceFormDialog } from './service-form-dialog'
 import { DeleteServiceDialog } from './delete-service-dialog'
 import { ProjectPositions } from './project-positions'
 import { ProjectOffers } from './project-offers'
+import { SubRequests } from './sub-requests'
 import type { PositionJoined, BookForImport } from './project-positions'
 import type { MusicianForOffer } from './send-offer-dialog'
 import type { Project, Service } from '@/types'
@@ -347,6 +348,7 @@ export function ProjectsClient({
                             projectId={project.id}
                             books={books}
                             musicians={musicians}
+                            services={project.services}
                             canManage={canManage}
                             onPositionChange={handleSuccess}
                           />
@@ -361,6 +363,20 @@ export function ProjectsClient({
                             )}
                             canManage={canManage}
                             onOfferChange={handleSuccess}
+                          />
+                          <SubRequests
+                            requests={project.project_positions.flatMap((p) =>
+                              (p.substitution_requests || []).map((r) => ({
+                                ...r,
+                                project_position_id: p.id,
+                                position_instrument: p.instrument?.name ?? '',
+                                position_chair: p.chair_number,
+                                position_instrument_id: p.instrument_id,
+                              }))
+                            )}
+                            musicians={musicians}
+                            canManage={canManage}
+                            onRequestChange={handleSuccess}
                           />
                         </td>
                       </tr>
