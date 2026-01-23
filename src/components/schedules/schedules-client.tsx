@@ -1,0 +1,210 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
+import { ScheduleFormDialog } from './schedule-form-dialog'
+import { DeleteScheduleDialog } from './delete-schedule-dialog'
+import type { CompetingSchedule } from '@/types'
+
+export type ScheduleWithMusician = CompetingSchedule & {
+  musician: { id: string; first_name: string; last_name: string }
+}
+
+type MusicianOption = {
+  id: string
+  first_name: string
+  last_name: string
+}
+
+interface SchedulesClientProps {
+  schedules: ScheduleWithMusician[]
+  musicians: MusicianOption[]
+  canManage: boolean
+}
+
+export function SchedulesClient({
+  schedules,
+  musicians,
+  canManage,
+}: SchedulesClientProps) {
+  const router = useRouter()
+  const [formOpen, setFormOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [editingSchedule, setEditingSchedule] = useState<CompetingSchedule | null>(null)
+  const [deletingSchedule, setDeletingSchedule] = useState<CompetingSchedule | null>(null)
+
+  function handleAdd() {
+    setEditingSchedule(null)
+    setFormOpen(true)
+  }
+
+  function handleEdit(schedule: ScheduleWithMusician) {
+    setEditingSchedule(schedule)
+    setFormOpen(true)
+  }
+
+  function handleDelete(schedule: ScheduleWithMusician) {
+    setDeletingSchedule(schedule)
+    setDeleteOpen(true)
+  }
+
+  function handleSuccess() {
+    setFormOpen(false)
+    setDeleteOpen(false)
+    setEditingSchedule(null)
+    setDeletingSchedule(null)
+    router.refresh()
+  }
+
+  // Sort: upcoming first, then past
+  const sorted = [...schedules].sort(
+    (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+  )
+
+  const now = new Date()
+  const upcoming = sorted.filter((s) => new Date(s.end_time) >= now)
+  const past = sorted.filter((s) => new Date(s.end_time) < now)
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Schedules</h2>
+          <p className="text-muted-foreground">
+            Track musician availability and external commitments.
+          </p>
+        </div>
+        {canManage && (
+          <Button onClick={handleAdd}>Add Entry</Button>
+        )}
+      </div>
+
+      <Separator />
+
+      {schedules.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <p className="text-muted-foreground mb-4">
+            No schedule conflicts have been added yet.
+          </p>
+          {canManage && (
+            <Button onClick={handleAdd}>Add First Entry</Button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {upcoming.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-muted-foreground">Upcoming & Current</h3>
+              <ScheduleTable
+                schedules={upcoming}
+                canManage={canManage}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
+            </div>
+          )}
+
+          {past.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-muted-foreground">Past</h3>
+              <ScheduleTable
+                schedules={past}
+                canManage={canManage}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      <ScheduleFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        schedule={editingSchedule}
+        musicians={musicians}
+        onSuccess={handleSuccess}
+      />
+
+      <DeleteScheduleDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        schedule={deletingSchedule}
+        onSuccess={handleSuccess}
+      />
+    </div>
+  )
+}
+
+function ScheduleTable({
+  schedules,
+  canManage,
+  onEdit,
+  onDelete,
+}: {
+  schedules: ScheduleWithMusician[]
+  canManage: boolean
+  onEdit: (s: ScheduleWithMusician) => void
+  onDelete: (s: ScheduleWithMusician) => void
+}) {
+  return (
+    <div className="overflow-x-auto rounded-md border">
+      <table className="w-full text-sm">
+        <thead className="border-b bg-muted/50">
+          <tr>
+            <th className="px-4 py-3 text-left font-medium">Musician</th>
+            <th className="px-4 py-3 text-left font-medium">Title</th>
+            <th className="px-4 py-3 text-left font-medium">Start</th>
+            <th className="px-4 py-3 text-left font-medium">End</th>
+            <th className="px-4 py-3 text-left font-medium">Notes</th>
+            {canManage && (
+              <th className="px-4 py-3 text-right font-medium">Actions</th>
+            )}
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {schedules.map((schedule) => (
+            <tr key={schedule.id} className="hover:bg-muted/50">
+              <td className="px-4 py-3 font-medium">
+                {schedule.musician.first_name} {schedule.musician.last_name}
+              </td>
+              <td className="px-4 py-3">{schedule.title}</td>
+              <td className="px-4 py-3 text-muted-foreground">
+                {new Date(schedule.start_time).toLocaleString()}
+              </td>
+              <td className="px-4 py-3 text-muted-foreground">
+                {new Date(schedule.end_time).toLocaleString()}
+              </td>
+              <td className="px-4 py-3 text-muted-foreground">
+                {schedule.notes
+                  ? schedule.notes.length > 40
+                    ? schedule.notes.slice(0, 40) + '...'
+                    : schedule.notes
+                  : '—'}
+              </td>
+              {canManage && (
+                <td className="px-4 py-3 text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => onEdit(schedule)}>
+                      Edit
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => onDelete(schedule)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
