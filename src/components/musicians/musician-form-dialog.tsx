@@ -307,7 +307,7 @@ export function MusicianFormDialog({
               <div className="max-h-48 overflow-y-auto rounded-md border p-3 space-y-2">
                 {instruments.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    No instruments available. Add instruments first.
+                    No instruments defined yet. You can add instruments later in the Instruments page.
                   </p>
                 ) : (
                   instruments.map((instrument) => {

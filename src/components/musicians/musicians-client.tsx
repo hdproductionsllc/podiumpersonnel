@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Fragment } from 'react'
+import { useState, Fragment, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -8,6 +8,7 @@ import { MusicianFormDialog } from './musician-form-dialog'
 import { DeleteMusicianDialog } from './delete-musician-dialog'
 import { ScheduleFormDialog } from '@/components/schedules/schedule-form-dialog'
 import { DeleteScheduleDialog } from '@/components/schedules/delete-schedule-dialog'
+import { toast } from 'sonner'
 import type { Musician, CompetingSchedule } from '@/types'
 
 export type MusicianInstrumentJoin = {
@@ -74,6 +75,10 @@ export function MusiciansClient({
   const [search, setSearch] = useState('')
   const [instrumentFilter, setInstrumentFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<'' | 'active' | 'inactive'>('')
+
+  // Import state
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isImporting, setIsImporting] = useState(false)
 
   const canManage = userRole === 'owner' || userRole === 'admin'
 
@@ -155,6 +160,58 @@ export function MusiciansClient({
     router.refresh()
   }
 
+  function handleImportClick() {
+    fileInputRef.current?.click()
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsImporting(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch('/api/musicians/import', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        toast.error(result.error || 'Import failed')
+        return
+      }
+
+      if (result.success > 0) {
+        toast.success(`Successfully imported ${result.success} musician${result.success !== 1 ? 's' : ''}`)
+      }
+
+      if (result.errors > 0) {
+        const errorMsg = result.errorRows
+          .slice(0, 3)
+          .map((err: { row: number; reason: string }) => `Row ${err.row}: ${err.reason}`)
+          .join('; ')
+        toast.warning(`${result.errors} row${result.errors !== 1 ? 's' : ''} skipped: ${errorMsg}${result.totalErrorRows > 3 ? '...' : ''}`)
+      }
+
+      if (result.success > 0) {
+        router.refresh()
+      }
+    } catch {
+      toast.error('Failed to import file')
+    } finally {
+      setIsImporting(false)
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
   const colCount = canManage ? 7 : 6
 
   return (
@@ -167,7 +224,19 @@ export function MusiciansClient({
           </p>
         </div>
         {canManage && (
-          <Button onClick={handleAdd}>Add Musician</Button>
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <Button variant="outline" onClick={handleImportClick} disabled={isImporting}>
+              {isImporting ? 'Importing...' : 'Import from Excel'}
+            </Button>
+            <Button onClick={handleAdd}>Add Musician</Button>
+          </div>
         )}
       </div>
 
