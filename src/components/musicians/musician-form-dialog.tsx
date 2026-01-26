@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createClient } from '@/lib/supabase/client'
-import { musicianSchema, type MusicianInput } from '@/lib/validations/musicians'
+import { musicianSchema, type MusicianInput, HOME_REGIONS } from '@/lib/validations/musicians'
 import {
   Dialog,
   DialogContent,
@@ -57,6 +57,7 @@ export function MusicianFormDialog({
       is_active: true,
       instrument_ids: [],
       zip_code: '',
+      home_region: '',
       service_radius_miles: 50,
       call_order: 100,
       is_leader: false,
@@ -75,6 +76,7 @@ export function MusicianFormDialog({
           is_active: musician.is_active,
           instrument_ids: musician.musician_instruments.map((mi) => mi.instrument_id),
           zip_code: (musician as any).zip_code || '',
+          home_region: (musician as any).home_region || '',
           service_radius_miles: (musician as any).service_radius_miles ?? 50,
           call_order: (musician as any).call_order ?? 100,
           is_leader: (musician as any).is_leader ?? false,
@@ -89,6 +91,7 @@ export function MusicianFormDialog({
           is_active: true,
           instrument_ids: [],
           zip_code: '',
+          home_region: '',
           service_radius_miles: 50,
           call_order: 100,
           is_leader: false,
@@ -115,6 +118,7 @@ export function MusicianFormDialog({
           notes: data.notes || null,
           is_active: data.is_active,
           zip_code: data.zip_code || null,
+          home_region: data.home_region || null,
           service_radius_miles: data.service_radius_miles ?? 50,
           call_order: data.call_order ?? 100,
           is_leader: data.is_leader ?? false,
@@ -168,6 +172,7 @@ export function MusicianFormDialog({
           notes: data.notes || null,
           is_active: data.is_active,
           zip_code: data.zip_code || null,
+          home_region: data.home_region || null,
           service_radius_miles: data.service_radius_miles ?? 50,
           call_order: data.call_order ?? 100,
           is_leader: data.is_leader ?? false,
@@ -305,6 +310,30 @@ export function MusicianFormDialog({
 
             <div className="border-t pt-4 mt-4">
               <h4 className="text-sm font-medium mb-3">Service Area & Preferences</h4>
+
+              <FormField
+                control={form.control}
+                name="home_region"
+                render={({ field }) => (
+                  <FormItem className="mb-4">
+                    <FormLabel>Home Region</FormLabel>
+                    <FormControl>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        value={field.value ?? ''}
+                        onChange={(e) => field.onChange(e.target.value)}
+                      >
+                        <option value="">Select a region...</option>
+                        {HOME_REGIONS.map((region) => (
+                          <option key={region} value={region}>{region}</option>
+                        ))}
+                      </select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}

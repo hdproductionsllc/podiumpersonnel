@@ -27,7 +27,7 @@ export default async function MusiciansPage() {
     slug: string
   } | null
 
-  // Fetch musicians with their instrument assignments and schedules
+  // Fetch musicians with their instrument assignments
   const { data: musicians } = await supabase
     .from('musicians')
     .select(`
@@ -38,8 +38,7 @@ export default async function MusiciansPage() {
         is_primary,
         proficiency,
         instrument:instruments(id, name, abbreviation, section)
-      ),
-      competing_schedules(id, title, start_time, end_time, notes)
+      )
     `)
     .eq('organization_id', organization!.id)
     .order('last_name', { ascending: true })

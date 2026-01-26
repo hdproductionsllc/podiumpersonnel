@@ -1,5 +1,17 @@
 import { z } from 'zod'
 
+export const HOME_REGIONS = [
+  'SF Bay Area',
+  'Los Angeles',
+  'Orange County',
+  'San Diego',
+  'Chicago',
+  'St. Louis',
+  'Kansas City',
+] as const
+
+export type HomeRegion = typeof HOME_REGIONS[number]
+
 export const musicianSchema = z.object({
   first_name: z
     .string()
@@ -29,6 +41,10 @@ export const musicianSchema = z.object({
   zip_code: z
     .string()
     .max(10, 'Zip code must be less than 10 characters')
+    .optional()
+    .or(z.literal('')),
+  home_region: z
+    .string()
     .optional()
     .or(z.literal('')),
   service_radius_miles: z
