@@ -28,7 +28,18 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import type { Service } from '@/types'
+import type { Service, Venue } from '@/types'
+
+interface VenueOption {
+  id: string
+  name: string
+  address: string | null
+  city: string | null
+  state: string | null
+  google_maps_url: string | null
+  parking_info: string | null
+  directions: string | null
+}
 
 function isoToDatetimeLocal(iso: string): string {
   const date = new Date(iso)
@@ -42,6 +53,9 @@ interface ServiceFormDialogProps {
   onOpenChange: (open: boolean) => void
   service: Service | null
   projectId: string | null
+  projectStartDate?: string | null
+  projectEndDate?: string | null
+  organizationId: string
   onSuccess: () => void
 }
 
@@ -50,11 +64,32 @@ export function ServiceFormDialog({
   onOpenChange,
   service,
   projectId,
+  projectStartDate,
+  projectEndDate,
+  organizationId,
   onSuccess,
 }: ServiceFormDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [dateWarning, setDateWarning] = useState<string | null>(null)
+  const [venues, setVenues] = useState<VenueOption[]>([])
+  const [selectedVenue, setSelectedVenue] = useState<VenueOption | null>(null)
   const isEditing = !!service
+
+  // Fetch venues when dialog opens
+  useEffect(() => {
+    if (open && organizationId) {
+      const supabase = createClient()
+      supabase
+        .from('venues')
+        .select('id, name, address, city, state, google_maps_url, parking_info, directions')
+        .eq('organization_id', organizationId)
+        .order('name')
+        .then(({ data }) => {
+          setVenues(data || [])
+        })
+    }
+  }, [open, organizationId])
 
   const form = useForm<ServiceInput>({
     resolver: zodResolver(serviceSchema),
@@ -90,8 +125,41 @@ export function ServiceFormDialog({
         })
       }
       setError(null)
+      setDateWarning(null)
     }
   }, [open, service, form])
+
+  // Auto-populate end time when start time changes (3 hours later)
+  function handleStartTimeChange(value: string) {
+    form.setValue('start_time', value)
+
+    if (value) {
+      const startDate = new Date(value)
+      const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000) // Add 3 hours
+      const endTimeStr = endDate.toISOString().slice(0, 16)
+      form.setValue('end_time', endTimeStr)
+
+      // Check if date is within project range
+      checkDateRange(value)
+    }
+  }
+
+  function checkDateRange(dateTimeStr: string) {
+    if (!projectStartDate && !projectEndDate) {
+      setDateWarning(null)
+      return
+    }
+
+    const serviceDate = new Date(dateTimeStr).toISOString().split('T')[0]
+
+    if (projectStartDate && serviceDate < projectStartDate) {
+      setDateWarning(`This service is before the project start date (${projectStartDate})`)
+    } else if (projectEndDate && serviceDate > projectEndDate) {
+      setDateWarning(`This service is after the project end date (${projectEndDate})`)
+    } else {
+      setDateWarning(null)
+    }
+  }
 
   async function onSubmit(data: ServiceInput) {
     setIsLoading(true)
@@ -214,7 +282,11 @@ export function ServiceFormDialog({
                   <FormItem>
                     <FormLabel>Start Time</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" {...field} />
+                      <Input
+                        type="datetime-local"
+                        {...field}
+                        onChange={(e) => handleStartTimeChange(e.target.value)}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -230,11 +302,18 @@ export function ServiceFormDialog({
                     <FormControl>
                       <Input type="datetime-local" {...field} />
                     </FormControl>
+                    <p className="text-xs text-muted-foreground">Auto-fills 3 hours after start</p>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
+
+            {dateWarning && (
+              <div className="rounded-md bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 p-3 text-sm text-yellow-800 dark:text-yellow-200">
+                {dateWarning}
+              </div>
+            )}
 
             <FormField
               control={form.control}
@@ -243,12 +322,70 @@ export function ServiceFormDialog({
                 <FormItem>
                   <FormLabel>Venue</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Symphony Hall" {...field} />
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      value={field.value}
+                      onChange={(e) => {
+                        field.onChange(e.target.value)
+                        const venue = venues.find(v => v.name === e.target.value)
+                        setSelectedVenue(venue || null)
+                      }}
+                    >
+                      <option value="">-- Select venue --</option>
+                      {venues.map((v) => (
+                        <option key={v.id} value={v.name}>
+                          {v.name}
+                        </option>
+                      ))}
+                      <option value="__other__">Other (type below)</option>
+                    </select>
                   </FormControl>
+                  {field.value === '__other__' && (
+                    <Input
+                      className="mt-2"
+                      placeholder="Enter venue name"
+                      onChange={(e) => field.onChange(e.target.value)}
+                    />
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
             />
+
+            {selectedVenue && (
+              <div className="rounded-md border bg-muted/30 p-3 space-y-2 text-sm">
+                {selectedVenue.address && (
+                  <div>
+                    <span className="font-medium">Address: </span>
+                    <span className="text-muted-foreground">
+                      {[selectedVenue.address, selectedVenue.city, selectedVenue.state].filter(Boolean).join(', ')}
+                    </span>
+                    {selectedVenue.google_maps_url && (
+                      <a
+                        href={selectedVenue.google_maps_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-2 text-blue-600 hover:underline"
+                      >
+                        Get Directions
+                      </a>
+                    )}
+                  </div>
+                )}
+                {selectedVenue.parking_info && (
+                  <div>
+                    <span className="font-medium">Parking: </span>
+                    <span className="text-muted-foreground">{selectedVenue.parking_info}</span>
+                  </div>
+                )}
+                {selectedVenue.directions && (
+                  <div>
+                    <span className="font-medium">Directions: </span>
+                    <span className="text-muted-foreground">{selectedVenue.directions}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             <FormField
               control={form.control}

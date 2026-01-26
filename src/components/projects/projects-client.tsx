@@ -468,6 +468,9 @@ export function ProjectsClient({
         onOpenChange={setServiceFormOpen}
         service={editingService}
         projectId={activeProjectId}
+        projectStartDate={projects.find(p => p.id === activeProjectId)?.start_date}
+        projectEndDate={projects.find(p => p.id === activeProjectId)?.end_date}
+        organizationId={organizationId}
         onSuccess={handleSuccess}
       />
 

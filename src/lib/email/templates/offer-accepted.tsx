@@ -1,0 +1,251 @@
+import {
+  Html,
+  Head,
+  Body,
+  Container,
+  Section,
+  Text,
+  Hr,
+  Preview,
+} from '@react-email/components'
+
+interface OfferAcceptedEmailProps {
+  musicianName: string
+  organizationName: string
+  projectName: string
+  instrument: string
+  chairNumber: number
+  services: {
+    name: string
+    date: string
+    time: string
+    venue: string | null
+  }[]
+}
+
+export function OfferAcceptedEmail({
+  musicianName,
+  organizationName,
+  projectName,
+  instrument,
+  chairNumber,
+  services,
+}: OfferAcceptedEmailProps) {
+  return (
+    <Html>
+      <Head />
+      <Preview>
+        Confirmed: You're booked for {projectName}
+      </Preview>
+      <Body style={main}>
+        <Container style={container}>
+          <Section style={header}>
+            <Text style={heading}>{organizationName}</Text>
+          </Section>
+
+          <Section style={content}>
+            <Section style={successBanner}>
+              <Text style={successIcon}>✓</Text>
+              <Text style={successText}>You're Confirmed!</Text>
+            </Section>
+
+            <Text style={greeting}>Dear {musicianName},</Text>
+
+            <Text style={paragraph}>
+              Thank you for accepting the contract offer. You are now confirmed for the following engagement:
+            </Text>
+
+            <Section style={detailsBox}>
+              <Text style={detailsTitle}>{projectName}</Text>
+              <Text style={detailsItem}>
+                <strong>Position:</strong> {instrument}, Chair {chairNumber}
+              </Text>
+            </Section>
+
+            <Text style={sectionTitle}>Your Services:</Text>
+            <Section style={servicesTable}>
+              {services.map((service, index) => (
+                <Section key={index} style={serviceRow}>
+                  <Text style={serviceName}>{service.name}</Text>
+                  <Text style={serviceDetail}>
+                    📅 {service.date} at {service.time}
+                  </Text>
+                  {service.venue && (
+                    <Text style={serviceVenue}>📍 {service.venue}</Text>
+                  )}
+                </Section>
+              ))}
+            </Section>
+
+            <Text style={paragraph}>
+              Please save these dates to your calendar. If you have any questions or need to report a conflict,
+              please contact {organizationName} as soon as possible.
+            </Text>
+
+            <Text style={thankYou}>
+              We look forward to working with you!
+            </Text>
+          </Section>
+
+          <Hr style={hr} />
+
+          <Section style={footer}>
+            <Text style={footerText}>
+              This confirmation was sent by {organizationName} via Podium.
+            </Text>
+          </Section>
+        </Container>
+      </Body>
+    </Html>
+  )
+}
+
+const main = {
+  backgroundColor: '#f6f9fc',
+  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Ubuntu, sans-serif',
+}
+
+const container = {
+  backgroundColor: '#ffffff',
+  margin: '0 auto',
+  padding: '20px 0 48px',
+  marginBottom: '64px',
+  maxWidth: '600px',
+}
+
+const header = {
+  padding: '24px',
+  backgroundColor: '#1a1a1a',
+}
+
+const heading = {
+  color: '#ffffff',
+  fontSize: '24px',
+  fontWeight: 'bold',
+  margin: '0',
+  textAlign: 'center' as const,
+}
+
+const content = {
+  padding: '24px',
+}
+
+const successBanner = {
+  backgroundColor: '#dcfce7',
+  border: '1px solid #22c55e',
+  borderRadius: '8px',
+  padding: '16px',
+  marginBottom: '24px',
+  textAlign: 'center' as const,
+}
+
+const successIcon = {
+  fontSize: '32px',
+  margin: '0 0 8px 0',
+  color: '#22c55e',
+}
+
+const successText = {
+  fontSize: '20px',
+  fontWeight: 'bold',
+  color: '#166534',
+  margin: '0',
+}
+
+const greeting = {
+  fontSize: '16px',
+  lineHeight: '24px',
+  marginBottom: '16px',
+}
+
+const paragraph = {
+  fontSize: '14px',
+  lineHeight: '22px',
+  color: '#525f7f',
+  marginBottom: '16px',
+}
+
+const detailsBox = {
+  backgroundColor: '#f8fafc',
+  border: '1px solid #e2e8f0',
+  borderRadius: '8px',
+  padding: '16px',
+  marginBottom: '24px',
+}
+
+const detailsTitle = {
+  fontSize: '18px',
+  fontWeight: 'bold',
+  color: '#1a1a1a',
+  marginBottom: '8px',
+}
+
+const detailsItem = {
+  fontSize: '14px',
+  color: '#525f7f',
+  marginBottom: '4px',
+}
+
+const sectionTitle = {
+  fontSize: '14px',
+  fontWeight: 'bold',
+  color: '#1a1a1a',
+  marginBottom: '12px',
+}
+
+const servicesTable = {
+  marginBottom: '24px',
+}
+
+const serviceRow = {
+  backgroundColor: '#f0fdf4',
+  borderLeft: '3px solid #22c55e',
+  padding: '12px 16px',
+  marginBottom: '8px',
+}
+
+const serviceName = {
+  fontSize: '14px',
+  fontWeight: 'bold',
+  color: '#1a1a1a',
+  margin: '0 0 4px 0',
+}
+
+const serviceDetail = {
+  fontSize: '13px',
+  color: '#525f7f',
+  margin: '0 0 2px 0',
+}
+
+const serviceVenue = {
+  fontSize: '13px',
+  color: '#64748b',
+  margin: '0',
+}
+
+const thankYou = {
+  fontSize: '14px',
+  fontWeight: '500',
+  color: '#166534',
+  textAlign: 'center' as const,
+  marginTop: '24px',
+}
+
+const hr = {
+  borderColor: '#e6ebf1',
+  margin: '20px 0',
+}
+
+const footer = {
+  padding: '0 24px',
+}
+
+const footerText = {
+  color: '#8898aa',
+  fontSize: '12px',
+  lineHeight: '16px',
+  textAlign: 'center' as const,
+  marginBottom: '4px',
+}
+
+export default OfferAcceptedEmail

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { sendOfferDeclinedEmail, sendAdminOfferResponseEmail } from '@/lib/email/send'
 
 export async function POST(
   _request: Request,
@@ -8,10 +9,29 @@ export async function POST(
   const { token } = await params
   const supabase = await createClient()
 
-  // Find the offer by token
+  // Find the offer by token with all related data for emails
   const { data: offer, error: fetchError } = await supabase
     .from('contract_offers')
-    .select('id, status, project_position_id, expires_at')
+    .select(`
+      id,
+      status,
+      project_position_id,
+      musician_id,
+      expires_at,
+      response_notes,
+      musician:musicians(id, first_name, last_name, email),
+      project_position:project_positions(
+        id,
+        chair_number,
+        instrument:instruments(id, name),
+        project:projects(
+          id,
+          name,
+          organization_id,
+          organization:organizations(id, name)
+        )
+      )
+    `)
     .eq('token', token)
     .single()
 
@@ -38,11 +58,65 @@ export async function POST(
     })
     .eq('id', offer.id)
 
-  // Update position status to declined
+  // Update position status to declined (back to vacant so another offer can be sent)
   await supabase
     .from('project_positions')
-    .update({ status: 'declined' })
+    .update({ status: 'vacant' })
     .eq('id', offer.project_position_id)
+
+  // Send confirmation emails (don't block on failure)
+  try {
+    const musician = offer.musician as any
+    const position = offer.project_position as any
+    const project = position?.project as any
+    const organization = project?.organization as any
+    const instrument = position?.instrument as any
+
+    // Send confirmation to musician if they have email
+    if (musician?.email) {
+      await sendOfferDeclinedEmail({
+        to: musician.email,
+        musicianName: `${musician.first_name} ${musician.last_name}`,
+        organizationName: organization?.name || 'Orchestra',
+        projectName: project?.name || 'Project',
+        instrument: instrument?.name || 'Instrument',
+        chairNumber: position?.chair_number || 1,
+        declineReason: offer.response_notes,
+      }).catch((err) => console.warn('Failed to send musician confirmation:', err))
+    }
+
+    // Send notification to organization admins
+    if (project?.organization_id) {
+      const { data: admins } = await supabase
+        .from('organization_members')
+        .select('user_id, users:user_id(email)')
+        .eq('organization_id', project.organization_id)
+        .in('role', ['owner', 'admin'])
+
+      const adminEmails = (admins || [])
+        .map((a: any) => a.users?.email)
+        .filter(Boolean)
+
+      if (adminEmails.length > 0) {
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+        await sendAdminOfferResponseEmail({
+          to: adminEmails,
+          organizationName: organization?.name || 'Orchestra',
+          projectName: project?.name || 'Project',
+          musicianName: `${musician?.first_name} ${musician?.last_name}`,
+          musicianEmail: musician?.email || null,
+          instrument: instrument?.name || 'Instrument',
+          chairNumber: position?.chair_number || 1,
+          status: 'declined',
+          responseNotes: offer.response_notes,
+          dashboardUrl: `${baseUrl}/dashboard/projects`,
+        }).catch((err) => console.warn('Failed to send admin notification:', err))
+      }
+    }
+  } catch (emailError) {
+    console.warn('Email sending failed:', emailError)
+    // Don't block the response on email failure
+  }
 
   return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
 }

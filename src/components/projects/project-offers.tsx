@@ -1,7 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
+import { toast } from 'sonner'
 
 export type OfferJoined = {
   id: string
@@ -44,6 +46,8 @@ export function ProjectOffers({
   canManage,
   onOfferChange,
 }: ProjectOffersProps) {
+  const [sendingReminder, setSendingReminder] = useState<string | null>(null)
+
   if (offers.length === 0) return null
 
   async function handleRevoke(offerId: string) {
@@ -51,6 +55,30 @@ export function ProjectOffers({
     const supabase = createClient()
     await supabase.from('contract_offers').delete().eq('id', offerId)
     onOfferChange()
+  }
+
+  async function handleSendReminder(offerId: string) {
+    setSendingReminder(offerId)
+    try {
+      const response = await fetch('/api/offers/send-reminder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ offerId }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        toast.error(result.error || 'Failed to send reminder')
+        return
+      }
+
+      toast.success('Reminder email sent')
+    } catch {
+      toast.error('Failed to send reminder')
+    } finally {
+      setSendingReminder(null)
+    }
   }
 
   function formatDate(dateStr: string | null): string {
@@ -107,16 +135,28 @@ export function ProjectOffers({
                   </td>
                   {canManage && (
                     <td className="px-3 py-2 text-right">
-                      {(offer.status === 'pending' || offer.status === 'viewed') && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => handleRevoke(offer.id)}
-                        >
-                          Revoke
-                        </Button>
-                      )}
+                      <div className="flex items-center justify-end gap-1">
+                        {(offer.status === 'pending' || offer.status === 'viewed') && !expired && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleSendReminder(offer.id)}
+                            disabled={sendingReminder === offer.id}
+                          >
+                            {sendingReminder === offer.id ? 'Sending...' : 'Remind'}
+                          </Button>
+                        )}
+                        {(offer.status === 'pending' || offer.status === 'viewed') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => handleRevoke(offer.id)}
+                          >
+                            Revoke
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   )}
                 </tr>

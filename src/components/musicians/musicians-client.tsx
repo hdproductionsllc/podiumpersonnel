@@ -35,6 +35,7 @@ export type MusicianSchedule = {
 export type MusicianWithInstruments = Musician & {
   musician_instruments: MusicianInstrumentJoin[]
   competing_schedules: MusicianSchedule[]
+  tags?: string[]
 }
 
 export type InstrumentOption = {
@@ -75,14 +76,22 @@ export function MusiciansClient({
   const [search, setSearch] = useState('')
   const [instrumentFilter, setInstrumentFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<'' | 'active' | 'inactive'>('')
+  const [tagFilter, setTagFilter] = useState('')
+
+  // Get unique tags from all musicians
+  const allTags = Array.from(
+    new Set(musicians.flatMap((m) => m.tags || []))
+  ).sort()
 
   // Import state
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isImporting, setIsImporting] = useState(false)
+  const [importTag, setImportTag] = useState('')
+  const [showImportDialog, setShowImportDialog] = useState(false)
 
   const canManage = userRole === 'owner' || userRole === 'admin'
 
-  const hasFilters = search !== '' || instrumentFilter !== '' || statusFilter !== ''
+  const hasFilters = search !== '' || instrumentFilter !== '' || statusFilter !== '' || tagFilter !== ''
 
   const filteredMusicians = musicians.filter((m) => {
     if (search) {
@@ -98,6 +107,9 @@ export function MusiciansClient({
     if (statusFilter) {
       if (statusFilter === 'active' && !m.is_active) return false
       if (statusFilter === 'inactive' && m.is_active) return false
+    }
+    if (tagFilter) {
+      if (!m.tags || !m.tags.includes(tagFilter)) return false
     }
     return true
   })
@@ -161,6 +173,10 @@ export function MusiciansClient({
   }
 
   function handleImportClick() {
+    setShowImportDialog(true)
+  }
+
+  function handleSelectFile() {
     fileInputRef.current?.click()
   }
 
@@ -169,10 +185,14 @@ export function MusiciansClient({
     if (!file) return
 
     setIsImporting(true)
+    setShowImportDialog(false)
 
     try {
       const formData = new FormData()
       formData.append('file', file)
+      if (importTag.trim()) {
+        formData.append('tag', importTag.trim())
+      }
 
       const response = await fetch('/api/musicians/import', {
         method: 'POST',
@@ -182,12 +202,17 @@ export function MusiciansClient({
       const result = await response.json()
 
       if (!response.ok) {
-        toast.error(result.error || 'Import failed')
+        let errorMsg = result.error || 'Import failed'
+        if (result.detectedColumns) {
+          errorMsg += ` (Found columns: ${result.detectedColumns.join(', ')})`
+        }
+        toast.error(errorMsg)
         return
       }
 
       if (result.success > 0) {
-        toast.success(`Successfully imported ${result.success} musician${result.success !== 1 ? 's' : ''}`)
+        const tagMsg = importTag.trim() ? ` with tag "${importTag.trim()}"` : ''
+        toast.success(`Successfully imported ${result.success} musician${result.success !== 1 ? 's' : ''}${tagMsg}`)
       }
 
       if (result.errors > 0) {
@@ -205,6 +230,7 @@ export function MusiciansClient({
       toast.error('Failed to import file')
     } finally {
       setIsImporting(false)
+      setImportTag('')
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
@@ -212,7 +238,7 @@ export function MusiciansClient({
     }
   }
 
-  const colCount = canManage ? 7 : 6
+  const colCount = canManage ? 8 : 7
 
   return (
     <div className="space-y-6">
@@ -232,9 +258,38 @@ export function MusiciansClient({
               onChange={handleFileChange}
               className="hidden"
             />
-            <Button variant="outline" onClick={handleImportClick} disabled={isImporting}>
-              {isImporting ? 'Importing...' : 'Import from Excel'}
-            </Button>
+            <div className="relative">
+              <Button variant="outline" onClick={handleImportClick} disabled={isImporting}>
+                {isImporting ? 'Importing...' : 'Import from Excel'}
+              </Button>
+              {showImportDialog && (
+                <div className="absolute right-0 top-full mt-2 w-72 rounded-md border bg-background p-4 shadow-lg z-50">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium">Tag / Label (optional)</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., LA Symphony, Region 1"
+                        className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        value={importTag}
+                        onChange={(e) => setImportTag(e.target.value)}
+                      />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        All imported musicians will be tagged with this label
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={handleSelectFile}>
+                        Select File
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setShowImportDialog(false)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <Button onClick={handleAdd}>Add Musician</Button>
           </div>
         )}
@@ -270,11 +325,23 @@ export function MusiciansClient({
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </select>
+          {allTags.length > 0 && (
+            <select
+              className="rounded-md border bg-background px-3 py-2 text-sm"
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+            >
+              <option value="">All tags</option>
+              {allTags.map((tag) => (
+                <option key={tag} value={tag}>{tag}</option>
+              ))}
+            </select>
+          )}
           {hasFilters && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => { setSearch(''); setInstrumentFilter(''); setStatusFilter('') }}
+              onClick={() => { setSearch(''); setInstrumentFilter(''); setStatusFilter(''); setTagFilter('') }}
             >
               Clear
             </Button>
@@ -308,6 +375,7 @@ export function MusiciansClient({
                 <th className="px-4 py-3 text-left font-medium">Email</th>
                 <th className="px-4 py-3 text-left font-medium">Phone</th>
                 <th className="px-4 py-3 text-left font-medium">Instruments</th>
+                <th className="px-4 py-3 text-left font-medium">Tags</th>
                 <th className="px-4 py-3 text-left font-medium">Status</th>
                 {canManage && (
                   <th className="px-4 py-3 text-right font-medium">Actions</th>
@@ -341,10 +409,26 @@ export function MusiciansClient({
                         {musician.last_name}, {musician.first_name}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {musician.email || '—'}
+                        {musician.email ? (
+                          <a
+                            href={`mailto:${musician.email}`}
+                            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {musician.email}
+                          </a>
+                        ) : '—'}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {musician.phone || '—'}
+                        {musician.phone ? (
+                          <a
+                            href={`tel:${musician.phone.replace(/[^\d+]/g, '')}`}
+                            className="hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {musician.phone}
+                          </a>
+                        ) : '—'}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {musician.musician_instruments.length > 0
@@ -352,6 +436,20 @@ export function MusiciansClient({
                               .map((mi) => mi.instrument.abbreviation || mi.instrument.name)
                               .join(', ')
                           : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        {musician.tags && musician.tags.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {musician.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        ) : '—'}
                       </td>
                       <td className="px-4 py-3">
                         <span

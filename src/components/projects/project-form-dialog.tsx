@@ -193,6 +193,7 @@ export function ProjectFormDialog({
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
+                    <p className="text-xs text-muted-foreground">First rehearsal date</p>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -207,6 +208,7 @@ export function ProjectFormDialog({
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
+                    <p className="text-xs text-muted-foreground">Final performance date</p>
                     <FormMessage />
                   </FormItem>
                 )}

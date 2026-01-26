@@ -256,6 +256,56 @@ export type Database = {
           updated_at?: string
         }
       }
+      venues: {
+        Row: {
+          id: string
+          organization_id: string
+          name: string
+          address: string | null
+          city: string | null
+          state: string | null
+          zip: string | null
+          google_place_id: string | null
+          google_maps_url: string | null
+          parking_info: string | null
+          directions: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          name: string
+          address?: string | null
+          city?: string | null
+          state?: string | null
+          zip?: string | null
+          google_place_id?: string | null
+          google_maps_url?: string | null
+          parking_info?: string | null
+          directions?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          name?: string
+          address?: string | null
+          city?: string | null
+          state?: string | null
+          zip?: string | null
+          google_place_id?: string | null
+          google_maps_url?: string | null
+          parking_info?: string | null
+          directions?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       services: {
         Row: {
           id: string
@@ -263,6 +313,7 @@ export type Database = {
           name: string
           service_type: string
           venue: string | null
+          venue_id: string | null
           start_time: string
           end_time: string | null
           notes: string | null
@@ -275,6 +326,7 @@ export type Database = {
           name: string
           service_type: string
           venue?: string | null
+          venue_id?: string | null
           start_time: string
           end_time?: string | null
           notes?: string | null
@@ -287,6 +339,7 @@ export type Database = {
           name?: string
           service_type?: string
           venue?: string | null
+          venue_id?: string | null
           start_time?: string
           end_time?: string | null
           notes?: string | null
@@ -469,6 +522,7 @@ export type MusicianInstrument = Database['public']['Tables']['musician_instrume
 export type Book = Database['public']['Tables']['books']['Row']
 export type BookEntry = Database['public']['Tables']['book_entries']['Row']
 export type Project = Database['public']['Tables']['projects']['Row']
+export type Venue = Database['public']['Tables']['venues']['Row']
 export type Service = Database['public']['Tables']['services']['Row']
 export type ProjectPosition = Database['public']['Tables']['project_positions']['Row']
 export type ContractOffer = Database['public']['Tables']['contract_offers']['Row']

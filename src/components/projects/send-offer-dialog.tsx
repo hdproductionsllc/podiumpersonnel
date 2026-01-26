@@ -15,6 +15,7 @@ export type MusicianForOffer = {
   id: string
   first_name: string
   last_name: string
+  email: string | null
   musician_instruments: { instrument_id: string }[]
   competing_schedules: MusicianScheduleEntry[]
 }
@@ -40,8 +41,13 @@ export function SendOfferDialog({
 }: SendOfferDialogProps) {
   const [selectedMusicianId, setSelectedMusicianId] = useState('')
   const [expiresIn, setExpiresIn] = useState<string>('7')
+  const [sendEmail, setSendEmail] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Get selected musician's email status
+  const selectedMusician = musicians.find((m) => m.id === selectedMusicianId)
+  const hasEmail = selectedMusician?.email ? true : false
 
   if (!open) return null
 
@@ -64,17 +70,20 @@ export function SendOfferDialog({
       ? new Date(Date.now() + parseInt(expiresIn) * 24 * 60 * 60 * 1000).toISOString()
       : null
 
-    const { error: insertError } = await supabase.from('contract_offers').insert({
-      project_position_id: positionId,
-      musician_id: selectedMusicianId,
-      status: 'pending',
-      sent_at: new Date().toISOString(),
-      expires_at: expiresAt,
-    })
-
-    setLoading(false)
+    const { data: offerData, error: insertError } = await supabase
+      .from('contract_offers')
+      .insert({
+        project_position_id: positionId,
+        musician_id: selectedMusicianId,
+        status: 'pending',
+        sent_at: new Date().toISOString(),
+        expires_at: expiresAt,
+      })
+      .select('id')
+      .single()
 
     if (insertError) {
+      setLoading(false)
       setError(insertError.message)
       return
     }
@@ -85,6 +94,27 @@ export function SendOfferDialog({
       .update({ status: 'offered' })
       .eq('id', positionId)
 
+    // Send email notification if enabled and musician has email
+    if (sendEmail && hasEmail && offerData?.id) {
+      try {
+        const response = await fetch('/api/offers/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ offerId: offerData.id }),
+        })
+
+        if (!response.ok) {
+          const result = await response.json()
+          console.warn('Failed to send email:', result.error)
+          // Don't block on email failure, offer is already created
+        }
+      } catch (emailError) {
+        console.warn('Failed to send email:', emailError)
+        // Don't block on email failure
+      }
+    }
+
+    setLoading(false)
     setSelectedMusicianId('')
     onOpenChange(false)
     onSuccess()
@@ -147,6 +177,23 @@ export function SendOfferDialog({
               <option value="30">30 days</option>
               <option value="">No expiration</option>
             </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="sendEmail"
+              checked={sendEmail}
+              onChange={(e) => setSendEmail(e.target.checked)}
+              disabled={!hasEmail}
+              className="h-4 w-4 rounded border-gray-300"
+            />
+            <label htmlFor="sendEmail" className="text-sm">
+              Send email notification
+            </label>
+            {selectedMusicianId && !hasEmail && (
+              <span className="text-xs text-amber-600">(No email on file)</span>
+            )}
           </div>
         </div>
 

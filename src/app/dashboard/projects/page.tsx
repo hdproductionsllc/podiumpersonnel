@@ -66,7 +66,7 @@ export default async function ProjectsPage() {
   const { data: musicians } = await supabase
     .from('musicians')
     .select(`
-      id, first_name, last_name,
+      id, first_name, last_name, email,
       musician_instruments(instrument_id),
       competing_schedules(id, title, start_time, end_time)
     `)

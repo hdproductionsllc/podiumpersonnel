@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -64,10 +65,10 @@ export default async function DashboardPage() {
   ])
 
   const steps = [
-    { label: 'Add instruments', description: 'Define the instruments in your orchestra', done: (instrumentCount ?? 0) > 0 },
-    { label: 'Add musicians', description: 'Build your roster of available musicians', done: (musicianCount ?? 0) > 0 },
-    { label: 'Create a book', description: 'Organize musicians by instrument and preference', done: (bookCount ?? 0) > 0 },
-    { label: 'Create your first project', description: 'Start managing personnel for concerts and events', done: (activeProjectCount ?? 0) > 0 },
+    { label: 'Add instruments', description: 'Define the instruments in your orchestra', done: (instrumentCount ?? 0) > 0, href: '/dashboard/instruments' },
+    { label: 'Add musicians', description: 'Build your roster of available musicians', done: (musicianCount ?? 0) > 0, href: '/dashboard/musicians' },
+    { label: 'Create a book', description: 'Organize musicians by instrument and preference', done: (bookCount ?? 0) > 0, href: '/dashboard/books' },
+    { label: 'Create your first project', description: 'Start managing personnel for concerts and events', done: (activeProjectCount ?? 0) > 0, href: '/dashboard/projects' },
   ]
 
   const allStepsComplete = steps.every((s) => s.done)
@@ -141,7 +142,11 @@ export default async function DashboardPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {steps.map((step, i) => (
-                <div key={i} className="flex items-center gap-4">
+                <Link
+                  key={i}
+                  href={step.href}
+                  className="flex items-center gap-4 rounded-lg p-2 -m-2 transition-colors hover:bg-muted/50"
+                >
                   <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${
                     step.done
                       ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'
@@ -149,7 +154,7 @@ export default async function DashboardPage() {
                   }`}>
                     {step.done ? '✓' : i + 1}
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <p className={`font-medium ${step.done ? 'line-through text-muted-foreground' : ''}`}>
                       {step.label}
                     </p>
@@ -157,7 +162,16 @@ export default async function DashboardPage() {
                       {step.description}
                     </p>
                   </div>
-                </div>
+                  <svg
+                    className="h-5 w-5 text-muted-foreground"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                  </svg>
+                </Link>
               ))}
             </CardContent>
           </Card>
