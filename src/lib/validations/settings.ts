@@ -9,6 +9,14 @@ export const updateOrganizationSchema = z.object({
 
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>
 
+export const updateEmailBrandingSchema = z.object({
+  email_logo_url: z.string().url('Please enter a valid URL').max(500).optional().nullable().or(z.literal('')),
+  email_brand_color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Please enter a valid hex color (e.g., #3b82f6)').optional().nullable(),
+  email_footer_text: z.string().max(500, 'Footer text must be 500 characters or less').optional().nullable(),
+})
+
+export type UpdateEmailBrandingInput = z.infer<typeof updateEmailBrandingSchema>
+
 export const addMemberSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   role: z.enum(['admin', 'member']),

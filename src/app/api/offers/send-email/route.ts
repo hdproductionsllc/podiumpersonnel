@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
           project:projects(
             id,
             name,
-            organization:organizations(id, name, timezone),
+            organization:organizations(id, name, timezone, email_logo_url, email_brand_color, email_footer_text),
             services(id, name, service_type, start_time, end_time, venue)
           )
         )
@@ -131,6 +131,11 @@ export async function POST(request: NextRequest) {
       services: formattedServices,
       responseUrl,
       expiresAt: offer.expires_at,
+      branding: {
+        logoUrl: organization?.email_logo_url,
+        brandColor: organization?.email_brand_color,
+        footerText: organization?.email_footer_text,
+      },
     })
 
     console.log('📧 Email sent successfully:', result)

@@ -7,19 +7,27 @@ import {
   Text,
   Hr,
   Preview,
+  Img,
 } from '@react-email/components'
+import { type EmailBranding } from './email-layout'
 
 interface W9RequestEmailProps {
   musicianName: string
   organizationName: string
   adminEmail?: string
+  branding?: EmailBranding
 }
 
 export function W9RequestEmail({
   musicianName,
   organizationName,
   adminEmail,
+  branding,
 }: W9RequestEmailProps) {
+  const brandColor = branding?.brandColor || '#3b82f6'
+  const logoUrl = branding?.logoUrl
+  const footerText = branding?.footerText
+
   return (
     <Html>
       <Head />
@@ -28,8 +36,17 @@ export function W9RequestEmail({
       </Preview>
       <Body style={main}>
         <Container style={container}>
-          <Section style={header}>
-            <Text style={heading}>{organizationName}</Text>
+          <Section style={{ ...header, backgroundColor: brandColor }}>
+            {logoUrl ? (
+              <Img
+                src={logoUrl}
+                alt={organizationName}
+                height="48"
+                style={{ margin: '0 auto', maxWidth: '200px' }}
+              />
+            ) : (
+              <Text style={heading}>{organizationName}</Text>
+            )}
           </Section>
 
           <Section style={content}>
@@ -82,10 +99,13 @@ export function W9RequestEmail({
           <Hr style={hr} />
 
           <Section style={footer}>
-            <Text style={footerText}>
+            {footerText && (
+              <Text style={footerTextStyle}>{footerText}</Text>
+            )}
+            <Text style={footerTextStyle}>
               This email was sent by {organizationName} via Podium.
             </Text>
-            <Text style={footerText}>
+            <Text style={footerTextStyle}>
               If you have questions, please contact the organization directly.
             </Text>
           </Section>
@@ -110,7 +130,7 @@ const container = {
 
 const header = {
   padding: '24px',
-  backgroundColor: '#1a1a1a',
+  textAlign: 'center' as const,
 }
 
 const heading = {
@@ -202,7 +222,7 @@ const footer = {
   padding: '0 24px',
 }
 
-const footerText = {
+const footerTextStyle = {
   color: '#8898aa',
   fontSize: '12px',
   lineHeight: '16px',

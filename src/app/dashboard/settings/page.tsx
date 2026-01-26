@@ -14,7 +14,7 @@ export default async function SettingsPage() {
     .from('organization_members')
     .select(`
       role,
-      organization:organizations(id, name, slug, timezone, musician_policy)
+      organization:organizations(id, name, slug, timezone, musician_policy, email_logo_url, email_brand_color, email_footer_text)
     `)
     .eq('user_id', user.id)
     .single()
@@ -23,7 +23,16 @@ export default async function SettingsPage() {
     redirect('/onboarding')
   }
 
-  const organization = membership.organization as unknown as { id: string; name: string; slug: string; timezone: string; musician_policy: string | null }
+  const organization = membership.organization as unknown as {
+    id: string
+    name: string
+    slug: string
+    timezone: string
+    musician_policy: string | null
+    email_logo_url: string | null
+    email_brand_color: string | null
+    email_footer_text: string | null
+  }
 
   return (
     <SettingsClient

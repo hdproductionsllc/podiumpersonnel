@@ -8,7 +8,9 @@ import {
   Button,
   Hr,
   Preview,
+  Img,
 } from '@react-email/components'
+import { type EmailBranding } from './email-layout'
 
 interface OfferReminderEmailProps {
   musicianName: string
@@ -20,6 +22,7 @@ interface OfferReminderEmailProps {
   responseUrl: string
   expiresAt: string | null
   daysRemaining: number | null
+  branding?: EmailBranding
 }
 
 export function OfferReminderEmail({
@@ -32,9 +35,13 @@ export function OfferReminderEmail({
   responseUrl,
   expiresAt,
   daysRemaining,
+  branding,
 }: OfferReminderEmailProps) {
   const urgentStyle = daysRemaining !== null && daysRemaining <= 2
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
+  const brandColor = branding?.brandColor || '#f59e0b'
+  const logoUrl = branding?.logoUrl
+  const footerText = branding?.footerText
 
   return (
     <Html>
@@ -44,8 +51,17 @@ export function OfferReminderEmail({
       </Preview>
       <Body style={main}>
         <Container style={container}>
-          <Section style={header}>
-            <Text style={heading}>{organizationName}</Text>
+          <Section style={{ ...header, backgroundColor: brandColor }}>
+            {logoUrl ? (
+              <Img
+                src={logoUrl}
+                alt={organizationName}
+                height="48"
+                style={{ margin: '0 auto', maxWidth: '200px' }}
+              />
+            ) : (
+              <Text style={heading}>{organizationName}</Text>
+            )}
           </Section>
 
           <Section style={content}>
@@ -83,7 +99,7 @@ export function OfferReminderEmail({
             </Section>
 
             <Section style={buttonContainer}>
-              <Button style={button} href={responseUrl}>
+              <Button style={{ ...button, backgroundColor: brandColor }} href={responseUrl}>
                 View & Respond to Offer
               </Button>
             </Section>
@@ -96,10 +112,13 @@ export function OfferReminderEmail({
           <Hr style={hr} />
 
           <Section style={footer}>
-            <Text style={footerText}>
+            {footerText && (
+              <Text style={footerTextStyle}>{footerText}</Text>
+            )}
+            <Text style={footerTextStyle}>
               This email was sent by {organizationName} via Podium.
             </Text>
-            <Text style={footerText}>
+            <Text style={footerTextStyle}>
               If you have questions, please contact the organization directly.
             </Text>
           </Section>
@@ -124,7 +143,7 @@ const container = {
 
 const header = {
   padding: '24px',
-  backgroundColor: '#1a1a1a',
+  textAlign: 'center' as const,
 }
 
 const heading = {
@@ -222,7 +241,7 @@ const footer = {
   padding: '0 24px',
 }
 
-const footerText = {
+const footerTextStyle = {
   color: '#8898aa',
   fontSize: '12px',
   lineHeight: '16px',

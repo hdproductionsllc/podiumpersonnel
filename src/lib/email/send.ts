@@ -13,6 +13,9 @@ import { SubRequestDeclinedEmail } from './templates/sub-request-declined'
 import { MusicianReleasedEmail } from './templates/musician-released'
 import { SubDeclinedFindAnotherEmail } from './templates/sub-declined-find-another'
 import { render } from '@react-email/render'
+import { type EmailBranding } from './templates/email-layout'
+
+export type { EmailBranding }
 
 // Contract Offer Email
 interface SendContractOfferParams {
@@ -32,6 +35,7 @@ interface SendContractOfferParams {
   responseUrl: string
   expiresAt: string | null
   notes?: string | null
+  branding?: EmailBranding
 }
 
 export async function sendContractOfferEmail(params: SendContractOfferParams) {
@@ -47,6 +51,7 @@ export async function sendContractOfferEmail(params: SendContractOfferParams) {
       responseUrl: params.responseUrl,
       expiresAt: params.expiresAt,
       notes: params.notes,
+      branding: params.branding,
     })
   )
 
@@ -77,6 +82,7 @@ interface SendOfferReminderParams {
   responseUrl: string
   expiresAt: string | null
   daysRemaining: number | null
+  branding?: EmailBranding
 }
 
 export async function sendOfferReminderEmail(params: SendOfferReminderParams) {
@@ -91,6 +97,7 @@ export async function sendOfferReminderEmail(params: SendOfferReminderParams) {
       responseUrl: params.responseUrl,
       expiresAt: params.expiresAt,
       daysRemaining: params.daysRemaining,
+      branding: params.branding,
     })
   )
 
@@ -305,6 +312,7 @@ interface SendW9RequestParams {
   musicianName: string
   organizationName: string
   adminEmail?: string
+  branding?: EmailBranding
 }
 
 export async function sendW9RequestEmail(params: SendW9RequestParams) {
@@ -313,6 +321,7 @@ export async function sendW9RequestEmail(params: SendW9RequestParams) {
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       adminEmail: params.adminEmail,
+      branding: params.branding,
     })
   )
 

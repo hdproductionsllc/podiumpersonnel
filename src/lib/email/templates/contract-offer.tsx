@@ -8,7 +8,9 @@ import {
   Button,
   Hr,
   Preview,
+  Img,
 } from '@react-email/components'
+import { type EmailBranding } from './email-layout'
 
 interface ContractOfferEmailProps {
   musicianName: string
@@ -26,6 +28,7 @@ interface ContractOfferEmailProps {
   responseUrl: string
   expiresAt: string | null
   notes?: string | null
+  branding?: EmailBranding
 }
 
 export function ContractOfferEmail({
@@ -39,8 +42,13 @@ export function ContractOfferEmail({
   responseUrl,
   expiresAt,
   notes,
+  branding,
 }: ContractOfferEmailProps) {
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
+  const brandColor = branding?.brandColor || '#3b82f6'
+  const logoUrl = branding?.logoUrl
+  const footerText = branding?.footerText
+
   return (
     <Html>
       <Head />
@@ -49,8 +57,17 @@ export function ContractOfferEmail({
       </Preview>
       <Body style={main}>
         <Container style={container}>
-          <Section style={header}>
-            <Text style={heading}>{organizationName}</Text>
+          <Section style={{ ...header, backgroundColor: brandColor }}>
+            {logoUrl ? (
+              <Img
+                src={logoUrl}
+                alt={organizationName}
+                height="48"
+                style={{ margin: '0 auto', maxWidth: '200px' }}
+              />
+            ) : (
+              <Text style={heading}>{organizationName}</Text>
+            )}
           </Section>
 
           <Section style={content}>
@@ -75,7 +92,7 @@ export function ContractOfferEmail({
             <Text style={sectionTitle}>Services:</Text>
             <Section style={servicesTable}>
               {services.map((service, index) => (
-                <Section key={index} style={serviceRow}>
+                <Section key={index} style={{ ...serviceRow, borderLeftColor: brandColor }}>
                   <Text style={serviceName}>{service.name}</Text>
                   <Text style={serviceDetail}>
                     {service.date} at {service.time}
@@ -95,7 +112,7 @@ export function ContractOfferEmail({
             )}
 
             <Section style={buttonContainer}>
-              <Button style={button} href={responseUrl}>
+              <Button style={{ ...button, backgroundColor: brandColor }} href={responseUrl}>
                 View & Respond to Offer
               </Button>
             </Section>
@@ -161,10 +178,13 @@ export function ContractOfferEmail({
           <Hr style={hr} />
 
           <Section style={footer}>
-            <Text style={footerText}>
+            {footerText && (
+              <Text style={footerTextStyle}>{footerText}</Text>
+            )}
+            <Text style={footerTextStyle}>
               This email was sent by {organizationName} via Podium.
             </Text>
-            <Text style={footerText}>
+            <Text style={footerTextStyle}>
               If you have questions, please contact the organization directly.
             </Text>
           </Section>
@@ -190,7 +210,7 @@ const container = {
 
 const header = {
   padding: '24px',
-  backgroundColor: '#1a1a1a',
+  textAlign: 'center' as const,
 }
 
 const heading = {
@@ -252,7 +272,9 @@ const servicesTable = {
 
 const serviceRow = {
   backgroundColor: '#f8fafc',
-  borderLeft: '3px solid #3b82f6',
+  borderLeftWidth: '3px',
+  borderLeftStyle: 'solid' as const,
+  borderLeftColor: '#3b82f6',
   padding: '12px 16px',
   marginBottom: '8px',
 }
@@ -309,7 +331,7 @@ const footer = {
   padding: '0 24px',
 }
 
-const footerText = {
+const footerTextStyle = {
   color: '#8898aa',
   fontSize: '12px',
   lineHeight: '16px',

@@ -16,6 +16,9 @@ export type Database = {
           slug: string
           timezone: string | null
           musician_policy: string | null
+          email_logo_url: string | null
+          email_brand_color: string | null
+          email_footer_text: string | null
           created_at: string
           updated_at: string
         }
@@ -25,6 +28,9 @@ export type Database = {
           slug: string
           timezone?: string | null
           musician_policy?: string | null
+          email_logo_url?: string | null
+          email_brand_color?: string | null
+          email_footer_text?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -34,6 +40,9 @@ export type Database = {
           slug?: string
           timezone?: string | null
           musician_policy?: string | null
+          email_logo_url?: string | null
+          email_brand_color?: string | null
+          email_footer_text?: string | null
           created_at?: string
           updated_at?: string
         }

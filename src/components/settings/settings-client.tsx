@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button'
 import { OrganizationSection } from './organization-section'
 import { MembersSection } from './members-section'
 import { ProfileSection } from './profile-section'
+import { EmailBrandingSection } from './email-branding-section'
 
 const tabs = [
   { id: 'organization', label: 'Organization' },
+  { id: 'email-branding', label: 'Email Branding' },
   { id: 'members', label: 'Members' },
   { id: 'profile', label: 'Profile' },
 ] as const
@@ -16,7 +18,16 @@ const tabs = [
 type TabId = (typeof tabs)[number]['id']
 
 interface SettingsClientProps {
-  organization: { id: string; name: string; slug: string; timezone: string; musician_policy?: string | null }
+  organization: {
+    id: string
+    name: string
+    slug: string
+    timezone: string
+    musician_policy?: string | null
+    email_logo_url?: string | null
+    email_brand_color?: string | null
+    email_footer_text?: string | null
+  }
   role: 'owner' | 'admin' | 'member'
   currentUserId: string
 }
@@ -50,6 +61,9 @@ export function SettingsClient({ organization, role, currentUserId }: SettingsCl
       <div>
         {activeTab === 'organization' && (
           <OrganizationSection organization={organization} role={role} />
+        )}
+        {activeTab === 'email-branding' && (
+          <EmailBrandingSection organization={organization} role={role} />
         )}
         {activeTab === 'members' && (
           <MembersSection role={role} currentUserId={currentUserId} />

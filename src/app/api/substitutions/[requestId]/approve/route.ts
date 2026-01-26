@@ -31,7 +31,7 @@ export async function POST(
           id,
           name,
           organization_id,
-          organization:organizations(id, name, timezone),
+          organization:organizations(id, name, timezone, email_logo_url, email_brand_color, email_footer_text),
           services(id, name, service_type, start_time, end_time, venue)
         )
       )
@@ -244,6 +244,11 @@ export async function POST(
         responseUrl: `${baseUrl}/gig/${offerToken}`,
         expiresAt: expiresAt.toISOString(),
         notes: `You have been requested as a substitute by ${requestingMusician.first_name} ${requestingMusician.last_name}.`,
+        branding: {
+          logoUrl: organization?.email_logo_url,
+          brandColor: organization?.email_brand_color,
+          footerText: organization?.email_footer_text,
+        },
       }).catch((err) => console.warn('Failed to send offer email:', err))
     }
 

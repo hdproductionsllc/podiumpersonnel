@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       .from('organization_members')
       .select(`
         role,
-        organization:organizations(id, name)
+        organization:organizations(id, name, email_logo_url, email_brand_color, email_footer_text)
       `)
       .eq('user_id', user.id)
       .single()
@@ -70,6 +70,11 @@ export async function POST(request: NextRequest) {
           musicianName: `${musician.first_name} ${musician.last_name}`,
           organizationName: organization.name,
           adminEmail: user.email || undefined,
+          branding: {
+            logoUrl: organization.email_logo_url,
+            brandColor: organization.email_brand_color,
+            footerText: organization.email_footer_text,
+          },
         })
         successCount++
       } catch (err) {
