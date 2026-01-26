@@ -128,11 +128,11 @@ export function BookFormDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? 'Edit Ensemble' : 'Add Ensemble'}
+            {isEditing ? 'Ensemble Settings' : 'Add Ensemble'}
           </DialogTitle>
           <DialogDescription>
             {isEditing
-              ? 'Update the ensemble details.'
+              ? 'Rename, add description, or set as default.'
               : 'Create a new saved ensemble.'}
           </DialogDescription>
         </DialogHeader>

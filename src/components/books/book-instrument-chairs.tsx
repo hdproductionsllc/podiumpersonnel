@@ -135,14 +135,45 @@ export function BookInstrumentChairs({
           )}
         </span>
         {canManage && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleAddChair}
-            disabled={isLoading || pendingChair !== null}
-          >
-            Add Chair
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAddChair}
+              disabled={isLoading || pendingChair !== null}
+            >
+              Add Chair
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-destructive"
+              title="Remove this instrument from the ensemble"
+              onClick={async () => {
+                if (!confirm(`Remove ${instrument.name} and all its chairs from this ensemble?`)) return
+                setIsLoading(true)
+                const supabase = createClient()
+                await supabase
+                  .from('book_entries')
+                  .delete()
+                  .eq('book_id', bookId)
+                  .eq('instrument_id', instrument.id)
+                setIsLoading(false)
+                onEntryChange()
+              }}
+              disabled={isLoading}
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </Button>
+          </div>
         )}
       </div>
 
