@@ -87,12 +87,12 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-full w-64 flex-col border-r bg-card">
-      <div className="flex h-16 items-center px-6">
+      <div className="flex h-36 items-center px-6">
         <Link href="/dashboard" className="flex items-center gap-2">
           <img
             src="/logo.png"
             alt="Podium Personnel"
-            className="h-10 w-auto"
+            className="h-[120px] w-auto"
           />
         </Link>
       </div>
