@@ -132,8 +132,14 @@ export function ProjectPositions({
   const [clearing, setClearing] = useState(false)
   const [offerPositionId, setOfferPositionId] = useState<string | null>(null)
   const [offerInstrumentId, setOfferInstrumentId] = useState<string | null>(null)
+  const [offerChairNumber, setOfferChairNumber] = useState<number>(1)
   const [offerExistingIds, setOfferExistingIds] = useState<string[]>([])
   const [subRequestPosition, setSubRequestPosition] = useState<PositionJoined | null>(null)
+
+  // Get pay info from the first service (services should have consistent pay)
+  const firstService = services[0]
+  const basePay = (firstService as any)?.base_pay ?? null
+  const leaderFee = (firstService as any)?.leader_fee ?? 50
 
   function handleSendOffer(position: PositionJoined) {
     const existingMusicianIds = position.contract_offers
@@ -141,6 +147,7 @@ export function ProjectPositions({
       .map((o) => o.musician_id)
     setOfferPositionId(position.id)
     setOfferInstrumentId(position.instrument_id)
+    setOfferChairNumber(position.chair_number)
     setOfferExistingIds(existingMusicianIds)
   }
 
@@ -368,11 +375,14 @@ export function ProjectPositions({
 
       <SendOfferDialog
         open={offerPositionId !== null}
-        onOpenChange={(open) => { if (!open) { setOfferPositionId(null); setOfferInstrumentId(null); setOfferExistingIds([]) } }}
+        onOpenChange={(open) => { if (!open) { setOfferPositionId(null); setOfferInstrumentId(null); setOfferChairNumber(1); setOfferExistingIds([]) } }}
         positionId={offerPositionId ?? ''}
         instrumentId={offerInstrumentId ?? ''}
+        chairNumber={offerChairNumber}
         musicians={musicians}
         existingOfferMusicianIds={offerExistingIds}
+        basePay={basePay}
+        leaderFee={leaderFee}
         onSuccess={onPositionChange}
       />
 

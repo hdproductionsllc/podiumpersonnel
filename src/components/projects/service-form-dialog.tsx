@@ -97,9 +97,12 @@ export function ServiceFormDialog({
       name: '',
       service_type: 'rehearsal',
       venue: '',
+      venue_id: null,
       start_time: '',
       end_time: '',
       notes: '',
+      base_pay: null,
+      leader_fee: 50,
     },
   })
 
@@ -110,19 +113,34 @@ export function ServiceFormDialog({
           name: service.name,
           service_type: service.service_type as ServiceInput['service_type'],
           venue: service.venue || '',
+          venue_id: service.venue_id || null,
           start_time: isoToDatetimeLocal(service.start_time),
           end_time: service.end_time ? isoToDatetimeLocal(service.end_time) : '',
           notes: service.notes || '',
+          base_pay: (service as any).base_pay ?? null,
+          leader_fee: (service as any).leader_fee ?? 50,
         })
+        // Set selected venue based on venue_id
+        if (service.venue_id) {
+          const venue = venues.find(v => v.id === service.venue_id)
+          setSelectedVenue(venue || null)
+        } else if (service.venue) {
+          const venue = venues.find(v => v.name === service.venue)
+          setSelectedVenue(venue || null)
+        }
       } else {
         form.reset({
           name: '',
           service_type: 'rehearsal',
           venue: '',
+          venue_id: null,
           start_time: '',
           end_time: '',
           notes: '',
+          base_pay: null,
+          leader_fee: 50,
         })
+        setSelectedVenue(null)
       }
       setError(null)
       setDateWarning(null)
@@ -174,9 +192,12 @@ export function ServiceFormDialog({
           name: data.name,
           service_type: data.service_type,
           venue: data.venue || null,
+          venue_id: data.venue_id || null,
           start_time: data.start_time,
           end_time: data.end_time || null,
           notes: data.notes || null,
+          base_pay: data.base_pay ?? null,
+          leader_fee: data.leader_fee ?? 50,
         })
         .eq('id', service.id)
 
@@ -199,9 +220,12 @@ export function ServiceFormDialog({
           name: data.name,
           service_type: data.service_type,
           venue: data.venue || null,
+          venue_id: data.venue_id || null,
           start_time: data.start_time,
           end_time: data.end_time || null,
           notes: data.notes || null,
+          base_pay: data.base_pay ?? null,
+          leader_fee: data.leader_fee ?? 50,
         })
 
       if (insertError) {
@@ -326,9 +350,12 @@ export function ServiceFormDialog({
                       className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                       value={field.value}
                       onChange={(e) => {
-                        field.onChange(e.target.value)
-                        const venue = venues.find(v => v.name === e.target.value)
+                        const value = e.target.value
+                        field.onChange(value)
+                        const venue = venues.find(v => v.name === value)
                         setSelectedVenue(venue || null)
+                        // Set venue_id when selecting a known venue
+                        form.setValue('venue_id', venue?.id || null)
                       }}
                     >
                       <option value="">-- Select venue --</option>
@@ -344,7 +371,10 @@ export function ServiceFormDialog({
                     <Input
                       className="mt-2"
                       placeholder="Enter venue name"
-                      onChange={(e) => field.onChange(e.target.value)}
+                      onChange={(e) => {
+                        field.onChange(e.target.value)
+                        form.setValue('venue_id', null) // Clear venue_id for custom venues
+                      }}
                     />
                   )}
                   <FormMessage />
@@ -404,6 +434,54 @@ export function ServiceFormDialog({
                 </FormItem>
               )}
             />
+
+            <div className="border-t pt-4 mt-4">
+              <h4 className="text-sm font-medium mb-3">Pay</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="base_pay"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Base Pay ($)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          placeholder="e.g. 200"
+                          value={field.value ?? ''}
+                          onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="leader_fee"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Leader Fee ($)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          placeholder="e.g. 50"
+                          value={field.value ?? 50}
+                          onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 50)}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">Added to Violin 1 / Chair 1</p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
 
             <DialogFooter>
               <Button

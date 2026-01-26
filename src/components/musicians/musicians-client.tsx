@@ -36,6 +36,10 @@ export type MusicianWithInstruments = Musician & {
   musician_instruments: MusicianInstrumentJoin[]
   competing_schedules: MusicianSchedule[]
   tags?: string[]
+  zip_code?: string | null
+  service_radius_miles?: number | null
+  call_order?: number
+  is_leader?: boolean
 }
 
 export type InstrumentOption = {

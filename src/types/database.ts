@@ -100,6 +100,10 @@ export type Database = {
           phone: string | null
           notes: string | null
           is_active: boolean
+          zip_code: string | null
+          service_radius_miles: number | null
+          call_order: number
+          is_leader: boolean
           created_at: string
           updated_at: string
         }
@@ -112,6 +116,10 @@ export type Database = {
           phone?: string | null
           notes?: string | null
           is_active?: boolean
+          zip_code?: string | null
+          service_radius_miles?: number | null
+          call_order?: number
+          is_leader?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -124,6 +132,10 @@ export type Database = {
           phone?: string | null
           notes?: string | null
           is_active?: boolean
+          zip_code?: string | null
+          service_radius_miles?: number | null
+          call_order?: number
+          is_leader?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -317,6 +329,8 @@ export type Database = {
           start_time: string
           end_time: string | null
           notes: string | null
+          base_pay: number | null
+          leader_fee: number | null
           created_at: string
           updated_at: string
         }
@@ -330,6 +344,8 @@ export type Database = {
           start_time: string
           end_time?: string | null
           notes?: string | null
+          base_pay?: number | null
+          leader_fee?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -343,6 +359,8 @@ export type Database = {
           start_time?: string
           end_time?: string | null
           notes?: string | null
+          base_pay?: number | null
+          leader_fee?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -389,6 +407,7 @@ export type Database = {
           musician_id: string
           token: string
           status: 'pending' | 'viewed' | 'accepted' | 'declined' | 'expired'
+          custom_pay: number | null
           sent_at: string | null
           viewed_at: string | null
           responded_at: string | null
@@ -403,6 +422,7 @@ export type Database = {
           musician_id: string
           token?: string
           status?: 'pending' | 'viewed' | 'accepted' | 'declined' | 'expired'
+          custom_pay?: number | null
           sent_at?: string | null
           viewed_at?: string | null
           responded_at?: string | null
@@ -417,6 +437,7 @@ export type Database = {
           musician_id?: string
           token?: string
           status?: 'pending' | 'viewed' | 'accepted' | 'declined' | 'expired'
+          custom_pay?: number | null
           sent_at?: string | null
           viewed_at?: string | null
           responded_at?: string | null

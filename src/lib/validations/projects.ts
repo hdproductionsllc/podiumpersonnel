@@ -52,6 +52,11 @@ export const serviceSchema = z.object({
     .max(255, 'Venue must be less than 255 characters')
     .optional()
     .or(z.literal('')),
+  venue_id: z
+    .string()
+    .uuid()
+    .optional()
+    .nullable(),
   start_time: z
     .string()
     .min(1, 'Start time is required'),
@@ -63,6 +68,17 @@ export const serviceSchema = z.object({
     .string()
     .optional()
     .or(z.literal('')),
+  base_pay: z
+    .number()
+    .min(0, 'Base pay must be positive')
+    .optional()
+    .nullable(),
+  leader_fee: z
+    .number()
+    .min(0, 'Leader fee must be positive')
+    .default(50)
+    .optional()
+    .nullable(),
 })
 
 export type ProjectInput = z.infer<typeof projectSchema>

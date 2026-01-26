@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -14,9 +14,19 @@ export type OfferJoined = {
   sent_at: string | null
   expires_at: string | null
   responded_at: string | null
-  musician: { id: string; first_name: string; last_name: string }
+  musician: { id: string; first_name: string; last_name: string; email?: string | null }
   position_instrument: string
   position_chair: number
+}
+
+type WaterfallCandidate = {
+  id: string
+  first_name: string
+  last_name: string
+  email: string | null
+  call_order: number
+  is_leader: boolean
+  has_conflict: boolean
 }
 
 interface ProjectOffersProps {
@@ -47,6 +57,84 @@ export function ProjectOffers({
   onOfferChange,
 }: ProjectOffersProps) {
   const [sendingReminder, setSendingReminder] = useState<string | null>(null)
+  const [waterfallCandidates, setWaterfallCandidates] = useState<Record<string, WaterfallCandidate[]>>({})
+  const [loadingWaterfall, setLoadingWaterfall] = useState<string | null>(null)
+  const [sendingWaterfall, setSendingWaterfall] = useState<string | null>(null)
+
+  // Find declined offers and load waterfall candidates
+  const declinedOffers = offers.filter(o => o.status === 'declined')
+
+  useEffect(() => {
+    async function loadWaterfallCandidates() {
+      for (const offer of declinedOffers) {
+        if (!waterfallCandidates[offer.project_position_id]) {
+          try {
+            const response = await fetch(`/api/positions/${offer.project_position_id}/next-candidates`)
+            if (response.ok) {
+              const data = await response.json()
+              setWaterfallCandidates(prev => ({
+                ...prev,
+                [offer.project_position_id]: data.candidates || []
+              }))
+            }
+          } catch (err) {
+            console.error('Failed to load waterfall candidates:', err)
+          }
+        }
+      }
+    }
+    if (canManage && declinedOffers.length > 0) {
+      loadWaterfallCandidates()
+    }
+  }, [declinedOffers.map(o => o.id).join(','), canManage])
+
+  async function handleWaterfallSend(positionId: string, musicianId: string) {
+    setSendingWaterfall(musicianId)
+    try {
+      const supabase = createClient()
+
+      // Create new offer
+      const { data: offerData, error } = await supabase
+        .from('contract_offers')
+        .insert({
+          project_position_id: positionId,
+          musician_id: musicianId,
+          status: 'pending',
+          sent_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        })
+        .select('id')
+        .single()
+
+      if (error) throw error
+
+      // Update position status
+      await supabase
+        .from('project_positions')
+        .update({ status: 'offered' })
+        .eq('id', positionId)
+
+      // Send email if offer created
+      if (offerData?.id) {
+        try {
+          await fetch('/api/offers/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ offerId: offerData.id }),
+          })
+        } catch {
+          // Don't fail if email fails
+        }
+      }
+
+      toast.success('Offer sent to next candidate')
+      onOfferChange()
+    } catch (err) {
+      toast.error('Failed to send offer')
+    } finally {
+      setSendingWaterfall(null)
+    }
+  }
 
   if (offers.length === 0) return null
 
@@ -115,7 +203,8 @@ export function ProjectOffers({
                 ? 'expired'
                 : offer.status
               return (
-                <tr key={offer.id} className="hover:bg-muted/30">
+                <Fragment key={offer.id}>
+                <tr className="hover:bg-muted/30">
                   <td className="px-3 py-2">
                     {offer.musician.first_name} {offer.musician.last_name}
                   </td>
@@ -160,6 +249,38 @@ export function ProjectOffers({
                     </td>
                   )}
                 </tr>
+                {/* Waterfall suggestion for declined offers */}
+                {canManage && offer.status === 'declined' && waterfallCandidates[offer.project_position_id]?.length > 0 && (
+                  <tr className="bg-amber-50/50 dark:bg-amber-950/20">
+                    <td colSpan={canManage ? 6 : 5} className="px-3 py-2">
+                      <div className="flex items-center gap-3 text-sm">
+                        <span className="text-amber-700 dark:text-amber-300 font-medium">
+                          Next in line:
+                        </span>
+                        {waterfallCandidates[offer.project_position_id].map((candidate, idx) => (
+                          <div key={candidate.id} className="flex items-center gap-2">
+                            {idx > 0 && <span className="text-muted-foreground">or</span>}
+                            <span className={candidate.has_conflict ? 'text-muted-foreground line-through' : ''}>
+                              {candidate.first_name} {candidate.last_name}
+                              {candidate.is_leader && ' ★'}
+                              {candidate.call_order < 100 && ` (#${candidate.call_order})`}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              disabled={sendingWaterfall === candidate.id || candidate.has_conflict}
+                              onClick={() => handleWaterfallSend(offer.project_position_id, candidate.id)}
+                            >
+                              {sendingWaterfall === candidate.id ? 'Sending...' : 'Send Offer'}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               )
             })}
           </tbody>
