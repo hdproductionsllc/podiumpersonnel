@@ -553,6 +553,62 @@ export type Database = {
           updated_at?: string
         }
       }
+      payments: {
+        Row: {
+          id: string
+          organization_id: string
+          service_id: string
+          musician_id: string
+          project_position_id: string | null
+          amount: number
+          is_leader_fee: boolean
+          status: 'unpaid' | 'pending' | 'paid'
+          payment_date: string | null
+          payment_method: string | null
+          payment_reference: string | null
+          notes: string | null
+          exported_at: string | null
+          export_batch_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          service_id: string
+          musician_id: string
+          project_position_id?: string | null
+          amount: number
+          is_leader_fee?: boolean
+          status?: 'unpaid' | 'pending' | 'paid'
+          payment_date?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          notes?: string | null
+          exported_at?: string | null
+          export_batch_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          service_id?: string
+          musician_id?: string
+          project_position_id?: string | null
+          amount?: number
+          is_leader_fee?: boolean
+          status?: 'unpaid' | 'pending' | 'paid'
+          payment_date?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          notes?: string | null
+          exported_at?: string | null
+          export_batch_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -588,3 +644,4 @@ export type ProjectPosition = Database['public']['Tables']['project_positions'][
 export type ContractOffer = Database['public']['Tables']['contract_offers']['Row']
 export type SubstitutionRequest = Database['public']['Tables']['substitution_requests']['Row']
 export type CompetingSchedule = Database['public']['Tables']['competing_schedules']['Row']
+export type Payment = Database['public']['Tables']['payments']['Row']
