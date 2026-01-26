@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { VenueSearch } from '@/components/ui/venue-search'
 import {
   Form,
   FormControl,
@@ -28,18 +29,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import type { Service, Venue } from '@/types'
-
-interface VenueOption {
-  id: string
-  name: string
-  address: string | null
-  city: string | null
-  state: string | null
-  google_maps_url: string | null
-  parking_info: string | null
-  directions: string | null
-}
+import type { Service } from '@/types'
 
 function isoToDatetimeLocal(iso: string): string {
   const date = new Date(iso)
@@ -56,6 +46,7 @@ interface ServiceFormDialogProps {
   projectStartDate?: string | null
   projectEndDate?: string | null
   organizationId: string
+  initialServiceType?: 'rehearsal' | 'performance'
   onSuccess: () => void
 }
 
@@ -67,29 +58,13 @@ export function ServiceFormDialog({
   projectStartDate,
   projectEndDate,
   organizationId,
+  initialServiceType,
   onSuccess,
 }: ServiceFormDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dateWarning, setDateWarning] = useState<string | null>(null)
-  const [venues, setVenues] = useState<VenueOption[]>([])
-  const [selectedVenue, setSelectedVenue] = useState<VenueOption | null>(null)
   const isEditing = !!service
-
-  // Fetch venues when dialog opens
-  useEffect(() => {
-    if (open && organizationId) {
-      const supabase = createClient()
-      supabase
-        .from('venues')
-        .select('id, name, address, city, state, google_maps_url, parking_info, directions')
-        .eq('organization_id', organizationId)
-        .order('name')
-        .then(({ data }) => {
-          setVenues(data || [])
-        })
-    }
-  }, [open, organizationId])
 
   const form = useForm<ServiceInput>({
     resolver: zodResolver(serviceSchema),
@@ -120,32 +95,34 @@ export function ServiceFormDialog({
           base_pay: (service as any).base_pay ?? null,
           leader_fee: (service as any).leader_fee ?? 50,
         })
-        // Set selected venue based on venue_id
-        if (service.venue_id) {
-          const venue = venues.find(v => v.id === service.venue_id)
-          setSelectedVenue(venue || null)
-        } else if (service.venue) {
-          const venue = venues.find(v => v.name === service.venue)
-          setSelectedVenue(venue || null)
-        }
       } else {
+        // Auto-populate date from project dates
+        let defaultStartTime = ''
+        let defaultEndTime = ''
+        const dateToUse = projectStartDate || projectEndDate
+        if (dateToUse) {
+          // Default to 7:00 PM start time
+          defaultStartTime = `${dateToUse}T19:00`
+          // Default to 10:00 PM end time (3 hours later)
+          defaultEndTime = `${dateToUse}T22:00`
+        }
+
         form.reset({
           name: '',
-          service_type: 'rehearsal',
+          service_type: initialServiceType || 'rehearsal',
           venue: '',
           venue_id: null,
-          start_time: '',
-          end_time: '',
+          start_time: defaultStartTime,
+          end_time: defaultEndTime,
           notes: '',
           base_pay: null,
           leader_fee: 50,
         })
-        setSelectedVenue(null)
       }
       setError(null)
       setDateWarning(null)
     }
-  }, [open, service, form])
+  }, [open, service, form, initialServiceType, projectStartDate, projectEndDate])
 
   // Auto-populate end time when start time changes (3 hours later)
   function handleStartTimeChange(value: string) {
@@ -346,76 +323,21 @@ export function ServiceFormDialog({
                 <FormItem>
                   <FormLabel>Venue</FormLabel>
                   <FormControl>
-                    <select
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      value={field.value}
-                      onChange={(e) => {
-                        const value = e.target.value
-                        field.onChange(value)
-                        const venue = venues.find(v => v.name === value)
-                        setSelectedVenue(venue || null)
-                        // Set venue_id when selecting a known venue
-                        form.setValue('venue_id', venue?.id || null)
+                    <VenueSearch
+                      value={field.value || ''}
+                      venueId={form.watch('venue_id') ?? null}
+                      organizationId={organizationId}
+                      onChange={(venueName, venueId) => {
+                        field.onChange(venueName)
+                        form.setValue('venue_id', venueId)
                       }}
-                    >
-                      <option value="">-- Select venue --</option>
-                      {venues.map((v) => (
-                        <option key={v.id} value={v.name}>
-                          {v.name}
-                        </option>
-                      ))}
-                      <option value="__other__">Other (type below)</option>
-                    </select>
-                  </FormControl>
-                  {field.value === '__other__' && (
-                    <Input
-                      className="mt-2"
-                      placeholder="Enter venue name"
-                      onChange={(e) => {
-                        field.onChange(e.target.value)
-                        form.setValue('venue_id', null) // Clear venue_id for custom venues
-                      }}
+                      placeholder="Search saved venues or enter address..."
                     />
-                  )}
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-
-            {selectedVenue && (
-              <div className="rounded-md border bg-muted/30 p-3 space-y-2 text-sm">
-                {selectedVenue.address && (
-                  <div>
-                    <span className="font-medium">Address: </span>
-                    <span className="text-muted-foreground">
-                      {[selectedVenue.address, selectedVenue.city, selectedVenue.state].filter(Boolean).join(', ')}
-                    </span>
-                    {selectedVenue.google_maps_url && (
-                      <a
-                        href={selectedVenue.google_maps_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="ml-2 text-blue-600 hover:underline"
-                      >
-                        Get Directions
-                      </a>
-                    )}
-                  </div>
-                )}
-                {selectedVenue.parking_info && (
-                  <div>
-                    <span className="font-medium">Parking: </span>
-                    <span className="text-muted-foreground">{selectedVenue.parking_info}</span>
-                  </div>
-                )}
-                {selectedVenue.directions && (
-                  <div>
-                    <span className="font-medium">Directions: </span>
-                    <span className="text-muted-foreground">{selectedVenue.directions}</span>
-                  </div>
-                )}
-              </div>
-            )}
 
             <FormField
               control={form.control}

@@ -1,0 +1,223 @@
+'use client'
+
+import { useState, useEffect, useRef } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { Input } from './input'
+import type { Venue } from '@/types'
+
+interface VenueSearchProps {
+  value: string
+  venueId: string | null
+  organizationId: string
+  onChange: (venue: string, venueId: string | null, venueData?: Venue | null) => void
+  placeholder?: string
+  className?: string
+}
+
+export function VenueSearch({
+  value,
+  venueId,
+  organizationId,
+  onChange,
+  placeholder = 'Search saved venues or enter address...',
+  className,
+}: VenueSearchProps) {
+  const [inputValue, setInputValue] = useState(value)
+  const [venues, setVenues] = useState<Venue[]>([])
+  const [filteredVenues, setFilteredVenues] = useState<Venue[]>([])
+  const [isOpen, setIsOpen] = useState(false)
+  const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  // Fetch venues on mount
+  useEffect(() => {
+    async function fetchVenues() {
+      setIsLoading(true)
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('venues')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .order('name', { ascending: true })
+
+      setVenues(data || [])
+      setIsLoading(false)
+
+      // If we have a venueId, find and set the selected venue
+      if (venueId && data) {
+        const found = data.find((v) => v.id === venueId)
+        if (found) {
+          setSelectedVenue(found)
+          setInputValue(found.name)
+        }
+      }
+    }
+
+    fetchVenues()
+  }, [organizationId, venueId])
+
+  // Sync external value changes
+  useEffect(() => {
+    if (!venueId) {
+      setInputValue(value)
+      setSelectedVenue(null)
+    }
+  }, [value, venueId])
+
+  // Filter venues based on search
+  useEffect(() => {
+    if (!inputValue.trim()) {
+      setFilteredVenues(venues)
+    } else {
+      const query = inputValue.toLowerCase()
+      const filtered = venues.filter((v) => {
+        const nameMatch = v.name.toLowerCase().includes(query)
+        const addressMatch = v.address?.toLowerCase().includes(query)
+        const cityMatch = v.city?.toLowerCase().includes(query)
+        return nameMatch || addressMatch || cityMatch
+      })
+      setFilteredVenues(filtered)
+    }
+  }, [inputValue, venues])
+
+  // Handle click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const newValue = e.target.value
+    setInputValue(newValue)
+    setIsOpen(true)
+    setSelectedVenue(null)
+    // When typing, clear the venue_id and just pass the text
+    onChange(newValue, null, null)
+  }
+
+  function handleVenueSelect(venue: Venue) {
+    setInputValue(venue.name)
+    setSelectedVenue(venue)
+    setIsOpen(false)
+    onChange(venue.name, venue.id, venue)
+  }
+
+  function handleClearVenue() {
+    setInputValue('')
+    setSelectedVenue(null)
+    onChange('', null, null)
+  }
+
+  function formatAddress(venue: Venue): string {
+    const parts = [venue.address, venue.city, venue.state, venue.zip].filter(Boolean)
+    return parts.join(', ')
+  }
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <div className="relative">
+        <Input
+          type="text"
+          value={inputValue}
+          onChange={handleInputChange}
+          onFocus={() => setIsOpen(true)}
+          placeholder={isLoading ? 'Loading venues...' : placeholder}
+          className={className}
+          disabled={isLoading}
+        />
+        {selectedVenue && (
+          <button
+            type="button"
+            onClick={handleClearVenue}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* Dropdown */}
+      {isOpen && !isLoading && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-64 overflow-auto">
+          {filteredVenues.length > 0 ? (
+            <>
+              <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                Saved Venues
+              </div>
+              {filteredVenues.map((venue) => (
+                <button
+                  key={venue.id}
+                  type="button"
+                  className="w-full px-3 py-2 text-left hover:bg-muted flex flex-col gap-0.5"
+                  onClick={() => handleVenueSelect(venue)}
+                >
+                  <span className="font-medium text-sm">{venue.name}</span>
+                  {(venue.address || venue.city) && (
+                    <span className="text-xs text-muted-foreground">
+                      {formatAddress(venue)}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </>
+          ) : venues.length > 0 ? (
+            <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+              No saved venues match "{inputValue}"
+              <p className="text-xs mt-1">Enter a custom address or add this venue in Settings</p>
+            </div>
+          ) : (
+            <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+              No saved venues yet
+              <p className="text-xs mt-1">Add venues in the Venues page, or enter an address directly</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Selected venue details */}
+      {selectedVenue && (
+        <div className="mt-2 rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center rounded-full bg-green-100 dark:bg-green-900 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-300">
+              Saved Venue
+            </span>
+            {selectedVenue.google_maps_url && (
+              <a
+                href={selectedVenue.google_maps_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-600 hover:underline"
+              >
+                View on Google Maps
+              </a>
+            )}
+          </div>
+          {(selectedVenue.address || selectedVenue.city) && (
+            <p className="text-muted-foreground">{formatAddress(selectedVenue)}</p>
+          )}
+          {selectedVenue.parking_info && (
+            <p>
+              <span className="font-medium">Parking:</span>{' '}
+              <span className="text-muted-foreground">{selectedVenue.parking_info}</span>
+            </p>
+          )}
+          {selectedVenue.directions && (
+            <p>
+              <span className="font-medium">Access:</span>{' '}
+              <span className="text-muted-foreground">{selectedVenue.directions}</span>
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
