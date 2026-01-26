@@ -147,6 +147,13 @@ export function OnboardingForm() {
                     <Input
                       placeholder="bay-area-symphony"
                       {...field}
+                      onChange={(e) => {
+                        const value = e.target.value
+                          .toLowerCase()
+                          .replace(/\s+/g, '-')
+                          .replace(/[^a-z0-9-]/g, '')
+                        field.onChange(value)
+                      }}
                     />
                   </FormControl>
                   <FormDescription>

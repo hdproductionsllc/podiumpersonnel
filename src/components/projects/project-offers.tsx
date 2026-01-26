@@ -61,6 +61,10 @@ export function ProjectOffers({
   const [loadingWaterfall, setLoadingWaterfall] = useState<string | null>(null)
   const [sendingWaterfall, setSendingWaterfall] = useState<string | null>(null)
 
+  // Confirmation dialog state
+  const [confirmReminder, setConfirmReminder] = useState<OfferJoined | null>(null)
+  const [confirmWaterfall, setConfirmWaterfall] = useState<{ positionId: string; candidate: WaterfallCandidate; offer: OfferJoined } | null>(null)
+
   // Find declined offers and load waterfall candidates
   const declinedOffers = offers.filter(o => o.status === 'declined')
 
@@ -88,7 +92,15 @@ export function ProjectOffers({
     }
   }, [declinedOffers.map(o => o.id).join(','), canManage])
 
-  async function handleWaterfallSend(positionId: string, musicianId: string) {
+  function handleWaterfallSend(positionId: string, candidate: WaterfallCandidate, offer: OfferJoined) {
+    setConfirmWaterfall({ positionId, candidate, offer })
+  }
+
+  async function confirmWaterfallSend() {
+    if (!confirmWaterfall) return
+    const { positionId, candidate } = confirmWaterfall
+    const musicianId = candidate.id
+    setConfirmWaterfall(null)
     setSendingWaterfall(musicianId)
     try {
       const supabase = createClient()
@@ -145,7 +157,14 @@ export function ProjectOffers({
     onOfferChange()
   }
 
-  async function handleSendReminder(offerId: string) {
+  function handleSendReminder(offer: OfferJoined) {
+    setConfirmReminder(offer)
+  }
+
+  async function confirmSendReminder() {
+    if (!confirmReminder) return
+    const offerId = confirmReminder.id
+    setConfirmReminder(null)
     setSendingReminder(offerId)
     try {
       const response = await fetch('/api/offers/send-reminder', {
@@ -238,7 +257,7 @@ export function ProjectOffers({
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleSendReminder(offer.id)}
+                            onClick={() => handleSendReminder(offer)}
                             disabled={sendingReminder === offer.id}
                           >
                             {sendingReminder === offer.id ? 'Sending...' : 'Remind'}
@@ -279,7 +298,7 @@ export function ProjectOffers({
                               size="sm"
                               className="h-7 text-xs"
                               disabled={sendingWaterfall === candidate.id || candidate.has_conflict}
-                              onClick={() => handleWaterfallSend(offer.project_position_id, candidate.id)}
+                              onClick={() => handleWaterfallSend(offer.project_position_id, candidate, offer)}
                             >
                               {sendingWaterfall === candidate.id ? 'Sending...' : 'Send Offer'}
                             </Button>
@@ -296,6 +315,106 @@ export function ProjectOffers({
           </tbody>
         </table>
       </div>
+
+      {/* Reminder Confirmation Dialog */}
+      {confirmReminder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-lg rounded-lg border bg-background p-6 shadow-lg">
+            <h3 className="text-lg font-semibold">Confirm Reminder Email</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Review the reminder email that will be sent.
+            </p>
+
+            {/* Email Preview */}
+            <div className="mt-4 rounded-lg border bg-white dark:bg-gray-900">
+              <div className="border-b bg-muted/30 px-4 py-2">
+                <p className="text-xs text-muted-foreground">To:</p>
+                <p className="text-sm">{confirmReminder.musician.email || 'No email on file'}</p>
+              </div>
+              <div className="border-b bg-muted/30 px-4 py-2">
+                <p className="text-xs text-muted-foreground">Subject:</p>
+                <p className="text-sm font-medium">Reminder: Contract Offer for {confirmReminder.position_instrument}</p>
+              </div>
+              <div className="p-4 space-y-3 text-sm">
+                <p>Dear {confirmReminder.musician.first_name} {confirmReminder.musician.last_name},</p>
+                <p className="text-muted-foreground">
+                  This is a friendly reminder that you have a pending contract offer for{' '}
+                  <strong>{confirmReminder.position_instrument}</strong>.
+                </p>
+                <p className="text-muted-foreground">
+                  {confirmReminder.expires_at
+                    ? `This offer expires on ${new Date(confirmReminder.expires_at).toLocaleDateString()}.`
+                    : 'This offer has no expiration date.'}
+                </p>
+                <p className="text-xs text-muted-foreground italic">
+                  [A link to respond to the offer will be included]
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setConfirmReminder(null)}>
+                Cancel
+              </Button>
+              <Button onClick={confirmSendReminder}>
+                Confirm & Send Reminder
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Waterfall Send Confirmation Dialog */}
+      {confirmWaterfall && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-lg rounded-lg border bg-background p-6 shadow-lg">
+            <h3 className="text-lg font-semibold">Confirm Contract Offer Email</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Review the contract offer email that will be sent.
+            </p>
+
+            {/* Email Preview */}
+            <div className="mt-4 rounded-lg border bg-white dark:bg-gray-900">
+              <div className="border-b bg-muted/30 px-4 py-2">
+                <p className="text-xs text-muted-foreground">To:</p>
+                <p className="text-sm">{confirmWaterfall.candidate.email || 'No email on file'}</p>
+              </div>
+              <div className="border-b bg-muted/30 px-4 py-2">
+                <p className="text-xs text-muted-foreground">Subject:</p>
+                <p className="text-sm font-medium">Contract Offer: {confirmWaterfall.offer.position_instrument}</p>
+              </div>
+              <div className="p-4 space-y-3 text-sm">
+                <p>Dear {confirmWaterfall.candidate.first_name} {confirmWaterfall.candidate.last_name},</p>
+                <p className="text-muted-foreground">
+                  We are pleased to offer you a position as{' '}
+                  <strong>{confirmWaterfall.offer.position_instrument}</strong>.
+                </p>
+                <p className="text-muted-foreground">
+                  Please review the details and respond to this offer within 7 days.
+                </p>
+                <p className="text-xs text-muted-foreground italic">
+                  [Full project details and response link will be included]
+                </p>
+              </div>
+            </div>
+
+            {!confirmWaterfall.candidate.email && (
+              <div className="mt-3 rounded bg-amber-100 dark:bg-amber-900/50 p-3 text-sm text-amber-700 dark:text-amber-300">
+                Warning: This musician has no email on file. The offer will be created but no email will be sent.
+              </div>
+            )}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setConfirmWaterfall(null)}>
+                Cancel
+              </Button>
+              <Button onClick={confirmWaterfallSend}>
+                Confirm & Send Offer
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

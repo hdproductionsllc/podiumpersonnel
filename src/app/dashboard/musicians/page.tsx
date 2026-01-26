@@ -57,6 +57,7 @@ export default async function MusiciansPage() {
       musicians={(musicians as any) ?? []}
       instruments={instruments ?? []}
       organizationId={organization!.id}
+      organizationName={organization!.name}
       userRole={membership!.role}
     />
   )

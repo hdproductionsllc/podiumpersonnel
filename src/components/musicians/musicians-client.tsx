@@ -47,6 +47,7 @@ interface MusiciansClientProps {
   musicians: MusicianWithInstruments[]
   instruments: InstrumentOption[]
   organizationId: string
+  organizationName: string
   userRole: string
 }
 
@@ -54,6 +55,7 @@ export function MusiciansClient({
   musicians,
   instruments,
   organizationId,
+  organizationName,
   userRole,
 }: MusiciansClientProps) {
   const router = useRouter()
@@ -296,16 +298,21 @@ export function MusiciansClient({
 
   // W-9 request state
   const [isSendingW9, setIsSendingW9] = useState(false)
+  const [showW9Confirm, setShowW9Confirm] = useState(false)
 
   // Count selected musicians who need W-9 and have email
   const selectedNeedW9 = selectedMusicians.filter((m) => !m.w9_on_file && m.email)
 
-  async function handleSendW9Request() {
+  function handleSendW9Request() {
     if (selectedNeedW9.length === 0) {
       toast.error('No selected musicians need a W-9 request (must have email and no W-9 on file)')
       return
     }
+    setShowW9Confirm(true)
+  }
 
+  async function confirmSendW9Request() {
+    setShowW9Confirm(false)
     setIsSendingW9(true)
 
     try {
@@ -1030,6 +1037,71 @@ export function MusiciansClient({
         instruments={instruments}
         onSuccess={handleBulkEditSuccess}
       />
+
+      {/* W-9 Request Confirmation Dialog */}
+      {showW9Confirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-2xl rounded-lg border bg-background p-6 shadow-lg max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold">Confirm W-9 Request Email</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Review the email that will be sent to {selectedNeedW9.length} musician{selectedNeedW9.length !== 1 ? 's' : ''}.
+            </p>
+
+            {/* Email Preview */}
+            <div className="mt-4 rounded-lg border bg-white dark:bg-gray-900">
+              <div className="border-b bg-muted/30 px-4 py-2">
+                <p className="text-xs text-muted-foreground">Subject:</p>
+                <p className="text-sm font-medium">W-9 Form Request - {organizationName}</p>
+              </div>
+              <div className="p-4 space-y-3 text-sm">
+                <p>Dear <span className="italic text-muted-foreground">[Musician Name]</span>,</p>
+                <p className="text-muted-foreground">
+                  We hope this message finds you well. As part of our record-keeping requirements,
+                  we need to have a completed <strong>W-9 form</strong> on file for all musicians
+                  we work with.
+                </p>
+                <div className="rounded bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-3">
+                  <p className="font-medium text-blue-800 dark:text-blue-200 text-xs">What is a W-9?</p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                    Form W-9 is used to provide your taxpayer identification number (TIN) to
+                    organizations that will pay you for your services.
+                  </p>
+                </div>
+                <p className="text-muted-foreground">
+                  <strong>Please complete and return your W-9 form at your earliest convenience.</strong>
+                </p>
+                <p className="text-xs text-muted-foreground italic">
+                  [Instructions for downloading and submitting the form will be included]
+                </p>
+              </div>
+            </div>
+
+            {/* Recipients */}
+            <div className="mt-4">
+              <p className="text-sm font-medium mb-2">Recipients ({selectedNeedW9.length}):</p>
+              <div className="max-h-32 overflow-y-auto rounded border bg-muted/50 p-2">
+                <ul className="space-y-1 text-sm">
+                  {selectedNeedW9.map((m) => (
+                    <li key={m.id} className="flex justify-between">
+                      <span>{m.first_name} {m.last_name}</span>
+                      <span className="text-muted-foreground">{m.email}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowW9Confirm(false)}>
+                Cancel
+              </Button>
+              <Button onClick={confirmSendW9Request}>
+                Confirm & Send {selectedNeedW9.length} Email{selectedNeedW9.length !== 1 ? 's' : ''}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

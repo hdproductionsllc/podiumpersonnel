@@ -104,7 +104,18 @@ export function OrganizationSection({ organization, role }: OrganizationSectionP
                 <FormItem>
                   <FormLabel>Slug</FormLabel>
                   <FormControl>
-                    <Input {...field} disabled={!canEdit} placeholder="my-organization" />
+                    <Input
+                      {...field}
+                      disabled={!canEdit}
+                      placeholder="my-organization"
+                      onChange={(e) => {
+                        const value = e.target.value
+                          .toLowerCase()
+                          .replace(/\s+/g, '-')
+                          .replace(/[^a-z0-9-]/g, '')
+                        field.onChange(value)
+                      }}
+                    />
                   </FormControl>
                   <FormDescription>
                     Used in URLs. Only lowercase letters, numbers, and hyphens allowed.
