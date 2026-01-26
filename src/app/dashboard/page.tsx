@@ -400,7 +400,7 @@ export default async function DashboardPage() {
               {staffingAlerts.slice(0, 5).map((alert, i) => (
                 <Link
                   key={`${alert.projectId}-${alert.alertType}-${i}`}
-                  href="/dashboard/projects"
+                  href={`/dashboard/projects?expand=${alert.projectId}`}
                   className="flex items-center justify-between rounded-lg p-2 -mx-2 transition-colors hover:bg-yellow-100/50 dark:hover:bg-yellow-900/20"
                 >
                   <div className="flex items-center gap-3">
@@ -436,7 +436,7 @@ export default async function DashboardPage() {
                 {calendarItems.slice(0, 10).map((item) => (
                   <Link
                     key={`${item.type}-${item.id}`}
-                    href={`/dashboard/projects/${item.projectId}`}
+                    href={`/dashboard/projects?expand=${item.projectId}`}
                     className="flex items-start gap-3 rounded-lg p-2 -mx-2 transition-colors hover:bg-muted/50"
                   >
                     <div className="flex flex-col items-center justify-center min-w-[50px] rounded bg-muted px-2 py-1">

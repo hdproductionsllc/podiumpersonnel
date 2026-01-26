@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, Fragment } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Fragment } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { ProjectFormDialog } from './project-form-dialog'
@@ -193,7 +193,31 @@ export function ProjectsClient({
   const [selectedServiceType, setSelectedServiceType] = useState<'rehearsal' | 'performance'>('rehearsal')
 
   // Expandable row state
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const searchParams = useSearchParams()
+  const expandProjectId = searchParams.get('expand')
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(() => {
+    // Initialize with the project ID from query param if present
+    if (expandProjectId) {
+      return new Set([expandProjectId])
+    }
+    return new Set()
+  })
+
+  // Auto-expand and scroll to project from URL query param
+  useEffect(() => {
+    if (expandProjectId) {
+      if (!expandedRows.has(expandProjectId)) {
+        setExpandedRows((prev) => new Set([...prev, expandProjectId]))
+      }
+      // Scroll to the project row after a brief delay for render
+      setTimeout(() => {
+        const element = document.getElementById(`project-${expandProjectId}`)
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+      }, 100)
+    }
+  }, [expandProjectId])
 
   // Filter state
   const [search, setSearch] = useState('')
@@ -384,6 +408,7 @@ export function ProjectsClient({
                 return (
                   <Fragment key={project.id}>
                     <tr
+                      id={`project-${project.id}`}
                       className="hover:bg-muted/50 cursor-pointer"
                       onClick={() => toggleRow(project.id)}
                     >
