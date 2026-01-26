@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
           project:projects(
             id,
             name,
-            organization:organizations(id, name),
+            organization:organizations(id, name, timezone),
             services(id, name, service_type, start_time, end_time, venue)
           )
         )
@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
     const organization = project?.organization as any
     const instrument = position?.instrument as any
     const services = project?.services as any[] || []
+    const timezone = organization?.timezone || 'America/Los_Angeles'
 
     // Count total chairs for this instrument in this project
     let totalChairs = 1
@@ -99,10 +100,12 @@ export async function POST(request: NextRequest) {
           year: 'numeric',
           month: 'long',
           day: 'numeric',
+          timeZone: timezone,
         }),
         time: new Date(service.start_time).toLocaleTimeString('en-US', {
           hour: 'numeric',
           minute: '2-digit',
+          timeZone: timezone,
         }),
         venue: service.venue,
       }))

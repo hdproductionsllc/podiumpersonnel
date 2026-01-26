@@ -20,6 +20,16 @@ import {
 } from '@/components/ui/form'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
+const TIMEZONE_OPTIONS = [
+  { value: 'America/New_York', label: 'Eastern Time (ET)' },
+  { value: 'America/Chicago', label: 'Central Time (CT)' },
+  { value: 'America/Denver', label: 'Mountain Time (MT)' },
+  { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+  { value: 'America/Anchorage', label: 'Alaska Time (AKT)' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii Time (HT)' },
+  { value: 'America/Phoenix', label: 'Arizona (no DST)' },
+]
+
 export function OnboardingForm() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
@@ -31,6 +41,7 @@ export function OnboardingForm() {
     defaultValues: {
       organizationName: '',
       slug: '',
+      timezone: 'America/Los_Angeles',
       musician_policy: '',
     },
   })
@@ -71,6 +82,7 @@ export function OnboardingForm() {
       .insert({
         name: data.organizationName,
         slug: data.slug,
+        timezone: data.timezone,
         musician_policy: data.musician_policy || null,
       })
       .select()
@@ -158,6 +170,31 @@ export function OnboardingForm() {
                   </FormControl>
                   <FormDescription>
                     This will be used in your organization&apos;s URL
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="timezone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Timezone</FormLabel>
+                  <FormControl>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      {...field}
+                    >
+                      {TIMEZONE_OPTIONS.map((tz) => (
+                        <option key={tz.value} value={tz.value}>
+                          {tz.label}
+                        </option>
+                      ))}
+                    </select>
+                  </FormControl>
+                  <FormDescription>
+                    Used for displaying dates and times
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

@@ -3,6 +3,7 @@ import { z } from 'zod'
 export const updateOrganizationSchema = z.object({
   name: z.string().min(1, 'Organization name is required').max(255),
   slug: z.string().min(1, 'Slug is required').max(100).regex(/^[a-z0-9-]+$/, 'Slug can only contain lowercase letters, numbers, and hyphens'),
+  timezone: z.string().min(1, 'Timezone is required'),
   musician_policy: z.string().max(10000).optional().nullable(),
 })
 

@@ -33,6 +33,7 @@ export const onboardingSchema = z.object({
       /^[a-z0-9-]+$/,
       'Slug can only contain lowercase letters, numbers, and hyphens'
     ),
+  timezone: z.string().min(1, 'Timezone is required'),
   musician_policy: z.string().max(10000).optional(),
 })
 

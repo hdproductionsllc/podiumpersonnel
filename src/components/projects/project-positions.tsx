@@ -4,6 +4,7 @@ import { useState, Fragment } from 'react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { ImportFromBookDialog } from './import-from-book-dialog'
+import { AddPositionDialog } from './add-position-dialog'
 import { SendOfferDialog, type MusicianForOffer, type MusicianScheduleEntry } from './send-offer-dialog'
 import { RequestSubDialog } from './request-sub-dialog'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
@@ -59,6 +60,7 @@ export type BookForImport = {
 interface ProjectPositionsProps {
   positions: PositionJoined[]
   projectId: string
+  organizationId: string
   books: BookForImport[]
   musicians: MusicianForOffer[]
   services: Service[]
@@ -108,7 +110,7 @@ export function detectConflicts(
         if (schedStart < svcEnd && schedEnd > svcStart) {
           conflicts.push({
             musicianName: `${musician.first_name} ${musician.last_name}`,
-            positionLabel: `${position.instrument?.name} ${position.chair_number}`,
+            positionLabel: `${position.instrument?.name}, Chair ${position.chair_number}`,
             schedule,
             service,
           })
@@ -122,6 +124,7 @@ export function detectConflicts(
 export function ProjectPositions({
   positions,
   projectId,
+  organizationId,
   books,
   musicians,
   services,
@@ -129,11 +132,14 @@ export function ProjectPositions({
   onPositionChange,
 }: ProjectPositionsProps) {
   const [importOpen, setImportOpen] = useState(false)
+  const [addPositionOpen, setAddPositionOpen] = useState(false)
+  const [addPositionMode, setAddPositionMode] = useState<'presets' | 'single'>('presets')
   const [clearing, setClearing] = useState(false)
   const [offerPositionId, setOfferPositionId] = useState<string | null>(null)
   const [offerInstrumentId, setOfferInstrumentId] = useState<string | null>(null)
   const [offerChairNumber, setOfferChairNumber] = useState<number>(1)
   const [offerExistingIds, setOfferExistingIds] = useState<string[]>([])
+  const [suggestedCustomPay, setSuggestedCustomPay] = useState<string>('')
   const [subRequestPosition, setSubRequestPosition] = useState<PositionJoined | null>(null)
 
   // Get pay info from the first service (services should have consistent pay)
@@ -164,13 +170,24 @@ export function ProjectPositions({
     return acc
   }, {} as Record<string, PositionJoined[]>)
 
-  async function handleRemovePosition(positionId: string) {
+  async function handleRemovePosition(position: PositionJoined) {
+    // Prevent removal of confirmed positions
+    if (position.status === 'confirmed' || position.musician_id) {
+      alert('Cannot remove a position that has a confirmed musician. Unassign the musician first.')
+      return
+    }
     const supabase = createClient()
-    await supabase.from('project_positions').delete().eq('id', positionId)
+    await supabase.from('project_positions').delete().eq('id', position.id)
     onPositionChange()
   }
 
   async function handleClearAll() {
+    // Check if any positions are confirmed
+    const confirmedPositions = positions.filter(p => p.status === 'confirmed' || p.musician_id)
+    if (confirmedPositions.length > 0) {
+      alert(`Cannot clear all positions. ${confirmedPositions.length} position(s) have confirmed musicians. Unassign them first.`)
+      return
+    }
     if (!confirm('Remove all positions from this project?')) return
     setClearing(true)
     const supabase = createClient()
@@ -187,10 +204,36 @@ export function ProjectPositions({
 
   async function handleUnassign(positionId: string) {
     const supabase = createClient()
+
+    // Delete any contract offers for this position (so musician can be re-offered)
+    await supabase
+      .from('contract_offers')
+      .delete()
+      .eq('project_position_id', positionId)
+
+    // Reset the position to vacant
     await supabase
       .from('project_positions')
       .update({ musician_id: null, status: 'vacant' })
       .eq('id', positionId)
+
+    onPositionChange()
+  }
+
+  async function handleDuplicatePosition(position: PositionJoined) {
+    // Find the next available chair number for this instrument
+    const existingChairs = positions
+      .filter(p => p.instrument_id === position.instrument_id)
+      .map(p => p.chair_number)
+    const nextChair = existingChairs.length > 0 ? Math.max(...existingChairs) + 1 : 1
+
+    const supabase = createClient()
+    await supabase.from('project_positions').insert({
+      project_id: projectId,
+      instrument_id: position.instrument_id,
+      chair_number: nextChair,
+      status: 'vacant',
+    })
     onPositionChange()
   }
 
@@ -221,8 +264,14 @@ export function ProjectPositions({
                 Clear All
               </Button>
             )}
+            <Button size="sm" variant="outline" onClick={() => { setAddPositionMode('presets'); setAddPositionOpen(true) }}>
+              Quick Presets
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => { setAddPositionMode('single'); setAddPositionOpen(true) }}>
+              Add Position
+            </Button>
             <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
-              Import from Book
+              Import from Saved Ensemble
             </Button>
           </div>
         )}
@@ -230,7 +279,7 @@ export function ProjectPositions({
 
       {totalPositions === 0 ? (
         <p className="text-sm text-muted-foreground py-2">
-          No positions defined. Import from a book to set up staffing.
+          No positions defined. Import from a saved ensemble or add positions manually.
         </p>
       ) : (
         <div className="rounded-md border bg-background">
@@ -263,7 +312,7 @@ export function ProjectPositions({
                     {sectionPositions.map((position) => (
                       <tr key={position.id} className="hover:bg-muted/30">
                         <td className="px-3 py-2">{position.instrument?.name}</td>
-                        <td className="px-3 py-2 text-muted-foreground">{position.chair_number}</td>
+                        <td className="px-3 py-2 text-muted-foreground">Chair {position.chair_number}</td>
                         <td className="px-3 py-2">
                           {position.musician
                             ? (() => {
@@ -297,22 +346,46 @@ export function ProjectPositions({
                           }
                         </td>
                         <td className="px-3 py-2">
-                          {canManage ? (
-                            <select
-                              className="rounded border bg-background px-2 py-0.5 text-xs"
-                              value={position.status}
-                              onChange={(e) => handleStatusChange(position.id, e.target.value)}
-                            >
-                              <option value="vacant">Vacant</option>
-                              <option value="offered">Offered</option>
-                              <option value="confirmed">Confirmed</option>
-                              <option value="declined">Declined</option>
-                            </select>
-                          ) : (
-                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[position.status] || ''}`}>
-                              {STATUS_LABELS[position.status] || position.status}
-                            </span>
-                          )}
+                          {(() => {
+                            // Find pending offer to show who it's offered to
+                            const pendingOffer = position.contract_offers.find(
+                              o => o.status === 'pending' || o.status === 'viewed'
+                            )
+                            const offeredToName = pendingOffer
+                              ? `${pendingOffer.musician.first_name} ${pendingOffer.musician.last_name}`
+                              : null
+
+                            return canManage ? (
+                              <div className="flex flex-col gap-1">
+                                <select
+                                  className="rounded border bg-background px-2 py-0.5 text-xs"
+                                  value={position.status}
+                                  onChange={(e) => handleStatusChange(position.id, e.target.value)}
+                                >
+                                  <option value="vacant">Vacant</option>
+                                  <option value="offered">Offered</option>
+                                  <option value="confirmed">Confirmed</option>
+                                  <option value="declined">Declined</option>
+                                </select>
+                                {position.status === 'offered' && offeredToName && (
+                                  <span className="text-xs text-muted-foreground">
+                                    to {offeredToName}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-1">
+                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[position.status] || ''}`}>
+                                  {STATUS_LABELS[position.status] || position.status}
+                                </span>
+                                {position.status === 'offered' && offeredToName && (
+                                  <span className="text-xs text-muted-foreground">
+                                    to {offeredToName}
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })()}
                         </td>
                         {canManage && (
                           <td className="px-3 py-2 text-right">
@@ -347,11 +420,21 @@ export function ProjectPositions({
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => handleRemovePosition(position.id)}
+                                onClick={() => handleDuplicatePosition(position)}
+                                title="Add another chair for this instrument"
                               >
-                                Remove
+                                +
                               </Button>
+                              {position.status !== 'confirmed' && !position.musician_id && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => handleRemovePosition(position)}
+                                >
+                                  Remove
+                                </Button>
+                              )}
                             </div>
                           </td>
                         )}
@@ -373,6 +456,16 @@ export function ProjectPositions({
         onSuccess={onPositionChange}
       />
 
+      <AddPositionDialog
+        open={addPositionOpen}
+        onOpenChange={setAddPositionOpen}
+        projectId={projectId}
+        organizationId={organizationId}
+        existingPositions={positions.map(p => ({ instrument_id: p.instrument_id, chair_number: p.chair_number }))}
+        initialMode={addPositionMode}
+        onSuccess={onPositionChange}
+      />
+
       <SendOfferDialog
         open={offerPositionId !== null}
         onOpenChange={(open) => { if (!open) { setOfferPositionId(null); setOfferInstrumentId(null); setOfferChairNumber(1); setOfferExistingIds([]) } }}
@@ -383,7 +476,13 @@ export function ProjectPositions({
         existingOfferMusicianIds={offerExistingIds}
         basePay={basePay}
         leaderFee={leaderFee}
-        onSuccess={onPositionChange}
+        suggestedCustomPay={suggestedCustomPay}
+        onSuccess={(applyPayToRemaining) => {
+          if (applyPayToRemaining?.customPay) {
+            setSuggestedCustomPay(applyPayToRemaining.customPay)
+          }
+          onPositionChange()
+        }}
       />
 
       <RequestSubDialog

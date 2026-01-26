@@ -19,8 +19,18 @@ import {
 } from '@/components/ui/form'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
+const TIMEZONE_OPTIONS = [
+  { value: 'America/New_York', label: 'Eastern Time (ET)' },
+  { value: 'America/Chicago', label: 'Central Time (CT)' },
+  { value: 'America/Denver', label: 'Mountain Time (MT)' },
+  { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+  { value: 'America/Anchorage', label: 'Alaska Time (AKT)' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii Time (HT)' },
+  { value: 'America/Phoenix', label: 'Arizona (no DST)' },
+]
+
 interface OrganizationSectionProps {
-  organization: { id: string; name: string; slug: string; musician_policy?: string | null }
+  organization: { id: string; name: string; slug: string; timezone: string; musician_policy?: string | null }
   role: 'owner' | 'admin' | 'member'
 }
 
@@ -37,6 +47,7 @@ export function OrganizationSection({ organization, role }: OrganizationSectionP
     defaultValues: {
       name: organization.name,
       slug: organization.slug,
+      timezone: organization.timezone,
       musician_policy: organization.musician_policy || '',
     },
   })
@@ -119,6 +130,32 @@ export function OrganizationSection({ organization, role }: OrganizationSectionP
                   </FormControl>
                   <FormDescription>
                     Used in URLs. Only lowercase letters, numbers, and hyphens allowed.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="timezone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Timezone</FormLabel>
+                  <FormControl>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      {...field}
+                      disabled={!canEdit}
+                    >
+                      {TIMEZONE_OPTIONS.map((tz) => (
+                        <option key={tz.value} value={tz.value}>
+                          {tz.label}
+                        </option>
+                      ))}
+                    </select>
+                  </FormControl>
+                  <FormDescription>
+                    Used for displaying dates and times in emails and the musician portal.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

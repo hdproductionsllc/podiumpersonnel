@@ -31,7 +31,7 @@ export default async function GigPage({ params }: GigPageProps) {
           start_date,
           end_date,
           organization_id,
-          organization:organizations(id, name)
+          organization:organizations(id, name, timezone)
         )
       )
     `)
@@ -56,9 +56,12 @@ export default async function GigPage({ params }: GigPageProps) {
       start_date: string | null
       end_date: string | null
       organization_id: string
-      organization: { id: string; name: string } | null
+      organization: { id: string; name: string; timezone: string } | null
     } | null
   } | null
+
+  // Get organization timezone for date formatting
+  const timezone = position?.project?.organization?.timezone || 'America/Los_Angeles'
 
   // Fetch services for schedule display and pay calculation
   let payAmount: number | null = offerData.custom_pay ?? null
@@ -129,8 +132,8 @@ export default async function GigPage({ params }: GigPageProps) {
                 <span className="text-muted-foreground">Date{services.length > 1 ? 's' : ''}</span>
                 <span className="font-medium">
                   {services.length === 1
-                    ? new Date(services[0].start_time).toLocaleDateString()
-                    : `${new Date(services[0].start_time).toLocaleDateString()} - ${new Date(services[services.length - 1].start_time).toLocaleDateString()}`
+                    ? new Date(services[0].start_time).toLocaleDateString('en-US', { timeZone: timezone })
+                    : `${new Date(services[0].start_time).toLocaleDateString('en-US', { timeZone: timezone })} - ${new Date(services[services.length - 1].start_time).toLocaleDateString('en-US', { timeZone: timezone })}`
                   }
                 </span>
               </div>
@@ -138,9 +141,9 @@ export default async function GigPage({ params }: GigPageProps) {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Date</span>
                 <span className="font-medium">
-                  {new Date(position.project.start_date).toLocaleDateString()}
+                  {new Date(position.project.start_date + 'T12:00:00').toLocaleDateString('en-US')}
                   {position.project.end_date && position.project.end_date !== position.project.start_date &&
-                    ` - ${new Date(position.project.end_date).toLocaleDateString()}`}
+                    ` - ${new Date(position.project.end_date + 'T12:00:00').toLocaleDateString('en-US')}`}
                 </span>
               </div>
             )}
@@ -172,11 +175,13 @@ export default async function GigPage({ params }: GigPageProps) {
                         month: 'long',
                         day: 'numeric',
                         year: 'numeric',
+                        timeZone: timezone,
                       })}
                       {' at '}
                       {new Date(service.start_time).toLocaleTimeString('en-US', {
                         hour: 'numeric',
                         minute: '2-digit',
+                        timeZone: timezone,
                       })}
                       {service.end_time && (
                         <>
@@ -184,6 +189,7 @@ export default async function GigPage({ params }: GigPageProps) {
                           {new Date(service.end_time).toLocaleTimeString('en-US', {
                             hour: 'numeric',
                             minute: '2-digit',
+                            timeZone: timezone,
                           })}
                         </>
                       )}

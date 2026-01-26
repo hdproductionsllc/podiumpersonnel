@@ -49,6 +49,7 @@ export async function PATCH(request: Request) {
     .update({
       name: parsed.data.name,
       slug: parsed.data.slug,
+      timezone: parsed.data.timezone,
       musician_policy: parsed.data.musician_policy || null,
     })
     .eq('id', membership.organization_id)
