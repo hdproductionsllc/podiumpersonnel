@@ -58,6 +58,9 @@ export const musicianSchema = z.object({
     .min(1, 'Call order must be at least 1')
     .max(999, 'Call order must be less than 1000'),
   is_leader: z.boolean(),
+  w9_on_file: z.boolean(),
+  zelle_method: z.enum(['email', 'phone', '']).optional().nullable(),
+  zelle_verified: z.boolean(),
 })
 
 export type MusicianInput = z.infer<typeof musicianSchema>

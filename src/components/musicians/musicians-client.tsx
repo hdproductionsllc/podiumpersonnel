@@ -31,6 +31,9 @@ export type MusicianWithInstruments = Musician & {
   service_radius_miles?: number | null
   call_order?: number
   is_leader?: boolean
+  w9_on_file?: boolean
+  zelle_method?: 'email' | 'phone' | null
+  zelle_verified?: boolean
 }
 
 export type InstrumentOption = {
@@ -66,6 +69,7 @@ export function MusiciansClient({
   const [tagFilter, setTagFilter] = useState('')
   const [regionFilter, setRegionFilter] = useState('')
   const [missingInfoFilter, setMissingInfoFilter] = useState(false)
+  const [w9Filter, setW9Filter] = useState<'' | 'has_w9' | 'no_w9'>('')
 
   // Selection state for bulk edit
   const [selectMode, setSelectMode] = useState(false)
@@ -101,10 +105,13 @@ export function MusiciansClient({
 
   const canManage = userRole === 'owner' || userRole === 'admin'
 
-  const hasFilters = search !== '' || instrumentFilter !== '' || statusFilter !== '' || tagFilter !== '' || regionFilter !== '' || missingInfoFilter
+  const hasFilters = search !== '' || instrumentFilter !== '' || statusFilter !== '' || tagFilter !== '' || regionFilter !== '' || missingInfoFilter || w9Filter !== ''
 
   // Count musicians with missing info
   const missingInfoCount = musicians.filter((m) => !m.email || !m.phone).length
+
+  // Count musicians without W-9 on file
+  const noW9Count = musicians.filter((m) => !m.w9_on_file).length
 
   const filteredMusicians = musicians
     .filter((m) => {
@@ -130,6 +137,10 @@ export function MusiciansClient({
       }
       if (missingInfoFilter) {
         if (m.email && m.phone) return false
+      }
+      if (w9Filter) {
+        if (w9Filter === 'has_w9' && !m.w9_on_file) return false
+        if (w9Filter === 'no_w9' && m.w9_on_file) return false
       }
       return true
     })
@@ -282,6 +293,47 @@ export function MusiciansClient({
   }
 
   const selectedMusicians = musicians.filter((m) => selectedIds.has(m.id))
+
+  // W-9 request state
+  const [isSendingW9, setIsSendingW9] = useState(false)
+
+  // Count selected musicians who need W-9 and have email
+  const selectedNeedW9 = selectedMusicians.filter((m) => !m.w9_on_file && m.email)
+
+  async function handleSendW9Request() {
+    if (selectedNeedW9.length === 0) {
+      toast.error('No selected musicians need a W-9 request (must have email and no W-9 on file)')
+      return
+    }
+
+    setIsSendingW9(true)
+
+    try {
+      const response = await fetch('/api/musicians/send-w9-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ musicianIds: selectedNeedW9.map((m) => m.id) }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        toast.error(result.error || 'Failed to send W-9 requests')
+        return
+      }
+
+      if (result.sent > 0) {
+        toast.success(`Sent W-9 request to ${result.sent} musician${result.sent !== 1 ? 's' : ''}`)
+      }
+      if (result.failed > 0) {
+        toast.warning(`Failed to send to ${result.failed} musician${result.failed !== 1 ? 's' : ''}`)
+      }
+    } catch {
+      toast.error('Failed to send W-9 requests')
+    } finally {
+      setIsSendingW9(false)
+    }
+  }
 
   function handleImportClick() {
     setShowImportDialog(true)
@@ -452,11 +504,26 @@ export function MusiciansClient({
                 {missingInfoCount} missing info
               </button>
             )}
+            {noW9Count > 0 && (
+              <button
+                onClick={() => setW9Filter(w9Filter === 'no_w9' ? '' : 'no_w9')}
+                className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  w9Filter === 'no_w9'
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900/50 dark:text-orange-300 dark:hover:bg-orange-900'
+                }`}
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                </svg>
+                {noW9Count} no W-9
+              </button>
+            )}
             {hasFilters && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => { setSearch(''); setInstrumentFilter(''); setStatusFilter(''); setTagFilter(''); setRegionFilter(''); setMissingInfoFilter(false) }}
+                onClick={() => { setSearch(''); setInstrumentFilter(''); setStatusFilter(''); setTagFilter(''); setRegionFilter(''); setMissingInfoFilter(false); setW9Filter('') }}
               >
                 Clear all
               </Button>
@@ -595,6 +662,16 @@ export function MusiciansClient({
                   </button>
                 </span>
               )}
+              {w9Filter && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 dark:bg-orange-900 px-2 py-0.5 text-xs text-orange-700 dark:text-orange-300">
+                  {w9Filter === 'no_w9' ? 'No W-9' : 'Has W-9'}
+                  <button onClick={() => setW9Filter('')} className="hover:text-destructive">
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -642,6 +719,16 @@ export function MusiciansClient({
               <Button size="sm" onClick={() => setBulkEditOpen(true)}>
                 Bulk Edit
               </Button>
+              {selectedNeedW9.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSendW9Request}
+                  disabled={isSendingW9}
+                >
+                  {isSendingW9 ? 'Sending...' : `Send W-9 Request (${selectedNeedW9.length})`}
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="ghost"
@@ -784,15 +871,41 @@ export function MusiciansClient({
                         {musician.home_region || '—'}
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                            musician.is_active
-                              ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300'
-                              : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-                          }`}
-                        >
-                          {musician.is_active ? 'Active' : 'Inactive'}
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                              musician.is_active
+                                ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300'
+                                : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                            }`}
+                          >
+                            {musician.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                              musician.w9_on_file
+                                ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                                : 'bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300'
+                            }`}
+                          >
+                            {musician.w9_on_file ? 'W-9 ✓' : 'No W-9'}
+                          </span>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                              musician.zelle_verified
+                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                : musician.zelle_method
+                                  ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300'
+                                  : 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
+                            }`}
+                          >
+                            {musician.zelle_verified
+                              ? `Zelle ✓ (${musician.zelle_method})`
+                              : musician.zelle_method
+                                ? `Zelle? (${musician.zelle_method})`
+                                : 'No Zelle'}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         {musician.tags && musician.tags.length > 0 ? (

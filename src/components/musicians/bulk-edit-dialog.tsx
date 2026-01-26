@@ -38,6 +38,7 @@ export function BulkEditDialog({
   const [updateHomeRegion, setUpdateHomeRegion] = useState(false)
   const [updateServiceRadius, setUpdateServiceRadius] = useState(false)
   const [updateIsLeader, setUpdateIsLeader] = useState(false)
+  const [updateW9OnFile, setUpdateW9OnFile] = useState(false)
 
   // Field values
   const [instrumentIds, setInstrumentIds] = useState<string[]>([])
@@ -45,9 +46,10 @@ export function BulkEditDialog({
   const [homeRegion, setHomeRegion] = useState('')
   const [serviceRadius, setServiceRadius] = useState(50)
   const [isLeader, setIsLeader] = useState(false)
+  const [w9OnFile, setW9OnFile] = useState(false)
 
   async function handleSubmit() {
-    if (!updateInstruments && !updateHomeRegion && !updateServiceRadius && !updateIsLeader) {
+    if (!updateInstruments && !updateHomeRegion && !updateServiceRadius && !updateIsLeader && !updateW9OnFile) {
       setError('Please select at least one field to update')
       return
     }
@@ -72,6 +74,9 @@ export function BulkEditDialog({
         }
         if (updateIsLeader) {
           updates.is_leader = isLeader
+        }
+        if (updateW9OnFile) {
+          updates.w9_on_file = w9OnFile
         }
 
         // Only update musicians table if there are field updates
@@ -157,11 +162,13 @@ export function BulkEditDialog({
       setUpdateHomeRegion(false)
       setUpdateServiceRadius(false)
       setUpdateIsLeader(false)
+      setUpdateW9OnFile(false)
       setInstrumentIds([])
       setInstrumentMode('add')
       setHomeRegion('')
       setServiceRadius(50)
       setIsLeader(false)
+      setW9OnFile(false)
       onSuccess()
     }
   }
@@ -354,6 +361,42 @@ export function BulkEditDialog({
                     onChange={() => setIsLeader(false)}
                   />
                   No
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* W-9 On File */}
+          <div className="space-y-3">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-300"
+                checked={updateW9OnFile}
+                onChange={(e) => setUpdateW9OnFile(e.target.checked)}
+              />
+              <span className="font-medium">Update W-9 On File</span>
+            </label>
+
+            {updateW9OnFile && (
+              <div className="ml-6 flex gap-4">
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="radio"
+                    name="w9OnFile"
+                    checked={w9OnFile === true}
+                    onChange={() => setW9OnFile(true)}
+                  />
+                  Yes, W-9 on file
+                </label>
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="radio"
+                    name="w9OnFile"
+                    checked={w9OnFile === false}
+                    onChange={() => setW9OnFile(false)}
+                  />
+                  No W-9
                 </label>
               </div>
             )}

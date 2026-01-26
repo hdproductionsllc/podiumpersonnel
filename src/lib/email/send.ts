@@ -4,6 +4,7 @@ import { OfferReminderEmail } from './templates/offer-reminder'
 import { OfferAcceptedEmail } from './templates/offer-accepted'
 import { OfferDeclinedEmail } from './templates/offer-declined'
 import { AdminOfferResponseEmail } from './templates/admin-offer-response'
+import { W9RequestEmail } from './templates/w9-request'
 import { render } from '@react-email/render'
 
 // Contract Offer Email
@@ -222,6 +223,38 @@ export async function sendAdminOfferResponseEmail(params: SendAdminOfferResponse
 
   if (error) {
     console.error('Failed to send admin notification email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// W-9 Request Email
+interface SendW9RequestParams {
+  to: string
+  musicianName: string
+  organizationName: string
+  adminEmail?: string
+}
+
+export async function sendW9RequestEmail(params: SendW9RequestParams) {
+  const emailHtml = await render(
+    W9RequestEmail({
+      musicianName: params.musicianName,
+      organizationName: params.organizationName,
+      adminEmail: params.adminEmail,
+    })
+  )
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: `W-9 Form Request - ${params.organizationName}`,
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send W-9 request email:', error)
     throw new Error(`Failed to send email: ${error.message}`)
   }
 

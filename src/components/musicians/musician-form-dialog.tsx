@@ -61,6 +61,9 @@ export function MusicianFormDialog({
       service_radius_miles: 50,
       call_order: 100,
       is_leader: false,
+      w9_on_file: false,
+      zelle_method: '',
+      zelle_verified: false,
     },
   })
 
@@ -80,6 +83,9 @@ export function MusicianFormDialog({
           service_radius_miles: (musician as any).service_radius_miles ?? 50,
           call_order: (musician as any).call_order ?? 100,
           is_leader: (musician as any).is_leader ?? false,
+          w9_on_file: (musician as any).w9_on_file ?? false,
+          zelle_method: (musician as any).zelle_method || '',
+          zelle_verified: (musician as any).zelle_verified ?? false,
         })
       } else {
         form.reset({
@@ -95,6 +101,9 @@ export function MusicianFormDialog({
           service_radius_miles: 50,
           call_order: 100,
           is_leader: false,
+          w9_on_file: false,
+          zelle_method: '',
+          zelle_verified: false,
         })
       }
       setError(null)
@@ -122,6 +131,9 @@ export function MusicianFormDialog({
           service_radius_miles: data.service_radius_miles ?? 50,
           call_order: data.call_order ?? 100,
           is_leader: data.is_leader ?? false,
+          w9_on_file: data.w9_on_file ?? false,
+          zelle_method: data.zelle_method || null,
+          zelle_verified: data.zelle_verified ?? false,
         })
         .eq('id', musician.id)
 
@@ -176,6 +188,9 @@ export function MusicianFormDialog({
           service_radius_miles: data.service_radius_miles ?? 50,
           call_order: data.call_order ?? 100,
           is_leader: data.is_leader ?? false,
+          w9_on_file: data.w9_on_file ?? false,
+          zelle_method: data.zelle_method || null,
+          zelle_verified: data.zelle_verified ?? false,
         })
         .select('id')
         .single()
@@ -417,24 +432,92 @@ export function MusicianFormDialog({
               </div>
             </div>
 
-            <FormField
-              control={form.control}
-              name="is_active"
-              render={({ field }) => (
-                <FormItem className="flex items-center gap-2">
-                  <FormControl>
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-gray-300"
-                      checked={field.value}
-                      onChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormLabel className="!mt-0">Active</FormLabel>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="flex items-center gap-6">
+              <FormField
+                control={form.control}
+                name="is_active"
+                render={({ field }) => (
+                  <FormItem className="flex items-center gap-2">
+                    <FormControl>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300"
+                        checked={field.value}
+                        onChange={field.onChange}
+                      />
+                    </FormControl>
+                    <FormLabel className="!mt-0">Active</FormLabel>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="w9_on_file"
+                render={({ field }) => (
+                  <FormItem className="flex items-center gap-2">
+                    <FormControl>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300"
+                        checked={field.value}
+                        onChange={field.onChange}
+                      />
+                    </FormControl>
+                    <FormLabel className="!mt-0">W-9 on File</FormLabel>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Zelle Payment Info */}
+            <div className="border-t pt-4 mt-4">
+              <h4 className="text-sm font-medium mb-3">Payment Info (Zelle)</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="zelle_method"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Zelle Method</FormLabel>
+                      <FormControl>
+                        <select
+                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          value={field.value ?? ''}
+                          onChange={(e) => field.onChange(e.target.value)}
+                        >
+                          <option value="">Not set</option>
+                          <option value="email">Email</option>
+                          <option value="phone">Phone</option>
+                        </select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="zelle_verified"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center gap-2 pt-8">
+                      <FormControl>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-gray-300"
+                          checked={field.value}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormLabel className="!mt-0">Verified</FormLabel>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
 
             <div className="space-y-2">
               <FormLabel>Instruments</FormLabel>
