@@ -66,10 +66,14 @@ function StatusBadge({ status }: { status: ProjectStatus }) {
 }
 
 function formatDateRange(start: string | null, end: string | null): string {
+  // Append T12:00:00 to date strings to avoid timezone shifting issues
+  // (date-only strings are interpreted as midnight UTC, which shifts back a day in US timezones)
+  const parseDate = (d: string) => new Date(d + 'T12:00:00')
+
   if (!start && !end) return '—'
-  if (start && !end) return new Date(start).toLocaleDateString()
-  if (!start && end) return `until ${new Date(end).toLocaleDateString()}`
-  return `${new Date(start!).toLocaleDateString()} – ${new Date(end!).toLocaleDateString()}`
+  if (start && !end) return parseDate(start).toLocaleDateString()
+  if (!start && end) return `until ${parseDate(end).toLocaleDateString()}`
+  return `${parseDate(start!).toLocaleDateString()} – ${parseDate(end!).toLocaleDateString()}`
 }
 
 function ServicesList({
