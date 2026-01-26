@@ -7,6 +7,11 @@ import { AdminOfferResponseEmail } from './templates/admin-offer-response'
 import { AdminOfferSentEmail } from './templates/admin-offer-sent'
 import { W9RequestEmail } from './templates/w9-request'
 import { PositionUnassignedEmail } from './templates/position-unassigned'
+import { AdminSubRequestEmail } from './templates/admin-sub-request'
+import { SubRequestApprovedEmail } from './templates/sub-request-approved'
+import { SubRequestDeclinedEmail } from './templates/sub-request-declined'
+import { MusicianReleasedEmail } from './templates/musician-released'
+import { SubDeclinedFindAnotherEmail } from './templates/sub-declined-find-another'
 import { render } from '@react-email/render'
 
 // Contract Offer Email
@@ -358,6 +363,236 @@ export async function sendPositionUnassignedEmail(params: SendPositionUnassigned
 
   if (error) {
     console.error('Failed to send position unassigned email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// Admin Sub Request Email (to admins when musician requests a sub)
+interface SendAdminSubRequestParams {
+  to: string | string[]
+  adminName?: string
+  organizationName: string
+  projectName: string
+  musicianName: string
+  musicianEmail: string | null
+  instrument: string
+  chairNumber: number
+  totalChairs?: number
+  serviceName: string | null
+  reason: string | null
+  suggestedSubName: string
+  suggestedSubEmail: string
+  suggestedSubPhone: string | null
+  suggestedSubInstrument: string
+  dashboardUrl: string
+}
+
+export async function sendAdminSubRequestEmail(params: SendAdminSubRequestParams) {
+  const emailHtml = await render(
+    AdminSubRequestEmail({
+      adminName: params.adminName,
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      musicianName: params.musicianName,
+      musicianEmail: params.musicianEmail,
+      instrument: params.instrument,
+      chairNumber: params.chairNumber,
+      totalChairs: params.totalChairs,
+      serviceName: params.serviceName,
+      reason: params.reason,
+      suggestedSubName: params.suggestedSubName,
+      suggestedSubEmail: params.suggestedSubEmail,
+      suggestedSubPhone: params.suggestedSubPhone,
+      suggestedSubInstrument: params.suggestedSubInstrument,
+      dashboardUrl: params.dashboardUrl,
+    })
+  )
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: `Sub Request: ${params.musicianName} needs a sub for ${params.projectName}`,
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send admin sub request email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// Sub Request Approved Email (to musician when admin approves)
+interface SendSubRequestApprovedParams {
+  to: string
+  musicianName: string
+  organizationName: string
+  projectName: string
+  instrument: string
+  chairNumber: number
+  totalChairs?: number
+  serviceName: string | null
+  suggestedSubName: string
+}
+
+export async function sendSubRequestApprovedEmail(params: SendSubRequestApprovedParams) {
+  const emailHtml = await render(
+    SubRequestApprovedEmail({
+      musicianName: params.musicianName,
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      instrument: params.instrument,
+      chairNumber: params.chairNumber,
+      totalChairs: params.totalChairs,
+      serviceName: params.serviceName,
+      suggestedSubName: params.suggestedSubName,
+    })
+  )
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: `Sub Request Approved: ${params.projectName}`,
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send sub request approved email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// Sub Request Declined Email (to musician when admin declines)
+interface SendSubRequestDeclinedParams {
+  to: string
+  musicianName: string
+  organizationName: string
+  projectName: string
+  instrument: string
+  chairNumber: number
+  totalChairs?: number
+  serviceName: string | null
+  suggestedSubName: string
+  adminNotes: string | null
+  gigUrl: string
+}
+
+export async function sendSubRequestDeclinedEmail(params: SendSubRequestDeclinedParams) {
+  const emailHtml = await render(
+    SubRequestDeclinedEmail({
+      musicianName: params.musicianName,
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      instrument: params.instrument,
+      chairNumber: params.chairNumber,
+      totalChairs: params.totalChairs,
+      serviceName: params.serviceName,
+      suggestedSubName: params.suggestedSubName,
+      adminNotes: params.adminNotes,
+      gigUrl: params.gigUrl,
+    })
+  )
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: `Sub Request Declined: ${params.projectName} - Please find another substitute`,
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send sub request declined email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// Musician Released Email (to original musician when sub accepts)
+interface SendMusicianReleasedParams {
+  to: string
+  musicianName: string
+  organizationName: string
+  projectName: string
+  instrument: string
+  chairNumber: number
+  totalChairs?: number
+  serviceName: string | null
+  substituteName: string
+}
+
+export async function sendMusicianReleasedEmail(params: SendMusicianReleasedParams) {
+  const emailHtml = await render(
+    MusicianReleasedEmail({
+      musicianName: params.musicianName,
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      instrument: params.instrument,
+      chairNumber: params.chairNumber,
+      totalChairs: params.totalChairs,
+      serviceName: params.serviceName,
+      substituteName: params.substituteName,
+    })
+  )
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: `You've Been Released: ${params.projectName}`,
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send musician released email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// Sub Declined Find Another Email (to original musician when sub declines)
+interface SendSubDeclinedFindAnotherParams {
+  to: string
+  musicianName: string
+  organizationName: string
+  projectName: string
+  instrument: string
+  chairNumber: number
+  totalChairs?: number
+  serviceName: string | null
+  suggestedSubName: string
+  gigUrl: string
+}
+
+export async function sendSubDeclinedFindAnotherEmail(params: SendSubDeclinedFindAnotherParams) {
+  const emailHtml = await render(
+    SubDeclinedFindAnotherEmail({
+      musicianName: params.musicianName,
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      instrument: params.instrument,
+      chairNumber: params.chairNumber,
+      totalChairs: params.totalChairs,
+      serviceName: params.serviceName,
+      suggestedSubName: params.suggestedSubName,
+      gigUrl: params.gigUrl,
+    })
+  )
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: `Action Required: Your sub declined - ${params.projectName}`,
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send sub declined find another email:', error)
     throw new Error(`Failed to send email: ${error.message}`)
   }
 

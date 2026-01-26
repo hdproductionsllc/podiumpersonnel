@@ -29,8 +29,15 @@ export type PositionSubRequestJoined = {
   reason: string | null
   status: string
   substitute_musician_id: string | null
+  suggested_sub_name: string | null
+  suggested_sub_email: string | null
+  suggested_sub_phone: string | null
+  suggested_sub_instrument_id: string | null
+  admin_notes: string | null
+  offer_id: string | null
   requesting_musician: { id: string; first_name: string; last_name: string }
   substitute_musician: { id: string; first_name: string; last_name: string } | null
+  suggested_sub_instrument: { id: string; name: string } | null
   service: { id: string; name: string; start_time: string } | null
 }
 

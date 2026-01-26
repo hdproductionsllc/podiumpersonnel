@@ -454,8 +454,14 @@ export type Database = {
           requesting_musician_id: string
           service_id: string | null
           reason: string | null
-          status: 'pending' | 'approved' | 'denied' | 'filled'
+          status: 'pending' | 'pending_approval' | 'approved' | 'denied' | 'declined' | 'sub_declined' | 'filled' | 'cancelled'
           substitute_musician_id: string | null
+          suggested_sub_name: string | null
+          suggested_sub_email: string | null
+          suggested_sub_phone: string | null
+          suggested_sub_instrument_id: string | null
+          admin_notes: string | null
+          offer_id: string | null
           created_at: string
           updated_at: string
         }
@@ -465,8 +471,14 @@ export type Database = {
           requesting_musician_id: string
           service_id?: string | null
           reason?: string | null
-          status?: 'pending' | 'approved' | 'denied' | 'filled'
+          status?: 'pending' | 'pending_approval' | 'approved' | 'denied' | 'declined' | 'sub_declined' | 'filled' | 'cancelled'
           substitute_musician_id?: string | null
+          suggested_sub_name?: string | null
+          suggested_sub_email?: string | null
+          suggested_sub_phone?: string | null
+          suggested_sub_instrument_id?: string | null
+          admin_notes?: string | null
+          offer_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -476,8 +488,14 @@ export type Database = {
           requesting_musician_id?: string
           service_id?: string | null
           reason?: string | null
-          status?: 'pending' | 'approved' | 'denied' | 'filled'
+          status?: 'pending' | 'pending_approval' | 'approved' | 'denied' | 'declined' | 'sub_declined' | 'filled' | 'cancelled'
           substitute_musician_id?: string | null
+          suggested_sub_name?: string | null
+          suggested_sub_email?: string | null
+          suggested_sub_phone?: string | null
+          suggested_sub_instrument_id?: string | null
+          admin_notes?: string | null
+          offer_id?: string | null
           created_at?: string
           updated_at?: string
         }

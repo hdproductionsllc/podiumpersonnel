@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
-import { sendOfferAcceptedEmail, sendAdminOfferResponseEmail } from '@/lib/email/send'
+import { sendOfferAcceptedEmail, sendAdminOfferResponseEmail, sendMusicianReleasedEmail } from '@/lib/email/send'
 
 export async function POST(
   _request: Request,
@@ -22,6 +22,7 @@ export async function POST(
       project_position:project_positions(
         id,
         chair_number,
+        musician_id,
         instrument:instruments(id, name),
         project:projects(
           id,
@@ -49,6 +50,30 @@ export async function POST(
     return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
   }
 
+  // Type the nested data
+  const musician = offer.musician as any
+  const position = offer.project_position as any
+  const project = position?.project as any
+  const organization = project?.organization as any
+  const instrument = position?.instrument as any
+  const services = project?.services as any[] || []
+  const timezone = organization?.timezone || 'America/Los_Angeles'
+
+  // Check if this is a substitution offer by looking for a related substitution request
+  const { data: subRequest } = await supabase
+    .from('substitution_requests')
+    .select(`
+      id,
+      requesting_musician_id,
+      service_id,
+      suggested_sub_name,
+      requesting_musician:musicians!requesting_musician_id(id, first_name, last_name, email),
+      service:services(id, name)
+    `)
+    .eq('offer_id', offer.id)
+    .eq('status', 'approved')
+    .maybeSingle()
+
   // Update offer to accepted
   await supabase
     .from('contract_offers')
@@ -67,16 +92,51 @@ export async function POST(
     })
     .eq('id', offer.project_position_id)
 
+  // If this is a substitution, update the substitution request and notify original musician
+  if (subRequest) {
+    // Update substitution request to filled
+    await supabase
+      .from('substitution_requests')
+      .update({ status: 'filled' })
+      .eq('id', subRequest.id)
+
+    // Get the original musician's accepted offer token for the gig URL
+    const originalMusician = subRequest.requesting_musician as any
+    const serviceName = (subRequest.service as any)?.name || null
+
+    // Count total chairs
+    let totalChairs = 1
+    if (project?.id && instrument?.id) {
+      const { count } = await supabase
+        .from('project_positions')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', project.id)
+        .eq('instrument_id', instrument.id)
+      totalChairs = count || 1
+    }
+
+    // Send "you've been released" email to the original musician
+    if (originalMusician?.email) {
+      try {
+        await sendMusicianReleasedEmail({
+          to: originalMusician.email,
+          musicianName: `${originalMusician.first_name} ${originalMusician.last_name}`,
+          organizationName: organization?.name || 'Orchestra',
+          projectName: project?.name || 'Project',
+          instrument: instrument?.name || 'Instrument',
+          chairNumber: position?.chair_number || 1,
+          totalChairs,
+          serviceName,
+          substituteName: `${musician?.first_name} ${musician?.last_name}`,
+        }).catch((err) => console.warn('Failed to send musician released email:', err))
+      } catch (emailError) {
+        console.warn('Email sending failed:', emailError)
+      }
+    }
+  }
+
   // Send confirmation emails (don't block on failure)
   try {
-    const musician = offer.musician as any
-    const position = offer.project_position as any
-    const project = position?.project as any
-    const organization = project?.organization as any
-    const instrument = position?.instrument as any
-    const services = project?.services as any[] || []
-    const timezone = organization?.timezone || 'America/Los_Angeles'
-
     // Count total chairs for this instrument in this project
     let totalChairs = 1
     if (project?.id && instrument?.id) {

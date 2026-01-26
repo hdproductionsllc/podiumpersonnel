@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
-import { sendOfferDeclinedEmail, sendAdminOfferResponseEmail } from '@/lib/email/send'
+import { sendOfferDeclinedEmail, sendAdminOfferResponseEmail, sendSubDeclinedFindAnotherEmail } from '@/lib/email/send'
 
 export async function POST(
   _request: Request,
@@ -49,6 +49,28 @@ export async function POST(
     return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
   }
 
+  // Type the nested data
+  const musician = offer.musician as any
+  const position = offer.project_position as any
+  const project = position?.project as any
+  const organization = project?.organization as any
+  const instrument = position?.instrument as any
+
+  // Check if this is a substitution offer by looking for a related substitution request
+  const { data: subRequest } = await supabase
+    .from('substitution_requests')
+    .select(`
+      id,
+      requesting_musician_id,
+      service_id,
+      suggested_sub_name,
+      requesting_musician:musicians!requesting_musician_id(id, first_name, last_name, email),
+      service:services(id, name)
+    `)
+    .eq('offer_id', offer.id)
+    .eq('status', 'approved')
+    .maybeSingle()
+
   // Update offer to declined
   await supabase
     .from('contract_offers')
@@ -59,19 +81,71 @@ export async function POST(
     .eq('id', offer.id)
 
   // Update position status to declined (back to vacant so another offer can be sent)
-  await supabase
-    .from('project_positions')
-    .update({ status: 'vacant' })
-    .eq('id', offer.project_position_id)
+  // But only if this is NOT a substitution - for substitutions, position stays with original musician
+  if (!subRequest) {
+    await supabase
+      .from('project_positions')
+      .update({ status: 'vacant' })
+      .eq('id', offer.project_position_id)
+  }
+
+  // If this is a substitution, update the substitution request and notify original musician
+  if (subRequest) {
+    // Update substitution request to sub_declined
+    await supabase
+      .from('substitution_requests')
+      .update({ status: 'sub_declined' })
+      .eq('id', subRequest.id)
+
+    const originalMusician = subRequest.requesting_musician as any
+    const serviceName = (subRequest.service as any)?.name || null
+
+    // Count total chairs
+    let totalChairs = 1
+    if (project?.id && instrument?.id) {
+      const { count } = await supabase
+        .from('project_positions')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', project.id)
+        .eq('instrument_id', instrument.id)
+      totalChairs = count || 1
+    }
+
+    // Get the original musician's offer token
+    const { data: originalOffer } = await supabase
+      .from('contract_offers')
+      .select('token')
+      .eq('project_position_id', offer.project_position_id)
+      .eq('musician_id', subRequest.requesting_musician_id)
+      .eq('status', 'accepted')
+      .single()
+
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const gigUrl = originalOffer ? `${baseUrl}/gig/${originalOffer.token}` : baseUrl
+
+    // Send "sub declined, find another" email to the original musician
+    if (originalMusician?.email) {
+      try {
+        await sendSubDeclinedFindAnotherEmail({
+          to: originalMusician.email,
+          musicianName: `${originalMusician.first_name} ${originalMusician.last_name}`,
+          organizationName: organization?.name || 'Orchestra',
+          projectName: project?.name || 'Project',
+          instrument: instrument?.name || 'Instrument',
+          chairNumber: position?.chair_number || 1,
+          totalChairs,
+          serviceName,
+          suggestedSubName: subRequest.suggested_sub_name || `${musician?.first_name} ${musician?.last_name}`,
+          gigUrl,
+        }).catch((err) => console.warn('Failed to send sub declined email:', err))
+      } catch (emailError) {
+        console.warn('Email sending failed:', emailError)
+      }
+    }
+  }
 
   // Send confirmation emails (don't block on failure)
   try {
-    const musician = offer.musician as any
-    const position = offer.project_position as any
-    const project = position?.project as any
-    const organization = project?.organization as any
-    const instrument = position?.instrument as any
-
     // Count total chairs for this instrument in this project
     let totalChairs = 1
     if (project?.id && instrument?.id) {

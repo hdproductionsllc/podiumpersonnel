@@ -1,7 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { GigPageClient } from '@/components/gig/gig-page-client'
 
 interface GigPageProps {
   params: Promise<{ token: string }>
@@ -17,13 +16,15 @@ export default async function GigPage({ params }: GigPageProps) {
     .select(`
       *,
       musician:musicians(
+        id,
         first_name,
         last_name,
         email
       ),
       project_position:project_positions(
+        id,
         chair_number,
-        instrument:instruments(name),
+        instrument:instruments(id, name),
         project:projects(
           id,
           name,
@@ -45,10 +46,11 @@ export default async function GigPage({ params }: GigPageProps) {
   // Type the nested data - eslint-disable needed for Supabase join queries
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const offerData = offer as any
-  const musician = offerData.musician as { first_name: string; last_name: string; email: string | null } | null
+  const musician = offerData.musician as { id: string; first_name: string; last_name: string; email: string | null } | null
   const position = offerData.project_position as {
+    id: string
     chair_number: number
-    instrument: { name: string } | null
+    instrument: { id: string; name: string } | null
     project: {
       id: string
       name: string
@@ -85,6 +87,35 @@ export default async function GigPage({ params }: GigPageProps) {
     }
   }
 
+  // Fetch instruments for the organization (for sub request form)
+  let instruments: { id: string; name: string }[] = []
+  if (position?.project?.organization_id) {
+    const { data: instrumentData } = await supabase
+      .from('instruments')
+      .select('id, name')
+      .eq('organization_id', position.project.organization_id)
+      .order('sort_order', { ascending: true })
+
+    instruments = instrumentData || []
+  }
+
+  // Check for existing sub request
+  let existingSubRequest = null
+  if (offerData.status === 'accepted' && musician?.id && position?.id) {
+    const { data: subRequestData } = await supabase
+      .from('substitution_requests')
+      .select('id, status, suggested_sub_name')
+      .eq('project_position_id', position.id)
+      .eq('requesting_musician_id', musician.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (subRequestData) {
+      existingSubRequest = subRequestData
+    }
+  }
+
   // Mark as viewed if pending
   if (offerData.status === 'pending') {
     await supabase
@@ -96,194 +127,26 @@ export default async function GigPage({ params }: GigPageProps) {
       .eq('id', offerData.id)
   }
 
-  const isExpired = offerData.expires_at && new Date(offerData.expires_at) < new Date()
-  const canRespond = offerData.status === 'pending' || offerData.status === 'viewed'
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4 py-8">
-      <Card className="w-full max-w-lg">
-        <CardHeader>
-          <CardTitle className="text-2xl">Contract Offer</CardTitle>
-          <CardDescription>
-            {position?.project?.organization?.name}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div>
-            <h3 className="font-semibold">Hello, {musician?.first_name}!</h3>
-            <p className="text-muted-foreground">
-              You have been invited to perform with {position?.project?.organization?.name}.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Project</span>
-              <span className="font-medium">{position?.project?.name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Position</span>
-              <span className="font-medium">
-                {position?.instrument?.name}
-              </span>
-            </div>
-            {services.length > 0 ? (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Date{services.length > 1 ? 's' : ''}</span>
-                <span className="font-medium">
-                  {services.length === 1
-                    ? new Date(services[0].start_time).toLocaleDateString('en-US', { timeZone: timezone })
-                    : `${new Date(services[0].start_time).toLocaleDateString('en-US', { timeZone: timezone })} - ${new Date(services[services.length - 1].start_time).toLocaleDateString('en-US', { timeZone: timezone })}`
-                  }
-                </span>
-              </div>
-            ) : position?.project?.start_date && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Date</span>
-                <span className="font-medium">
-                  {new Date(position.project.start_date + 'T12:00:00').toLocaleDateString('en-US')}
-                  {position.project.end_date && position.project.end_date !== position.project.start_date &&
-                    ` - ${new Date(position.project.end_date + 'T12:00:00').toLocaleDateString('en-US')}`}
-                </span>
-              </div>
-            )}
-            {payAmount != null && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Pay</span>
-                <span className="font-medium">${payAmount}</span>
-              </div>
-            )}
-          </div>
-
-          {services.length > 0 && (
-            <div>
-              <h4 className="font-medium mb-2">Schedule</h4>
-              <div className="space-y-2">
-                {services.map((service: any) => (
-                  <div key={service.id} className="text-sm bg-muted/50 rounded-md p-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <span className="font-medium">{service.name}</span>
-                        <span className="text-muted-foreground ml-2 text-xs">
-                          ({service.service_type})
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-muted-foreground mt-1">
-                      {new Date(service.start_time).toLocaleDateString('en-US', {
-                        weekday: 'long',
-                        month: 'long',
-                        day: 'numeric',
-                        year: 'numeric',
-                        timeZone: timezone,
-                      })}
-                      {' at '}
-                      {new Date(service.start_time).toLocaleTimeString('en-US', {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        timeZone: timezone,
-                      })}
-                      {service.end_time && (
-                        <>
-                          {' - '}
-                          {new Date(service.end_time).toLocaleTimeString('en-US', {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                            timeZone: timezone,
-                          })}
-                        </>
-                      )}
-                    </div>
-                    {service.venue && (
-                      <div className="text-muted-foreground mt-1">
-                        {service.venue}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {position?.project?.description && (
-            <div>
-              <h4 className="font-medium mb-1">Details</h4>
-              <p className="text-sm text-muted-foreground">{position.project.description}</p>
-            </div>
-          )}
-
-          {offerData.status === 'accepted' && (
-            <div className="space-y-3">
-              <div className="rounded-md bg-green-50 dark:bg-green-950 p-4 text-green-800 dark:text-green-200">
-                You have accepted this offer.
-              </div>
-              {(services.length > 0 || position?.project?.start_date) && (
-                <div className="flex flex-col gap-2">
-                  <a
-                    href={`/api/offers/${offerData.id}/calendar?format=google`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-                  >
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-                    </svg>
-                    Add to Google Calendar
-                  </a>
-                  <a
-                    href={`/api/offers/${offerData.id}/calendar`}
-                    download
-                    className="flex items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm hover:bg-muted"
-                  >
-                    Download .ics file (Outlook, Apple Calendar)
-                  </a>
-                </div>
-              )}
-            </div>
-          )}
-
-          {offerData.status === 'declined' && (
-            <div className="rounded-md bg-red-50 dark:bg-red-950 p-4 text-red-800 dark:text-red-200">
-              You have declined this offer.
-            </div>
-          )}
-
-          {isExpired && canRespond && (
-            <div className="rounded-md bg-yellow-50 dark:bg-yellow-950 p-4 text-yellow-800 dark:text-yellow-200">
-              This offer has expired.
-            </div>
-          )}
-
-          {canRespond && !isExpired && (
-            <div className="space-y-4">
-              <p className="text-xs text-muted-foreground text-center">
-                By accepting this offer, you agree to our{' '}
-                <a
-                  href={`/musician-policy?org=${position?.project?.organization_id || ''}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary underline hover:text-primary/80"
-                >
-                  Musician Policy
-                </a>
-                .
-              </p>
-              <div className="flex gap-3">
-                <form action={`/api/gig/${token}/accept`} method="POST" className="flex-1">
-                  <Button type="submit" className="w-full">
-                    Accept Offer
-                  </Button>
-                </form>
-                <form action={`/api/gig/${token}/decline`} method="POST" className="flex-1">
-                  <Button type="submit" variant="outline" className="w-full">
-                    Decline
-                  </Button>
-                </form>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+    <GigPageClient
+      token={token}
+      offerId={offerData.id}
+      offerStatus={offerData.status}
+      expiresAt={offerData.expires_at}
+      musicianFirstName={musician?.first_name || 'Musician'}
+      organizationName={position?.project?.organization?.name || 'Organization'}
+      organizationId={position?.project?.organization_id || ''}
+      projectName={position?.project?.name || 'Project'}
+      projectDescription={position?.project?.description || null}
+      projectStartDate={position?.project?.start_date || null}
+      projectEndDate={position?.project?.end_date || null}
+      instrumentId={position?.instrument?.id || ''}
+      instrumentName={position?.instrument?.name || 'Instrument'}
+      services={services}
+      payAmount={payAmount}
+      timezone={timezone}
+      instruments={instruments}
+      existingSubRequest={existingSubRequest}
+    />
   )
 }

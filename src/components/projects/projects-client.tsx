@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { ProjectFormDialog } from './project-form-dialog'
 import { DeleteProjectDialog } from './delete-project-dialog'
+import { ServiceTypeDialog } from './service-type-dialog'
 import { ServiceFormDialog } from './service-form-dialog'
 import { DeleteServiceDialog } from './delete-service-dialog'
 import { ProjectPositions } from './project-positions'
@@ -178,11 +179,14 @@ export function ProjectsClient({
   const [deletingProject, setDeletingProject] = useState<ProjectWithServices | null>(null)
 
   // Service dialog state
+  const [serviceTypeOpen, setServiceTypeOpen] = useState(false)
   const [serviceFormOpen, setServiceFormOpen] = useState(false)
   const [deleteServiceOpen, setDeleteServiceOpen] = useState(false)
   const [editingService, setEditingService] = useState<Service | null>(null)
   const [deletingService, setDeletingService] = useState<Service | null>(null)
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
+  const [activeProjectDates, setActiveProjectDates] = useState<{ start: string | null; end: string | null }>({ start: null, end: null })
+  const [selectedServiceType, setSelectedServiceType] = useState<'rehearsal' | 'performance'>('rehearsal')
 
   // Expandable row state
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
@@ -232,8 +236,19 @@ export function ProjectsClient({
 
   // Service handlers
   function handleAddService(projectId: string) {
+    const project = projects.find(p => p.id === projectId)
     setActiveProjectId(projectId)
+    setActiveProjectDates({
+      start: project?.start_date || null,
+      end: project?.end_date || null,
+    })
     setEditingService(null)
+    setServiceTypeOpen(true)
+  }
+
+  function handleServiceTypeSelect(type: 'rehearsal' | 'performance') {
+    setSelectedServiceType(type)
+    setServiceTypeOpen(false)
     setServiceFormOpen(true)
   }
   function handleEditService(projectId: string, service: Service) {
@@ -249,6 +264,7 @@ export function ProjectsClient({
   function handleSuccess() {
     setProjectFormOpen(false)
     setDeleteProjectOpen(false)
+    setServiceTypeOpen(false)
     setServiceFormOpen(false)
     setDeleteServiceOpen(false)
     setEditingProject(null)
@@ -256,7 +272,25 @@ export function ProjectsClient({
     setEditingService(null)
     setDeletingService(null)
     setActiveProjectId(null)
+    setActiveProjectDates({ start: null, end: null })
     router.refresh()
+  }
+
+  function handleProjectSuccess(newProject?: { id: string; start_date: string | null; end_date: string | null }) {
+    setProjectFormOpen(false)
+    setEditingProject(null)
+    router.refresh()
+
+    // If a new project was created, prompt to add a service
+    if (newProject) {
+      setActiveProjectId(newProject.id)
+      setActiveProjectDates({
+        start: newProject.start_date,
+        end: newProject.end_date,
+      })
+      setEditingService(null)
+      setServiceTypeOpen(true)
+    }
   }
 
   const colCount = canManage ? 6 : 5
@@ -402,6 +436,7 @@ export function ProjectsClient({
                           <ProjectPositions
                             positions={project.project_positions}
                             projectId={project.id}
+                            organizationId={organizationId}
                             books={books}
                             musicians={musicians}
                             services={project.services}
@@ -430,7 +465,6 @@ export function ProjectsClient({
                                 position_instrument_id: p.instrument_id,
                               }))
                             )}
-                            musicians={musicians}
                             canManage={canManage}
                             onRequestChange={handleSuccess}
                           />
@@ -453,7 +487,7 @@ export function ProjectsClient({
         onOpenChange={setProjectFormOpen}
         project={editingProject}
         organizationId={organizationId}
-        onSuccess={handleSuccess}
+        onSuccess={handleProjectSuccess}
       />
 
       <DeleteProjectDialog
@@ -463,14 +497,21 @@ export function ProjectsClient({
         onSuccess={handleSuccess}
       />
 
+      <ServiceTypeDialog
+        open={serviceTypeOpen}
+        onOpenChange={setServiceTypeOpen}
+        onSelect={handleServiceTypeSelect}
+      />
+
       <ServiceFormDialog
         open={serviceFormOpen}
         onOpenChange={setServiceFormOpen}
         service={editingService}
         projectId={activeProjectId}
-        projectStartDate={projects.find(p => p.id === activeProjectId)?.start_date}
-        projectEndDate={projects.find(p => p.id === activeProjectId)?.end_date}
+        projectStartDate={activeProjectDates.start || projects.find(p => p.id === activeProjectId)?.start_date}
+        projectEndDate={activeProjectDates.end || projects.find(p => p.id === activeProjectId)?.end_date}
         organizationId={organizationId}
+        initialServiceType={editingService ? undefined : selectedServiceType}
         onSuccess={handleSuccess}
       />
 

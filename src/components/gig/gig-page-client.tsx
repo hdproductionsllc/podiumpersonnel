@@ -1,0 +1,374 @@
+'use client'
+
+import { useState } from 'react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { SubRequestForm } from './sub-request-form'
+
+interface Service {
+  id: string
+  name: string
+  service_type: string
+  start_time: string
+  end_time: string | null
+  venue: string | null
+  base_pay: number | null
+  leader_fee: number | null
+}
+
+interface Instrument {
+  id: string
+  name: string
+}
+
+interface SubRequest {
+  id: string
+  status: string
+  suggested_sub_name: string | null
+}
+
+interface GigPageClientProps {
+  token: string
+  offerId: string
+  offerStatus: string
+  expiresAt: string | null
+  musicianFirstName: string
+  organizationName: string
+  organizationId: string
+  projectName: string
+  projectDescription: string | null
+  projectStartDate: string | null
+  projectEndDate: string | null
+  instrumentId: string
+  instrumentName: string
+  services: Service[]
+  payAmount: number | null
+  timezone: string
+  instruments: Instrument[]
+  existingSubRequest: SubRequest | null
+}
+
+export function GigPageClient({
+  token,
+  offerId,
+  offerStatus,
+  expiresAt,
+  musicianFirstName,
+  organizationName,
+  organizationId,
+  projectName,
+  projectDescription,
+  projectStartDate,
+  projectEndDate,
+  instrumentId,
+  instrumentName,
+  services,
+  payAmount,
+  timezone,
+  instruments,
+  existingSubRequest,
+}: GigPageClientProps) {
+  const [showSubRequestForm, setShowSubRequestForm] = useState(false)
+  const [subRequestSubmitted, setSubRequestSubmitted] = useState(false)
+  const [currentSubRequest, setCurrentSubRequest] = useState(existingSubRequest)
+
+  const isExpired = expiresAt && new Date(expiresAt) < new Date()
+  const canRespond = offerStatus === 'pending' || offerStatus === 'viewed'
+  const canRequestSub = offerStatus === 'accepted' && !currentSubRequest
+
+  function handleSubRequestSuccess() {
+    setShowSubRequestForm(false)
+    setSubRequestSubmitted(true)
+    setCurrentSubRequest({
+      id: 'new',
+      status: 'pending_approval',
+      suggested_sub_name: null,
+    })
+  }
+
+  // Format services for display
+  const formattedServices = services.map((service) => ({
+    ...service,
+    formattedDate: new Date(service.start_time).toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: timezone,
+    }),
+    formattedTime: new Date(service.start_time).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: timezone,
+    }),
+    formattedEndTime: service.end_time
+      ? new Date(service.end_time).toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          timeZone: timezone,
+        })
+      : null,
+  }))
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4 py-8">
+      <Card className="w-full max-w-lg">
+        <CardHeader>
+          <CardTitle className="text-2xl">Contract Offer</CardTitle>
+          <CardDescription>{organizationName}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {showSubRequestForm ? (
+            <div>
+              <h3 className="font-semibold mb-4">Request a Substitute</h3>
+              <SubRequestForm
+                token={token}
+                services={services}
+                instruments={instruments}
+                currentInstrumentId={instrumentId}
+                onSuccess={handleSubRequestSuccess}
+                onCancel={() => setShowSubRequestForm(false)}
+              />
+            </div>
+          ) : (
+            <>
+              <div>
+                <h3 className="font-semibold">Hello, {musicianFirstName}!</h3>
+                <p className="text-muted-foreground">
+                  You have been invited to perform with {organizationName}.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Project</span>
+                  <span className="font-medium">{projectName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Position</span>
+                  <span className="font-medium">{instrumentName}</span>
+                </div>
+                {services.length > 0 ? (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Date{services.length > 1 ? 's' : ''}</span>
+                    <span className="font-medium">
+                      {services.length === 1
+                        ? new Date(services[0].start_time).toLocaleDateString('en-US', { timeZone: timezone })
+                        : `${new Date(services[0].start_time).toLocaleDateString('en-US', { timeZone: timezone })} - ${new Date(services[services.length - 1].start_time).toLocaleDateString('en-US', { timeZone: timezone })}`}
+                    </span>
+                  </div>
+                ) : (
+                  projectStartDate && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Date</span>
+                      <span className="font-medium">
+                        {new Date(projectStartDate + 'T12:00:00').toLocaleDateString('en-US')}
+                        {projectEndDate &&
+                          projectEndDate !== projectStartDate &&
+                          ` - ${new Date(projectEndDate + 'T12:00:00').toLocaleDateString('en-US')}`}
+                      </span>
+                    </div>
+                  )
+                )}
+                {payAmount != null && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Pay</span>
+                    <span className="font-medium">${payAmount}</span>
+                  </div>
+                )}
+              </div>
+
+              {formattedServices.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-2">Schedule</h4>
+                  <div className="space-y-2">
+                    {formattedServices.map((service) => (
+                      <div key={service.id} className="text-sm bg-muted/50 rounded-md p-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="font-medium">{service.name}</span>
+                            <span className="text-muted-foreground ml-2 text-xs">
+                              ({service.service_type})
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-muted-foreground mt-1">
+                          {service.formattedDate} at {service.formattedTime}
+                          {service.formattedEndTime && ` - ${service.formattedEndTime}`}
+                        </div>
+                        {service.venue && (
+                          <div className="text-muted-foreground mt-1">{service.venue}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {projectDescription && (
+                <div>
+                  <h4 className="font-medium mb-1">Details</h4>
+                  <p className="text-sm text-muted-foreground">{projectDescription}</p>
+                </div>
+              )}
+
+              {offerStatus === 'accepted' && (
+                <div className="space-y-3">
+                  <div className="rounded-md bg-green-50 dark:bg-green-950 p-4 text-green-800 dark:text-green-200">
+                    You have accepted this offer.
+                  </div>
+
+                  {/* Sub request status */}
+                  {currentSubRequest && (
+                    <div
+                      className={`rounded-md p-4 ${
+                        currentSubRequest.status === 'pending_approval'
+                          ? 'bg-yellow-50 dark:bg-yellow-950 text-yellow-800 dark:text-yellow-200'
+                          : currentSubRequest.status === 'approved'
+                            ? 'bg-blue-50 dark:bg-blue-950 text-blue-800 dark:text-blue-200'
+                            : currentSubRequest.status === 'filled'
+                              ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200'
+                              : currentSubRequest.status === 'declined' || currentSubRequest.status === 'sub_declined'
+                                ? 'bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200'
+                                : 'bg-muted'
+                      }`}
+                    >
+                      {currentSubRequest.status === 'pending_approval' && (
+                        <>Your sub request is pending admin approval.</>
+                      )}
+                      {currentSubRequest.status === 'approved' && (
+                        <>
+                          Your sub request was approved. We&apos;re contacting{' '}
+                          {currentSubRequest.suggested_sub_name || 'your suggested substitute'}.
+                        </>
+                      )}
+                      {currentSubRequest.status === 'filled' && (
+                        <>Your substitute has been confirmed. You are released from this engagement.</>
+                      )}
+                      {currentSubRequest.status === 'declined' && (
+                        <>
+                          Your sub request was declined. Please find another substitute.
+                        </>
+                      )}
+                      {currentSubRequest.status === 'sub_declined' && (
+                        <>
+                          Your suggested substitute declined. Please find another substitute.
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {subRequestSubmitted && !currentSubRequest && (
+                    <div className="rounded-md bg-blue-50 dark:bg-blue-950 p-4 text-blue-800 dark:text-blue-200">
+                      Your sub request has been submitted and is pending approval.
+                    </div>
+                  )}
+
+                  {(services.length > 0 || projectStartDate) && !currentSubRequest?.status?.includes('filled') && (
+                    <div className="flex flex-col gap-2">
+                      <a
+                        href={`/api/offers/${offerId}/calendar?format=google`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+                      >
+                        <svg
+                          className="h-5 w-5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={1.5}
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"
+                          />
+                        </svg>
+                        Add to Google Calendar
+                      </a>
+                      <a
+                        href={`/api/offers/${offerId}/calendar`}
+                        download
+                        className="flex items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm hover:bg-muted"
+                      >
+                        Download .ics file (Outlook, Apple Calendar)
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Request Sub button - only show if accepted and no pending/approved request */}
+                  {canRequestSub && (
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setShowSubRequestForm(true)}
+                    >
+                      Request a Substitute
+                    </Button>
+                  )}
+
+                  {/* Allow new sub request if previous was declined */}
+                  {currentSubRequest &&
+                    (currentSubRequest.status === 'declined' || currentSubRequest.status === 'sub_declined') && (
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => {
+                          setCurrentSubRequest(null)
+                          setShowSubRequestForm(true)
+                        }}
+                      >
+                        Submit New Sub Request
+                      </Button>
+                    )}
+                </div>
+              )}
+
+              {offerStatus === 'declined' && (
+                <div className="rounded-md bg-red-50 dark:bg-red-950 p-4 text-red-800 dark:text-red-200">
+                  You have declined this offer.
+                </div>
+              )}
+
+              {isExpired && canRespond && (
+                <div className="rounded-md bg-yellow-50 dark:bg-yellow-950 p-4 text-yellow-800 dark:text-yellow-200">
+                  This offer has expired.
+                </div>
+              )}
+
+              {canRespond && !isExpired && (
+                <div className="space-y-4">
+                  <p className="text-xs text-muted-foreground text-center">
+                    By accepting this offer, you agree to our{' '}
+                    <a
+                      href={`/musician-policy?org=${organizationId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline hover:text-primary/80"
+                    >
+                      Musician Policy
+                    </a>
+                    .
+                  </p>
+                  <div className="flex gap-3">
+                    <form action={`/api/gig/${token}/accept`} method="POST" className="flex-1">
+                      <Button type="submit" className="w-full">
+                        Accept Offer
+                      </Button>
+                    </form>
+                    <form action={`/api/gig/${token}/decline`} method="POST" className="flex-1">
+                      <Button type="submit" variant="outline" className="w-full">
+                        Decline
+                      </Button>
+                    </form>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
