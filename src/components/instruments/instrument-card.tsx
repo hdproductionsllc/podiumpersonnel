@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { MoreHorizontal, ChevronDown, ChevronRight } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -10,13 +11,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import type { InstrumentWithMusicians } from './instruments-client'
+import type { InstrumentWithMusicians, MusicianInfo } from './instruments-client'
 
 interface InstrumentCardProps {
   instrument: InstrumentWithMusicians
   canManage: boolean
   onEdit: (instrument: InstrumentWithMusicians) => void
   onDelete: (instrument: InstrumentWithMusicians) => void
+  onMusicianClick?: (musician: MusicianInfo) => void
 }
 
 export function InstrumentCard({
@@ -24,6 +26,7 @@ export function InstrumentCard({
   canManage,
   onEdit,
   onDelete,
+  onMusicianClick,
 }: InstrumentCardProps) {
   const [expanded, setExpanded] = useState(false)
 
@@ -88,8 +91,22 @@ export function InstrumentCard({
           <div className="border-t pt-2 mt-2">
             <ul className="space-y-1">
               {musicians.map((m) => (
-                <li key={m.id} className="text-sm text-muted-foreground">
-                  {m.last_name}, {m.first_name}
+                <li key={m.id} className="text-sm">
+                  {onMusicianClick ? (
+                    <button
+                      onClick={() => onMusicianClick(m)}
+                      className="text-left text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+                    >
+                      {m.last_name}, {m.first_name}
+                    </button>
+                  ) : (
+                    <Link
+                      href={`/dashboard/musicians?search=${encodeURIComponent(`${m.last_name}, ${m.first_name}`)}`}
+                      className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+                    >
+                      {m.last_name}, {m.first_name}
+                    </Link>
+                  )}
                 </li>
               ))}
             </ul>

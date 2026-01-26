@@ -7,8 +7,10 @@ import { Separator } from '@/components/ui/separator'
 import { MusicianFormDialog } from './musician-form-dialog'
 import { DeleteMusicianDialog } from './delete-musician-dialog'
 import { BulkEditDialog } from './bulk-edit-dialog'
+import { MusicianCard } from './musician-card'
 import { toast } from 'sonner'
 import type { Musician } from '@/types'
+import { INSTRUMENT_SECTIONS, SECTION_LABELS, type InstrumentSection } from '@/lib/validations/instruments'
 
 export type MusicianInstrumentJoin = {
   id: string
@@ -43,9 +45,16 @@ export type InstrumentOption = {
   sort_order: number
 }
 
+export type BookOption = {
+  id: string
+  name: string
+  book_entries: { musician_id: string }[]
+}
+
 interface MusiciansClientProps {
   musicians: MusicianWithInstruments[]
   instruments: InstrumentOption[]
+  books: BookOption[]
   organizationId: string
   organizationName: string
   userRole: string
@@ -54,6 +63,7 @@ interface MusiciansClientProps {
 export function MusiciansClient({
   musicians,
   instruments,
+  books,
   organizationId,
   organizationName,
   userRole,
@@ -64,9 +74,14 @@ export function MusiciansClient({
   const [editingMusician, setEditingMusician] = useState<MusicianWithInstruments | null>(null)
   const [deletingMusician, setDeletingMusician] = useState<MusicianWithInstruments | null>(null)
 
+  // View mode state
+  const [viewMode, setViewMode] = useState<'table' | 'card'>('table')
+
   // Filter state
   const [search, setSearch] = useState('')
   const [instrumentFilter, setInstrumentFilter] = useState('')
+  const [sectionFilter, setSectionFilter] = useState<InstrumentSection | ''>('')
+  const [bookFilter, setBookFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<'' | 'active' | 'inactive'>('')
   const [tagFilter, setTagFilter] = useState('')
   const [regionFilter, setRegionFilter] = useState('')
@@ -107,7 +122,16 @@ export function MusiciansClient({
 
   const canManage = userRole === 'owner' || userRole === 'admin'
 
-  const hasFilters = search !== '' || instrumentFilter !== '' || statusFilter !== '' || tagFilter !== '' || regionFilter !== '' || missingInfoFilter || w9Filter !== ''
+  const hasFilters = search !== '' || instrumentFilter !== '' || sectionFilter !== '' || bookFilter !== '' || statusFilter !== '' || tagFilter !== '' || regionFilter !== '' || missingInfoFilter || w9Filter !== ''
+
+  // Get unique sections that are actually used by musicians' instruments
+  const usedSections = Array.from(
+    new Set(
+      musicians.flatMap((m) =>
+        m.musician_instruments.map((mi) => mi.instrument.section).filter((s): s is string => !!s)
+      )
+    )
+  ).filter((s) => INSTRUMENT_SECTIONS.includes(s as InstrumentSection)) as InstrumentSection[]
 
   // Count musicians with missing info
   const missingInfoCount = musicians.filter((m) => !m.email || !m.phone).length
@@ -126,6 +150,15 @@ export function MusiciansClient({
       }
       if (instrumentFilter) {
         if (!m.musician_instruments.some((mi) => mi.instrument_id === instrumentFilter)) return false
+      }
+      if (sectionFilter) {
+        if (!m.musician_instruments.some((mi) => mi.instrument.section === sectionFilter)) return false
+      }
+      if (bookFilter) {
+        const book = books.find((b) => b.id === bookFilter)
+        if (!book) return false
+        const bookMusicianIds = new Set(book.book_entries.map((e) => e.musician_id))
+        if (!bookMusicianIds.has(m.id)) return false
       }
       if (statusFilter) {
         if (statusFilter === 'active' && !m.is_active) return false
@@ -468,8 +501,38 @@ export function MusiciansClient({
 
       {musicians.length > 0 && (
         <div className="space-y-3">
-          {/* Search and dropdown filters */}
+          {/* View toggle and Search */}
           <div className="flex flex-wrap items-center gap-3">
+            {/* View toggle */}
+            <div className="flex rounded-md border bg-muted/30 p-1">
+              <button
+                onClick={() => setViewMode('table')}
+                className={`px-3 py-1 text-sm rounded transition-colors ${
+                  viewMode === 'table'
+                    ? 'bg-background shadow-sm font-medium'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <svg className="h-4 w-4 inline-block mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0 1 12 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5" />
+                </svg>
+                Table
+              </button>
+              <button
+                onClick={() => setViewMode('card')}
+                className={`px-3 py-1 text-sm rounded transition-colors ${
+                  viewMode === 'card'
+                    ? 'bg-background shadow-sm font-medium'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <svg className="h-4 w-4 inline-block mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
+                </svg>
+                Cards
+              </button>
+            </div>
+
             <input
               type="text"
               placeholder="Search by name or email..."
@@ -487,6 +550,30 @@ export function MusiciansClient({
                 <option key={inst.id} value={inst.id}>{inst.name}</option>
               ))}
             </select>
+            {usedSections.length > 0 && (
+              <select
+                className="rounded-md border bg-background px-3 py-2 text-sm"
+                value={sectionFilter}
+                onChange={(e) => setSectionFilter(e.target.value as InstrumentSection | '')}
+              >
+                <option value="">All sections</option>
+                {usedSections.map((section) => (
+                  <option key={section} value={section}>{SECTION_LABELS[section]}</option>
+                ))}
+              </select>
+            )}
+            {books.length > 0 && (
+              <select
+                className="rounded-md border bg-background px-3 py-2 text-sm"
+                value={bookFilter}
+                onChange={(e) => setBookFilter(e.target.value)}
+              >
+                <option value="">All books</option>
+                {books.map((book) => (
+                  <option key={book.id} value={book.id}>{book.name}</option>
+                ))}
+              </select>
+            )}
             <select
               className="rounded-md border bg-background px-3 py-2 text-sm"
               value={statusFilter}
@@ -530,7 +617,7 @@ export function MusiciansClient({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => { setSearch(''); setInstrumentFilter(''); setStatusFilter(''); setTagFilter(''); setRegionFilter(''); setMissingInfoFilter(false); setW9Filter('') }}
+                onClick={() => { setSearch(''); setInstrumentFilter(''); setSectionFilter(''); setBookFilter(''); setStatusFilter(''); setTagFilter(''); setRegionFilter(''); setMissingInfoFilter(false); setW9Filter('') }}
               >
                 Clear all
               </Button>
@@ -633,6 +720,26 @@ export function MusiciansClient({
                 <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 dark:bg-purple-900 px-2 py-0.5 text-xs text-purple-700 dark:text-purple-300">
                   {instruments.find((i) => i.id === instrumentFilter)?.name}
                   <button onClick={() => setInstrumentFilter('')} className="hover:text-destructive">
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </span>
+              )}
+              {sectionFilter && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 dark:bg-indigo-900 px-2 py-0.5 text-xs text-indigo-700 dark:text-indigo-300">
+                  Section: {SECTION_LABELS[sectionFilter]}
+                  <button onClick={() => setSectionFilter('')} className="hover:text-destructive">
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </span>
+              )}
+              {bookFilter && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-cyan-100 dark:bg-cyan-900 px-2 py-0.5 text-xs text-cyan-700 dark:text-cyan-300">
+                  Book: {books.find((b) => b.id === bookFilter)?.name}
+                  <button onClick={() => setBookFilter('')} className="hover:text-destructive">
                     <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -746,6 +853,22 @@ export function MusiciansClient({
             </div>
           )}
 
+          {viewMode === 'card' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredMusicians.map((musician) => (
+                <MusicianCard
+                  key={musician.id}
+                  musician={musician}
+                  canManage={canManage}
+                  selectMode={selectMode}
+                  isSelected={selectedIds.has(musician.id)}
+                  onSelect={() => toggleSelect(musician.id)}
+                  onEdit={() => handleEdit(musician)}
+                  onDelete={() => handleDelete(musician)}
+                />
+              ))}
+            </div>
+          ) : (
           <div className="overflow-x-auto rounded-md border">
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/50">
@@ -1011,6 +1134,7 @@ export function MusiciansClient({
             </tbody>
           </table>
         </div>
+          )}
         </>
       )}
 

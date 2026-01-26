@@ -52,10 +52,22 @@ export default async function MusiciansPage() {
     .order('sort_order', { ascending: true })
     .order('name', { ascending: true })
 
+  // Fetch books with their musician entries for filtering
+  const { data: books } = await supabase
+    .from('books')
+    .select(`
+      id,
+      name,
+      book_entries(musician_id)
+    `)
+    .eq('organization_id', organization!.id)
+    .order('name', { ascending: true })
+
   return (
     <MusiciansClient
       musicians={(musicians as any) ?? []}
       instruments={instruments ?? []}
+      books={(books as any) ?? []}
       organizationId={organization!.id}
       organizationName={organization!.name}
       userRole={membership!.role}
