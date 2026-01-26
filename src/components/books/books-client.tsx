@@ -112,13 +112,13 @@ export function BooksClient({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Books</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Saved Ensembles</h2>
           <p className="text-muted-foreground">
             Manage personnel lists for your orchestra.
           </p>
         </div>
         {canManage && (
-          <Button onClick={handleAdd}>Add Book</Button>
+          <Button onClick={handleAdd}>Add Ensemble</Button>
         )}
       </div>
 
@@ -128,7 +128,7 @@ export function BooksClient({
         <div className="flex flex-wrap items-center gap-3">
           <input
             type="text"
-            placeholder="Search books..."
+            placeholder="Search ensembles..."
             className="rounded-md border bg-background px-3 py-2 text-sm w-64"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -143,7 +143,7 @@ export function BooksClient({
             </Button>
           )}
           <span className="text-xs text-muted-foreground ml-auto">
-            {filteredBooks.length} of {books.length} books
+            {filteredBooks.length} of {books.length} ensembles
           </span>
         </div>
       )}
@@ -151,15 +151,15 @@ export function BooksClient({
       {books.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <p className="text-muted-foreground mb-4">
-            No books have been added yet.
+            No saved ensembles have been added yet.
           </p>
           {canManage && (
-            <Button onClick={handleAdd}>Add Your First Book</Button>
+            <Button onClick={handleAdd}>Add Your First Ensemble</Button>
           )}
         </div>
       ) : filteredBooks.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-muted-foreground">No books match your search.</p>
+          <p className="text-muted-foreground">No ensembles match your search.</p>
         </div>
       ) : (
         <>

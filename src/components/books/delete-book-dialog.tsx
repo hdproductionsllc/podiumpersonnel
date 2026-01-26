@@ -57,7 +57,7 @@ export function DeleteBookDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete Book</DialogTitle>
+          <DialogTitle>Delete Ensemble</DialogTitle>
           <DialogDescription>
             Are you sure you want to delete &quot;{book?.name}&quot;?
             {entryCount > 0 && (

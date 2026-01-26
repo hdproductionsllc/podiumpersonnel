@@ -128,12 +128,12 @@ export function BookFormDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? 'Edit Book' : 'Add Book'}
+            {isEditing ? 'Edit Ensemble' : 'Add Ensemble'}
           </DialogTitle>
           <DialogDescription>
             {isEditing
-              ? 'Update the book details.'
-              : 'Create a new personnel book.'}
+              ? 'Update the ensemble details.'
+              : 'Create a new saved ensemble.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -190,7 +190,7 @@ export function BookFormDialog({
                       onChange={field.onChange}
                     />
                   </FormControl>
-                  <FormLabel className="!mt-0">Set as default book</FormLabel>
+                  <FormLabel className="!mt-0">Set as default ensemble</FormLabel>
                   <FormMessage />
                 </FormItem>
               )}
@@ -207,7 +207,7 @@ export function BookFormDialog({
               <Button type="submit" disabled={isLoading}>
                 {isLoading
                   ? isEditing ? 'Saving...' : 'Creating...'
-                  : isEditing ? 'Save Changes' : 'Create Book'}
+                  : isEditing ? 'Save Changes' : 'Create Ensemble'}
               </Button>
             </DialogFooter>
           </form>

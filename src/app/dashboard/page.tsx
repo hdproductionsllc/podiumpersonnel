@@ -67,7 +67,7 @@ export default async function DashboardPage() {
   const steps = [
     { label: 'Add instruments', description: 'Define the instruments in your orchestra', done: (instrumentCount ?? 0) > 0, href: '/dashboard/instruments' },
     { label: 'Add musicians', description: 'Build your roster of available musicians', done: (musicianCount ?? 0) > 0, href: '/dashboard/musicians' },
-    { label: 'Create a book', description: 'Organize musicians by instrument and preference', done: (bookCount ?? 0) > 0, href: '/dashboard/books' },
+    { label: 'Create a saved ensemble', description: 'Organize musicians by instrument and preference', done: (bookCount ?? 0) > 0, href: '/dashboard/books' },
     { label: 'Create your first project', description: 'Start managing personnel for concerts and events', done: (activeProjectCount ?? 0) > 0, href: '/dashboard/projects' },
   ]
 

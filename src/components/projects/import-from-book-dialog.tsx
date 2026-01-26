@@ -39,7 +39,7 @@ export function ImportFromBookDialog({
     if (!selectedBookId) return
     const book = books.find((b) => b.id === selectedBookId)
     if (!book || book.book_entries.length === 0) {
-      setError('Selected book has no entries to import.')
+      setError('Selected ensemble has no entries to import.')
       return
     }
 
@@ -107,9 +107,9 @@ export function ImportFromBookDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/50" onClick={handleClose} />
       <div className="relative bg-background rounded-lg border shadow-lg w-full max-w-md p-6 space-y-4">
-        <h3 className="text-lg font-semibold">Import from Book</h3>
+        <h3 className="text-lg font-semibold">Import from Ensemble</h3>
         <p className="text-sm text-muted-foreground">
-          Select a book to create positions from its entries. Musicians will be pre-assigned.
+          Select an ensemble to create positions from its entries. Musicians will be pre-assigned.
         </p>
 
         {error && (
@@ -119,13 +119,13 @@ export function ImportFromBookDialog({
         )}
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">Book</label>
+          <label className="text-sm font-medium">Ensemble</label>
           <select
             className="w-full rounded-md border bg-background px-3 py-2 text-sm"
             value={selectedBookId}
             onChange={(e) => setSelectedBookId(e.target.value)}
           >
-            <option value="">Select a book...</option>
+            <option value="">Select an ensemble...</option>
             {books.map((book) => (
               <option key={book.id} value={book.id}>
                 {book.name} ({book.book_entries.length} entries)

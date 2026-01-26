@@ -76,7 +76,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
   { name: 'Projects', href: '/dashboard/projects', icon: FolderIcon },
   { name: 'Musicians', href: '/dashboard/musicians', icon: UsersIcon },
-  { name: 'Books', href: '/dashboard/books', icon: BookIcon },
+  { name: 'Saved Ensembles', href: '/dashboard/books', icon: BookIcon },
   { name: 'Instruments', href: '/dashboard/instruments', icon: MusicIcon },
   { name: 'Venues', href: '/dashboard/venues', icon: MapPinIcon },
   { name: 'Schedules', href: '/dashboard/schedules', icon: CalendarIcon },
@@ -89,7 +89,11 @@ export function Sidebar() {
     <aside className="flex h-full w-64 flex-col border-r bg-card">
       <div className="flex h-16 items-center px-6">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <span className="text-xl font-bold">Podium</span>
+          <img
+            src="/logo.png"
+            alt="Podium Personnel"
+            className="h-10 w-auto"
+          />
         </Link>
       </div>
       <Separator />
