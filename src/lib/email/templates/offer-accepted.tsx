@@ -16,6 +16,7 @@ interface OfferAcceptedEmailProps {
   projectName: string
   instrument: string
   chairNumber: number
+  totalChairs?: number
   services: {
     name: string
     date: string
@@ -31,9 +32,11 @@ export function OfferAcceptedEmail({
   projectName,
   instrument,
   chairNumber,
+  totalChairs,
   services,
   calendarUrl,
 }: OfferAcceptedEmailProps) {
+  const showChair = totalChairs !== undefined ? totalChairs > 1 : true
   return (
     <Html>
       <Head />
@@ -61,7 +64,7 @@ export function OfferAcceptedEmail({
             <Section style={detailsBox}>
               <Text style={detailsTitle}>{projectName}</Text>
               <Text style={detailsItem}>
-                <strong>Position:</strong> {instrument}, Chair {chairNumber}
+                <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
               </Text>
             </Section>
 

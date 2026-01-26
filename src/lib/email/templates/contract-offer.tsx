@@ -16,6 +16,7 @@ interface ContractOfferEmailProps {
   projectName: string
   instrument: string
   chairNumber: number
+  totalChairs?: number
   services: {
     name: string
     date: string
@@ -33,11 +34,13 @@ export function ContractOfferEmail({
   projectName,
   instrument,
   chairNumber,
+  totalChairs,
   services,
   responseUrl,
   expiresAt,
   notes,
 }: ContractOfferEmailProps) {
+  const showChair = totalChairs !== undefined ? totalChairs > 1 : true
   return (
     <Html>
       <Head />
@@ -60,7 +63,7 @@ export function ContractOfferEmail({
             <Section style={detailsBox}>
               <Text style={detailsTitle}>{projectName}</Text>
               <Text style={detailsItem}>
-                <strong>Position:</strong> {instrument}, Chair {chairNumber}
+                <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
               </Text>
               {expiresAt && (
                 <Text style={detailsItem}>

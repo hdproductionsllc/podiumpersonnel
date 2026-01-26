@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferDeclinedEmail, sendAdminOfferResponseEmail } from '@/lib/email/send'
 
 export async function POST(
@@ -72,6 +72,17 @@ export async function POST(
     const organization = project?.organization as any
     const instrument = position?.instrument as any
 
+    // Count total chairs for this instrument in this project
+    let totalChairs = 1
+    if (project?.id && instrument?.id) {
+      const { count } = await supabase
+        .from('project_positions')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', project.id)
+        .eq('instrument_id', instrument.id)
+      totalChairs = count || 1
+    }
+
     // Send confirmation to musician if they have email
     if (musician?.email) {
       await sendOfferDeclinedEmail({
@@ -81,21 +92,14 @@ export async function POST(
         projectName: project?.name || 'Project',
         instrument: instrument?.name || 'Instrument',
         chairNumber: position?.chair_number || 1,
+        totalChairs,
         declineReason: offer.response_notes,
       }).catch((err) => console.warn('Failed to send musician confirmation:', err))
     }
 
     // Send notification to organization admins
     if (project?.organization_id) {
-      const { data: admins } = await supabase
-        .from('organization_members')
-        .select('user_id, users:user_id(email)')
-        .eq('organization_id', project.organization_id)
-        .in('role', ['owner', 'admin'])
-
-      const adminEmails = (admins || [])
-        .map((a: any) => a.users?.email)
-        .filter(Boolean)
+      const adminEmails = await getOrgAdminEmails(project.organization_id)
 
       if (adminEmails.length > 0) {
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
@@ -107,6 +111,7 @@ export async function POST(
           musicianEmail: musician?.email || null,
           instrument: instrument?.name || 'Instrument',
           chairNumber: position?.chair_number || 1,
+          totalChairs,
           status: 'declined',
           responseNotes: offer.response_notes,
           dashboardUrl: `${baseUrl}/dashboard/projects`,

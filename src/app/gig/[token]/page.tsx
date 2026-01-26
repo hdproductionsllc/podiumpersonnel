@@ -25,11 +25,13 @@ export default async function GigPage({ params }: GigPageProps) {
         chair_number,
         instrument:instruments(name),
         project:projects(
+          id,
           name,
           description,
           start_date,
           end_date,
-          organization:organizations(name)
+          organization_id,
+          organization:organizations(id, name)
         )
       )
     `)
@@ -48,13 +50,37 @@ export default async function GigPage({ params }: GigPageProps) {
     chair_number: number
     instrument: { name: string } | null
     project: {
+      id: string
       name: string
       description: string | null
       start_date: string | null
       end_date: string | null
-      organization: { name: string } | null
+      organization_id: string
+      organization: { id: string; name: string } | null
     } | null
   } | null
+
+  // Fetch services for schedule display and pay calculation
+  let payAmount: number | null = offerData.custom_pay ?? null
+  let services: any[] = []
+
+  if (position?.project?.id) {
+    const { data: serviceData } = await supabase
+      .from('services')
+      .select('id, name, service_type, start_time, end_time, venue, base_pay, leader_fee')
+      .eq('project_id', position.project.id)
+      .order('start_time', { ascending: true })
+
+    services = serviceData || []
+
+    // Calculate pay from first service if no custom_pay
+    if (payAmount === null && services.length > 0) {
+      const isLeader = position.chair_number === 1
+      const basePay = services[0].base_pay
+      const leaderFee = services[0].leader_fee ?? 50
+      payAmount = basePay != null ? basePay + (isLeader ? leaderFee : 0) : null
+    }
+  }
 
   // Mark as viewed if pending
   if (offerData.status === 'pending') {
@@ -95,23 +121,87 @@ export default async function GigPage({ params }: GigPageProps) {
             <div className="flex justify-between">
               <span className="text-muted-foreground">Position</span>
               <span className="font-medium">
-                {position?.instrument?.name} {position?.chair_number}
+                {position?.instrument?.name}
               </span>
             </div>
-            {position?.project?.start_date && (
+            {services.length > 0 ? (
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Dates</span>
+                <span className="text-muted-foreground">Date{services.length > 1 ? 's' : ''}</span>
+                <span className="font-medium">
+                  {services.length === 1
+                    ? new Date(services[0].start_time).toLocaleDateString()
+                    : `${new Date(services[0].start_time).toLocaleDateString()} - ${new Date(services[services.length - 1].start_time).toLocaleDateString()}`
+                  }
+                </span>
+              </div>
+            ) : position?.project?.start_date && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Date</span>
                 <span className="font-medium">
                   {new Date(position.project.start_date).toLocaleDateString()}
-                  {position.project.end_date && ` - ${new Date(position.project.end_date).toLocaleDateString()}`}
+                  {position.project.end_date && position.project.end_date !== position.project.start_date &&
+                    ` - ${new Date(position.project.end_date).toLocaleDateString()}`}
                 </span>
+              </div>
+            )}
+            {payAmount != null && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Pay</span>
+                <span className="font-medium">${payAmount}</span>
               </div>
             )}
           </div>
 
+          {services.length > 0 && (
+            <div>
+              <h4 className="font-medium mb-2">Schedule</h4>
+              <div className="space-y-2">
+                {services.map((service: any) => (
+                  <div key={service.id} className="text-sm bg-muted/50 rounded-md p-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="font-medium">{service.name}</span>
+                        <span className="text-muted-foreground ml-2 text-xs">
+                          ({service.service_type})
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-muted-foreground mt-1">
+                      {new Date(service.start_time).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                      {' at '}
+                      {new Date(service.start_time).toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                      {service.end_time && (
+                        <>
+                          {' - '}
+                          {new Date(service.end_time).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })}
+                        </>
+                      )}
+                    </div>
+                    {service.venue && (
+                      <div className="text-muted-foreground mt-1">
+                        {service.venue}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {position?.project?.description && (
             <div>
-              <h4 className="font-medium mb-1">Description</h4>
+              <h4 className="font-medium mb-1">Details</h4>
               <p className="text-sm text-muted-foreground">{position.project.description}</p>
             </div>
           )}
@@ -121,16 +211,28 @@ export default async function GigPage({ params }: GigPageProps) {
               <div className="rounded-md bg-green-50 dark:bg-green-950 p-4 text-green-800 dark:text-green-200">
                 You have accepted this offer.
               </div>
-              <a
-                href={`/api/offers/${offerData.id}/calendar`}
-                download
-                className="flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-                </svg>
-                Add to Calendar
-              </a>
+              {(services.length > 0 || position?.project?.start_date) && (
+                <div className="flex flex-col gap-2">
+                  <a
+                    href={`/api/offers/${offerData.id}/calendar?format=google`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                    </svg>
+                    Add to Google Calendar
+                  </a>
+                  <a
+                    href={`/api/offers/${offerData.id}/calendar`}
+                    download
+                    className="flex items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm hover:bg-muted"
+                  >
+                    Download .ics file (Outlook, Apple Calendar)
+                  </a>
+                </div>
+              )}
             </div>
           )}
 
@@ -147,17 +249,31 @@ export default async function GigPage({ params }: GigPageProps) {
           )}
 
           {canRespond && !isExpired && (
-            <div className="flex gap-3">
-              <form action={`/api/gig/${token}/accept`} method="POST" className="flex-1">
-                <Button type="submit" className="w-full">
-                  Accept Offer
-                </Button>
-              </form>
-              <form action={`/api/gig/${token}/decline`} method="POST" className="flex-1">
-                <Button type="submit" variant="outline" className="w-full">
-                  Decline
-                </Button>
-              </form>
+            <div className="space-y-4">
+              <p className="text-xs text-muted-foreground text-center">
+                By accepting this offer, you agree to our{' '}
+                <a
+                  href={`/musician-policy?org=${position?.project?.organization_id || ''}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary underline hover:text-primary/80"
+                >
+                  Musician Policy
+                </a>
+                .
+              </p>
+              <div className="flex gap-3">
+                <form action={`/api/gig/${token}/accept`} method="POST" className="flex-1">
+                  <Button type="submit" className="w-full">
+                    Accept Offer
+                  </Button>
+                </form>
+                <form action={`/api/gig/${token}/decline`} method="POST" className="flex-1">
+                  <Button type="submit" variant="outline" className="w-full">
+                    Decline
+                  </Button>
+                </form>
+              </div>
             </div>
           )}
         </CardContent>

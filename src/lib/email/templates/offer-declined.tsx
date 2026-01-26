@@ -15,6 +15,7 @@ interface OfferDeclinedEmailProps {
   projectName: string
   instrument: string
   chairNumber: number
+  totalChairs?: number
   declineReason?: string | null
 }
 
@@ -24,8 +25,10 @@ export function OfferDeclinedEmail({
   projectName,
   instrument,
   chairNumber,
+  totalChairs,
   declineReason,
 }: OfferDeclinedEmailProps) {
+  const showChair = totalChairs !== undefined ? totalChairs > 1 : true
   return (
     <Html>
       <Head />
@@ -47,7 +50,7 @@ export function OfferDeclinedEmail({
 
             <Text style={paragraph}>
               We understand you are unable to accept the position of{' '}
-              <strong>{instrument}, Chair {chairNumber}</strong> at this time.
+              <strong>{instrument}{showChair ? `, Chair ${chairNumber}` : ''}</strong> at this time.
             </Text>
 
             {declineReason && (

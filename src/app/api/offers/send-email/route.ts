@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { sendContractOfferEmail } from '@/lib/email/send'
+import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
+import { sendContractOfferEmail, sendAdminOfferSentEmail } from '@/lib/email/send'
+import { logEmailConfig } from '@/lib/email/client'
 
 export async function POST(request: NextRequest) {
+  console.log('📧 Send email API called')
+  logEmailConfig()
+
   try {
     const supabase = await createClient()
 
@@ -62,6 +66,17 @@ export async function POST(request: NextRequest) {
     const instrument = position?.instrument as any
     const services = project?.services as any[] || []
 
+    // Count total chairs for this instrument in this project
+    let totalChairs = 1
+    if (project?.id && instrument?.id) {
+      const { count } = await supabase
+        .from('project_positions')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', project.id)
+        .eq('instrument_id', instrument.id)
+      totalChairs = count || 1
+    }
+
     // Check if musician has an email
     if (!musician?.email) {
       return NextResponse.json(
@@ -93,17 +108,56 @@ export async function POST(request: NextRequest) {
       }))
 
     // Send the email
-    await sendContractOfferEmail({
+    console.log('📧 Attempting to send email to:', musician.email)
+    console.log('📧 Email params:', {
+      to: musician.email,
+      musicianName: `${musician.first_name} ${musician.last_name}`,
+      organizationName: organization?.name,
+      projectName: project?.name,
+      instrument: instrument?.name,
+    })
+
+    const result = await sendContractOfferEmail({
       to: musician.email,
       musicianName: `${musician.first_name} ${musician.last_name}`,
       organizationName: organization?.name || 'Orchestra',
       projectName: project?.name || 'Project',
       instrument: instrument?.name || 'Instrument',
       chairNumber: position?.chair_number || 1,
+      totalChairs,
       services: formattedServices,
       responseUrl,
       expiresAt: offer.expires_at,
     })
+
+    console.log('📧 Email sent successfully:', result)
+
+    // Send notification to organization admins
+    try {
+      const adminEmails = await getOrgAdminEmails(organization?.id)
+
+      if (adminEmails.length > 0) {
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+        await sendAdminOfferSentEmail({
+          to: adminEmails,
+          organizationName: organization?.name || 'Orchestra',
+          projectName: project?.name || 'Project',
+          musicianName: `${musician.first_name} ${musician.last_name}`,
+          musicianEmail: musician.email,
+          instrument: instrument?.name || 'Instrument',
+          chairNumber: position?.chair_number || 1,
+          totalChairs,
+          services: formattedServices,
+          dashboardUrl: `${baseUrl}/dashboard/projects`,
+        }).catch((err) => console.warn('Failed to send admin notification:', err))
+        console.log('📧 Admin notification sent to:', adminEmails)
+      } else {
+        console.log('📧 No admin emails found for organization')
+      }
+    } catch (adminEmailError) {
+      console.warn('Failed to send admin notification:', adminEmailError)
+      // Don't fail the request if admin notification fails
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

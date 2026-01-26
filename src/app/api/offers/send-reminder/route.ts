@@ -69,6 +69,17 @@ export async function POST(request: NextRequest) {
     const organization = project?.organization as any
     const instrument = position?.instrument as any
 
+    // Count total chairs for this instrument in this project
+    let totalChairs = 1
+    if (project?.id && instrument?.id) {
+      const { count } = await supabase
+        .from('project_positions')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', project.id)
+        .eq('instrument_id', instrument.id)
+      totalChairs = count || 1
+    }
+
     // Check if musician has an email
     if (!musician?.email) {
       return NextResponse.json(
@@ -97,6 +108,7 @@ export async function POST(request: NextRequest) {
       projectName: project?.name || 'Project',
       instrument: instrument?.name || 'Instrument',
       chairNumber: position?.chair_number || 1,
+      totalChairs,
       responseUrl,
       expiresAt: offer.expires_at,
       daysRemaining,

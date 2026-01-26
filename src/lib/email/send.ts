@@ -4,6 +4,7 @@ import { OfferReminderEmail } from './templates/offer-reminder'
 import { OfferAcceptedEmail } from './templates/offer-accepted'
 import { OfferDeclinedEmail } from './templates/offer-declined'
 import { AdminOfferResponseEmail } from './templates/admin-offer-response'
+import { AdminOfferSentEmail } from './templates/admin-offer-sent'
 import { W9RequestEmail } from './templates/w9-request'
 import { render } from '@react-email/render'
 
@@ -15,6 +16,7 @@ interface SendContractOfferParams {
   projectName: string
   instrument: string
   chairNumber: number
+  totalChairs?: number
   services: {
     name: string
     date: string
@@ -34,6 +36,7 @@ export async function sendContractOfferEmail(params: SendContractOfferParams) {
       projectName: params.projectName,
       instrument: params.instrument,
       chairNumber: params.chairNumber,
+      totalChairs: params.totalChairs,
       services: params.services,
       responseUrl: params.responseUrl,
       expiresAt: params.expiresAt,
@@ -64,6 +67,7 @@ interface SendOfferReminderParams {
   projectName: string
   instrument: string
   chairNumber: number
+  totalChairs?: number
   responseUrl: string
   expiresAt: string | null
   daysRemaining: number | null
@@ -77,6 +81,7 @@ export async function sendOfferReminderEmail(params: SendOfferReminderParams) {
       projectName: params.projectName,
       instrument: params.instrument,
       chairNumber: params.chairNumber,
+      totalChairs: params.totalChairs,
       responseUrl: params.responseUrl,
       expiresAt: params.expiresAt,
       daysRemaining: params.daysRemaining,
@@ -108,6 +113,7 @@ interface SendOfferAcceptedParams {
   projectName: string
   instrument: string
   chairNumber: number
+  totalChairs?: number
   services: {
     name: string
     date: string
@@ -125,6 +131,7 @@ export async function sendOfferAcceptedEmail(params: SendOfferAcceptedParams) {
       projectName: params.projectName,
       instrument: params.instrument,
       chairNumber: params.chairNumber,
+      totalChairs: params.totalChairs,
       services: params.services,
       calendarUrl: params.calendarUrl,
     })
@@ -153,6 +160,7 @@ interface SendOfferDeclinedParams {
   projectName: string
   instrument: string
   chairNumber: number
+  totalChairs?: number
   declineReason?: string | null
 }
 
@@ -164,6 +172,7 @@ export async function sendOfferDeclinedEmail(params: SendOfferDeclinedParams) {
       projectName: params.projectName,
       instrument: params.instrument,
       chairNumber: params.chairNumber,
+      totalChairs: params.totalChairs,
       declineReason: params.declineReason,
     })
   )
@@ -193,6 +202,7 @@ interface SendAdminOfferResponseParams {
   musicianEmail: string | null
   instrument: string
   chairNumber: number
+  totalChairs?: number
   status: 'accepted' | 'declined'
   responseNotes?: string | null
   dashboardUrl: string
@@ -208,6 +218,7 @@ export async function sendAdminOfferResponseEmail(params: SendAdminOfferResponse
       musicianEmail: params.musicianEmail,
       instrument: params.instrument,
       chairNumber: params.chairNumber,
+      totalChairs: params.totalChairs,
       status: params.status,
       responseNotes: params.responseNotes,
       dashboardUrl: params.dashboardUrl,
@@ -225,6 +236,57 @@ export async function sendAdminOfferResponseEmail(params: SendAdminOfferResponse
 
   if (error) {
     console.error('Failed to send admin notification email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// Admin Notification Email (when offer is sent)
+interface SendAdminOfferSentParams {
+  to: string | string[]
+  adminName?: string
+  organizationName: string
+  projectName: string
+  musicianName: string
+  musicianEmail: string
+  instrument: string
+  chairNumber: number
+  totalChairs?: number
+  services: {
+    name: string
+    date: string
+    time: string
+    venue: string | null
+  }[]
+  dashboardUrl: string
+}
+
+export async function sendAdminOfferSentEmail(params: SendAdminOfferSentParams) {
+  const emailHtml = await render(
+    AdminOfferSentEmail({
+      adminName: params.adminName,
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      musicianName: params.musicianName,
+      musicianEmail: params.musicianEmail,
+      instrument: params.instrument,
+      chairNumber: params.chairNumber,
+      totalChairs: params.totalChairs,
+      services: params.services,
+      dashboardUrl: params.dashboardUrl,
+    })
+  )
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: `Offer Sent: ${params.musicianName} - ${params.projectName}`,
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send admin offer sent email:', error)
     throw new Error(`Failed to send email: ${error.message}`)
   }
 

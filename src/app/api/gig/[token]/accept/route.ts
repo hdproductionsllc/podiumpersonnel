@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferAcceptedEmail, sendAdminOfferResponseEmail } from '@/lib/email/send'
 
 export async function POST(
@@ -76,6 +76,17 @@ export async function POST(
     const instrument = position?.instrument as any
     const services = project?.services as any[] || []
 
+    // Count total chairs for this instrument in this project
+    let totalChairs = 1
+    if (project?.id && instrument?.id) {
+      const { count } = await supabase
+        .from('project_positions')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', project.id)
+        .eq('instrument_id', instrument.id)
+      totalChairs = count || 1
+    }
+
     // Format services for email
     const formattedServices = services
       .sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
@@ -106,6 +117,7 @@ export async function POST(
         projectName: project?.name || 'Project',
         instrument: instrument?.name || 'Instrument',
         chairNumber: position?.chair_number || 1,
+        totalChairs,
         services: formattedServices,
         calendarUrl,
       }).catch((err) => console.warn('Failed to send musician confirmation:', err))
@@ -113,15 +125,7 @@ export async function POST(
 
     // Send notification to organization admins
     if (project?.organization_id) {
-      const { data: admins } = await supabase
-        .from('organization_members')
-        .select('user_id, users:user_id(email)')
-        .eq('organization_id', project.organization_id)
-        .in('role', ['owner', 'admin'])
-
-      const adminEmails = (admins || [])
-        .map((a: any) => a.users?.email)
-        .filter(Boolean)
+      const adminEmails = await getOrgAdminEmails(project.organization_id)
 
       if (adminEmails.length > 0) {
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
@@ -133,6 +137,7 @@ export async function POST(
           musicianEmail: musician?.email || null,
           instrument: instrument?.name || 'Instrument',
           chairNumber: position?.chair_number || 1,
+          totalChairs,
           status: 'accepted',
           dashboardUrl: `${baseUrl}/dashboard/projects`,
         }).catch((err) => console.warn('Failed to send admin notification:', err))

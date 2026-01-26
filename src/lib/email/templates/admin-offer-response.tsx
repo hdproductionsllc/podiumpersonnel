@@ -18,6 +18,7 @@ interface AdminOfferResponseEmailProps {
   musicianEmail: string | null
   instrument: string
   chairNumber: number
+  totalChairs?: number
   status: 'accepted' | 'declined'
   responseNotes?: string | null
   dashboardUrl: string
@@ -31,11 +32,13 @@ export function AdminOfferResponseEmail({
   musicianEmail,
   instrument,
   chairNumber,
+  totalChairs,
   status,
   responseNotes,
   dashboardUrl,
 }: AdminOfferResponseEmailProps) {
   const isAccepted = status === 'accepted'
+  const showChair = totalChairs !== undefined ? totalChairs > 1 : true
 
   return (
     <Html>
@@ -66,7 +69,7 @@ export function AdminOfferResponseEmail({
             <Section style={detailsBox}>
               <Text style={detailsTitle}>{projectName}</Text>
               <Text style={detailsItem}>
-                <strong>Position:</strong> {instrument}, Chair {chairNumber}
+                <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
               </Text>
               <Text style={detailsItem}>
                 <strong>Musician:</strong> {musicianName}

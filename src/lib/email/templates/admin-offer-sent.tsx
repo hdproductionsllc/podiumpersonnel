@@ -10,37 +10,42 @@ import {
   Preview,
 } from '@react-email/components'
 
-interface OfferReminderEmailProps {
-  musicianName: string
+interface AdminOfferSentEmailProps {
+  adminName?: string
   organizationName: string
   projectName: string
+  musicianName: string
+  musicianEmail: string
   instrument: string
   chairNumber: number
   totalChairs?: number
-  responseUrl: string
-  expiresAt: string | null
-  daysRemaining: number | null
+  services: {
+    name: string
+    date: string
+    time: string
+    venue: string | null
+  }[]
+  dashboardUrl: string
 }
 
-export function OfferReminderEmail({
-  musicianName,
+export function AdminOfferSentEmail({
+  adminName,
   organizationName,
   projectName,
+  musicianName,
+  musicianEmail,
   instrument,
   chairNumber,
   totalChairs,
-  responseUrl,
-  expiresAt,
-  daysRemaining,
-}: OfferReminderEmailProps) {
-  const urgentStyle = daysRemaining !== null && daysRemaining <= 2
+  services,
+  dashboardUrl,
+}: AdminOfferSentEmailProps) {
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
-
   return (
     <Html>
       <Head />
       <Preview>
-        Reminder: Contract offer for {projectName} expires soon
+        Offer sent to {musicianName} for {projectName}
       </Preview>
       <Body style={main}>
         <Container style={container}>
@@ -49,58 +54,61 @@ export function OfferReminderEmail({
           </Section>
 
           <Section style={content}>
-            <Text style={greeting}>Dear {musicianName},</Text>
+            <Section style={sentBanner}>
+              <Text style={bannerIcon}>📤</Text>
+              <Text style={bannerText}>Offer Sent</Text>
+            </Section>
+
+            {adminName && <Text style={greeting}>Hi {adminName},</Text>}
 
             <Text style={paragraph}>
-              This is a friendly reminder that you have a pending contract offer from{' '}
-              <strong>{organizationName}</strong> that requires your response.
+              A contract offer has been sent to <strong>{musicianName}</strong> for:
             </Text>
-
-            {urgentStyle && (
-              <Section style={urgentBox}>
-                <Text style={urgentText}>
-                  ⚠️ This offer expires {daysRemaining === 0 ? 'today' : daysRemaining === 1 ? 'tomorrow' : `in ${daysRemaining} days`}!
-                </Text>
-              </Section>
-            )}
 
             <Section style={detailsBox}>
               <Text style={detailsTitle}>{projectName}</Text>
               <Text style={detailsItem}>
                 <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
               </Text>
-              {expiresAt && (
-                <Text style={detailsItem}>
-                  <strong>Response deadline:</strong>{' '}
-                  {new Date(expiresAt).toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
-                </Text>
-              )}
+              <Text style={detailsItem}>
+                <strong>Musician:</strong> {musicianName} ({musicianEmail})
+              </Text>
+              <Text style={detailsItem}>
+                <strong>Status:</strong>{' '}
+                <span style={pendingText}>AWAITING RESPONSE</span>
+              </Text>
             </Section>
+
+            {services.length > 0 && (
+              <>
+                <Text style={sectionTitle}>Services included:</Text>
+                <Section style={servicesBox}>
+                  {services.map((service, index) => (
+                    <Text key={index} style={serviceItem}>
+                      • {service.name} - {service.date} at {service.time}
+                      {service.venue && ` (${service.venue})`}
+                    </Text>
+                  ))}
+                </Section>
+              </>
+            )}
+
+            <Text style={infoText}>
+              You will be notified when the musician responds to this offer.
+            </Text>
 
             <Section style={buttonContainer}>
-              <Button style={button} href={responseUrl}>
-                View & Respond to Offer
+              <Button style={button} href={dashboardUrl}>
+                View in Dashboard
               </Button>
             </Section>
-
-            <Text style={smallText}>
-              Please respond at your earliest convenience to secure your position.
-            </Text>
           </Section>
 
           <Hr style={hr} />
 
           <Section style={footer}>
             <Text style={footerText}>
-              This email was sent by {organizationName} via Podium.
-            </Text>
-            <Text style={footerText}>
-              If you have questions, please contact the organization directly.
+              This notification was sent by Podium.
             </Text>
           </Section>
         </Container>
@@ -139,6 +147,27 @@ const content = {
   padding: '24px',
 }
 
+const sentBanner = {
+  backgroundColor: '#dbeafe',
+  border: '1px solid #3b82f6',
+  borderRadius: '8px',
+  padding: '16px',
+  marginBottom: '24px',
+  textAlign: 'center' as const,
+}
+
+const bannerIcon = {
+  fontSize: '28px',
+  margin: '0 0 4px 0',
+}
+
+const bannerText = {
+  fontSize: '18px',
+  fontWeight: 'bold',
+  margin: '0',
+  color: '#1e40af',
+}
+
 const greeting = {
   fontSize: '16px',
   lineHeight: '24px',
@@ -152,28 +181,12 @@ const paragraph = {
   marginBottom: '16px',
 }
 
-const urgentBox = {
-  backgroundColor: '#fef3c7',
-  border: '1px solid #f59e0b',
-  borderRadius: '8px',
-  padding: '12px 16px',
-  marginBottom: '16px',
-}
-
-const urgentText = {
-  fontSize: '14px',
-  fontWeight: 'bold',
-  color: '#92400e',
-  margin: '0',
-  textAlign: 'center' as const,
-}
-
 const detailsBox = {
   backgroundColor: '#f8fafc',
   border: '1px solid #e2e8f0',
   borderRadius: '8px',
   padding: '16px',
-  marginBottom: '24px',
+  marginBottom: '16px',
 }
 
 const detailsTitle = {
@@ -189,14 +202,46 @@ const detailsItem = {
   marginBottom: '4px',
 }
 
-const buttonContainer = {
-  textAlign: 'center' as const,
-  marginTop: '24px',
+const pendingText = {
+  color: '#d97706',
+  fontWeight: 'bold',
+}
+
+const sectionTitle = {
+  fontSize: '14px',
+  fontWeight: 'bold',
+  color: '#1a1a1a',
+  marginBottom: '8px',
+}
+
+const servicesBox = {
+  backgroundColor: '#f8fafc',
+  border: '1px solid #e2e8f0',
+  borderRadius: '8px',
+  padding: '12px 16px',
   marginBottom: '16px',
 }
 
+const serviceItem = {
+  fontSize: '13px',
+  color: '#525f7f',
+  margin: '4px 0',
+}
+
+const infoText = {
+  fontSize: '14px',
+  color: '#6b7280',
+  marginBottom: '16px',
+  fontStyle: 'italic' as const,
+}
+
+const buttonContainer = {
+  textAlign: 'center' as const,
+  marginTop: '24px',
+}
+
 const button = {
-  backgroundColor: '#f59e0b',
+  backgroundColor: '#3b82f6',
   borderRadius: '6px',
   color: '#fff',
   fontSize: '14px',
@@ -205,12 +250,6 @@ const button = {
   textAlign: 'center' as const,
   display: 'inline-block',
   padding: '12px 24px',
-}
-
-const smallText = {
-  fontSize: '12px',
-  color: '#8898aa',
-  textAlign: 'center' as const,
 }
 
 const hr = {
@@ -230,4 +269,4 @@ const footerText = {
   marginBottom: '4px',
 }
 
-export default OfferReminderEmail
+export default AdminOfferSentEmail
