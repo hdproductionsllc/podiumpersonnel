@@ -36,6 +36,7 @@ export function OrganizationSection({ organization, role }: OrganizationSectionP
     resolver: zodResolver(updateOrganizationSchema),
     defaultValues: {
       name: organization.name,
+      slug: organization.slug,
       musician_policy: organization.musician_policy || '',
     },
   })
@@ -96,13 +97,22 @@ export function OrganizationSection({ organization, role }: OrganizationSectionP
                 </FormItem>
               )}
             />
-            <div>
-              <label className="text-sm font-medium">Slug</label>
-              <Input value={organization.slug} disabled className="mt-1.5" />
-              <p className="mt-1 text-sm text-muted-foreground">
-                The slug cannot be changed
-              </p>
-            </div>
+            <FormField
+              control={form.control}
+              name="slug"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Slug</FormLabel>
+                  <FormControl>
+                    <Input {...field} disabled={!canEdit} placeholder="my-organization" />
+                  </FormControl>
+                  <FormDescription>
+                    Used in URLs. Only lowercase letters, numbers, and hyphens allowed.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="musician_policy"
