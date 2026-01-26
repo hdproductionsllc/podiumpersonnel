@@ -609,6 +609,38 @@ export type Database = {
           updated_at?: string
         }
       }
+      staffing_presets: {
+        Row: {
+          id: string
+          organization_id: string
+          name: string
+          description: string | null
+          category: string
+          positions: { instrument_name: string; chair_number: number }[]
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          name: string
+          description?: string | null
+          category?: string
+          positions: { instrument_name: string; chair_number: number }[]
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          name?: string
+          description?: string | null
+          category?: string
+          positions?: { instrument_name: string; chair_number: number }[]
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -645,3 +677,4 @@ export type ContractOffer = Database['public']['Tables']['contract_offers']['Row
 export type SubstitutionRequest = Database['public']['Tables']['substitution_requests']['Row']
 export type CompetingSchedule = Database['public']['Tables']['competing_schedules']['Row']
 export type Payment = Database['public']['Tables']['payments']['Row']
+export type StaffingPreset = Database['public']['Tables']['staffing_presets']['Row']

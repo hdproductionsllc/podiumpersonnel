@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { ImportFromBookDialog } from './import-from-book-dialog'
 import { AddPositionDialog } from './add-position-dialog'
+import { SavePresetDialog } from './save-preset-dialog'
 import { SendOfferDialog, type MusicianForOffer, type MusicianScheduleEntry } from './send-offer-dialog'
 import { RequestSubDialog } from './request-sub-dialog'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
@@ -142,6 +143,7 @@ export function ProjectPositions({
   const [importOpen, setImportOpen] = useState(false)
   const [addPositionOpen, setAddPositionOpen] = useState(false)
   const [addPositionMode, setAddPositionMode] = useState<'presets' | 'single'>('presets')
+  const [savePresetOpen, setSavePresetOpen] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [offerPositionId, setOfferPositionId] = useState<string | null>(null)
   const [offerInstrumentId, setOfferInstrumentId] = useState<string | null>(null)
@@ -295,6 +297,11 @@ export function ProjectPositions({
             <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
               Import from Saved Ensemble
             </Button>
+            {totalPositions > 0 && (
+              <Button size="sm" variant="outline" onClick={() => setSavePresetOpen(true)}>
+                Save as Preset
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -486,6 +493,14 @@ export function ProjectPositions({
         existingPositions={positions.map(p => ({ instrument_id: p.instrument_id, chair_number: p.chair_number }))}
         initialMode={addPositionMode}
         onSuccess={onPositionChange}
+      />
+
+      <SavePresetDialog
+        open={savePresetOpen}
+        onOpenChange={setSavePresetOpen}
+        positions={positions}
+        organizationId={organizationId}
+        onSuccess={() => {}}
       />
 
       <SendOfferDialog
