@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { onboardingSchema, type OnboardingInput } from '@/lib/validations/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Form,
   FormControl,
@@ -23,12 +24,14 @@ export function OnboardingForm() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showOptionalFields, setShowOptionalFields] = useState(false)
 
   const form = useForm<OnboardingInput>({
     resolver: zodResolver(onboardingSchema),
     defaultValues: {
       organizationName: '',
       slug: '',
+      musician_policy: '',
     },
   })
 
@@ -68,6 +71,7 @@ export function OnboardingForm() {
       .insert({
         name: data.organizationName,
         slug: data.slug,
+        musician_policy: data.musician_policy || null,
       })
       .select()
       .single()
@@ -152,9 +156,49 @@ export function OnboardingForm() {
                 </FormItem>
               )}
             />
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Creating organization...' : 'Create organization'}
-            </Button>
+
+            {!showOptionalFields ? (
+              <button
+                type="button"
+                onClick={() => setShowOptionalFields(true)}
+                className="text-sm text-primary hover:underline"
+              >
+                + Add musician policy (optional)
+              </button>
+            ) : (
+              <FormField
+                control={form.control}
+                name="musician_policy"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center justify-between">
+                      <FormLabel>Musician Policy</FormLabel>
+                      <span className="text-xs text-muted-foreground">Optional</span>
+                    </div>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Enter your organization's musician guidelines and policies..."
+                        rows={6}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      This will be shown to musicians when they accept contract offers.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            <div className="pt-2">
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? 'Creating organization...' : 'Create organization'}
+              </Button>
+              <p className="mt-3 text-center text-xs text-muted-foreground">
+                You can update all these settings later under Settings.
+              </p>
+            </div>
           </form>
         </Form>
       </CardContent>
