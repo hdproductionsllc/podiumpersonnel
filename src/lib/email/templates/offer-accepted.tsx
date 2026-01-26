@@ -5,6 +5,7 @@ import {
   Container,
   Section,
   Text,
+  Button,
   Hr,
   Preview,
 } from '@react-email/components'
@@ -21,6 +22,7 @@ interface OfferAcceptedEmailProps {
     time: string
     venue: string | null
   }[]
+  calendarUrl?: string
 }
 
 export function OfferAcceptedEmail({
@@ -30,6 +32,7 @@ export function OfferAcceptedEmail({
   instrument,
   chairNumber,
   services,
+  calendarUrl,
 }: OfferAcceptedEmailProps) {
   return (
     <Html>
@@ -77,8 +80,19 @@ export function OfferAcceptedEmail({
               ))}
             </Section>
 
+            {calendarUrl && (
+              <Section style={buttonContainer}>
+                <Button style={calendarButton} href={calendarUrl}>
+                  📅 Add to Calendar
+                </Button>
+              </Section>
+            )}
+
             <Text style={paragraph}>
-              Please save these dates to your calendar. If you have any questions or need to report a conflict,
+              {calendarUrl
+                ? 'Click the button above to download the calendar file and add these events to your Google Calendar, Outlook, or other calendar app.'
+                : 'Please save these dates to your calendar.'}{' '}
+              If you have any questions or need to report a conflict,
               please contact {organizationName} as soon as possible.
             </Text>
 
@@ -221,6 +235,24 @@ const serviceVenue = {
   fontSize: '13px',
   color: '#64748b',
   margin: '0',
+}
+
+const buttonContainer = {
+  textAlign: 'center' as const,
+  marginTop: '16px',
+  marginBottom: '16px',
+}
+
+const calendarButton = {
+  backgroundColor: '#3b82f6',
+  borderRadius: '6px',
+  color: '#fff',
+  fontSize: '14px',
+  fontWeight: 'bold',
+  textDecoration: 'none',
+  textAlign: 'center' as const,
+  display: 'inline-block',
+  padding: '12px 24px',
 }
 
 const thankYou = {

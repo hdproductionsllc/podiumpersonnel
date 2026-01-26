@@ -104,6 +104,59 @@ export function ContractOfferEmail({
 
           <Hr style={hr} />
 
+          {/* Musician Guidelines & Policy */}
+          <Section style={policySection}>
+            <Text style={policyTitle}>{organizationName} Musician Guidelines</Text>
+
+            <Text style={policyText}>
+              As a {organizationName} musician, your professionalism reflects directly on the group.
+              These expectations apply from arrival to departure at every event.
+            </Text>
+
+            <Text style={policyHeading}>Cancellation Policy</Text>
+            <Text style={policyText}>
+              <strong>If you need to cancel after accepting this engagement, you are responsible for finding
+              your own qualified substitute, subject to our approval.</strong> Please notify us as soon as
+              possible if any conflicts arise so we can work together to find a solution.
+            </Text>
+
+            <Text style={policyHeading}>1. Professionalism</Text>
+            <Text style={policyText}>
+              Always assume you're being watched and recorded. Stay positive and professional at all times.
+              Keep conversation minimal and appropriate.
+            </Text>
+
+            <Text style={policyHeading}>2. Phones</Text>
+            <Text style={policyText}>
+              Keep phones silenced and out of sight unless used for tuning or essential cues.
+            </Text>
+
+            <Text style={policyHeading}>3. Appearance & Punctuality</Text>
+            <Text style={policyText}>
+              Arrive early with buffer time. Dress professionally and in accordance with {organizationName} attire guidelines.
+            </Text>
+
+            <Text style={policyHeading}>4. Belongings & Case Safety</Text>
+            <Text style={policyText}>
+              Bring only your instrument, music, stand, and water. No large purses or bags (small black purses are okay).
+              All instrument cases must be out of sight and out of the way.
+            </Text>
+
+            <Text style={policyHeading}>5. Overtime</Text>
+            <Text style={policyText}>
+              You will be compensated for all time played beyond the contracted hours. If asked to stay past the
+              contracted period, only agree to do so if you are available. The lead musician must confirm approval
+              with the client or event coordinator before continuing beyond the contracted time.
+            </Text>
+
+            <Text style={policyHeading}>6. Team Conduct</Text>
+            <Text style={policyText}>
+              Greet teammates professionally. Be warm, collaborative, and supportive.
+            </Text>
+          </Section>
+
+          <Hr style={hr} />
+
           <Section style={footer}>
             <Text style={footerText}>
               This email was sent by {organizationName} via Podium.
@@ -259,6 +312,34 @@ const footerText = {
   lineHeight: '16px',
   textAlign: 'center' as const,
   marginBottom: '4px',
+}
+
+const policySection = {
+  padding: '24px',
+  backgroundColor: '#fafafa',
+}
+
+const policyTitle = {
+  fontSize: '16px',
+  fontWeight: 'bold',
+  color: '#1a1a1a',
+  marginBottom: '16px',
+  textAlign: 'center' as const,
+}
+
+const policyHeading = {
+  fontSize: '13px',
+  fontWeight: 'bold',
+  color: '#1a1a1a',
+  marginTop: '16px',
+  marginBottom: '4px',
+}
+
+const policyText = {
+  fontSize: '12px',
+  lineHeight: '18px',
+  color: '#525f7f',
+  marginBottom: '8px',
 }
 
 export default ContractOfferEmail

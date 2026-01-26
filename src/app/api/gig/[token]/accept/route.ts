@@ -96,6 +96,9 @@ export async function POST(
 
     // Send confirmation to musician if they have email
     if (musician?.email) {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      const calendarUrl = `${baseUrl}/api/offers/${offer.id}/calendar`
+
       await sendOfferAcceptedEmail({
         to: musician.email,
         musicianName: `${musician.first_name} ${musician.last_name}`,
@@ -104,6 +107,7 @@ export async function POST(
         instrument: instrument?.name || 'Instrument',
         chairNumber: position?.chair_number || 1,
         services: formattedServices,
+        calendarUrl,
       }).catch((err) => console.warn('Failed to send musician confirmation:', err))
     }
 

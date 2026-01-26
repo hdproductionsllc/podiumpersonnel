@@ -114,6 +114,7 @@ interface SendOfferAcceptedParams {
     time: string
     venue: string | null
   }[]
+  calendarUrl?: string
 }
 
 export async function sendOfferAcceptedEmail(params: SendOfferAcceptedParams) {
@@ -125,6 +126,7 @@ export async function sendOfferAcceptedEmail(params: SendOfferAcceptedParams) {
       instrument: params.instrument,
       chairNumber: params.chairNumber,
       services: params.services,
+      calendarUrl: params.calendarUrl,
     })
   )
 

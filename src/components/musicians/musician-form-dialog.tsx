@@ -59,7 +59,7 @@ export function MusicianFormDialog({
       zip_code: '',
       home_region: '',
       service_radius_miles: 50,
-      call_order: 100,
+      call_order: 50,
       is_leader: false,
       w9_on_file: false,
       zelle_method: '',
@@ -81,7 +81,7 @@ export function MusicianFormDialog({
           zip_code: (musician as any).zip_code || '',
           home_region: (musician as any).home_region || '',
           service_radius_miles: (musician as any).service_radius_miles ?? 50,
-          call_order: (musician as any).call_order ?? 100,
+          call_order: (musician as any).call_order ?? 50,
           is_leader: (musician as any).is_leader ?? false,
           w9_on_file: (musician as any).w9_on_file ?? false,
           zelle_method: (musician as any).zelle_method || '',
@@ -99,7 +99,7 @@ export function MusicianFormDialog({
           zip_code: '',
           home_region: '',
           service_radius_miles: 50,
-          call_order: 100,
+          call_order: 50,
           is_leader: false,
           w9_on_file: false,
           zelle_method: '',
@@ -129,7 +129,7 @@ export function MusicianFormDialog({
           zip_code: data.zip_code || null,
           home_region: data.home_region || null,
           service_radius_miles: data.service_radius_miles ?? 50,
-          call_order: data.call_order ?? 100,
+          call_order: data.call_order ?? 50,
           is_leader: data.is_leader ?? false,
           w9_on_file: data.w9_on_file ?? false,
           zelle_method: data.zelle_method || null,
@@ -186,7 +186,7 @@ export function MusicianFormDialog({
           zip_code: data.zip_code || null,
           home_region: data.home_region || null,
           service_radius_miles: data.service_radius_miles ?? 50,
-          call_order: data.call_order ?? 100,
+          call_order: data.call_order ?? 50,
           is_leader: data.is_leader ?? false,
           w9_on_file: data.w9_on_file ?? false,
           zelle_method: data.zelle_method || null,
@@ -403,7 +403,7 @@ export function MusicianFormDialog({
                           max={999}
                           placeholder="1-999 (lower = higher priority)"
                           {...field}
-                          onChange={(e) => field.onChange(Number(e.target.value) || 100)}
+                          onChange={(e) => field.onChange(Number(e.target.value) || 50)}
                         />
                       </FormControl>
                       <FormMessage />
