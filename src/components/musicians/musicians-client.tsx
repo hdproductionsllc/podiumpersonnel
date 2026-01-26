@@ -823,7 +823,16 @@ export function MusiciansClient({
                     </td>
                     <td className="px-4 py-3 font-medium">
                         <div className="flex items-center gap-2">
-                          {musician.last_name}, {musician.first_name}
+                          {canManage && !selectMode ? (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
+                              className="text-left hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer"
+                            >
+                              {musician.last_name}, {musician.first_name}
+                            </button>
+                          ) : (
+                            <span>{musician.last_name}, {musician.first_name}</span>
+                          )}
                           {(!musician.email || !musician.phone) && (
                             <button
                               onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
