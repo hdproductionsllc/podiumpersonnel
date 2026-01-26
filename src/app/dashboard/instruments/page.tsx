@@ -29,14 +29,20 @@ export default async function InstrumentsPage() {
 
   const { data: instruments } = await supabase
     .from('instruments')
-    .select('*')
+    .select(`
+      *,
+      musician_instruments(
+        id,
+        musician:musicians(id, first_name, last_name, email, is_active)
+      )
+    `)
     .eq('organization_id', organization!.id)
     .order('sort_order', { ascending: true })
     .order('name', { ascending: true })
 
   return (
     <InstrumentsClient
-      instruments={instruments ?? []}
+      instruments={(instruments as any) ?? []}
       organizationId={organization!.id}
       userRole={membership!.role}
     />

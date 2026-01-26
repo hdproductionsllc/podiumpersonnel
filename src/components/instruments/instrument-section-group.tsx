@@ -1,14 +1,14 @@
 'use client'
 
-import type { Instrument } from '@/types'
+import type { InstrumentWithMusicians } from './instruments-client'
 import { InstrumentCard } from './instrument-card'
 
 interface InstrumentSectionGroupProps {
   title: string
-  instruments: Instrument[]
+  instruments: InstrumentWithMusicians[]
   canManage: boolean
-  onEdit: (instrument: Instrument) => void
-  onDelete: (instrument: Instrument) => void
+  onEdit: (instrument: InstrumentWithMusicians) => void
+  onDelete: (instrument: InstrumentWithMusicians) => void
 }
 
 export function InstrumentSectionGroup({

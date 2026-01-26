@@ -400,14 +400,6 @@ export function MusiciansClient({
                 </div>
               )}
             </div>
-            {musicians.length > 0 && (
-              <Button
-                variant={selectMode ? 'default' : 'outline'}
-                onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
-              >
-                {selectMode ? 'Done' : 'Select'}
-              </Button>
-            )}
             <Button onClick={handleAdd}>Add Musician</Button>
           </div>
         )}
@@ -623,6 +615,24 @@ export function MusiciansClient({
         </div>
       ) : (
         <>
+          {/* Select & Batch Edit Button */}
+          {canManage && musicians.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant={selectMode ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+              >
+                {selectMode ? 'Done Selecting' : 'Select & Batch Edit'}
+              </Button>
+              {selectMode && (
+                <span className="text-sm text-muted-foreground">
+                  Click rows to select, or use checkboxes
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Bulk Actions Bar */}
           {selectMode && selectedIds.size > 0 && (
             <div className="flex items-center gap-4 rounded-lg bg-blue-50 dark:bg-blue-950 p-3 mb-4">
@@ -657,6 +667,12 @@ export function MusiciansClient({
                     />
                   </th>
                 )}
+                <th
+                  className="px-4 py-3 text-left font-medium cursor-pointer hover:bg-muted/80 select-none w-20"
+                  onClick={() => handleSort('call_order')}
+                >
+                  Order <SortIcon column="call_order" />
+                </th>
                 <th
                   className="px-4 py-3 text-left font-medium cursor-pointer hover:bg-muted/80 select-none"
                   onClick={() => handleSort('name')}
@@ -715,6 +731,9 @@ export function MusiciansClient({
                           />
                         </td>
                     )}
+                    <td className="px-4 py-3 text-center text-muted-foreground">
+                      {musician.call_order ?? '—'}
+                    </td>
                     <td className="px-4 py-3 font-medium">
                         <div className="flex items-center gap-2">
                           {musician.last_name}, {musician.first_name}

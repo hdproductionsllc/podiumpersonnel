@@ -11,8 +11,23 @@ import { PrepopulateButton } from './prepopulate-button'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
 import type { Instrument } from '@/types'
 
+export type MusicianInfo = {
+  id: string
+  first_name: string
+  last_name: string
+  email: string | null
+  is_active: boolean
+}
+
+export type InstrumentWithMusicians = Instrument & {
+  musician_instruments: {
+    id: string
+    musician: MusicianInfo
+  }[]
+}
+
 interface InstrumentsClientProps {
-  instruments: Instrument[]
+  instruments: InstrumentWithMusicians[]
   organizationId: string
   userRole: string
 }
@@ -50,19 +65,19 @@ export function InstrumentsClient({
       (i) => (i.section || 'other') === section
     )
     return acc
-  }, {} as Record<string, Instrument[]>)
+  }, {} as Record<string, InstrumentWithMusicians[]>)
 
   function handleAdd() {
     setEditingInstrument(null)
     setFormOpen(true)
   }
 
-  function handleEdit(instrument: Instrument) {
+  function handleEdit(instrument: InstrumentWithMusicians) {
     setEditingInstrument(instrument)
     setFormOpen(true)
   }
 
-  function handleDelete(instrument: Instrument) {
+  function handleDelete(instrument: InstrumentWithMusicians) {
     setDeletingInstrument(instrument)
     setDeleteOpen(true)
   }
