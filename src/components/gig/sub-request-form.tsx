@@ -75,10 +75,10 @@ export function SubRequestForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="serviceId">Which service do you need a sub for?</Label>
+        <Label htmlFor="serviceId" className="text-sm">Which service do you need a sub for?</Label>
         <select
           id="serviceId"
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          className="w-full rounded-md border border-input bg-background px-3 py-2.5 sm:py-2 text-sm"
           value={formData.serviceId}
           onChange={(e) => setFormData({ ...formData, serviceId: e.target.value })}
         >
@@ -152,11 +152,11 @@ export function SubRequestForm({
         </div>
 
         <div className="space-y-2 mt-4">
-          <Label htmlFor="subInstrumentId">Instrument *</Label>
+          <Label htmlFor="subInstrumentId" className="text-sm">Instrument *</Label>
           <select
             id="subInstrumentId"
             required
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            className="w-full rounded-md border border-input bg-background px-3 py-2.5 sm:py-2 text-sm"
             value={formData.subInstrumentId}
             onChange={(e) => setFormData({ ...formData, subInstrumentId: e.target.value })}
           >
@@ -175,12 +175,12 @@ export function SubRequestForm({
         </div>
       )}
 
-      <div className="flex gap-3 pt-2">
-        <Button type="submit" disabled={isSubmitting} className="flex-1">
-          {isSubmitting ? 'Submitting...' : 'Submit Request'}
-        </Button>
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
+      <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting} className="sm:flex-none h-11 sm:h-10">
           Cancel
+        </Button>
+        <Button type="submit" disabled={isSubmitting} className="flex-1 h-12 sm:h-10 text-base sm:text-sm font-semibold">
+          {isSubmitting ? 'Submitting...' : 'Submit Request'}
         </Button>
       </div>
     </form>

@@ -111,13 +111,13 @@ export function GigPageClient({
   }))
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4 py-8">
+    <div className="flex min-h-screen items-center justify-center bg-muted/50 px-3 sm:px-4 py-6 sm:py-8">
       <Card className="w-full max-w-lg">
-        <CardHeader>
-          <CardTitle className="text-2xl">Contract Offer</CardTitle>
-          <CardDescription>{organizationName}</CardDescription>
+        <CardHeader className="px-4 sm:px-6">
+          <CardTitle className="text-xl sm:text-2xl">Contract Offer</CardTitle>
+          <CardDescription className="text-sm">{organizationName}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-5 sm:space-y-6 px-4 sm:px-6">
           {showSubRequestForm ? (
             <div>
               <h3 className="font-semibold mb-4">Request a Substitute</h3>
@@ -139,18 +139,18 @@ export function GigPageClient({
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Project</span>
+              <div className="space-y-2 text-sm sm:text-base">
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-2">
+                  <span className="text-muted-foreground text-xs sm:text-sm">Project</span>
                   <span className="font-medium">{projectName}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Position</span>
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-2">
+                  <span className="text-muted-foreground text-xs sm:text-sm">Position</span>
                   <span className="font-medium">{instrumentName}</span>
                 </div>
                 {services.length > 0 ? (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Date{services.length > 1 ? 's' : ''}</span>
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-2">
+                    <span className="text-muted-foreground text-xs sm:text-sm">Date{services.length > 1 ? 's' : ''}</span>
                     <span className="font-medium">
                       {services.length === 1
                         ? new Date(services[0].start_time).toLocaleDateString('en-US', { timeZone: timezone })
@@ -159,8 +159,8 @@ export function GigPageClient({
                   </div>
                 ) : (
                   projectStartDate && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Date</span>
+                    <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-2">
+                      <span className="text-muted-foreground text-xs sm:text-sm">Date</span>
                       <span className="font-medium">
                         {new Date(projectStartDate + 'T12:00:00').toLocaleDateString('en-US')}
                         {projectEndDate &&
@@ -171,33 +171,37 @@ export function GigPageClient({
                   )
                 )}
                 {payAmount != null && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Pay</span>
-                    <span className="font-medium">${payAmount}</span>
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-2">
+                    <span className="text-muted-foreground text-xs sm:text-sm">Pay</span>
+                    <span className="font-medium text-lg sm:text-base text-green-600 dark:text-green-400">${payAmount}</span>
                   </div>
                 )}
               </div>
 
               {formattedServices.length > 0 && (
                 <div>
-                  <h4 className="font-medium mb-2">Schedule</h4>
+                  <h4 className="font-medium mb-2 text-sm sm:text-base">Schedule</h4>
                   <div className="space-y-2">
                     {formattedServices.map((service) => (
-                      <div key={service.id} className="text-sm bg-muted/50 rounded-md p-3">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <span className="font-medium">{service.name}</span>
-                            <span className="text-muted-foreground ml-2 text-xs">
-                              ({service.service_type})
-                            </span>
-                          </div>
+                      <div key={service.id} className="text-xs sm:text-sm bg-muted/50 rounded-md p-2.5 sm:p-3">
+                        <div className="flex flex-wrap items-baseline gap-1">
+                          <span className="font-medium">{service.name}</span>
+                          <span className="text-muted-foreground text-xs">
+                            ({service.service_type})
+                          </span>
                         </div>
                         <div className="text-muted-foreground mt-1">
                           {service.formattedDate} at {service.formattedTime}
                           {service.formattedEndTime && ` - ${service.formattedEndTime}`}
                         </div>
                         {service.venue && (
-                          <div className="text-muted-foreground mt-1">{service.venue}</div>
+                          <div className="text-muted-foreground mt-1 flex items-start gap-1">
+                            <svg className="h-3 w-3 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                            </svg>
+                            <span>{service.venue}</span>
+                          </div>
                         )}
                       </div>
                     ))}
@@ -270,7 +274,7 @@ export function GigPageClient({
                         href={`/api/offers/${offerId}/calendar?format=google`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+                        className="flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 sm:py-2 text-sm sm:text-base text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-transform"
                       >
                         <svg
                           className="h-5 w-5"
@@ -290,9 +294,12 @@ export function GigPageClient({
                       <a
                         href={`/api/offers/${offerId}/calendar`}
                         download
-                        className="flex items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm hover:bg-muted"
+                        className="flex items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-3 sm:py-2 text-xs sm:text-sm hover:bg-muted active:scale-[0.98] transition-transform"
                       >
-                        Download .ics file (Outlook, Apple Calendar)
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        Download .ics (Outlook, Apple)
                       </a>
                     </div>
                   )}
@@ -339,7 +346,7 @@ export function GigPageClient({
 
               {canRespond && !isExpired && (
                 <div className="space-y-4">
-                  <p className="text-xs text-muted-foreground text-center">
+                  <p className="text-xs text-muted-foreground text-center px-2">
                     By accepting this offer, you agree to our{' '}
                     <a
                       href={`/musician-policy?org=${organizationId}`}
@@ -351,14 +358,14 @@ export function GigPageClient({
                     </a>
                     .
                   </p>
-                  <div className="flex gap-3">
+                  <div className="flex flex-col sm:flex-row gap-3">
                     <form action={`/api/gig/${token}/accept`} method="POST" className="flex-1">
-                      <Button type="submit" className="w-full">
+                      <Button type="submit" className="w-full h-12 sm:h-10 text-base sm:text-sm font-semibold">
                         Accept Offer
                       </Button>
                     </form>
                     <form action={`/api/gig/${token}/decline`} method="POST" className="flex-1">
-                      <Button type="submit" variant="outline" className="w-full">
+                      <Button type="submit" variant="outline" className="w-full h-11 sm:h-10 text-base sm:text-sm">
                         Decline
                       </Button>
                     </form>
