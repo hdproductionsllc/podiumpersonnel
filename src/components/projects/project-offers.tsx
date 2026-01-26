@@ -197,20 +197,29 @@ export function ProjectOffers({
             </tr>
           </thead>
           <tbody className="divide-y">
-            {offers.map((offer) => {
-              const expired = isExpired(offer.expires_at)
-              const displayStatus = expired && (offer.status === 'pending' || offer.status === 'viewed')
-                ? 'expired'
-                : offer.status
-              return (
-                <Fragment key={offer.id}>
-                <tr className="hover:bg-muted/30">
-                  <td className="px-3 py-2">
-                    {offer.musician.first_name} {offer.musician.last_name}
-                  </td>
-                  <td className="px-3 py-2 text-muted-foreground">
-                    {offer.position_instrument}, Chair {offer.position_chair}
-                  </td>
+            {(() => {
+              // Count unique chairs per instrument to determine if we should show chair numbers
+              const chairCountByInstrument = offers.reduce((acc, o) => {
+                if (!acc[o.position_instrument]) acc[o.position_instrument] = new Set()
+                acc[o.position_instrument].add(o.position_chair)
+                return acc
+              }, {} as Record<string, Set<number>>)
+
+              return offers.map((offer) => {
+                const expired = isExpired(offer.expires_at)
+                const displayStatus = expired && (offer.status === 'pending' || offer.status === 'viewed')
+                  ? 'expired'
+                  : offer.status
+                const hasMultipleChairs = (chairCountByInstrument[offer.position_instrument]?.size || 0) > 1
+                return (
+                  <Fragment key={offer.id}>
+                  <tr className="hover:bg-muted/30">
+                    <td className="px-3 py-2">
+                      {offer.musician.first_name} {offer.musician.last_name}
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {offer.position_instrument}{hasMultipleChairs ? `, Chair ${offer.position_chair}` : ''}
+                    </td>
                   <td className="px-3 py-2">
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${OFFER_STATUS_COLORS[displayStatus] || ''}`}>
                       {OFFER_STATUS_LABELS[displayStatus] || displayStatus}
@@ -280,9 +289,10 @@ export function ProjectOffers({
                     </td>
                   </tr>
                 )}
-                </Fragment>
-              )
-            })}
+                  </Fragment>
+                )
+              })
+            })()}
           </tbody>
         </table>
       </div>
