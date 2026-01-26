@@ -881,39 +881,84 @@ export function MusiciansClient({
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col gap-1">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                              musician.is_active
-                                ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300'
-                                : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-                            }`}
-                          >
-                            {musician.is_active ? 'Active' : 'Inactive'}
-                          </span>
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                              musician.w9_on_file
-                                ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                                : 'bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300'
-                            }`}
-                          >
-                            {musician.w9_on_file ? 'W-9 ✓' : 'No W-9'}
-                          </span>
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                              musician.zelle_verified
-                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                          {canManage && !selectMode ? (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
+                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 ${
+                                musician.is_active
+                                  ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300'
+                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                              }`}
+                            >
+                              {musician.is_active ? 'Active' : 'Inactive'}
+                            </button>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                                musician.is_active
+                                  ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300'
+                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                              }`}
+                            >
+                              {musician.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          )}
+                          {canManage && !selectMode ? (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
+                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 ${
+                                musician.w9_on_file
+                                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                                  : 'bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300'
+                              }`}
+                            >
+                              {musician.w9_on_file ? 'W-9 ✓' : 'No W-9'}
+                            </button>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                                musician.w9_on_file
+                                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                                  : 'bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300'
+                              }`}
+                            >
+                              {musician.w9_on_file ? 'W-9 ✓' : 'No W-9'}
+                            </span>
+                          )}
+                          {canManage && !selectMode ? (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
+                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 ${
+                                musician.zelle_verified
+                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                  : musician.zelle_method
+                                    ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300'
+                                    : 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
+                              }`}
+                            >
+                              {musician.zelle_verified
+                                ? `Zelle ✓ (${musician.zelle_method})`
                                 : musician.zelle_method
-                                  ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300'
-                                  : 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
-                            }`}
-                          >
-                            {musician.zelle_verified
-                              ? `Zelle ✓ (${musician.zelle_method})`
-                              : musician.zelle_method
-                                ? `Zelle? (${musician.zelle_method})`
-                                : 'No Zelle'}
-                          </span>
+                                  ? `Zelle? (${musician.zelle_method})`
+                                  : 'No Zelle'}
+                            </button>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                                musician.zelle_verified
+                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                  : musician.zelle_method
+                                    ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300'
+                                    : 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
+                              }`}
+                            >
+                              {musician.zelle_verified
+                                ? `Zelle ✓ (${musician.zelle_method})`
+                                : musician.zelle_method
+                                  ? `Zelle? (${musician.zelle_method})`
+                                  : 'No Zelle'}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3">
