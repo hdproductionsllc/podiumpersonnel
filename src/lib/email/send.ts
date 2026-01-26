@@ -6,6 +6,7 @@ import { OfferDeclinedEmail } from './templates/offer-declined'
 import { AdminOfferResponseEmail } from './templates/admin-offer-response'
 import { AdminOfferSentEmail } from './templates/admin-offer-sent'
 import { W9RequestEmail } from './templates/w9-request'
+import { PositionUnassignedEmail } from './templates/position-unassigned'
 import { render } from '@react-email/render'
 
 // Contract Offer Email
@@ -319,6 +320,44 @@ export async function sendW9RequestEmail(params: SendW9RequestParams) {
 
   if (error) {
     console.error('Failed to send W-9 request email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// Position Unassigned Email (to musician)
+interface SendPositionUnassignedParams {
+  to: string
+  musicianName: string
+  organizationName: string
+  projectName: string
+  instrument: string
+  chairNumber: number
+  totalChairs?: number
+}
+
+export async function sendPositionUnassignedEmail(params: SendPositionUnassignedParams) {
+  const emailHtml = await render(
+    PositionUnassignedEmail({
+      musicianName: params.musicianName,
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      instrument: params.instrument,
+      chairNumber: params.chairNumber,
+      totalChairs: params.totalChairs,
+    })
+  )
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: `Position Update: ${params.projectName}`,
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send position unassigned email:', error)
     throw new Error(`Failed to send email: ${error.message}`)
   }
 

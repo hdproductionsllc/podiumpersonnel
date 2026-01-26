@@ -3,6 +3,7 @@
 import { useState, Fragment } from 'react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
+import { toast } from 'sonner'
 import { ImportFromBookDialog } from './import-from-book-dialog'
 import { AddPositionDialog } from './add-position-dialog'
 import { SendOfferDialog, type MusicianForOffer, type MusicianScheduleEntry } from './send-offer-dialog'
@@ -141,6 +142,8 @@ export function ProjectPositions({
   const [offerExistingIds, setOfferExistingIds] = useState<string[]>([])
   const [suggestedCustomPay, setSuggestedCustomPay] = useState<string>('')
   const [subRequestPosition, setSubRequestPosition] = useState<PositionJoined | null>(null)
+  const [unassignPosition, setUnassignPosition] = useState<PositionJoined | null>(null)
+  const [unassigning, setUnassigning] = useState(false)
 
   // Get pay info from the first service (services should have consistent pay)
   const firstService = services[0]
@@ -202,22 +205,34 @@ export function ProjectPositions({
     onPositionChange()
   }
 
-  async function handleUnassign(positionId: string) {
-    const supabase = createClient()
+  function handleUnassign(position: PositionJoined) {
+    setUnassignPosition(position)
+  }
 
-    // Delete any contract offers for this position (so musician can be re-offered)
-    await supabase
-      .from('contract_offers')
-      .delete()
-      .eq('project_position_id', positionId)
+  async function confirmUnassign() {
+    if (!unassignPosition) return
+    setUnassigning(true)
 
-    // Reset the position to vacant
-    await supabase
-      .from('project_positions')
-      .update({ musician_id: null, status: 'vacant' })
-      .eq('id', positionId)
+    try {
+      const response = await fetch(`/api/positions/${unassignPosition.id}/unassign`, {
+        method: 'POST',
+      })
 
-    onPositionChange()
+      const result = await response.json()
+
+      if (!response.ok) {
+        toast.error(result.error || 'Failed to unassign musician')
+        return
+      }
+
+      toast.success('Musician unassigned and notified')
+      onPositionChange()
+    } catch {
+      toast.error('Failed to unassign musician')
+    } finally {
+      setUnassigning(false)
+      setUnassignPosition(null)
+    }
   }
 
   async function handleDuplicatePosition(position: PositionJoined) {
@@ -412,7 +427,7 @@ export function ProjectPositions({
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => handleUnassign(position.id)}
+                                  onClick={() => handleUnassign(position)}
                                 >
                                   Unassign
                                 </Button>
@@ -494,6 +509,44 @@ export function ProjectPositions({
         services={services}
         onSuccess={onPositionChange}
       />
+
+      {/* Unassign Confirmation Dialog */}
+      {unassignPosition && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-lg border bg-background p-6 shadow-lg">
+            <h3 className="text-lg font-semibold">Confirm Unassignment</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Are you sure you want to unassign this musician?
+            </p>
+
+            <div className="mt-4 rounded-lg border bg-muted/30 p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Musician:</span>
+                <span className="font-medium">
+                  {unassignPosition.musician?.first_name} {unassignPosition.musician?.last_name}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Position:</span>
+                <span>{unassignPosition.instrument?.name}, Chair {unassignPosition.chair_number}</span>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded bg-amber-50 dark:bg-amber-950/50 p-3 text-sm text-amber-700 dark:text-amber-300">
+              Both the musician and organization admins will be notified by email.
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setUnassignPosition(null)} disabled={unassigning}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={confirmUnassign} disabled={unassigning}>
+                {unassigning ? 'Unassigning...' : 'Confirm Unassign'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
