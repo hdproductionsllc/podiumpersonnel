@@ -91,12 +91,13 @@ export async function POST(
   const subLastName = nameParts.slice(1).join(' ') || ''
 
   // Check if musician with this email already exists in the organization
+  // Use case-insensitive comparison to prevent duplicate records with different email casing
   let substituteMusician
   const { data: existingMusician } = await supabase
     .from('musicians')
     .select('id, first_name, last_name, email')
     .eq('organization_id', project.organization_id)
-    .eq('email', subRequest.suggested_sub_email)
+    .ilike('email', subRequest.suggested_sub_email || '')
     .maybeSingle()
 
   if (existingMusician) {

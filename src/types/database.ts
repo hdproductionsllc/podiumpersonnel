@@ -14,6 +14,8 @@ export type Database = {
           id: string
           name: string
           slug: string
+          timezone: string | null
+          musician_policy: string | null
           created_at: string
           updated_at: string
         }
@@ -21,6 +23,8 @@ export type Database = {
           id?: string
           name: string
           slug: string
+          timezone?: string | null
+          musician_policy?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -28,6 +32,8 @@ export type Database = {
           id?: string
           name?: string
           slug?: string
+          timezone?: string | null
+          musician_policy?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -104,6 +110,11 @@ export type Database = {
           service_radius_miles: number | null
           call_order: number
           is_leader: boolean
+          tags: string[] | null
+          home_region: string | null
+          w9_on_file: boolean
+          zelle_method: 'email' | 'phone' | null
+          zelle_verified: boolean
           created_at: string
           updated_at: string
         }
@@ -120,6 +131,11 @@ export type Database = {
           service_radius_miles?: number | null
           call_order?: number
           is_leader?: boolean
+          tags?: string[] | null
+          home_region?: string | null
+          w9_on_file?: boolean
+          zelle_method?: 'email' | 'phone' | null
+          zelle_verified?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -136,6 +152,11 @@ export type Database = {
           service_radius_miles?: number | null
           call_order?: number
           is_leader?: boolean
+          tags?: string[] | null
+          home_region?: string | null
+          w9_on_file?: boolean
+          zelle_method?: 'email' | 'phone' | null
+          zelle_verified?: boolean
           created_at?: string
           updated_at?: string
         }

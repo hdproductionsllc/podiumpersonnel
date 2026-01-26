@@ -16,7 +16,7 @@ const tabs = [
 type TabId = (typeof tabs)[number]['id']
 
 interface SettingsClientProps {
-  organization: { id: string; name: string; slug: string }
+  organization: { id: string; name: string; slug: string; timezone: string; musician_policy?: string | null }
   role: 'owner' | 'admin' | 'member'
   currentUserId: string
 }
