@@ -209,7 +209,7 @@ export function ProjectOffers({
                     {offer.musician.first_name} {offer.musician.last_name}
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">
-                    {offer.position_instrument} {offer.position_chair}
+                    {offer.position_instrument}, Chair {offer.position_chair}
                   </td>
                   <td className="px-3 py-2">
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${OFFER_STATUS_COLORS[displayStatus] || ''}`}>
