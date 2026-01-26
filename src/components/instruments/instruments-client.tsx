@@ -8,6 +8,7 @@ import { InstrumentSectionGroup } from './instrument-section-group'
 import { InstrumentFormDialog } from './instrument-form-dialog'
 import { DeleteInstrumentDialog } from './delete-instrument-dialog'
 import { PrepopulateButton } from './prepopulate-button'
+import { AddMissingButton } from './add-missing-button'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
 import type { Instrument } from '@/types'
 
@@ -104,6 +105,13 @@ export function InstrumentsClient({
             {instruments.length === 0 && (
               <PrepopulateButton
                 organizationId={organizationId}
+                onSuccess={handleSuccess}
+              />
+            )}
+            {instruments.length > 0 && (
+              <AddMissingButton
+                organizationId={organizationId}
+                existingNames={instruments.map(i => i.name)}
                 onSuccess={handleSuccess}
               />
             )}

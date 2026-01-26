@@ -110,5 +110,8 @@ export const STANDARD_INSTRUMENTS: {
   { name: 'Voice - Tenor', abbreviation: 'Ten', section: 'other', sort_order: 72 },
   { name: 'Voice - Baritone', abbreviation: 'Bar', section: 'other', sort_order: 73 },
   { name: 'Voice - Bass', abbreviation: 'Bas', section: 'other', sort_order: 74 },
+
+  // Staff Positions
   { name: 'Conductor', abbreviation: 'Cond', section: 'other', sort_order: 80 },
+  { name: 'Music Librarian', abbreviation: 'Lib', section: 'other', sort_order: 81 },
 ]
