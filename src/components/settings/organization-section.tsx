@@ -1,11 +1,13 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { updateOrganizationSchema, type UpdateOrganizationInput } from '@/lib/validations/settings'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Form,
   FormControl,
@@ -13,15 +15,17 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from '@/components/ui/form'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 interface OrganizationSectionProps {
-  organization: { id: string; name: string; slug: string }
+  organization: { id: string; name: string; slug: string; musician_policy?: string | null }
   role: 'owner' | 'admin' | 'member'
 }
 
 export function OrganizationSection({ organization, role }: OrganizationSectionProps) {
+  const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -32,6 +36,7 @@ export function OrganizationSection({ organization, role }: OrganizationSectionP
     resolver: zodResolver(updateOrganizationSchema),
     defaultValues: {
       name: organization.name,
+      musician_policy: organization.musician_policy || '',
     },
   })
 
@@ -56,6 +61,7 @@ export function OrganizationSection({ organization, role }: OrganizationSectionP
 
     setSuccess(true)
     setIsLoading(false)
+    router.refresh()
   }
 
   return (
@@ -74,7 +80,7 @@ export function OrganizationSection({ organization, role }: OrganizationSectionP
             )}
             {success && (
               <div className="rounded-md bg-green-500/15 p-3 text-sm text-green-700 dark:text-green-400">
-                Organization name updated successfully
+                Organization settings saved successfully
               </div>
             )}
             <FormField
@@ -97,6 +103,28 @@ export function OrganizationSection({ organization, role }: OrganizationSectionP
                 The slug cannot be changed
               </p>
             </div>
+            <FormField
+              control={form.control}
+              name="musician_policy"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Musician Policy</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      {...field}
+                      value={field.value || ''}
+                      disabled={!canEdit}
+                      rows={10}
+                      placeholder="Enter your organization's musician policy here. This will be shown to musicians when they accept contract offers."
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Customize the policy that musicians agree to when accepting offers. Leave blank to use the default policy.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             {canEdit && (
               <Button type="submit" disabled={isLoading}>
                 {isLoading ? 'Saving...' : 'Save Changes'}
