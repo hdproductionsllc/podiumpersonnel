@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createClient } from '@/lib/supabase/client'
@@ -21,9 +21,25 @@ import Link from 'next/link'
 
 export function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  // Handle URL messages (e.g., after password reset)
+  useEffect(() => {
+    const message = searchParams.get('message')
+    const errorParam = searchParams.get('error')
+
+    if (message === 'password_reset_success') {
+      setSuccessMessage('Your password has been reset successfully. Please sign in with your new password.')
+    }
+
+    if (errorParam === 'auth_callback_error') {
+      setError('There was an error processing your request. Please try again.')
+    }
+  }, [searchParams])
 
   async function signInWithGoogle() {
     setIsGoogleLoading(true)
@@ -76,6 +92,11 @@ export function LoginForm() {
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {successMessage && (
+              <div className="rounded-md bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 p-3 text-sm text-green-800 dark:text-green-200">
+                {successMessage}
+              </div>
+            )}
             {error && (
               <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
                 {error}
@@ -103,7 +124,15 @@ export function LoginForm() {
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Password</FormLabel>
+                  <div className="flex items-center justify-between">
+                    <FormLabel>Password</FormLabel>
+                    <Link
+                      href="/forgot-password"
+                      className="text-xs text-muted-foreground hover:text-primary underline-offset-4 hover:underline"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
                   <FormControl>
                     <Input type="password" {...field} />
                   </FormControl>

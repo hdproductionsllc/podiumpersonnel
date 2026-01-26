@@ -34,10 +34,12 @@ export async function updateSession(request: NextRequest) {
 
   // Protected routes
   const isAuthRoute = request.nextUrl.pathname.startsWith('/login') ||
-                      request.nextUrl.pathname.startsWith('/signup')
+                      request.nextUrl.pathname.startsWith('/signup') ||
+                      request.nextUrl.pathname.startsWith('/forgot-password')
   const isDashboardRoute = request.nextUrl.pathname.startsWith('/dashboard') ||
                           request.nextUrl.pathname === '/'
   const isOnboardingRoute = request.nextUrl.pathname.startsWith('/onboarding')
+  const isResetPasswordRoute = request.nextUrl.pathname.startsWith('/reset-password')
 
   // Redirect unauthenticated users from protected routes
   if (!user && (isDashboardRoute || isOnboardingRoute)) {
@@ -46,8 +48,8 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Redirect authenticated users away from auth routes
-  if (user && isAuthRoute) {
+  // Redirect authenticated users away from auth routes (except reset-password)
+  if (user && isAuthRoute && !isResetPasswordRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
