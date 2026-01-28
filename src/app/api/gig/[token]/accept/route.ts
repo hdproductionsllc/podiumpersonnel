@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferAcceptedEmail, sendAdminOfferResponseEmail, sendMusicianReleasedEmail } from '@/lib/email/send'
+import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 
 export async function POST(
   _request: Request,
@@ -57,7 +58,7 @@ export async function POST(
   const organization = project?.organization as any
   const instrument = position?.instrument as any
   const services = project?.services as any[] || []
-  const timezone = organization?.timezone || 'America/Los_Angeles'
+  const timezone = organization?.timezone || DEFAULT_TIMEZONE
 
   // Check if this is a substitution offer by looking for a related substitution request
   const { data: subRequest } = await supabase
@@ -170,7 +171,7 @@ export async function POST(
 
     // Send confirmation to musician if they have email
     if (musician?.email) {
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      const baseUrl = getAppUrl()
       const calendarUrl = `${baseUrl}/api/offers/${offer.id}/calendar`
 
       await sendOfferAcceptedEmail({
@@ -191,7 +192,7 @@ export async function POST(
       const adminEmails = await getOrgAdminEmails(project.organization_id)
 
       if (adminEmails.length > 0) {
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+        const baseUrl = getAppUrl()
         await sendAdminOfferResponseEmail({
           to: adminEmails,
           organizationName: organization?.name || 'Orchestra',

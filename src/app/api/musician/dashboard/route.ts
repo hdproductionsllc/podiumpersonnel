@@ -1,0 +1,168 @@
+import { NextResponse } from 'next/server'
+import { createClient, resolveMusicianIds } from '@/lib/supabase/server'
+
+export async function GET(request: Request) {
+  const supabase = await createClient()
+  const { searchParams } = new URL(request.url)
+  const impersonateId = searchParams.get('impersonate')
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Resolve musician IDs (supports admin impersonation)
+  const { musicianIds: resolvedIds, error: resolveError } = await resolveMusicianIds(
+    supabase, user.id, impersonateId
+  )
+
+  if (resolveError || resolvedIds.length === 0) {
+    return NextResponse.json({ error: resolveError || 'No musician records found' }, { status: 404 })
+  }
+
+  // Get full musician data for the resolved IDs
+  const { data: musicians, error: musiciansError } = await supabase
+    .from('musicians')
+    .select(`
+      id,
+      first_name,
+      last_name,
+      email,
+      organization_id,
+      portal_enabled,
+      organization:organizations(id, name, timezone, email_logo_url)
+    `)
+    .in('id', resolvedIds)
+    .eq('is_active', true)
+
+  if (musiciansError || !musicians || musicians.length === 0) {
+    return NextResponse.json({ error: 'No musician records found' }, { status: 404 })
+  }
+
+  // Filter to only portal-enabled musicians (skip for impersonation)
+  const enabledMusicians = impersonateId
+    ? musicians
+    : musicians.filter((m: any) => m.portal_enabled !== false)
+  if (enabledMusicians.length === 0) {
+    return NextResponse.json({ error: 'Portal access is disabled' }, { status: 403 })
+  }
+
+  const musicianIds = enabledMusicians.map((m: any) => m.id)
+  const primaryMusician = enabledMusicians[0]
+
+  // Get pending offers
+  const { data: pendingOffers } = await supabase
+    .from('contract_offers')
+    .select(`
+      id,
+      token,
+      status,
+      custom_pay,
+      expires_at,
+      created_at,
+      musician:musicians(
+        id,
+        first_name,
+        last_name,
+        organization:organizations(id, name, timezone, email_logo_url)
+      ),
+      project_position:project_positions(
+        id,
+        chair_number,
+        instrument:instruments(id, name),
+        project:projects(
+          id,
+          name,
+          description,
+          start_date,
+          end_date
+        )
+      )
+    `)
+    .in('musician_id', musicianIds)
+    .in('status', ['pending', 'viewed'])
+    .order('expires_at', { ascending: true, nullsFirst: false })
+
+  // Get upcoming services (next 30 days) for confirmed positions
+  const now = new Date()
+  const thirtyDaysLater = new Date()
+  thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30)
+
+  // First get confirmed positions for this user's musicians
+  const { data: confirmedPositions } = await supabase
+    .from('project_positions')
+    .select(`
+      id,
+      chair_number,
+      musician_id,
+      instrument:instruments(id, name),
+      project:projects(
+        id,
+        name,
+        organization_id,
+        organization:organizations(id, name, timezone)
+      )
+    `)
+    .in('musician_id', musicianIds)
+    .eq('status', 'confirmed')
+
+  let upcomingServices: any[] = []
+
+  if (confirmedPositions && confirmedPositions.length > 0) {
+    const projectIds = [...new Set(confirmedPositions.map((p: any) => p.project?.id).filter(Boolean))]
+
+    if (projectIds.length > 0) {
+      const { data: services } = await supabase
+        .from('services')
+        .select(`
+          id,
+          name,
+          service_type,
+          start_time,
+          end_time,
+          venue,
+          venue_id,
+          base_pay,
+          project_id,
+          venue_info:venues(id, name, address, city, state)
+        `)
+        .in('project_id', projectIds)
+        .gte('start_time', now.toISOString())
+        .lte('start_time', thirtyDaysLater.toISOString())
+        .order('start_time', { ascending: true })
+        .limit(20)
+
+      if (services) {
+        // Enrich services with project and position info
+        upcomingServices = services.map((service: any) => {
+          const position = confirmedPositions.find((p: any) => p.project?.id === service.project_id)
+          return {
+            ...service,
+            project: position?.project,
+            instrument: position?.instrument,
+            chair_number: position?.chair_number,
+          }
+        })
+      }
+    }
+  }
+
+  return NextResponse.json({
+    musician: {
+      id: primaryMusician.id,
+      first_name: primaryMusician.first_name,
+      last_name: primaryMusician.last_name,
+      email: primaryMusician.email,
+    },
+    organizations: enabledMusicians.map((m: any) => ({
+      id: m.organization?.id,
+      name: m.organization?.name,
+      musicianId: m.id,
+    })),
+    pendingOffers: pendingOffers || [],
+    upcomingServices,
+  })
+}

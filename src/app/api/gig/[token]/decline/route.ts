@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferDeclinedEmail, sendAdminOfferResponseEmail, sendSubDeclinedFindAnotherEmail } from '@/lib/email/send'
+import { getAppUrl } from '@/lib/utils'
 
 export async function POST(
   _request: Request,
@@ -120,7 +121,7 @@ export async function POST(
       .eq('status', 'accepted')
       .single()
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const baseUrl = getAppUrl()
     const gigUrl = originalOffer ? `${baseUrl}/gig/${originalOffer.token}` : baseUrl
 
     // Send "sub declined, find another" email to the original musician
@@ -176,7 +177,7 @@ export async function POST(
       const adminEmails = await getOrgAdminEmails(project.organization_id)
 
       if (adminEmails.length > 0) {
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+        const baseUrl = getAppUrl()
         await sendAdminOfferResponseEmail({
           to: adminEmails,
           organizationName: organization?.name || 'Orchestra',

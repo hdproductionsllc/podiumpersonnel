@@ -1,8 +1,20 @@
 import { Resend } from 'resend'
 
 // Initialize Resend client
-// You'll need to add RESEND_API_KEY to your .env.local
-export const resend = new Resend(process.env.RESEND_API_KEY)
+const apiKey = process.env.RESEND_API_KEY
+if (!apiKey) {
+  console.warn('⚠️ RESEND_API_KEY is not set - emails will not be sent')
+}
+export const resend = new Resend(apiKey)
 
-// Default from address - update this to your verified domain
-export const EMAIL_FROM = process.env.EMAIL_FROM || 'Podium <noreply@resend.dev>'
+// Default from address - requires verified domain in Resend
+// Using "hello@" instead of "noreply@" for better deliverability
+export const EMAIL_FROM = process.env.EMAIL_FROM || 'Podium Personnel <hello@podiumpersonnel.com>'
+
+// Debug helper
+export function logEmailConfig() {
+  console.log('Email config:', {
+    hasApiKey: !!apiKey,
+    from: EMAIL_FROM,
+  })
+}

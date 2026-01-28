@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 // Note: For full type safety, generate types from your Supabase project:
@@ -30,4 +31,94 @@ export async function createClient() {
       },
     }
   )
+}
+
+// Service role client for admin operations (e.g., getting user emails)
+export function createServiceClient() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    }
+  )
+}
+
+// Helper to resolve musician IDs for a request, supporting admin impersonation.
+// If `impersonateId` is provided and the authenticated user is an admin of
+// the musician's organization, returns only that musician's ID.
+// Otherwise returns all musician IDs belonging to the authenticated user.
+export async function resolveMusicianIds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  impersonateId?: string | null
+): Promise<{ musicianIds: string[]; error?: string }> {
+  if (impersonateId) {
+    // Verify the musician exists and admin has access
+    const { data: musician } = await supabase
+      .from('musicians')
+      .select('id, organization_id')
+      .eq('id', impersonateId)
+      .single()
+
+    if (!musician) {
+      return { musicianIds: [], error: 'Musician not found' }
+    }
+
+    const { data: membership } = await supabase
+      .from('organization_members')
+      .select('role')
+      .eq('organization_id', musician.organization_id)
+      .eq('user_id', userId)
+      .single()
+
+    if (!membership || !['owner', 'admin'].includes(membership.role)) {
+      return { musicianIds: [], error: 'Not authorized to impersonate this musician' }
+    }
+
+    return { musicianIds: [musician.id] }
+  }
+
+  // Normal flow: get all musician records for this user
+  const { data: musicians } = await supabase
+    .from('musicians')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+
+  if (!musicians || musicians.length === 0) {
+    return { musicianIds: [], error: 'No musician records found' }
+  }
+
+  return { musicianIds: musicians.map((m) => m.id) }
+}
+
+// Helper to get admin/owner emails for an organization
+export async function getOrgAdminEmails(organizationId: string): Promise<string[]> {
+  const serviceClient = createServiceClient()
+
+  // Get admin/owner user IDs
+  const { data: members } = await serviceClient
+    .from('organization_members')
+    .select('user_id')
+    .eq('organization_id', organizationId)
+    .in('role', ['owner', 'admin'])
+
+  if (!members || members.length === 0) {
+    return []
+  }
+
+  // Get user emails using admin API
+  const emails: string[] = []
+  for (const member of members) {
+    const { data: userData } = await serviceClient.auth.admin.getUserById(member.user_id)
+    if (userData?.user?.email) {
+      emails.push(userData.user.email)
+    }
+  }
+
+  return emails
 }

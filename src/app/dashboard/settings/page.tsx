@@ -2,7 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { SettingsClient } from '@/components/settings/settings-client'
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ setup?: string }>
+}) {
+  const { setup } = await searchParams
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -39,6 +44,7 @@ export default async function SettingsPage() {
       organization={organization}
       role={membership.role}
       currentUserId={user.id}
+      showSetupPrompt={setup === 'musician_policy'}
     />
   )
 }

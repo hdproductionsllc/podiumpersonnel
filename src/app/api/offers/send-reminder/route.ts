@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendOfferReminderEmail } from '@/lib/email/send'
+import { getAppUrl } from '@/lib/utils'
 
 export async function POST(request: NextRequest) {
   try {
@@ -97,7 +98,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build the response URL
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const baseUrl = getAppUrl()
     const responseUrl = `${baseUrl}/gig/${offer.token}`
 
     // Send the reminder email

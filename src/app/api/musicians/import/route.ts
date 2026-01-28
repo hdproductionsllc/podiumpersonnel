@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { sendPortalInvitationEmail } from '@/lib/email/send'
+import crypto from 'crypto'
 import * as XLSX from 'xlsx'
+import { getAppUrl } from '@/lib/utils'
 
 // Column name variations for standard format detection
 const COLUMN_MAPPINGS = {
@@ -481,6 +484,7 @@ export async function POST(request: Request) {
   const file = formData.get('file') as File | null
   const tagInput = formData.get('tag') as string | null
   const tags = tagInput ? [tagInput.trim()] : []
+  const sendPortalInvites = formData.get('sendPortalInvites') === 'true'
 
   if (!file) {
     return NextResponse.json({ error: 'No file provided' }, { status: 400 })
@@ -577,16 +581,65 @@ export async function POST(request: Request) {
       tags: tags,
     }))
 
+    let portalInvitesSent = 0
+
     if (musiciansToInsert.length > 0) {
-      const { error: insertError } = await supabase
+      const { data: insertedMusicians, error: insertError } = await supabase
         .from('musicians')
         .insert(musiciansToInsert)
+        .select('id, first_name, last_name, email')
 
       if (insertError) {
         return NextResponse.json(
           { error: `Database error: ${insertError.message}` },
           { status: 500 }
         )
+      }
+
+      // Send portal invites if requested
+      if (sendPortalInvites && insertedMusicians) {
+        const { data: organization } = await supabase
+          .from('organizations')
+          .select('id, name, email_logo_url, email_brand_color')
+          .eq('id', membership.organization_id)
+          .single()
+
+        const baseUrl = getAppUrl()
+
+        for (const musician of insertedMusicians) {
+          if (!musician.email) continue
+
+          try {
+            const token = crypto.randomBytes(32).toString('hex')
+            const expiresAt = new Date()
+            expiresAt.setDate(expiresAt.getDate() + 7)
+
+            await supabase
+              .from('musicians')
+              .update({
+                portal_invite_token: token,
+                portal_invite_sent_at: new Date().toISOString(),
+                portal_invite_expires_at: expiresAt.toISOString(),
+              })
+              .eq('id', musician.id)
+
+            await sendPortalInvitationEmail({
+              to: musician.email,
+              musicianName: `${musician.first_name} ${musician.last_name}`,
+              organizationName: organization?.name || 'Your Organization',
+              activationUrl: `${baseUrl}/musician/activate/${token}`,
+              expiresAt: expiresAt.toISOString(),
+              branding: {
+                logoUrl: organization?.email_logo_url,
+                brandColor: organization?.email_brand_color,
+              },
+            })
+
+            portalInvitesSent++
+          } catch (e) {
+            console.error('Failed to send portal invite during import:', e)
+          }
+        }
       }
     }
 
@@ -596,6 +649,7 @@ export async function POST(request: Request) {
       errors: 0,
       errorRows: [],
       totalErrorRows: 0,
+      portalInvitesSent,
     })
   } catch (err) {
     console.error('Excel import error:', err)

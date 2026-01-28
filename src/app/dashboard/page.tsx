@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { DEFAULT_TIMEZONE } from '@/lib/utils'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -25,7 +26,7 @@ export default async function DashboardPage() {
 
   const organization = membership?.organization as unknown as { id: string; name: string; slug: string; timezone: string } | null
   const orgId = organization!.id
-  const timezone = organization?.timezone || 'America/Los_Angeles'
+  const timezone = organization?.timezone || DEFAULT_TIMEZONE
 
   // Fetch stats, upcoming services, recent activity, and staffing alerts in parallel
   const [

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendContractOfferEmail, sendAdminOfferSentEmail } from '@/lib/email/send'
 import { logEmailConfig } from '@/lib/email/client'
+import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 
 export async function POST(request: NextRequest) {
   console.log('📧 Send email API called')
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
     const organization = project?.organization as any
     const instrument = position?.instrument as any
     const services = project?.services as any[] || []
-    const timezone = organization?.timezone || 'America/Los_Angeles'
+    const timezone = organization?.timezone || DEFAULT_TIMEZONE
 
     // Count total chairs for this instrument in this project
     let totalChairs = 1
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build the response URL
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const baseUrl = getAppUrl()
     const responseUrl = `${baseUrl}/gig/${offer.token}`
 
     // Format services for the email
@@ -145,7 +146,7 @@ export async function POST(request: NextRequest) {
       const adminEmails = await getOrgAdminEmails(organization?.id)
 
       if (adminEmails.length > 0) {
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+        const baseUrl = getAppUrl()
         await sendAdminOfferSentEmail({
           to: adminEmails,
           organizationName: organization?.name || 'Orchestra',

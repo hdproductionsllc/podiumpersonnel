@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { GigPageClient } from '@/components/gig/gig-page-client'
+import { DEFAULT_TIMEZONE } from '@/lib/utils'
 
 interface GigPageProps {
   params: Promise<{ token: string }>
@@ -63,7 +64,7 @@ export default async function GigPage({ params }: GigPageProps) {
   } | null
 
   // Get organization timezone for date formatting
-  const timezone = position?.project?.organization?.timezone || 'America/Los_Angeles'
+  const timezone = position?.project?.organization?.timezone || DEFAULT_TIMEZONE
 
   // Fetch services for schedule display and pay calculation
   let payAmount: number | null = offerData.custom_pay ?? null

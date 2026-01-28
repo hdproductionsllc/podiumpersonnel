@@ -35,7 +35,7 @@ interface ProjectFormDialogProps {
   onOpenChange: (open: boolean) => void
   project: ProjectWithServices | null
   organizationId: string
-  onSuccess: () => void
+  onSuccess: (newProject?: { id: string; start_date: string | null; end_date: string | null }) => void
 }
 
 export function ProjectFormDialog({
@@ -56,7 +56,7 @@ export function ProjectFormDialog({
       description: '',
       start_date: '',
       end_date: '',
-      status: 'draft',
+      status: 'active',
     },
   })
 
@@ -76,7 +76,7 @@ export function ProjectFormDialog({
           description: '',
           start_date: '',
           end_date: '',
-          status: 'draft',
+          status: 'active',
         })
       }
       setError(null)
@@ -107,7 +107,7 @@ export function ProjectFormDialog({
         return
       }
     } else {
-      const { error: insertError } = await supabase
+      const { data: newProject, error: insertError } = await supabase
         .from('projects')
         .insert({
           organization_id: organizationId,
@@ -117,12 +117,22 @@ export function ProjectFormDialog({
           end_date: data.end_date || null,
           status: data.status,
         })
+        .select('id')
+        .single()
 
       if (insertError) {
         setError(insertError.message)
         setIsLoading(false)
         return
       }
+
+      setIsLoading(false)
+      onSuccess({
+        id: newProject.id,
+        start_date: data.start_date || null,
+        end_date: data.end_date || null,
+      })
+      return
     }
 
     setIsLoading(false)
@@ -191,7 +201,19 @@ export function ProjectFormDialog({
                   <FormItem>
                     <FormLabel>Start Date</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input
+                        type="date"
+                        value={field.value}
+                        onChange={(e) => {
+                          const newValue = e.target.value
+                          field.onChange(e)
+                          // Auto-populate end_date if not already set (only when complete date entered)
+                          const currentEndDate = form.getValues('end_date')
+                          if (!currentEndDate && newValue && newValue.length === 10) {
+                            form.setValue('end_date', newValue)
+                          }
+                        }}
+                      />
                     </FormControl>
                     <p className="text-xs text-muted-foreground">First rehearsal date</p>
                     <FormMessage />

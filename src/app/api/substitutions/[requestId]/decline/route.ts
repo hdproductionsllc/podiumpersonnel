@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendSubRequestDeclinedEmail } from '@/lib/email/send'
+import { getAppUrl } from '@/lib/utils'
 
 export async function POST(
   request: Request,
@@ -119,7 +120,7 @@ export async function POST(
     .eq('status', 'accepted')
     .single()
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const baseUrl = getAppUrl()
   const gigUrl = originalOffer ? `${baseUrl}/gig/${originalOffer.token}` : baseUrl
 
   // Send "declined" email to requesting musician

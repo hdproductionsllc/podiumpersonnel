@@ -124,6 +124,13 @@ export type Database = {
           w9_on_file: boolean
           zelle_method: 'email' | 'phone' | null
           zelle_verified: boolean
+          user_id: string | null
+          portal_invite_token: string | null
+          portal_invite_sent_at: string | null
+          portal_invite_expires_at: string | null
+          portal_last_login: string | null
+          portal_enabled: boolean
+          profile_photo_url: string | null
           created_at: string
           updated_at: string
         }
@@ -145,6 +152,13 @@ export type Database = {
           w9_on_file?: boolean
           zelle_method?: 'email' | 'phone' | null
           zelle_verified?: boolean
+          user_id?: string | null
+          portal_invite_token?: string | null
+          portal_invite_sent_at?: string | null
+          portal_invite_expires_at?: string | null
+          portal_last_login?: string | null
+          portal_enabled?: boolean
+          profile_photo_url?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -166,6 +180,13 @@ export type Database = {
           w9_on_file?: boolean
           zelle_method?: 'email' | 'phone' | null
           zelle_verified?: boolean
+          user_id?: string | null
+          portal_invite_token?: string | null
+          portal_invite_sent_at?: string | null
+          portal_invite_expires_at?: string | null
+          portal_last_login?: string | null
+          portal_enabled?: boolean
+          profile_photo_url?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -650,6 +671,35 @@ export type Database = {
           updated_at?: string
         }
       }
+      musician_notification_preferences: {
+        Row: {
+          musician_id: string
+          email_new_offers: boolean
+          email_offer_reminders: boolean
+          email_schedule_changes: boolean
+          email_payment_updates: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          musician_id: string
+          email_new_offers?: boolean
+          email_offer_reminders?: boolean
+          email_schedule_changes?: boolean
+          email_payment_updates?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          musician_id?: string
+          email_new_offers?: boolean
+          email_offer_reminders?: boolean
+          email_schedule_changes?: boolean
+          email_payment_updates?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -687,3 +737,4 @@ export type SubstitutionRequest = Database['public']['Tables']['substitution_req
 export type CompetingSchedule = Database['public']['Tables']['competing_schedules']['Row']
 export type Payment = Database['public']['Tables']['payments']['Row']
 export type StaffingPreset = Database['public']['Tables']['staffing_presets']['Row']
+export type MusicianNotificationPreferences = Database['public']['Tables']['musician_notification_preferences']['Row']

@@ -32,7 +32,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Protected routes
+  // Protected routes - Org admin
   const isAuthRoute = request.nextUrl.pathname.startsWith('/login') ||
                       request.nextUrl.pathname.startsWith('/signup') ||
                       request.nextUrl.pathname.startsWith('/forgot-password')
@@ -41,6 +41,16 @@ export async function updateSession(request: NextRequest) {
   const isOnboardingRoute = request.nextUrl.pathname.startsWith('/onboarding')
   const isResetPasswordRoute = request.nextUrl.pathname.startsWith('/reset-password')
 
+  // Musician portal routes
+  const pathname = request.nextUrl.pathname
+  const isMusicianRoute = pathname.startsWith('/musician')
+  const isMusicianAuthRoute = pathname.startsWith('/musician/login') ||
+                              pathname.startsWith('/musician/register') ||
+                              pathname.startsWith('/musician/activate') ||
+                              pathname.startsWith('/musician/forgot-password') ||
+                              pathname.startsWith('/musician/reset-password')
+  const isMusicianProtectedRoute = isMusicianRoute && !isMusicianAuthRoute
+
   // Redirect unauthenticated users from protected routes
   if (!user && (isDashboardRoute || isOnboardingRoute)) {
     const url = request.nextUrl.clone()
@@ -48,10 +58,24 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Redirect unauthenticated musicians from protected musician routes
+  if (!user && isMusicianProtectedRoute) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/musician/login'
+    return NextResponse.redirect(url)
+  }
+
   // Redirect authenticated users away from auth routes (except reset-password)
   if (user && isAuthRoute && !isResetPasswordRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
+    return NextResponse.redirect(url)
+  }
+
+  // Redirect authenticated musicians away from musician auth routes
+  if (user && isMusicianAuthRoute && !pathname.startsWith('/musician/reset-password')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/musician'
     return NextResponse.redirect(url)
   }
 

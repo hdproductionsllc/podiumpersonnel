@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendSubRequestApprovedEmail, sendContractOfferEmail, sendAdminOfferSentEmail } from '@/lib/email/send'
+import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { randomBytes } from 'crypto'
 
 export async function POST(
@@ -65,7 +66,7 @@ export async function POST(
   const requestingMusician = subRequest.requesting_musician as any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const services = project?.services as any[] || []
-  const timezone = organization?.timezone || 'America/Los_Angeles'
+  const timezone = organization?.timezone || DEFAULT_TIMEZONE
 
   const { data: membership } = await supabase
     .from('organization_members')
@@ -211,7 +212,7 @@ export async function POST(
       venue: service.venue,
     }))
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const baseUrl = getAppUrl()
 
   // Send emails (non-blocking)
   try {

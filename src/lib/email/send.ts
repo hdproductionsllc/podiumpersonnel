@@ -12,6 +12,8 @@ import { SubRequestApprovedEmail } from './templates/sub-request-approved'
 import { SubRequestDeclinedEmail } from './templates/sub-request-declined'
 import { MusicianReleasedEmail } from './templates/musician-released'
 import { SubDeclinedFindAnotherEmail } from './templates/sub-declined-find-another'
+import { PortalInvitationEmail } from './templates/portal-invitation'
+import { MusicianWelcomeEmail } from './templates/musician-welcome'
 import { render } from '@react-email/render'
 import { type EmailBranding } from './templates/email-layout'
 
@@ -602,6 +604,75 @@ export async function sendSubDeclinedFindAnotherEmail(params: SendSubDeclinedFin
 
   if (error) {
     console.error('Failed to send sub declined find another email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// Portal Invitation Email
+interface SendPortalInvitationParams {
+  to: string
+  musicianName: string
+  organizationName: string
+  activationUrl: string
+  expiresAt: string
+  branding?: EmailBranding
+}
+
+export async function sendPortalInvitationEmail(params: SendPortalInvitationParams) {
+  const emailHtml = await render(
+    PortalInvitationEmail({
+      musicianName: params.musicianName,
+      organizationName: params.organizationName,
+      activationUrl: params.activationUrl,
+      expiresAt: params.expiresAt,
+      branding: params.branding,
+    })
+  )
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: `${params.organizationName} has invited you to Podium`,
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send portal invitation email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// Musician Welcome Email
+interface SendMusicianWelcomeParams {
+  to: string
+  musicianName: string
+  loginUrl: string
+  organizations: string[]
+}
+
+export async function sendMusicianWelcomeEmail(params: SendMusicianWelcomeParams) {
+  const emailHtml = await render(
+    MusicianWelcomeEmail({
+      musicianName: params.musicianName,
+      email: params.to,
+      loginUrl: params.loginUrl,
+      organizations: params.organizations,
+    })
+  )
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: 'Welcome to Podium - Your musician portal is ready',
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send musician welcome email:', error)
     throw new Error(`Failed to send email: ${error.message}`)
   }
 

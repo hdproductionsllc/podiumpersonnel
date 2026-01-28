@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendAdminSubRequestEmail } from '@/lib/email/send'
+import { getAppUrl } from '@/lib/utils'
 
 export async function POST(
   request: Request,
@@ -158,7 +159,7 @@ export async function POST(
     const adminEmails = await getOrgAdminEmails(project.organization_id)
 
     if (adminEmails.length > 0) {
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      const baseUrl = getAppUrl()
       await sendAdminSubRequestEmail({
         to: adminEmails,
         organizationName: organization?.name || 'Orchestra',

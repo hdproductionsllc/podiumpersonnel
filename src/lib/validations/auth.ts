@@ -21,20 +21,15 @@ export const signupSchema = z.object({
 })
 
 export const onboardingSchema = z.object({
+  fullName: z
+    .string()
+    .min(2, 'Please enter your full name')
+    .max(100, 'Name must be less than 100 characters'),
   organizationName: z
     .string()
     .min(2, 'Organization name must be at least 2 characters')
     .max(100, 'Organization name must be less than 100 characters'),
-  slug: z
-    .string()
-    .min(2, 'Slug must be at least 2 characters')
-    .max(50, 'Slug must be less than 50 characters')
-    .regex(
-      /^[a-z0-9-]+$/,
-      'Slug can only contain lowercase letters, numbers, and hyphens'
-    ),
   timezone: z.string().min(1, 'Timezone is required'),
-  musician_policy: z.string().max(10000).optional(),
 })
 
 export const forgotPasswordSchema = z.object({
