@@ -6,6 +6,7 @@ export const loginSchema = z.object({
 })
 
 export const signupSchema = z.object({
+  accessCode: z.string().min(1, 'Access code is required'),
   email: z.string().email('Please enter a valid email address'),
   password: z
     .string()
@@ -18,6 +19,9 @@ export const signupSchema = z.object({
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'Passwords do not match',
   path: ['confirmPassword'],
+}).refine((data) => data.accessCode === process.env.NEXT_PUBLIC_SIGNUP_ACCESS_CODE, {
+  message: 'Invalid access code',
+  path: ['accessCode'],
 })
 
 export const onboardingSchema = z.object({
