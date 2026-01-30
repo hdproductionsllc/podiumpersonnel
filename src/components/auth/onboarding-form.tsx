@@ -80,30 +80,15 @@ export function OnboardingForm() {
     }
 
     // Generate slug from organization name
-    let slug = generateSlug(data.organizationName)
+    const slug = generateSlug(data.organizationName)
 
-    // Ensure slug is unique by appending random suffix if needed
-    const { data: existingOrg } = await supabase
-      .from('organizations')
-      .select('id')
-      .eq('slug', slug)
-      .single()
-
-    if (existingOrg) {
-      // Add random suffix to make unique
-      slug = `${slug}-${Math.random().toString(36).substring(2, 6)}`
-    }
-
-    // Create organization
+    // Create organization and add user as owner atomically via RPC
     const { data: organization, error: orgError } = await supabase
-      .from('organizations')
-      .insert({
-        name: data.organizationName,
-        slug,
-        timezone: data.timezone,
+      .rpc('create_organization_with_owner', {
+        p_name: data.organizationName,
+        p_slug: slug,
+        p_timezone: data.timezone,
       })
-      .select()
-      .single()
 
     if (orgError) {
       if (orgError.code === '23505') {
@@ -111,21 +96,6 @@ export function OnboardingForm() {
       } else {
         setError(orgError.message)
       }
-      setIsLoading(false)
-      return
-    }
-
-    // Add user as owner
-    const { error: memberError } = await supabase
-      .from('organization_members')
-      .insert({
-        organization_id: organization.id,
-        user_id: user.id,
-        role: 'owner',
-      })
-
-    if (memberError) {
-      setError(memberError.message)
       setIsLoading(false)
       return
     }

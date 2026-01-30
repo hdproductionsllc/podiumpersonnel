@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
+import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferDeclinedEmail, sendAdminOfferResponseEmail, sendSubDeclinedFindAnotherEmail } from '@/lib/email/send'
 import { getAppUrl } from '@/lib/utils'
 
@@ -8,7 +8,7 @@ export async function POST(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   // Find the offer by token with all related data for emails
   const { data: offer, error: fetchError } = await supabase

@@ -9,6 +9,7 @@ interface Service {
   id: string
   name: string
   service_type: string
+  call_time: string | null
   start_time: string
   end_time: string | null
   venue: string | null
@@ -46,6 +47,7 @@ interface GigPageClientProps {
   timezone: string
   instruments: Instrument[]
   existingSubRequest: SubRequest | null
+  musicianHasAccount: boolean
 }
 
 export function GigPageClient({
@@ -67,6 +69,7 @@ export function GigPageClient({
   timezone,
   instruments,
   existingSubRequest,
+  musicianHasAccount,
 }: GigPageClientProps) {
   const [showSubRequestForm, setShowSubRequestForm] = useState(false)
   const [subRequestSubmitted, setSubRequestSubmitted] = useState(false)
@@ -96,6 +99,13 @@ export function GigPageClient({
       year: 'numeric',
       timeZone: timezone,
     }),
+    formattedCallTime: service.call_time
+      ? new Date(service.call_time).toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          timeZone: timezone,
+        })
+      : null,
     formattedTime: new Date(service.start_time).toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
@@ -191,8 +201,12 @@ export function GigPageClient({
                           </span>
                         </div>
                         <div className="text-muted-foreground mt-1">
-                          {service.formattedDate} at {service.formattedTime}
-                          {service.formattedEndTime && ` - ${service.formattedEndTime}`}
+                          {service.formattedDate}
+                        </div>
+                        <div className="text-muted-foreground">
+                          {service.formattedCallTime && `Call: ${service.formattedCallTime} | `}
+                          Start: {service.formattedTime}
+                          {service.formattedEndTime && ` | End: ${service.formattedEndTime}`}
                         </div>
                         {service.venue && (
                           <div className="text-muted-foreground mt-1 flex items-start gap-1">
@@ -335,6 +349,25 @@ export function GigPageClient({
               {offerStatus === 'declined' && (
                 <div className="rounded-md bg-red-50 dark:bg-red-950 p-4 text-red-800 dark:text-red-200">
                   You have declined this offer.
+                </div>
+              )}
+
+              {/* Portal signup prompt - shown after responding if musician has no account */}
+              {!musicianHasAccount && (offerStatus === 'accepted' || offerStatus === 'declined') && (
+                <div className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-4">
+                  <h4 className="font-medium text-blue-900 dark:text-blue-100 text-sm">Manage all your gigs in one place</h4>
+                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                    Create a free Podium account to view upcoming services, manage your schedule, and respond to future calls faster.
+                  </p>
+                  <a
+                    href="/musician/register"
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                    </svg>
+                    Create Your Account
+                  </a>
                 </div>
               )}
 

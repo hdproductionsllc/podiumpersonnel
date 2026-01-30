@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { ProjectsClient } from '@/components/projects/projects-client'
+import { DEFAULT_TIMEZONE } from '@/lib/utils'
 
 export default async function ProjectsPage() {
   const supabase = await createClient()
@@ -15,7 +16,8 @@ export default async function ProjectsPage() {
       organization:organizations(
         id,
         name,
-        slug
+        slug,
+        timezone
       )
     `)
     .eq('user_id', user!.id)
@@ -25,7 +27,10 @@ export default async function ProjectsPage() {
     id: string
     name: string
     slug: string
+    timezone: string | null
   } | null
+
+  const timezone = organization?.timezone || DEFAULT_TIMEZONE
 
   // Fetch projects with their services, positions, and offers
   const { data: projects } = await supabase
@@ -75,13 +80,24 @@ export default async function ProjectsPage() {
     .order('last_name', { ascending: true })
     .order('first_name', { ascending: true })
 
+  // Fetch tutorial state for tooltips
+  const { data: tutorialState } = await supabase
+    .from('user_tutorial_state')
+    .select('dismissed_tooltips')
+    .eq('user_id', user!.id)
+    .eq('organization_id', organization!.id)
+    .maybeSingle()
+
   return (
     <ProjectsClient
       projects={(projects as any) ?? []}
       books={(books as any) ?? []}
       musicians={(musicians as any) ?? []}
       organizationId={organization!.id}
+      timezone={timezone}
       userRole={membership!.role}
+      userId={user!.id}
+      dismissedTooltips={tutorialState?.dismissed_tooltips ?? []}
     />
   )
 }

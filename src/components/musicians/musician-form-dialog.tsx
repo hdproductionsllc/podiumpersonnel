@@ -44,9 +44,6 @@ export function MusicianFormDialog({
 }: MusicianFormDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [sendPortalInvite, setSendPortalInvite] = useState(false)
-  const [showInviteConfirm, setShowInviteConfirm] = useState(false)
-  const [pendingSubmitData, setPendingSubmitData] = useState<MusicianInput | null>(null)
   const isEditing = !!musician
 
   const form = useForm<MusicianInput>({
@@ -110,26 +107,12 @@ export function MusicianFormDialog({
         })
       }
       setError(null)
-      setSendPortalInvite(false)
     }
   }, [open, musician, form])
 
   async function onSubmit(data: MusicianInput) {
-    // If portal invite is requested and we haven't confirmed yet, show confirmation
-    if (sendPortalInvite && data.email && !showInviteConfirm) {
-      setPendingSubmitData(data)
-      setShowInviteConfirm(true)
-      return
-    }
-
-    await doSubmit(data)
-  }
-
-  async function doSubmit(data: MusicianInput) {
     setIsLoading(true)
     setError(null)
-    setShowInviteConfirm(false)
-    setPendingSubmitData(null)
 
     const supabase = createClient()
 
@@ -190,20 +173,6 @@ export function MusicianFormDialog({
         }
       }
 
-      // Send portal invite if requested when editing (and musician has email, no user_id)
-      if (sendPortalInvite && data.email && !musician.user_id) {
-        try {
-          const inviteResponse = await fetch(`/api/musicians/${musician.id}/send-portal-invite`, {
-            method: 'POST',
-          })
-          if (!inviteResponse.ok) {
-            const inviteResult = await inviteResponse.json()
-            console.error('Failed to send portal invite:', inviteResult.error)
-          }
-        } catch (e) {
-          console.error('Failed to send portal invite:', e)
-        }
-      }
     } else {
       const { data: newMusician, error: insertError } = await supabase
         .from('musicians')
@@ -250,27 +219,6 @@ export function MusicianFormDialog({
         }
       }
 
-      // Send portal invite if requested and musician has email
-      if (sendPortalInvite && data.email) {
-        try {
-          const inviteResponse = await fetch(`/api/musicians/${newMusician.id}/send-portal-invite`, {
-            method: 'POST',
-          })
-          if (!inviteResponse.ok) {
-            const inviteResult = await inviteResponse.json()
-            console.error('Failed to send portal invite:', inviteResult.error)
-            // Show warning but don't block form submission
-            setError(`Musician created but portal invite failed: ${inviteResult.error}`)
-            setIsLoading(false)
-            // Still call onSuccess to refresh the list
-            setTimeout(() => onSuccess(), 2000)
-            return
-          }
-        } catch (e) {
-          console.error('Failed to send portal invite:', e)
-          // Don't block the form submission for this
-        }
-      }
     }
 
     setIsLoading(false)
@@ -359,48 +307,6 @@ export function MusicianFormDialog({
                 </FormItem>
               )}
             />
-
-            {/* Portal invite option - show when musician has email and no portal account yet */}
-            {watchedEmail && (!isEditing || (musician && !musician.user_id)) && (
-              <div className="flex items-center gap-2 rounded-md border bg-blue-50 dark:bg-blue-950/30 p-3">
-                <input
-                  type="checkbox"
-                  id="send-portal-invite"
-                  className="h-4 w-4 rounded border-gray-300"
-                  checked={sendPortalInvite}
-                  onChange={(e) => setSendPortalInvite(e.target.checked)}
-                />
-                <label htmlFor="send-portal-invite" className="text-sm cursor-pointer">
-                  <span className="font-medium">{isEditing ? 'Send portal invite now' : 'Send portal invite'}</span>
-                  <span className="text-muted-foreground ml-1">
-                    - Musician will receive an email to activate their portal account
-                  </span>
-                </label>
-              </div>
-            )}
-
-            {/* Show portal status when editing */}
-            {isEditing && musician?.user_id && (
-              <div className="flex items-center gap-2 rounded-md border bg-green-50 dark:bg-green-950/30 p-3">
-                <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="text-sm text-green-700 dark:text-green-300">
-                  This musician has an active portal account
-                </span>
-              </div>
-            )}
-
-            {isEditing && musician?.portal_invite_token && !musician?.user_id && (
-              <div className="flex items-center gap-2 rounded-md border bg-yellow-50 dark:bg-yellow-950/30 p-3">
-                <svg className="h-5 w-5 text-yellow-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                </svg>
-                <span className="text-sm text-yellow-700 dark:text-yellow-300">
-                  Portal invite pending - check the box above to resend
-                </span>
-              </div>
-            )}
 
             <FormField
               control={form.control}
@@ -685,45 +591,6 @@ export function MusicianFormDialog({
         </Form>
       </DialogContent>
 
-      {/* Portal Invite Confirmation Dialog */}
-      {showInviteConfirm && pendingSubmitData && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-lg border bg-background p-6 shadow-lg">
-            <h3 className="text-lg font-semibold">Send Portal Invite?</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {isEditing ? 'Save changes and send' : 'Create musician and send'} a portal invite email to{' '}
-              <strong>{pendingSubmitData.first_name} {pendingSubmitData.last_name}</strong>?
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              They will receive an email at <strong>{pendingSubmitData.email}</strong> with a link to create their portal account.
-            </p>
-
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowInviteConfirm(false)
-                  setPendingSubmitData(null)
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSendPortalInvite(false)
-                  doSubmit(pendingSubmitData)
-                }}
-              >
-                {isEditing ? 'Save Without Invite' : 'Add Without Invite'}
-              </Button>
-              <Button onClick={() => doSubmit(pendingSubmitData)}>
-                {isEditing ? 'Save & Send Invite' : 'Add & Send Invite'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </Dialog>
   )
 }

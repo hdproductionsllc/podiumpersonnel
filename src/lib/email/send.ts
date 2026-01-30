@@ -31,7 +31,9 @@ interface SendContractOfferParams {
   services: {
     name: string
     date: string
+    callTime?: string | null
     time: string
+    endTime?: string | null
     venue: string | null
   }[]
   responseUrl: string
@@ -60,7 +62,7 @@ export async function sendContractOfferEmail(params: SendContractOfferParams) {
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Contract Offer: ${params.projectName} - ${params.instrument}`,
+    subject: `Call: ${params.projectName} - ${params.instrument}`,
     html: emailHtml,
   })
 
@@ -108,7 +110,7 @@ export async function sendOfferReminderEmail(params: SendOfferReminderParams) {
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `${urgentPrefix}Reminder: Contract Offer for ${params.projectName}`,
+    subject: `${urgentPrefix}Reminder: Call for ${params.projectName}`,
     html: emailHtml,
   })
 

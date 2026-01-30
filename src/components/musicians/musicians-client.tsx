@@ -126,7 +126,6 @@ export function MusiciansClient({
   const [isImporting, setIsImporting] = useState(false)
   const [importTag, setImportTag] = useState('')
   const [showImportDialog, setShowImportDialog] = useState(false)
-  const [importSendPortalInvites, setImportSendPortalInvites] = useState(false)
 
   const canManage = userRole === 'owner' || userRole === 'admin'
 
@@ -341,19 +340,9 @@ export function MusiciansClient({
   const [isSendingW9, setIsSendingW9] = useState(false)
   const [showW9Confirm, setShowW9Confirm] = useState(false)
 
-  // Portal invite state
-  const [isSendingPortalInvites, setIsSendingPortalInvites] = useState(false)
-  const [singleInviteLoading, setSingleInviteLoading] = useState<string | null>(null)
-  const [emailPromptMusician, setEmailPromptMusician] = useState<MusicianWithInstruments | null>(null)
-  const [emailPromptValue, setEmailPromptValue] = useState('')
-  const [portalInviteConfirm, setPortalInviteConfirm] = useState<MusicianWithInstruments | null>(null)
-  const [showBulkPortalConfirm, setShowBulkPortalConfirm] = useState(false)
 
   // Count selected musicians who need W-9 and have email
   const selectedNeedW9 = selectedMusicians.filter((m) => !m.w9_on_file && m.email)
-
-  // Count selected musicians who can receive portal invites
-  const selectedCanInvite = selectedMusicians.filter((m) => m.email && !m.user_id)
 
   function handleSendW9Request() {
     if (selectedNeedW9.length === 0) {
@@ -394,127 +383,6 @@ export function MusiciansClient({
     }
   }
 
-  function handleSendSinglePortalInvite(musician: MusicianWithInstruments) {
-    if (!musician.email) {
-      // Open email prompt dialog
-      setEmailPromptMusician(musician)
-      setEmailPromptValue('')
-      return
-    }
-
-    // Show confirmation dialog
-    setPortalInviteConfirm(musician)
-  }
-
-  async function confirmSinglePortalInvite() {
-    if (!portalInviteConfirm) return
-
-    const musician = portalInviteConfirm
-    setPortalInviteConfirm(null)
-    setSingleInviteLoading(musician.id)
-
-    try {
-      const response = await fetch(`/api/musicians/${musician.id}/send-portal-invite`, {
-        method: 'POST',
-      })
-      const result = await response.json()
-
-      if (!response.ok) {
-        toast.error(result.error || 'Failed to send portal invite')
-        return
-      }
-
-      toast.success(`Portal invite sent to ${musician.first_name} ${musician.last_name}`)
-      router.refresh()
-    } catch {
-      toast.error('Failed to send portal invite')
-    } finally {
-      setSingleInviteLoading(null)
-    }
-  }
-
-  async function handleEmailPromptSubmit() {
-    if (!emailPromptMusician || !emailPromptValue.trim()) return
-
-    // First update the musician's email
-    const supabase = createClient()
-    const { error: updateError } = await supabase
-      .from('musicians')
-      .update({ email: emailPromptValue.trim() })
-      .eq('id', emailPromptMusician.id)
-
-    if (updateError) {
-      toast.error('Failed to update email')
-      return
-    }
-
-    // Now send the portal invite
-    setSingleInviteLoading(emailPromptMusician.id)
-    setEmailPromptMusician(null)
-
-    try {
-      const response = await fetch(`/api/musicians/${emailPromptMusician.id}/send-portal-invite`, {
-        method: 'POST',
-      })
-      const result = await response.json()
-
-      if (!response.ok) {
-        toast.error(result.error || 'Failed to send portal invite')
-        return
-      }
-
-      toast.success(`Portal invite sent to ${emailPromptMusician.first_name} ${emailPromptMusician.last_name}`)
-      router.refresh()
-    } catch {
-      toast.error('Failed to send portal invite')
-    } finally {
-      setSingleInviteLoading(null)
-      setEmailPromptValue('')
-    }
-  }
-
-  function handleSendPortalInvites() {
-    if (selectedCanInvite.length === 0) {
-      toast.error('No selected musicians can receive portal invites (must have email and no portal account)')
-      return
-    }
-
-    // Show confirmation dialog
-    setShowBulkPortalConfirm(true)
-  }
-
-  async function confirmBulkPortalInvites() {
-    setShowBulkPortalConfirm(false)
-    setIsSendingPortalInvites(true)
-
-    try {
-      const response = await fetch('/api/musicians/send-portal-invites', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ musicianIds: selectedCanInvite.map((m) => m.id) }),
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        toast.error(result.error || 'Failed to send portal invites')
-        return
-      }
-
-      if (result.sent > 0) {
-        toast.success(`Sent portal invite to ${result.sent} musician${result.sent !== 1 ? 's' : ''}`)
-        router.refresh()
-      }
-      if (result.failed > 0) {
-        toast.warning(`Failed to send to ${result.failed} musician${result.failed !== 1 ? 's' : ''}`)
-      }
-    } catch {
-      toast.error('Failed to send portal invites')
-    } finally {
-      setIsSendingPortalInvites(false)
-    }
-  }
-
   function handleImportClick() {
     setShowImportDialog(true)
   }
@@ -536,10 +404,6 @@ export function MusiciansClient({
       if (importTag.trim()) {
         formData.append('tag', importTag.trim())
       }
-      if (importSendPortalInvites) {
-        formData.append('sendPortalInvites', 'true')
-      }
-
       const response = await fetch('/api/musicians/import', {
         method: 'POST',
         body: formData,
@@ -558,8 +422,7 @@ export function MusiciansClient({
 
       if (result.success > 0) {
         const tagMsg = importTag.trim() ? ` with tag "${importTag.trim()}"` : ''
-        const portalMsg = result.portalInvitesSent > 0 ? ` (${result.portalInvitesSent} portal invite${result.portalInvitesSent !== 1 ? 's' : ''} sent)` : ''
-        toast.success(`Successfully imported ${result.success} musician${result.success !== 1 ? 's' : ''}${tagMsg}${portalMsg}`)
+        toast.success(`Successfully imported ${result.success} musician${result.success !== 1 ? 's' : ''}${tagMsg}`)
       }
 
       if (result.errors > 0) {
@@ -578,7 +441,6 @@ export function MusiciansClient({
     } finally {
       setIsImporting(false)
       setImportTag('')
-      setImportSendPortalInvites(false)
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
@@ -625,23 +487,11 @@ export function MusiciansClient({
                         All imported musicians will be tagged with this label
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 pt-2 border-t">
-                      <input
-                        type="checkbox"
-                        id="import-portal-invites"
-                        className="h-4 w-4 rounded border-gray-300"
-                        checked={importSendPortalInvites}
-                        onChange={(e) => setImportSendPortalInvites(e.target.checked)}
-                      />
-                      <label htmlFor="import-portal-invites" className="text-sm cursor-pointer">
-                        Send portal invites to imported musicians with email
-                      </label>
-                    </div>
                     <div className="flex gap-2">
                       <Button size="sm" onClick={handleSelectFile}>
                         Select File
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => { setShowImportDialog(false); setImportSendPortalInvites(false) }}>
+                      <Button size="sm" variant="ghost" onClick={() => setShowImportDialog(false)}>
                         Cancel
                       </Button>
                     </div>
@@ -1000,16 +850,6 @@ export function MusiciansClient({
                   {isSendingW9 ? 'Sending...' : `Send W-9 Request (${selectedNeedW9.length})`}
                 </Button>
               )}
-              {selectedCanInvite.length > 0 && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleSendPortalInvites}
-                  disabled={isSendingPortalInvites}
-                >
-                  {isSendingPortalInvites ? 'Sending...' : `Send Portal Invite (${selectedCanInvite.length})`}
-                </Button>
-              )}
               <Button
                 size="sm"
                 variant="ghost"
@@ -1275,7 +1115,7 @@ export function MusiciansClient({
                           </div>
                         ) : '—'}
                       </td>
-                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-4 py-3">
                         {musician.user_id ? (
                           <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-950 dark:text-green-300">
                             <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -1283,41 +1123,6 @@ export function MusiciansClient({
                             </svg>
                             Active
                           </span>
-                        ) : canManage ? (
-                          <button
-                            onClick={() => handleSendSinglePortalInvite(musician)}
-                            disabled={singleInviteLoading === musician.id}
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium transition-colors cursor-pointer ${
-                              musician.portal_invite_token
-                                ? 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100 dark:bg-yellow-950 dark:text-yellow-300 dark:hover:bg-yellow-900'
-                                : 'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300 dark:hover:bg-blue-900'
-                            } ${singleInviteLoading === musician.id ? 'opacity-50 cursor-wait' : ''}`}
-                            title={musician.email ? (musician.portal_invite_token ? 'Resend portal invite' : 'Send portal invite') : 'Add email and send portal invite'}
-                          >
-                            {singleInviteLoading === musician.id ? (
-                              <>
-                                <svg className="h-3 w-3 mr-1 animate-spin" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Sending...
-                              </>
-                            ) : musician.portal_invite_token ? (
-                              <>
-                                <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                                </svg>
-                                Resend
-                              </>
-                            ) : (
-                              <>
-                                <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
-                                </svg>
-                                Invite
-                              </>
-                            )}
-                          </button>
                         ) : (
                           <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
                             —
@@ -1455,107 +1260,6 @@ export function MusiciansClient({
               </Button>
               <Button onClick={confirmSendW9Request}>
                 Confirm & Send {selectedNeedW9.length} Email{selectedNeedW9.length !== 1 ? 's' : ''}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Single Portal Invite Confirmation Dialog */}
-      {portalInviteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-lg border bg-background p-6 shadow-lg">
-            <h3 className="text-lg font-semibold">Send Portal Invite</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Send a portal invite email to <strong>{portalInviteConfirm.first_name} {portalInviteConfirm.last_name}</strong>?
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              They will receive an email at <strong>{portalInviteConfirm.email}</strong> with a link to create their portal account.
-            </p>
-
-            <div className="mt-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setPortalInviteConfirm(null)}>
-                Cancel
-              </Button>
-              <Button onClick={confirmSinglePortalInvite}>
-                Send Invite
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bulk Portal Invite Confirmation Dialog */}
-      {showBulkPortalConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-2xl rounded-lg border bg-background p-6 shadow-lg max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold">Confirm Portal Invites</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Send portal invites to {selectedCanInvite.length} musician{selectedCanInvite.length !== 1 ? 's' : ''}?
-            </p>
-
-            <div className="mt-4">
-              <p className="text-sm font-medium mb-2">Recipients:</p>
-              <div className="max-h-48 overflow-y-auto rounded border bg-muted/50 p-2">
-                <ul className="space-y-1 text-sm">
-                  {selectedCanInvite.map((m) => (
-                    <li key={m.id} className="flex justify-between">
-                      <span>{m.first_name} {m.last_name}</span>
-                      <span className="text-muted-foreground">{m.email}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            <div className="mt-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowBulkPortalConfirm(false)}>
-                Cancel
-              </Button>
-              <Button onClick={confirmBulkPortalInvites}>
-                Send {selectedCanInvite.length} Invite{selectedCanInvite.length !== 1 ? 's' : ''}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Email Prompt Dialog for Portal Invite */}
-      {emailPromptMusician && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-lg border bg-background p-6 shadow-lg">
-            <h3 className="text-lg font-semibold">Send Portal Invite</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              <strong>{emailPromptMusician.first_name} {emailPromptMusician.last_name}</strong> doesn&apos;t have an email address.
-              Enter their email to send a portal invite.
-            </p>
-
-            <div className="mt-4">
-              <label className="text-sm font-medium">Email Address</label>
-              <input
-                type="email"
-                placeholder="musician@example.com"
-                className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
-                value={emailPromptValue}
-                onChange={(e) => setEmailPromptValue(e.target.value)}
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && emailPromptValue.trim()) {
-                    handleEmailPromptSubmit()
-                  }
-                }}
-              />
-            </div>
-
-            <div className="mt-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => { setEmailPromptMusician(null); setEmailPromptValue('') }}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleEmailPromptSubmit}
-                disabled={!emailPromptValue.trim() || !emailPromptValue.includes('@')}
-              >
-                Save & Send Invite
               </Button>
             </div>
           </div>

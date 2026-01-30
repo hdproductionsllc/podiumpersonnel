@@ -377,6 +377,7 @@ export type Database = {
           service_type: string
           venue: string | null
           venue_id: string | null
+          call_time: string | null
           start_time: string
           end_time: string | null
           notes: string | null
@@ -392,6 +393,7 @@ export type Database = {
           service_type: string
           venue?: string | null
           venue_id?: string | null
+          call_time?: string | null
           start_time: string
           end_time?: string | null
           notes?: string | null
@@ -407,6 +409,7 @@ export type Database = {
           service_type?: string
           venue?: string | null
           venue_id?: string | null
+          call_time?: string | null
           start_time?: string
           end_time?: string | null
           notes?: string | null
@@ -700,6 +703,38 @@ export type Database = {
           updated_at?: string
         }
       }
+      user_tutorial_state: {
+        Row: {
+          id: string
+          user_id: string
+          organization_id: string
+          wizard_completed: boolean
+          wizard_step: number
+          dismissed_tooltips: string[]
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          organization_id: string
+          wizard_completed?: boolean
+          wizard_step?: number
+          dismissed_tooltips?: string[]
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          organization_id?: string
+          wizard_completed?: boolean
+          wizard_step?: number
+          dismissed_tooltips?: string[]
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -738,3 +773,4 @@ export type CompetingSchedule = Database['public']['Tables']['competing_schedule
 export type Payment = Database['public']['Tables']['payments']['Row']
 export type StaffingPreset = Database['public']['Tables']['staffing_presets']['Row']
 export type MusicianNotificationPreferences = Database['public']['Tables']['musician_notification_preferences']['Row']
+export type UserTutorialState = Database['public']['Tables']['user_tutorial_state']['Row']

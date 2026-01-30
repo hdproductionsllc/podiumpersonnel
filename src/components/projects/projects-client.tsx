@@ -17,6 +17,8 @@ import { detectConflicts } from './project-positions'
 import type { PositionJoined, BookForImport } from './project-positions'
 import type { MusicianForOffer } from './send-offer-dialog'
 import type { Project, Service } from '@/types'
+import { ContextualTooltip } from '@/components/onboarding/contextual-tooltip'
+import { TOOLTIP_DEFINITIONS } from '@/lib/tooltips'
 import {
   PROJECT_STATUS_LABELS,
   SERVICE_TYPE_LABELS,
@@ -34,7 +36,10 @@ interface ProjectsClientProps {
   books: BookForImport[]
   musicians: MusicianForOffer[]
   organizationId: string
+  timezone: string
   userRole: string
+  userId?: string
+  dismissedTooltips?: string[]
 }
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
@@ -172,7 +177,10 @@ export function ProjectsClient({
   books,
   musicians,
   organizationId,
+  timezone,
   userRole,
+  userId,
+  dismissedTooltips = [],
 }: ProjectsClientProps) {
   const router = useRouter()
 
@@ -338,6 +346,14 @@ export function ProjectsClient({
       </div>
 
       <Separator />
+
+      <ContextualTooltip
+        tooltipId="workflow"
+        text={TOOLTIP_DEFINITIONS.workflow}
+        userId={userId}
+        organizationId={organizationId}
+        dismissedTooltips={dismissedTooltips}
+      />
 
       {projects.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
@@ -540,6 +556,7 @@ export function ProjectsClient({
         projectStartDate={activeProjectDates.start || projects.find(p => p.id === activeProjectId)?.start_date}
         projectEndDate={activeProjectDates.end || projects.find(p => p.id === activeProjectId)?.end_date}
         organizationId={organizationId}
+        timezone={timezone}
         initialServiceType={editingService ? undefined : selectedServiceType}
         onSuccess={handleSuccess}
       />

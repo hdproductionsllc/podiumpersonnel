@@ -22,7 +22,9 @@ interface ContractOfferEmailProps {
   services: {
     name: string
     date: string
+    callTime?: string | null
     time: string
+    endTime?: string | null
     venue: string | null
   }[]
   responseUrl: string
@@ -53,7 +55,7 @@ export function ContractOfferEmail({
     <Html>
       <Head />
       <Preview>
-        Contract offer for {projectName} - {instrument}
+        Call for {projectName} - {instrument}
       </Preview>
       <Body style={main}>
         <Container style={container}>
@@ -74,7 +76,7 @@ export function ContractOfferEmail({
             <Text style={greeting}>Dear {musicianName},</Text>
 
             <Text style={paragraph}>
-              You have been offered a position with <strong>{organizationName}</strong> for the following project:
+              You have been called to perform with <strong>{organizationName}</strong> for the following project:
             </Text>
 
             <Section style={detailsBox}>
@@ -95,7 +97,10 @@ export function ContractOfferEmail({
                 <Section key={index} style={{ ...serviceRow, borderLeftColor: brandColor }}>
                   <Text style={serviceName}>{service.name}</Text>
                   <Text style={serviceDetail}>
-                    {service.date} at {service.time}
+                    {service.date}
+                  </Text>
+                  <Text style={serviceDetail}>
+                    {service.callTime && `Call: ${service.callTime} | `}Start: {service.time}{service.endTime && ` | End: ${service.endTime}`}
                   </Text>
                   {service.venue && (
                     <Text style={serviceVenue}>{service.venue}</Text>
@@ -113,12 +118,13 @@ export function ContractOfferEmail({
 
             <Section style={buttonContainer}>
               <Button style={{ ...button, backgroundColor: brandColor }} href={responseUrl}>
-                View & Respond to Offer
+                View & Respond
               </Button>
             </Section>
 
             <Text style={smallText}>
-              Click the button above to view the full details and accept or decline this offer.
+              Click the button above to view the full details and accept or decline.
+              After responding, you can create a free Podium account to manage all your gigs in one place.
             </Text>
           </Section>
 

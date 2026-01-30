@@ -47,7 +47,7 @@ export function OfferReminderEmail({
     <Html>
       <Head />
       <Preview>
-        Reminder: Contract offer for {projectName} expires soon
+        Reminder: Call for {projectName} expires soon
       </Preview>
       <Body style={main}>
         <Container style={container}>
@@ -68,7 +68,7 @@ export function OfferReminderEmail({
             <Text style={greeting}>Dear {musicianName},</Text>
 
             <Text style={paragraph}>
-              This is a friendly reminder that you have a pending contract offer from{' '}
+              This is a friendly reminder that you have a pending call from{' '}
               <strong>{organizationName}</strong> that requires your response.
             </Text>
 
@@ -100,7 +100,7 @@ export function OfferReminderEmail({
 
             <Section style={buttonContainer}>
               <Button style={{ ...button, backgroundColor: brandColor }} href={responseUrl}>
-                View & Respond to Offer
+                View & Respond
               </Button>
             </Section>
 

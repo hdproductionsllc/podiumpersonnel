@@ -11,7 +11,21 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
-      // Redirect to the specified next URL or dashboard
+      // Check if the user has an organization — if not, send to onboarding
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: membership } = await supabase
+          .from('organization_members')
+          .select('id')
+          .eq('user_id', user.id)
+          .limit(1)
+          .maybeSingle()
+
+        if (!membership) {
+          return NextResponse.redirect(`${origin}/onboarding`)
+        }
+      }
+
       return NextResponse.redirect(`${origin}${next}`)
     }
   }

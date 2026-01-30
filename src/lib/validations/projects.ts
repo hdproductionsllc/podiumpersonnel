@@ -57,6 +57,10 @@ export const serviceSchema = z.object({
     .uuid()
     .optional()
     .nullable(),
+  call_time: z
+    .string()
+    .optional()
+    .or(z.literal('')),
   start_time: z
     .string()
     .min(1, 'Start time is required'),

@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 import { GigPageClient } from '@/components/gig/gig-page-client'
 import { DEFAULT_TIMEZONE } from '@/lib/utils'
 
@@ -9,7 +9,7 @@ interface GigPageProps {
 
 export default async function GigPage({ params }: GigPageProps) {
   const { token } = await params
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   // Fetch contract offer by token
   const { data: offer } = await supabase
@@ -20,7 +20,8 @@ export default async function GigPage({ params }: GigPageProps) {
         id,
         first_name,
         last_name,
-        email
+        email,
+        user_id
       ),
       project_position:project_positions(
         id,
@@ -47,7 +48,7 @@ export default async function GigPage({ params }: GigPageProps) {
   // Type the nested data - eslint-disable needed for Supabase join queries
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const offerData = offer as any
-  const musician = offerData.musician as { id: string; first_name: string; last_name: string; email: string | null } | null
+  const musician = offerData.musician as { id: string; first_name: string; last_name: string; email: string | null; user_id: string | null } | null
   const position = offerData.project_position as {
     id: string
     chair_number: number
@@ -73,7 +74,7 @@ export default async function GigPage({ params }: GigPageProps) {
   if (position?.project?.id) {
     const { data: serviceData } = await supabase
       .from('services')
-      .select('id, name, service_type, start_time, end_time, venue, base_pay, leader_fee')
+      .select('id, name, service_type, call_time, start_time, end_time, venue, base_pay, leader_fee')
       .eq('project_id', position.project.id)
       .order('start_time', { ascending: true })
 
@@ -148,6 +149,7 @@ export default async function GigPage({ params }: GigPageProps) {
       timezone={timezone}
       instruments={instruments}
       existingSubRequest={existingSubRequest}
+      musicianHasAccount={!!musician?.user_id}
     />
   )
 }

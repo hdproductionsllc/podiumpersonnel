@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createClient } from '@/lib/supabase/client'
+import { formatInTimeZone } from 'date-fns-tz/formatInTimeZone'
+import { fromZonedTime } from 'date-fns-tz/fromZonedTime'
 import {
   serviceSchema,
   type ServiceInput,
@@ -20,6 +22,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DateTimePicker } from '@/components/ui/datetime-picker'
 import { VenueSearch } from '@/components/ui/venue-search'
 import {
   Form,
@@ -31,11 +34,14 @@ import {
 } from '@/components/ui/form'
 import type { Service } from '@/types'
 
-function isoToDatetimeLocal(iso: string): string {
-  const date = new Date(iso)
-  const offset = date.getTimezoneOffset()
-  const local = new Date(date.getTime() - offset * 60000)
-  return local.toISOString().slice(0, 16)
+/** Convert a UTC ISO string to a datetime-local value in the org's timezone */
+function isoToDatetimeLocal(iso: string, tz: string): string {
+  return formatInTimeZone(new Date(iso), tz, "yyyy-MM-dd'T'HH:mm")
+}
+
+/** Convert a datetime-local value (in org timezone) back to a UTC ISO string */
+function datetimeLocalToISO(localStr: string, tz: string): string {
+  return fromZonedTime(localStr, tz).toISOString()
 }
 
 interface ServiceFormDialogProps {
@@ -46,6 +52,7 @@ interface ServiceFormDialogProps {
   projectStartDate?: string | null
   projectEndDate?: string | null
   organizationId: string
+  timezone: string
   initialServiceType?: 'rehearsal' | 'performance'
   onSuccess: () => void
 }
@@ -58,6 +65,7 @@ export function ServiceFormDialog({
   projectStartDate,
   projectEndDate,
   organizationId,
+  timezone,
   initialServiceType,
   onSuccess,
 }: ServiceFormDialogProps) {
@@ -73,6 +81,7 @@ export function ServiceFormDialog({
       service_type: 'rehearsal',
       venue: '',
       venue_id: null,
+      call_time: '',
       start_time: '',
       end_time: '',
       notes: '',
@@ -89,8 +98,9 @@ export function ServiceFormDialog({
           service_type: service.service_type as ServiceInput['service_type'],
           venue: service.venue || '',
           venue_id: service.venue_id || null,
-          start_time: isoToDatetimeLocal(service.start_time),
-          end_time: service.end_time ? isoToDatetimeLocal(service.end_time) : '',
+          call_time: service.call_time ? isoToDatetimeLocal(service.call_time, timezone) : '',
+          start_time: isoToDatetimeLocal(service.start_time, timezone),
+          end_time: service.end_time ? isoToDatetimeLocal(service.end_time, timezone) : '',
           notes: service.notes || '',
           base_pay: (service as any).base_pay ?? null,
           leader_fee: (service as any).leader_fee ?? 50,
@@ -107,11 +117,23 @@ export function ServiceFormDialog({
           defaultEndTime = `${dateToUse}T22:00`
         }
 
+        // Default call time to 30 min before start
+        let defaultCallTime = ''
+        if (defaultStartTime) {
+          const [dp, tp] = defaultStartTime.split('T')
+          const [h, m] = tp.split(':').map(Number)
+          const totalMins = h * 60 + m - 30
+          const ch = Math.floor(totalMins / 60)
+          const cm = totalMins % 60
+          defaultCallTime = `${dp}T${String(ch).padStart(2, '0')}:${String(cm).padStart(2, '0')}`
+        }
+
         form.reset({
           name: '',
           service_type: initialServiceType || 'rehearsal',
           venue: '',
           venue_id: null,
+          call_time: defaultCallTime,
           start_time: defaultStartTime,
           end_time: defaultEndTime,
           notes: '',
@@ -124,15 +146,26 @@ export function ServiceFormDialog({
     }
   }, [open, service, form, initialServiceType, projectStartDate, projectEndDate])
 
-  // Auto-populate end time when start time changes (3 hours later)
+  // Auto-populate call_time and end_time when start time changes
   function handleStartTimeChange(value: string) {
     form.setValue('start_time', value)
 
     if (value) {
-      const startDate = new Date(value)
-      const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000) // Add 3 hours
-      const endTimeStr = endDate.toISOString().slice(0, 16)
+      // Parse datetime-local string directly as local parts (no UTC conversion)
+      const [datePart, timePart] = value.split('T')
+      const [hours, minutes] = timePart.split(':').map(Number)
+
+      // End time: 3 hours after start
+      const endHours = hours + 3
+      const endTimeStr = `${datePart}T${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
       form.setValue('end_time', endTimeStr)
+
+      // Call time: 30 min before start
+      const totalMins = hours * 60 + minutes - 30
+      const callH = Math.floor(totalMins / 60)
+      const callM = totalMins % 60
+      const callTimeStr = `${datePart}T${String(callH).padStart(2, '0')}:${String(callM).padStart(2, '0')}`
+      form.setValue('call_time', callTimeStr)
 
       // Check if date is within project range
       checkDateRange(value)
@@ -170,8 +203,9 @@ export function ServiceFormDialog({
           service_type: data.service_type,
           venue: data.venue || null,
           venue_id: data.venue_id || null,
-          start_time: data.start_time,
-          end_time: data.end_time || null,
+          call_time: data.call_time ? datetimeLocalToISO(data.call_time, timezone) : null,
+          start_time: datetimeLocalToISO(data.start_time, timezone),
+          end_time: data.end_time ? datetimeLocalToISO(data.end_time, timezone) : null,
           notes: data.notes || null,
           base_pay: data.base_pay ?? null,
           leader_fee: data.leader_fee ?? 50,
@@ -198,8 +232,9 @@ export function ServiceFormDialog({
           service_type: data.service_type,
           venue: data.venue || null,
           venue_id: data.venue_id || null,
-          start_time: data.start_time,
-          end_time: data.end_time || null,
+          call_time: data.call_time ? datetimeLocalToISO(data.call_time, timezone) : null,
+          start_time: datetimeLocalToISO(data.start_time, timezone),
+          end_time: data.end_time ? datetimeLocalToISO(data.end_time, timezone) : null,
           notes: data.notes || null,
           base_pay: data.base_pay ?? null,
           leader_fee: data.leader_fee ?? 50,
@@ -275,7 +310,26 @@ export function ServiceFormDialog({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="call_time"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Call Time</FormLabel>
+                    <FormControl>
+                      <DateTimePicker
+                        value={field.value || ''}
+                        onChange={field.onChange}
+                        placeholder="Call time"
+                      />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground">When musicians arrive</p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <FormField
                 control={form.control}
                 name="start_time"
@@ -283,10 +337,10 @@ export function ServiceFormDialog({
                   <FormItem>
                     <FormLabel>Start Time</FormLabel>
                     <FormControl>
-                      <Input
-                        type="datetime-local"
-                        {...field}
-                        onChange={(e) => handleStartTimeChange(e.target.value)}
+                      <DateTimePicker
+                        value={field.value}
+                        onChange={(val) => handleStartTimeChange(val)}
+                        placeholder="Start time"
                       />
                     </FormControl>
                     <FormMessage />
@@ -301,9 +355,13 @@ export function ServiceFormDialog({
                   <FormItem>
                     <FormLabel>End Time</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" {...field} />
+                      <DateTimePicker
+                        value={field.value || ''}
+                        onChange={field.onChange}
+                        placeholder="End time"
+                      />
                     </FormControl>
-                    <p className="text-xs text-muted-foreground">Auto-fills 3 hours after start</p>
+                    <p className="text-xs text-muted-foreground">Auto-fills 3h after start</p>
                     <FormMessage />
                   </FormItem>
                 )}

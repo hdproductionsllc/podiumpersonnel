@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { SetupWizard } from '@/components/onboarding/setup-wizard'
 import { DEFAULT_TIMEZONE } from '@/lib/utils'
 
 export default async function DashboardPage() {
@@ -78,6 +79,7 @@ export default async function DashboardPage() {
         id,
         name,
         service_type,
+        call_time,
         start_time,
         end_time,
         venue,
@@ -142,6 +144,16 @@ export default async function DashboardPage() {
       .order('start_date', { ascending: true }),
   ])
 
+  // Fetch tutorial state
+  const { data: tutorialState } = await supabase
+    .from('user_tutorial_state')
+    .select('wizard_completed, dismissed_tooltips')
+    .eq('user_id', user!.id)
+    .eq('organization_id', orgId)
+    .maybeSingle()
+
+  const showWizard = !tutorialState?.wizard_completed
+
   // Process staffing alerts
   type StaffingAlert = {
     projectId: string
@@ -193,6 +205,11 @@ export default async function DashboardPage() {
   // Sort alerts by count (most urgent first)
   staffingAlerts.sort((a, b) => b.count - a.count)
 
+  // Calculate total vacancies for hero CTA
+  const totalVacancies = staffingAlerts
+    .filter(a => a.alertType === 'vacant')
+    .reduce((sum, a) => sum + a.count, 0)
+
   // Combine services and projects into unified calendar items
   type CalendarItem = {
     id: string
@@ -201,6 +218,7 @@ export default async function DashboardPage() {
     projectId: string
     projectName: string
     date: string
+    callTime?: string | null
     time?: string
     venue?: string
     serviceType?: string
@@ -218,6 +236,7 @@ export default async function DashboardPage() {
       projectId: service.project?.id,
       projectName: service.project?.name,
       date: service.start_time,
+      callTime: service.call_time,
       time: service.start_time,
       venue: service.venue,
       serviceType: service.service_type,
@@ -244,10 +263,9 @@ export default async function DashboardPage() {
   calendarItems.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
   const steps = [
-    { label: 'Add instruments', description: 'Define the instruments in your orchestra', done: (instrumentCount ?? 0) > 0, href: '/dashboard/instruments' },
     { label: 'Add musicians', description: 'Build your roster of available musicians', done: (musicianCount ?? 0) > 0, href: '/dashboard/musicians' },
-    { label: 'Create a saved ensemble', description: 'Organize musicians by instrument and preference', done: (bookCount ?? 0) > 0, href: '/dashboard/books' },
-    { label: 'Create your first project', description: 'Start managing personnel for concerts and events', done: (activeProjectCount ?? 0) > 0, href: '/dashboard/projects' },
+    { label: 'Create a project', description: 'Set up concerts, events, or rehearsal series', done: (activeProjectCount ?? 0) > 0, href: '/dashboard/projects' },
+    { label: 'Send calls', description: 'Staff positions and send calls to musicians', done: (pendingOfferCount ?? 0) > 0 || staffingAlerts.length === 0, href: '/dashboard/projects' },
   ]
 
   const allStepsComplete = steps.every((s) => s.done)
@@ -320,6 +338,10 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {showWizard && (
+        <SetupWizard userId={user!.id} organizationId={orgId} />
+      )}
+
       <div>
         <h2 className="text-3xl font-bold tracking-tight">
           Welcome to {organization?.name || 'Podium'}
@@ -328,6 +350,53 @@ export default async function DashboardPage() {
           Manage your orchestra personnel, projects, and schedules.
         </p>
       </div>
+
+      {/* Hero CTA */}
+      {(activeProjectCount ?? 0) === 0 ? (
+        <Link href="/dashboard/projects">
+          <Card className="border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer">
+            <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+              <svg className="h-12 w-12 text-primary mb-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              <h3 className="text-xl font-bold mb-2">Start Your First Project</h3>
+              <p className="text-muted-foreground max-w-md">
+                Staff musicians for your upcoming gig! Create a project to begin adding services and sending calls.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+      ) : totalVacancies > 0 ? (
+        <Link href="/dashboard/projects">
+          <Card className="border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors cursor-pointer">
+            <CardContent className="flex items-center gap-4 py-4">
+              <svg className="h-8 w-8 text-amber-600 dark:text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              <div className="flex-1">
+                <h3 className="font-bold text-amber-900 dark:text-amber-100">
+                  {totalVacancies} vacant position{totalVacancies !== 1 ? 's' : ''} to fill
+                </h3>
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  Go to Projects to send calls to musicians
+                </p>
+              </div>
+              <svg className="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+              </svg>
+            </CardContent>
+          </Card>
+        </Link>
+      ) : (activeProjectCount ?? 0) > 0 ? (
+        <Card className="border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20">
+          <CardContent className="flex items-center gap-3 py-3">
+            <svg className="h-5 w-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+            <span className="text-sm font-medium text-green-700 dark:text-green-300">All positions filled</span>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -444,6 +513,11 @@ export default async function DashboardPage() {
                       <span className="text-xs font-medium text-muted-foreground">
                         {formatServiceDate(item.date)}
                       </span>
+                      {item.callTime && (
+                        <span className="text-xs text-muted-foreground">
+                          Call {formatTime(item.callTime)}
+                        </span>
+                      )}
                       {item.time && (
                         <span className="text-sm font-semibold">
                           {formatTime(item.time)}

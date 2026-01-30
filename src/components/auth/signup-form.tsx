@@ -24,6 +24,7 @@ export function SignupForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [emailSent, setEmailSent] = useState(false)
 
   const form = useForm<SignupInput>({
     resolver: zodResolver(signupSchema),
@@ -71,8 +72,41 @@ export function SignupForm() {
       return
     }
 
-    router.push('/onboarding')
-    router.refresh()
+    // Check if a session was returned (email confirmation disabled)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      router.push('/onboarding')
+      router.refresh()
+    } else {
+      // Email confirmation required — show message instead of redirecting
+      setEmailSent(true)
+      setIsLoading(false)
+    }
+  }
+
+  if (emailSent) {
+    return (
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold">Check your email</CardTitle>
+          <CardDescription>
+            We sent a confirmation link to your email address. Click the link to verify your account and get started.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Didn&apos;t receive the email? Check your spam folder or{' '}
+            <button
+              type="button"
+              className="text-primary underline-offset-4 hover:underline"
+              onClick={() => setEmailSent(false)}
+            >
+              try again
+            </button>.
+          </p>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (

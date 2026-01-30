@@ -81,14 +81,14 @@ function SettingsIcon({ className }: { className?: string }) {
 }
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-  { name: 'Projects', href: '/dashboard/projects', icon: FolderIcon },
-  { name: 'Musicians', href: '/dashboard/musicians', icon: UsersIcon },
-  { name: 'Payments', href: '/dashboard/payments', icon: CurrencyIcon },
-  { name: 'Saved Ensembles', href: '/dashboard/books', icon: BookIcon },
-  { name: 'Instruments', href: '/dashboard/instruments', icon: MusicIcon },
-  { name: 'Venues', href: '/dashboard/venues', icon: MapPinIcon },
-  { name: 'Schedules', href: '/dashboard/schedules', icon: CalendarIcon },
+  { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, emphasize: false },
+  { name: 'Projects', href: '/dashboard/projects', icon: FolderIcon, emphasize: true },
+  { name: 'Musicians', href: '/dashboard/musicians', icon: UsersIcon, emphasize: false },
+  { name: 'Saved Ensembles', href: '/dashboard/books', icon: BookIcon, emphasize: false },
+  { name: 'Payments', href: '/dashboard/payments', icon: CurrencyIcon, emphasize: false },
+  { name: 'Venues', href: '/dashboard/venues', icon: MapPinIcon, emphasize: false },
+  { name: 'Schedules', href: '/dashboard/schedules', icon: CalendarIcon, emphasize: false },
+  { name: 'Instruments', href: '/dashboard/instruments', icon: MusicIcon, emphasize: false },
 ]
 
 export function Sidebar() {
@@ -115,7 +115,8 @@ export function Sidebar() {
               variant={isActive ? 'secondary' : 'ghost'}
               className={cn(
                 'w-full justify-start',
-                isActive && 'bg-secondary'
+                isActive && 'bg-secondary',
+                !isActive && item.emphasize && 'font-semibold text-primary'
               )}
               asChild
             >

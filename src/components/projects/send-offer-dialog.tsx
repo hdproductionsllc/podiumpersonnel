@@ -52,11 +52,15 @@ export function SendOfferDialog({
   onSuccess,
 }: SendOfferDialogProps) {
   const [selectedMusicianId, setSelectedMusicianId] = useState('')
-  const [expiresIn, setExpiresIn] = useState<string>('7')
+  const [expiresIn, setExpiresIn] = useState<string>('2')
+  const [customDeadline, setCustomDeadline] = useState('')
   const [sendEmail, setSendEmail] = useState(true)
   const [customPay, setCustomPay] = useState<string>(suggestedCustomPay || '200')
   const [applyToRemaining, setApplyToRemaining] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -106,9 +110,15 @@ export function SendOfferDialog({
 
     const supabase = createClient()
 
-    const expiresAt = expiresIn
-      ? new Date(Date.now() + parseInt(expiresIn) * 24 * 60 * 60 * 1000).toISOString()
-      : null
+    let expiresAt: string | null = null
+    if (expiresIn === '0.17') {
+      // ASAP = 4 hours
+      expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString()
+    } else if (expiresIn === 'custom') {
+      expiresAt = customDeadline ? new Date(customDeadline + 'T23:59:59').toISOString() : null
+    } else if (expiresIn) {
+      expiresAt = new Date(Date.now() + parseInt(expiresIn) * 24 * 60 * 60 * 1000).toISOString()
+    }
 
     const { data: offerData, error: insertError } = await supabase
       .from('contract_offers')
@@ -236,18 +246,28 @@ export function SendOfferDialog({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Expires in (days)</label>
+            <label className="text-sm font-medium">Response deadline</label>
             <select
               className="w-full rounded-md border bg-background px-3 py-2 text-sm"
               value={expiresIn}
               onChange={(e) => setExpiresIn(e.target.value)}
             >
-              <option value="3">3 days</option>
-              <option value="7">7 days</option>
-              <option value="14">14 days</option>
-              <option value="30">30 days</option>
+              <option value="0.17">ASAP (4 hours)</option>
+              <option value="1">24 hours</option>
+              <option value="2">48 hours (recommended)</option>
+              <option value="7">1 week</option>
+              <option value="custom">Custom date</option>
               <option value="">No expiration</option>
             </select>
+            {expiresIn === 'custom' && (
+              <input
+                type="date"
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm mt-2"
+                value={customDeadline}
+                onChange={(e) => setCustomDeadline(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+              />
+            )}
           </div>
 
           <div className="space-y-2">
@@ -372,7 +392,12 @@ export function SendOfferDialog({
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Expires:</span>
-            <span>{expiresIn ? `${expiresIn} days` : 'No expiration'}</span>
+            <span>
+              {expiresIn === '0.17' ? '4 hours' :
+               expiresIn === 'custom' ? (customDeadline || 'No date selected') :
+               expiresIn ? `${expiresIn} day${expiresIn === '1' ? '' : 's'}` :
+               'No expiration'}
+            </span>
           </div>
           {sendEmail && hasEmail && (
             <div className="pt-2 border-t text-sm text-green-600">
@@ -392,17 +417,71 @@ export function SendOfferDialog({
           )}
         </div>
 
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={handleBackToForm} disabled={loading}>
-            Back
+        <div className="flex justify-between gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={previewLoading || loading}
+            onClick={async () => {
+              setPreviewLoading(true)
+              try {
+                const res = await fetch('/api/offers/preview-email', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ positionId, musicianId: selectedMusicianId }),
+                })
+                const data = await res.json()
+                if (data.html) {
+                  setPreviewHtml(data.html)
+                  setShowPreview(true)
+                }
+              } catch {
+                // ignore preview errors
+              }
+              setPreviewLoading(false)
+            }}
+          >
+            {previewLoading ? 'Loading...' : 'Preview Email'}
           </Button>
-          <Button onClick={handleSend} disabled={loading}>
-            {loading ? 'Sending...' : 'Confirm & Send Offer'}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleBackToForm} disabled={loading}>
+              Back
+            </Button>
+            <Button onClick={handleSend} disabled={loading}>
+              {loading ? 'Sending...' : 'Confirm & Send Offer'}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
   )
 
-  return showConfirmation ? confirmationView : formView
+  // Email preview modal
+  const previewModal = showPreview && previewHtml ? (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50" onClick={() => setShowPreview(false)} />
+      <div className="relative bg-background rounded-lg border shadow-lg w-full max-w-2xl max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h3 className="text-lg font-semibold">Email Preview</h3>
+          <Button variant="ghost" size="sm" onClick={() => setShowPreview(false)}>
+            Close
+          </Button>
+        </div>
+        <div className="flex-1 overflow-auto p-4">
+          <iframe
+            srcDoc={previewHtml}
+            className="w-full h-[600px] border rounded"
+            title="Email Preview"
+          />
+        </div>
+      </div>
+    </div>
+  ) : null
+
+  return (
+    <>
+      {showConfirmation ? confirmationView : formView}
+      {previewModal}
+    </>
+  )
 }

@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
             id,
             name,
             organization:organizations(id, name, timezone, email_logo_url, email_brand_color, email_footer_text),
-            services(id, name, service_type, start_time, end_time, venue)
+            services(id, name, service_type, call_time, start_time, end_time, venue)
           )
         )
       `)
@@ -103,11 +103,25 @@ export async function POST(request: NextRequest) {
           day: 'numeric',
           timeZone: timezone,
         }),
+        callTime: service.call_time
+          ? new Date(service.call_time).toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+              timeZone: timezone,
+            })
+          : null,
         time: new Date(service.start_time).toLocaleTimeString('en-US', {
           hour: 'numeric',
           minute: '2-digit',
           timeZone: timezone,
         }),
+        endTime: service.end_time
+          ? new Date(service.end_time).toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+              timeZone: timezone,
+            })
+          : null,
         venue: service.venue,
       }))
 
