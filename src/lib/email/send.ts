@@ -14,6 +14,7 @@ import { MusicianReleasedEmail } from './templates/musician-released'
 import { SubDeclinedFindAnotherEmail } from './templates/sub-declined-find-another'
 import { PortalInvitationEmail } from './templates/portal-invitation'
 import { MusicianWelcomeEmail } from './templates/musician-welcome'
+import { AdminWelcomeEmail } from './templates/admin-welcome'
 import { render } from '@react-email/render'
 import { type EmailBranding } from './templates/email-layout'
 
@@ -702,6 +703,38 @@ export async function sendEmail(params: SendEmailParams) {
 
   if (error) {
     console.error('Failed to send email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// Admin Welcome Email (sent after org creation)
+interface SendAdminWelcomeParams {
+  to: string
+  userName: string
+  organizationName: string
+  dashboardUrl: string
+}
+
+export async function sendAdminWelcomeEmail(params: SendAdminWelcomeParams) {
+  const emailHtml = await render(
+    AdminWelcomeEmail({
+      userName: params.userName,
+      organizationName: params.organizationName,
+      dashboardUrl: params.dashboardUrl,
+    })
+  )
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: `Welcome to Podium — ${params.organizationName} is ready`,
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send admin welcome email:', error)
     throw new Error(`Failed to send email: ${error.message}`)
   }
 

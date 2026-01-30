@@ -5,11 +5,25 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 
+function SidebarTab({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 border border-primary/20 px-2.5 py-1 text-sm font-semibold text-primary">
+      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+      </svg>
+      {label}
+    </span>
+  )
+}
+
 const STEPS = [
   {
     title: 'Welcome to Podium!',
-    content:
-      'Your instruments are already pre-loaded. Here\'s a quick overview of how Podium works to help you manage your orchestra personnel.',
+    body: (
+      <p className="text-muted-foreground">
+        Your instruments are already pre-loaded. Here&apos;s a quick overview of how Podium works to help you manage your personnel.
+      </p>
+    ),
     icon: (
       <svg className="h-12 w-12 text-primary" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 9 10.5-3m0 6.553v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 1 1-.99-3.467l2.31-.66a2.25 2.25 0 0 0 1.632-2.163Zm0 0V4.103A2.25 2.25 0 0 0 17.378 2h-.403a2.25 2.25 0 0 0-1.5.563L9 9m10.5-3H9m0 0v7.5" />
@@ -17,11 +31,21 @@ const STEPS = [
     ),
   },
   {
-    title: 'Import Your Musicians',
-    content:
-      'Head to the Musicians page to build your roster. Add each musician\'s name, email, and the instruments they play. This is who you\'ll call for gigs.',
-    link: '/dashboard/musicians',
-    linkLabel: 'Go to Musicians',
+    title: 'Build Your Roster',
+    body: (
+      <div className="space-y-3">
+        <p className="text-muted-foreground">
+          Import a spreadsheet of your musicians or add them one by one. Include their name, email, phone, and the instruments they play.
+        </p>
+        <p className="text-muted-foreground">
+          Be sure to set a <strong>call order</strong> for each musician — this tells Podium who to suggest first when you&apos;re staffing a project. The more detail you add, the easier sorting and sending calls will be.
+        </p>
+        <div className="pt-1">
+          <span className="text-xs text-muted-foreground">Find it in the sidebar:</span>{' '}
+          <SidebarTab label="Musicians" />
+        </div>
+      </div>
+    ),
     icon: (
       <svg className="h-12 w-12 text-primary" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
@@ -29,11 +53,29 @@ const STEPS = [
     ),
   },
   {
-    title: 'Create a Project',
-    content:
-      'Projects represent concerts, events, or series. Each project has a name, dates, and status. Think of it as the container for everything related to one gig.',
-    link: '/dashboard/projects',
-    linkLabel: 'Go to Projects',
+    title: 'Create Projects & Services',
+    body: (
+      <div className="space-y-3">
+        <p className="text-muted-foreground">
+          A <strong>project</strong> is the container for a gig — it could be a full concert series with multiple rehearsals and performances, or just a single casual event.
+        </p>
+        <p className="text-muted-foreground">
+          Inside each project, you add <strong>services</strong> — the individual rehearsals and performances your musicians need to show up for, each with a call time, start time, and end time.
+        </p>
+        <div className="rounded-md bg-muted/50 border px-3 py-2 text-sm text-left">
+          <div className="font-semibold">Holiday Concert</div>
+          <div className="ml-4 mt-1 space-y-0.5 text-muted-foreground text-xs">
+            <div>Rehearsal — Dec 18, 7:00 PM</div>
+            <div>Dress Rehearsal — Dec 19, 6:30 PM</div>
+            <div>Performance — Dec 20, 7:00 PM</div>
+          </div>
+        </div>
+        <div className="pt-1">
+          <span className="text-xs text-muted-foreground">Find it in the sidebar:</span>{' '}
+          <SidebarTab label="Projects" />
+        </div>
+      </div>
+    ),
     icon: (
       <svg className="h-12 w-12 text-primary" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" />
@@ -41,19 +83,17 @@ const STEPS = [
     ),
   },
   {
-    title: 'Add Services',
-    content:
-      'Services are the individual rehearsals and performances within a project. Each service has a call time (when musicians arrive), start time, and end time.',
-    icon: (
-      <svg className="h-12 w-12 text-primary" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-      </svg>
-    ),
-  },
-  {
     title: 'Send Calls',
-    content:
-      'Add positions to your project (e.g., Violin 1 Chair 1), then send calls to musicians. They\'ll receive an email and can accept or decline directly from the link.',
+    body: (
+      <div className="space-y-3">
+        <p className="text-muted-foreground">
+          Add positions to your project — like <strong>Violin 1</strong>, <strong>Cello</strong>, or <strong>Trumpet</strong> — and send calls to your musicians. Podium will automatically suggest players who are higher on your call list.
+        </p>
+        <p className="text-muted-foreground">
+          Musicians receive an email and can accept or decline directly from the link — no account required.
+        </p>
+      </div>
+    ),
     icon: (
       <svg className="h-12 w-12 text-primary" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
@@ -62,8 +102,11 @@ const STEPS = [
   },
   {
     title: 'You\'re All Set!',
-    content:
-      'That\'s the basic workflow: Musicians \u2192 Project \u2192 Services \u2192 Positions \u2192 Send Calls. You can always come back to the dashboard for a quick overview.',
+    body: (
+      <p className="text-muted-foreground">
+        That&apos;s the workflow: <strong>Musicians</strong> &rarr; <strong>Project</strong> &rarr; <strong>Services</strong> &rarr; <strong>Positions</strong> &rarr; <strong>Send Calls</strong>. Your dashboard will guide you through what to do next.
+      </p>
+    ),
     icon: (
       <svg className="h-12 w-12 text-green-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
@@ -106,21 +149,7 @@ export function SetupWizard({ userId, organizationId }: SetupWizardProps) {
           <div className="flex flex-col items-center text-center space-y-4">
             {currentStep.icon}
             <h2 className="text-xl font-bold">{currentStep.title}</h2>
-            <p className="text-muted-foreground">
-              {currentStep.content}
-            </p>
-            {currentStep.link && (
-              <a
-                href={currentStep.link}
-                className="text-primary underline text-sm hover:text-primary/80"
-                onClick={(e) => {
-                  e.preventDefault()
-                  // Don't navigate, just show the link
-                }}
-              >
-                {currentStep.linkLabel}
-              </a>
-            )}
+            {currentStep.body}
           </div>
 
           {/* Step indicators */}

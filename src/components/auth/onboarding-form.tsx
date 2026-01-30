@@ -100,8 +100,20 @@ export function OnboardingForm() {
       return
     }
 
-    // Redirect to settings with a prompt to set up musician policy
-    router.push('/dashboard/settings?setup=musician_policy')
+    // Send welcome email (don't await — don't block the redirect)
+    fetch('/api/auth/welcome-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        organizationName: data.organizationName,
+        userName: data.fullName,
+      }),
+    }).catch(() => {
+      // Ignore — welcome email is non-critical
+    })
+
+    // Redirect to dashboard where the setup wizard will guide them
+    router.push('/dashboard')
     router.refresh()
   }
 
