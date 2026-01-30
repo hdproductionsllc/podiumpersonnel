@@ -149,7 +149,7 @@ export function ProjectFormDialog({
           <DialogDescription>
             {isEditing
               ? 'Update the project details.'
-              : 'Create a new project for your orchestra.'}
+              : 'A project represents a gig, concert, or event — it can include one or more rehearsals and performances.'}
           </DialogDescription>
         </DialogHeader>
 

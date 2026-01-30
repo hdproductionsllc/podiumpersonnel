@@ -337,7 +337,7 @@ export function ProjectsClient({
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Projects</h2>
           <p className="text-muted-foreground">
-            Manage your orchestra projects and their services.
+            Manage your projects and their services.
           </p>
         </div>
         {canManage && (
@@ -346,6 +346,14 @@ export function ProjectsClient({
       </div>
 
       <Separator />
+
+      <ContextualTooltip
+        tooltipId="projects"
+        text={TOOLTIP_DEFINITIONS.projects}
+        userId={userId}
+        organizationId={organizationId}
+        dismissedTooltips={dismissedTooltips}
+      />
 
       <ContextualTooltip
         tooltipId="workflow"

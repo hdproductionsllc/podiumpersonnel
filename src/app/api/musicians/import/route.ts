@@ -259,6 +259,74 @@ function looksLikeName(text: string): boolean {
   return false
 }
 
+// Split a cell that has a name mixed with phone/email into its parts
+// e.g. "Tess Willer-(636) 627-9603" → { name: "Tess Willer", phone: "(636) 627-9603" }
+// e.g. "Eric Schaberg, ericschaberg@me.com, (973) 809-2911" → { name: "Eric Schaberg", email: "...", phone: "..." }
+function splitMixedCell(text: string): { name: string; email: string | null; phone: string | null } | null {
+  if (!text || typeof text !== 'string') return null
+  const trimmed = text.trim()
+
+  // Pattern: "Name-(AreaCode) LocalNumber" e.g. "Tess Willer-(636) 627-9603"
+  const dashParenMatch = trimmed.match(/^(.+?)-\((\d{3})\)\s*(\d{3}[\-\.\s]?\d{4})$/)
+  if (dashParenMatch) {
+    const name = dashParenMatch[1].trim()
+    const phone = `(${dashParenMatch[2]}) ${dashParenMatch[3]}`
+    if (name && /[a-zA-Z]{2,}/.test(name)) {
+      return { name, email: null, phone }
+    }
+  }
+
+  // Pattern: comma-separated parts like "Name, email, phone" or "Name, phone"
+  const parts = trimmed.split(',').map(p => p.trim()).filter(p => p)
+  if (parts.length >= 2) {
+    let name: string | null = null
+    let email: string | null = null
+    let phone: string | null = null
+
+    for (const part of parts) {
+      if (!email && looksLikeEmail(part)) {
+        email = part
+      } else if (!phone && looksLikePhone(part)) {
+        phone = part
+      } else if (!name && /[a-zA-Z]{2,}/.test(part) && !looksLikePhone(part) && !looksLikeEmail(part)) {
+        name = part
+      }
+    }
+
+    // Also check for phone appended to last text part: "Katelyn , email, (314) 920-5595"
+    // where the phone might have a parenthesized area code
+    if (!phone) {
+      for (const part of parts) {
+        const phoneInPart = part.match(/\((\d{3})\)\s*(\d{3}[\-\.\s]?\d{4})/)
+        if (phoneInPart) {
+          phone = phoneInPart[0]
+          // If this part also had text before the phone, that might be part of the name
+          const beforePhone = part.replace(phoneInPart[0], '').trim()
+          if (beforePhone && !name && /[a-zA-Z]{2,}/.test(beforePhone)) {
+            name = beforePhone
+          }
+        }
+      }
+    }
+
+    if (name && (email || phone)) {
+      return { name, email, phone }
+    }
+  }
+
+  // Pattern: "Name (AreaCode) LocalNumber" with space before paren
+  const spaceParenMatch = trimmed.match(/^(.+?)\s+\((\d{3})\)\s*(\d{3}[\-\.\s]?\d{4})$/)
+  if (spaceParenMatch) {
+    const name = spaceParenMatch[1].trim()
+    const phone = `(${spaceParenMatch[2]}) ${spaceParenMatch[3]}`
+    if (name && /[a-zA-Z]{2,}/.test(name) && !looksLikePhone(name)) {
+      return { name, email: null, phone }
+    }
+  }
+
+  return null
+}
+
 function looksLikeEmail(text: string): boolean {
   if (!text || typeof text !== 'string') return false
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text.trim())
@@ -357,38 +425,54 @@ function parseSmartScan(
 
       const cellStr = String(cell).trim()
 
+      let nameStr = cellStr
+      let extractedEmail: string | null = null
+      let extractedPhone: string | null = null
+
       if (looksLikeName(cellStr)) {
-        // Normalize for deduplication
-        const normalizedName = cellStr.toLowerCase()
-        if (seenNames.has(normalizedName)) continue
-        seenNames.add(normalizedName)
-
-        const { firstName, lastName } = splitFullName(cellStr)
-
-        // Look for email/phone in nearby cells (same row, next few columns)
-        let email: string | null = null
-        let phone: string | null = null
-
-        for (let nearCol = colIdx + 1; nearCol < Math.min(colIdx + 5, row.length); nearCol++) {
-          const nearCell = row[nearCol]
-          if (!nearCell) continue
-          const nearStr = String(nearCell).trim()
-
-          if (!email && looksLikeEmail(nearStr)) {
-            email = nearStr
-          } else if (!phone && looksLikePhone(nearStr)) {
-            phone = nearStr
-          }
+        // Cell is a clean name
+      } else {
+        // Cell isn't a clean name — try splitting mixed content (name + phone/email)
+        const mixed = splitMixedCell(cellStr)
+        if (mixed) {
+          nameStr = mixed.name
+          extractedEmail = mixed.email
+          extractedPhone = mixed.phone
+        } else {
+          continue // Not a name and can't be split
         }
-
-        musicians.push({
-          firstName,
-          lastName,
-          email,
-          phone,
-          notes: null,
-        })
       }
+
+      // Normalize for deduplication
+      const normalizedName = nameStr.toLowerCase()
+      if (seenNames.has(normalizedName)) continue
+      seenNames.add(normalizedName)
+
+      const { firstName, lastName } = splitFullName(nameStr)
+
+      // Look for email/phone in nearby cells (same row, next few columns)
+      let email: string | null = extractedEmail
+      let phone: string | null = extractedPhone
+
+      for (let nearCol = colIdx + 1; nearCol < Math.min(colIdx + 5, row.length); nearCol++) {
+        const nearCell = row[nearCol]
+        if (!nearCell) continue
+        const nearStr = String(nearCell).trim()
+
+        if (!email && looksLikeEmail(nearStr)) {
+          email = nearStr
+        } else if (!phone && looksLikePhone(nearStr)) {
+          phone = nearStr
+        }
+      }
+
+      musicians.push({
+        firstName,
+        lastName,
+        email,
+        phone,
+        notes: null,
+      })
     }
   }
 
@@ -427,37 +511,53 @@ function parseSectionFormat(
 
       const cellStr = String(cell).trim()
 
+      let nameStr = cellStr
+      let extractedEmail: string | null = null
+      let extractedPhone: string | null = null
+
       if (looksLikeName(cellStr)) {
-        const normalizedName = cellStr.toLowerCase()
-        if (seenNames.has(normalizedName)) continue
-        seenNames.add(normalizedName)
-
-        const { firstName, lastName } = splitFullName(cellStr)
-
-        // Look for email/phone in adjacent cells
-        let email: string | null = null
-        let phone: string | null = null
-
-        for (let nearCol = colIdx + 1; nearCol < Math.min(colIdx + 3, row.length); nearCol++) {
-          const nearCell = row[nearCol]
-          if (!nearCell) continue
-          const nearStr = String(nearCell).trim()
-
-          if (!email && looksLikeEmail(nearStr)) {
-            email = nearStr
-          } else if (!phone && looksLikePhone(nearStr)) {
-            phone = nearStr
-          }
+        // Cell is a clean name
+      } else {
+        // Cell isn't a clean name — try splitting mixed content (name + phone/email)
+        const mixed = splitMixedCell(cellStr)
+        if (mixed) {
+          nameStr = mixed.name
+          extractedEmail = mixed.email
+          extractedPhone = mixed.phone
+        } else {
+          continue // Not a name and can't be split
         }
-
-        musicians.push({
-          firstName,
-          lastName,
-          email,
-          phone,
-          notes: null,
-        })
       }
+
+      const normalizedName = nameStr.toLowerCase()
+      if (seenNames.has(normalizedName)) continue
+      seenNames.add(normalizedName)
+
+      const { firstName, lastName } = splitFullName(nameStr)
+
+      // Look for email/phone in adjacent cells
+      let email: string | null = extractedEmail
+      let phone: string | null = extractedPhone
+
+      for (let nearCol = colIdx + 1; nearCol < Math.min(colIdx + 3, row.length); nearCol++) {
+        const nearCell = row[nearCol]
+        if (!nearCell) continue
+        const nearStr = String(nearCell).trim()
+
+        if (!email && looksLikeEmail(nearStr)) {
+          email = nearStr
+        } else if (!phone && looksLikePhone(nearStr)) {
+          phone = nearStr
+        }
+      }
+
+      musicians.push({
+        firstName,
+        lastName,
+        email,
+        phone,
+        notes: null,
+      })
     }
   }
 

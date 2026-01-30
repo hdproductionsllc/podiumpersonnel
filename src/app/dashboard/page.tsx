@@ -265,7 +265,7 @@ export default async function DashboardPage() {
   const steps = [
     { label: 'Add musicians', description: 'Build your roster of available musicians', done: (musicianCount ?? 0) > 0, href: '/dashboard/musicians' },
     { label: 'Create a project', description: 'Set up concerts, events, or rehearsal series', done: (activeProjectCount ?? 0) > 0, href: '/dashboard/projects' },
-    { label: 'Send calls', description: 'Staff positions and send calls to musicians', done: (pendingOfferCount ?? 0) > 0 || staffingAlerts.length === 0, href: '/dashboard/projects' },
+    { label: 'Send calls', description: 'Staff positions and send calls to musicians', done: (pendingOfferCount ?? 0) > 0, href: '/dashboard/projects' },
   ]
 
   const allStepsComplete = steps.every((s) => s.done)
@@ -347,7 +347,7 @@ export default async function DashboardPage() {
           Welcome to {organization?.name || 'Podium'}
         </h2>
         <p className="text-muted-foreground">
-          Manage your orchestra personnel, projects, and schedules.
+          Manage your personnel, projects, and schedules.
         </p>
       </div>
 
@@ -375,7 +375,7 @@ export default async function DashboardPage() {
               </svg>
               <h3 className="text-xl font-bold mb-2">Start Your First Project</h3>
               <p className="text-muted-foreground max-w-md">
-                Staff musicians for your upcoming gig! Create a project to begin adding services and sending calls.
+                Staff musicians for your upcoming gig or concert! Create a project to begin adding services and sending calls.
               </p>
             </CardContent>
           </Card>

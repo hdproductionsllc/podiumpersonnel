@@ -18,10 +18,10 @@ function SidebarTab({ label }: { label: string }) {
 
 const STEPS = [
   {
-    title: 'Welcome to Podium!',
+    title: 'Welcome to Podium Personnel!',
     body: (
       <p className="text-muted-foreground">
-        Your instruments are already pre-loaded. Here&apos;s a quick overview of how Podium works to help you manage your personnel.
+        Your orchestral instruments are already pre-loaded. Here&apos;s a quick overview of how Podium works to help you manage your personnel.
       </p>
     ),
     icon: (
@@ -83,11 +83,11 @@ const STEPS = [
     ),
   },
   {
-    title: 'Send Calls',
+    title: 'Staff & Send Calls',
     body: (
       <div className="space-y-3">
         <p className="text-muted-foreground">
-          Add positions to your project — like <strong>Violin 1</strong>, <strong>Cello</strong>, or <strong>Trumpet</strong> — and send calls to your musicians. Podium will automatically suggest players who are higher on your call list.
+          Still inside the <SidebarTab label="Projects" /> tab, add positions to your project — like <strong>Violin 1</strong>, <strong>Cello</strong>, or <strong>Trumpet</strong> — and send calls to your musicians. Podium will automatically suggest players who are higher on your call list.
         </p>
         <p className="text-muted-foreground">
           Musicians receive an email and can accept or decline directly from the link — no account required.
@@ -104,7 +104,7 @@ const STEPS = [
     title: 'You\'re All Set!',
     body: (
       <p className="text-muted-foreground">
-        That&apos;s the workflow: <strong>Musicians</strong> &rarr; <strong>Project</strong> &rarr; <strong>Services</strong> &rarr; <strong>Positions</strong> &rarr; <strong>Send Calls</strong>. Your dashboard will guide you through what to do next.
+        That&apos;s the workflow: <strong>Musicians</strong> &rarr; <strong>Project</strong> &rarr; <strong>Services</strong> &rarr; <strong>Staff</strong> &rarr; <strong>Send Calls</strong>. Your dashboard will guide you through what to do next.
       </p>
     ),
     icon: (
