@@ -30,6 +30,9 @@ interface ContractOfferEmailProps {
   responseUrl: string
   expiresAt: string | null
   notes?: string | null
+  payAmount?: number | null
+  leaderFee?: number | null
+  isLeader?: boolean
   branding?: EmailBranding
 }
 
@@ -44,6 +47,9 @@ export function ContractOfferEmail({
   responseUrl,
   expiresAt,
   notes,
+  payAmount,
+  leaderFee,
+  isLeader,
   branding,
 }: ContractOfferEmailProps) {
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
@@ -84,6 +90,12 @@ export function ContractOfferEmail({
               <Text style={detailsItem}>
                 <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
               </Text>
+              {payAmount != null && (
+                <Text style={detailsItem}>
+                  <strong>Pay:</strong> ${payAmount}
+                  {isLeader && leaderFee ? ` (includes $${leaderFee} leader fee)` : ''}
+                </Text>
+              )}
               {expiresAt && (
                 <Text style={detailsItem}>
                   <strong>Please respond by:</strong> {new Date(expiresAt).toLocaleDateString()}
@@ -103,7 +115,11 @@ export function ContractOfferEmail({
                     {service.callTime && `Call: ${service.callTime} | `}Start: {service.time}{service.endTime && ` | End: ${service.endTime}`}
                   </Text>
                   {service.venue && (
-                    <Text style={serviceVenue}>{service.venue}</Text>
+                    <Text style={serviceVenue}>
+                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue)}`} style={{ color: '#3b82f6', textDecoration: 'underline' }}>
+                        {service.venue}
+                      </a>
+                    </Text>
                   )}
                 </Section>
               ))}

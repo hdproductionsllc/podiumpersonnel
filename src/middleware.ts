@@ -16,6 +16,6 @@ export const config = {
      * - gig (public musician portal)
      * - api (API routes that handle their own auth)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|gig|api).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|gig|api|musician).*)',
   ],
 }

@@ -375,7 +375,7 @@ export default async function DashboardPage() {
               </svg>
               <h3 className="text-xl font-bold mb-2">Start Your First Project</h3>
               <p className="text-muted-foreground max-w-md">
-                Staff musicians for your upcoming gig or concert! Create a project to begin adding services and sending calls.
+                Staff musicians for your upcoming gig or concert! You only need a musician&apos;s name and instrument to send a call — other details can be added later.
               </p>
             </CardContent>
           </Card>

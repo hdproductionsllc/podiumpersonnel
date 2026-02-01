@@ -386,16 +386,35 @@ export function ProjectPositions({
 
                             return canManage ? (
                               <div className="flex flex-col gap-1">
-                                <select
-                                  className="rounded border bg-background px-2 py-0.5 text-xs"
-                                  value={position.status}
-                                  onChange={(e) => handleStatusChange(position.id, e.target.value)}
-                                >
-                                  <option value="vacant">Vacant</option>
-                                  <option value="offered">Offered</option>
-                                  <option value="confirmed">Confirmed</option>
-                                  <option value="declined">Declined</option>
-                                </select>
+                                {position.status === 'confirmed' ? (
+                                  <div className="flex items-center gap-2">
+                                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[position.status]}`}>
+                                      {STATUS_LABELS[position.status]}
+                                    </span>
+                                    {canManage && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 text-xs text-muted-foreground"
+                                        onClick={() => handleStatusChange(position.id, 'vacant')}
+                                        title="Release this musician from the position"
+                                      >
+                                        Unassign
+                                      </Button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <select
+                                    className="rounded border bg-background px-2 py-0.5 text-xs"
+                                    value={position.status}
+                                    onChange={(e) => handleStatusChange(position.id, e.target.value)}
+                                  >
+                                    <option value="vacant">Vacant</option>
+                                    <option value="offered">Offered</option>
+                                    <option value="confirmed">Confirmed</option>
+                                    <option value="declined">Declined</option>
+                                  </select>
+                                )}
                                 {position.status === 'offered' && offeredToName && (
                                   <span className="text-xs text-muted-foreground">
                                     to {offeredToName}

@@ -322,6 +322,7 @@ export function ServiceFormDialog({
                         value={field.value || ''}
                         onChange={field.onChange}
                         placeholder="Call time"
+                        defaultMonth={projectStartDate ? new Date(projectStartDate + 'T12:00:00') : undefined}
                       />
                     </FormControl>
                     <p className="text-xs text-muted-foreground">When musicians arrive</p>
@@ -341,6 +342,7 @@ export function ServiceFormDialog({
                         value={field.value}
                         onChange={(val) => handleStartTimeChange(val)}
                         placeholder="Start time"
+                        defaultMonth={projectStartDate ? new Date(projectStartDate + 'T12:00:00') : undefined}
                       />
                     </FormControl>
                     <FormMessage />
@@ -359,6 +361,7 @@ export function ServiceFormDialog({
                         value={field.value || ''}
                         onChange={field.onChange}
                         placeholder="End time"
+                        defaultMonth={projectStartDate ? new Date(projectStartDate + 'T12:00:00') : undefined}
                       />
                     </FormControl>
                     <p className="text-xs text-muted-foreground">Auto-fills 3h after start</p>

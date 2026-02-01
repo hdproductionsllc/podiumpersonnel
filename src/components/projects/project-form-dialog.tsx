@@ -54,6 +54,7 @@ export function ProjectFormDialog({
     defaultValues: {
       name: '',
       description: '',
+      internal_notes: '',
       start_date: '',
       end_date: '',
       status: 'active',
@@ -66,6 +67,7 @@ export function ProjectFormDialog({
         form.reset({
           name: project.name,
           description: project.description || '',
+          internal_notes: project.internal_notes || '',
           start_date: project.start_date || '',
           end_date: project.end_date || '',
           status: project.status,
@@ -74,6 +76,7 @@ export function ProjectFormDialog({
         form.reset({
           name: '',
           description: '',
+          internal_notes: '',
           start_date: '',
           end_date: '',
           status: 'active',
@@ -95,6 +98,7 @@ export function ProjectFormDialog({
         .update({
           name: data.name,
           description: data.description || null,
+          internal_notes: data.internal_notes || null,
           start_date: data.start_date || null,
           end_date: data.end_date || null,
           status: data.status,
@@ -113,6 +117,7 @@ export function ProjectFormDialog({
           organization_id: organizationId,
           name: data.name,
           description: data.description || null,
+          internal_notes: data.internal_notes || null,
           start_date: data.start_date || null,
           end_date: data.end_date || null,
           status: data.status,
@@ -188,6 +193,26 @@ export function ProjectFormDialog({
                       {...field}
                     />
                   </FormControl>
+                  <p className="text-xs text-muted-foreground">(Visible to musicians in their call email)</p>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="internal_notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Internal Notes</FormLabel>
+                  <FormControl>
+                    <textarea
+                      className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      placeholder="Internal notes..."
+                      {...field}
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">(Only visible to your team)</p>
                   <FormMessage />
                 </FormItem>
               )}

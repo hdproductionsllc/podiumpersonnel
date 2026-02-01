@@ -77,7 +77,7 @@ export function GigPageClient({
 
   const isExpired = expiresAt && new Date(expiresAt) < new Date()
   const canRespond = offerStatus === 'pending' || offerStatus === 'viewed'
-  const canRequestSub = offerStatus === 'accepted' && !currentSubRequest
+  const canRequestSub = offerStatus === 'accepted' && !currentSubRequest && musicianHasAccount
 
   function handleSubRequestSuccess() {
     setShowSubRequestForm(false)
@@ -214,7 +214,14 @@ export function GigPageClient({
                               <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
                             </svg>
-                            <span>{service.venue}</span>
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary underline hover:text-primary/80"
+                            >
+                              {service.venue}
+                            </a>
                           </div>
                         )}
                       </div>
@@ -357,7 +364,7 @@ export function GigPageClient({
                 <div className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-4">
                   <h4 className="font-medium text-blue-900 dark:text-blue-100 text-sm">Manage all your gigs in one place</h4>
                   <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                    Create a free Podium account to view upcoming services, manage your schedule, and respond to future calls faster.
+                    Create a free Podium account to view upcoming services, manage your schedule, respond to future calls faster, and request substitutes if needed.
                   </p>
                   <a
                     href="/musician/register"

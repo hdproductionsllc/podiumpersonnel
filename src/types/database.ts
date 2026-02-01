@@ -287,6 +287,7 @@ export type Database = {
           organization_id: string
           name: string
           description: string | null
+          internal_notes: string | null
           start_date: string | null
           end_date: string | null
           status: 'draft' | 'active' | 'completed' | 'cancelled'
@@ -299,6 +300,7 @@ export type Database = {
           organization_id: string
           name: string
           description?: string | null
+          internal_notes?: string | null
           start_date?: string | null
           end_date?: string | null
           status?: 'draft' | 'active' | 'completed' | 'cancelled'
@@ -311,6 +313,7 @@ export type Database = {
           organization_id?: string
           name?: string
           description?: string | null
+          internal_notes?: string | null
           start_date?: string | null
           end_date?: string | null
           status?: 'draft' | 'active' | 'completed' | 'cancelled'

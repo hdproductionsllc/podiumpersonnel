@@ -2,6 +2,20 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import * as XLSX from 'xlsx'
 
+function formatPhoneNumber(phone: string): string {
+  const digits = phone.replace(/\D/g, '')
+  // Handle 10-digit US numbers
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+  }
+  // Handle 11-digit with leading 1
+  if (digits.length === 11 && digits[0] === '1') {
+    return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`
+  }
+  // Return original if can't format
+  return phone
+}
+
 // Column name variations for standard format detection
 const COLUMN_MAPPINGS = {
   firstName: [
@@ -564,6 +578,62 @@ function parseSectionFormat(
   return musicians
 }
 
+function parseVCard(text: string): ExtractedMusician[] {
+  const musicians: ExtractedMusician[] = []
+  const cards = text.split(/(?=BEGIN:VCARD)/i).filter(c => c.trim())
+
+  for (const card of cards) {
+    const lines = card.split(/\r?\n/)
+    let firstName = ''
+    let lastName = ''
+    let email: string | null = null
+    let phone: string | null = null
+
+    for (const line of lines) {
+      // Handle N: (structured name)
+      if (/^N[;:]/.test(line)) {
+        const value = line.replace(/^N[^:]*:/, '')
+        const parts = value.split(';')
+        lastName = (parts[0] || '').trim()
+        firstName = (parts[1] || '').trim()
+      }
+      // Handle FN: (formatted name) as fallback
+      else if (/^FN[;:]/.test(line) && !firstName && !lastName) {
+        const value = line.replace(/^FN[^:]*:/, '').trim()
+        const nameParts = value.split(/\s+/)
+        if (nameParts.length >= 2) {
+          firstName = nameParts.slice(0, -1).join(' ')
+          lastName = nameParts[nameParts.length - 1]
+        } else {
+          firstName = value
+        }
+      }
+      // Handle TEL:
+      else if (/^TEL[;:]/.test(line)) {
+        const value = line.replace(/^TEL[^:]*:/, '').trim()
+        if (!phone && value) phone = value
+      }
+      // Handle EMAIL:
+      else if (/^EMAIL[;:]/.test(line)) {
+        const value = line.replace(/^EMAIL[^:]*:/, '').trim()
+        if (!email && value) email = value
+      }
+    }
+
+    if (firstName || lastName) {
+      musicians.push({
+        firstName: firstName ? toTitleCase(firstName) : '',
+        lastName: lastName ? toTitleCase(lastName) : '',
+        email,
+        phone,
+        notes: null,
+      })
+    }
+  }
+
+  return musicians
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient()
 
@@ -594,11 +664,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'No file provided' }, { status: 400 })
   }
 
-  const validExtensions = ['.xlsx', '.xls', '.csv']
+  const validExtensions = ['.xlsx', '.xls', '.csv', '.vcf', '.vcard']
   const fileName = file.name.toLowerCase()
   if (!validExtensions.some(ext => fileName.endsWith(ext))) {
     return NextResponse.json(
-      { error: 'Invalid file type. Please upload an Excel (.xlsx, .xls) or CSV file.' },
+      { error: 'Invalid file type. Please upload an Excel (.xlsx, .xls), CSV, or vCard (.vcf) file.' },
       { status: 400 }
     )
   }
@@ -606,6 +676,51 @@ export async function POST(request: Request) {
   try {
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
+
+    // Check if file is a vCard
+    if (fileName.endsWith('.vcf') || fileName.endsWith('.vcard')) {
+      const text = buffer.toString('utf8')
+      const musicians = parseVCard(text)
+
+      if (musicians.length === 0) {
+        return NextResponse.json(
+          { error: 'No contacts found in the vCard file.' },
+          { status: 400 }
+        )
+      }
+
+      const musiciansToInsert = musicians.map(m => ({
+        organization_id: membership.organization_id,
+        first_name: m.firstName || m.lastName,
+        last_name: m.firstName ? m.lastName : '',
+        email: m.email && looksLikeEmail(m.email) ? m.email : null,
+        phone: m.phone ? formatPhoneNumber(m.phone) : null,
+        notes: m.notes,
+        is_active: true,
+        tags: tags,
+      }))
+
+      if (musiciansToInsert.length > 0) {
+        const { error: insertError } = await supabase
+          .from('musicians')
+          .insert(musiciansToInsert)
+
+        if (insertError) {
+          return NextResponse.json(
+            { error: `Database error: ${insertError.message}` },
+            { status: 500 }
+          )
+        }
+      }
+
+      return NextResponse.json({
+        success: musiciansToInsert.length,
+        parseMethod: 'vcard',
+        errors: 0,
+        errorRows: [],
+        totalErrorRows: 0,
+      })
+    }
 
     const workbook = XLSX.read(buffer, {
       type: 'buffer',
@@ -679,7 +794,7 @@ export async function POST(request: Request) {
       first_name: m.firstName || m.lastName,
       last_name: m.firstName ? m.lastName : '',
       email: m.email && looksLikeEmail(m.email) ? m.email : null,
-      phone: m.phone,
+      phone: m.phone ? formatPhoneNumber(m.phone) : null,
       notes: m.notes,
       is_active: true,
       tags: tags,

@@ -10,8 +10,24 @@ import { DeleteMusicianDialog } from './delete-musician-dialog'
 import { BulkEditDialog } from './bulk-edit-dialog'
 import { MusicianCard } from './musician-card'
 import { toast } from 'sonner'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import type { Musician } from '@/types'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS, type InstrumentSection } from '@/lib/validations/instruments'
+
+function formatPhoneNumber(phone: string | null): string {
+  if (!phone) return '\u2014'
+  const digits = phone.replace(/\D/g, '')
+  // Handle 10-digit US numbers
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+  }
+  // Handle 11-digit with leading 1
+  if (digits.length === 11 && digits[0] === '1') {
+    return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`
+  }
+  // Return original if can't format
+  return phone
+}
 
 export type MusicianInstrumentJoin = {
   id: string
@@ -126,6 +142,7 @@ export function MusiciansClient({
   const [isImporting, setIsImporting] = useState(false)
   const [importTag, setImportTag] = useState('')
   const [showImportDialog, setShowImportDialog] = useState(false)
+  const [showPostImportGuide, setShowPostImportGuide] = useState(false)
 
   const canManage = userRole === 'owner' || userRole === 'admin'
 
@@ -423,6 +440,7 @@ export function MusiciansClient({
       if (result.success > 0) {
         const tagMsg = importTag.trim() ? ` with tag "${importTag.trim()}"` : ''
         toast.success(`Successfully imported ${result.success} musician${result.success !== 1 ? 's' : ''}${tagMsg}`)
+        setShowPostImportGuide(true)
       }
 
       if (result.errors > 0) {
@@ -451,11 +469,20 @@ export function MusiciansClient({
 
   return (
     <div className="space-y-6">
+      {isImporting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="rounded-lg bg-background p-6 shadow-lg text-center space-y-3">
+            <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
+            <p className="font-medium">Importing musicians...</p>
+            <p className="text-sm text-muted-foreground">Parsing your spreadsheet and adding musicians to your roster.</p>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Musicians</h2>
           <p className="text-muted-foreground">
-            Manage the musicians in your orchestra.
+            Manage your musicians. Details can be updated anytime — focus on getting names in first.
           </p>
         </div>
         {canManage && (
@@ -463,13 +490,13 @@ export function MusiciansClient({
             <input
               ref={fileInputRef}
               type="file"
-              accept=".xlsx,.xls,.csv"
+              accept=".xlsx,.xls,.csv,.vcf,.vcard"
               onChange={handleFileChange}
               className="hidden"
             />
             <div className="relative">
               <Button variant="outline" onClick={handleImportClick} disabled={isImporting}>
-                {isImporting ? 'Importing...' : 'Import from Excel'}
+                {isImporting ? 'Importing...' : 'Import'}
               </Button>
               {showImportDialog && (
                 <div className="absolute right-0 top-full mt-2 w-72 rounded-md border bg-background p-4 shadow-lg z-50">
@@ -487,9 +514,51 @@ export function MusiciansClient({
                         All imported musicians will be tagged with this label
                       </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <Button size="sm" onClick={handleSelectFile}>
                         Select File
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            if ('contacts' in navigator && 'ContactsManager' in window) {
+                              const contacts = await (navigator as any).contacts.select(
+                                ['name', 'email', 'tel'],
+                                { multiple: true }
+                              )
+                              if (contacts && contacts.length > 0) {
+                                let vcf = ''
+                                for (const c of contacts) {
+                                  vcf += 'BEGIN:VCARD\nVERSION:3.0\n'
+                                  if (c.name?.[0]) vcf += `FN:${c.name[0]}\n`
+                                  if (c.email?.[0]) vcf += `EMAIL:${c.email[0]}\n`
+                                  if (c.tel?.[0]) vcf += `TEL:${c.tel[0]}\n`
+                                  vcf += 'END:VCARD\n'
+                                }
+                                const blob = new Blob([vcf], { type: 'text/vcard' })
+                                const file = new File([blob], 'contacts.vcf', { type: 'text/vcard' })
+                                const formData = new FormData()
+                                formData.append('file', file)
+                                if (importTag.trim()) formData.append('tag', importTag.trim())
+                                setShowImportDialog(false)
+                                setIsImporting(true)
+                                try {
+                                  const response = await fetch('/api/musicians/import', { method: 'POST', body: formData })
+                                  const result = await response.json()
+                                  if (!response.ok) { toast.error(result.error || 'Import failed'); return }
+                                  if (result.success > 0) { toast.success(`Imported ${result.success} contact${result.success !== 1 ? 's' : ''}`); router.refresh() }
+                                } catch { toast.error('Failed to import contacts') }
+                                finally { setIsImporting(false); setImportTag('') }
+                              }
+                            } else {
+                              fileInputRef.current?.click()
+                            }
+                          } catch { toast.error('Contact picker not supported on this device') }
+                        }}
+                      >
+                        From Contacts
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => setShowImportDialog(false)}>
                         Cancel
@@ -998,16 +1067,16 @@ export function MusiciansClient({
                           </a>
                         ) : '—'}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">
+                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                         {musician.phone ? (
                           <a
                             href={`tel:${musician.phone.replace(/[^\d+]/g, '')}`}
                             className="hover:underline"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            {musician.phone}
+                            {formatPhoneNumber(musician.phone)}
                           </a>
-                        ) : '—'}
+                        ) : '\u2014'}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {musician.musician_instruments.length > 0
@@ -1200,6 +1269,44 @@ export function MusiciansClient({
         instruments={instruments}
         onSuccess={handleBulkEditSuccess}
       />
+
+      {/* Post-Import Guidance Modal */}
+      <Dialog open={showPostImportGuide} onOpenChange={setShowPostImportGuide}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Musicians Imported!</DialogTitle>
+            <DialogDescription>
+              Your musicians are in. Here&apos;s what to do next:
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="flex items-start gap-3">
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex-shrink-0">1</div>
+              <div>
+                <p className="text-sm font-medium">Assign instruments</p>
+                <p className="text-xs text-muted-foreground">Use the batch edit tool to assign instruments to multiple musicians at once. Select musicians, then click &quot;Bulk Edit.&quot;</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex-shrink-0">2</div>
+              <div>
+                <p className="text-sm font-medium">Fill in missing details later</p>
+                <p className="text-xs text-muted-foreground">Phone numbers, emails, and other info can be added anytime — don&apos;t let missing data slow you down.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-100 text-green-700 text-xs font-bold flex-shrink-0">3</div>
+              <div>
+                <p className="text-sm font-medium">Create a project</p>
+                <p className="text-xs text-muted-foreground">Head to Projects to set up your first gig or concert and start sending calls.</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={() => setShowPostImportGuide(false)}>Got It</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* W-9 Request Confirmation Dialog */}
       {showW9Confirm && (

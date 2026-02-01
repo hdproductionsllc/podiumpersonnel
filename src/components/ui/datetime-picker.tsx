@@ -11,6 +11,7 @@ interface DateTimePickerProps {
   onChange: (value: string) => void
   placeholder?: string
   className?: string
+  defaultMonth?: Date
 }
 
 function parseValue(value: string) {
@@ -49,7 +50,7 @@ function buildValue(date: Date | undefined, hour: number, minute: number, ampm: 
 const HOURS = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
 
-export function DateTimePicker({ value, onChange, placeholder = 'Select date & time', className }: DateTimePickerProps) {
+export function DateTimePicker({ value, onChange, placeholder = 'Select date & time', className, defaultMonth }: DateTimePickerProps) {
   const [open, setOpen] = React.useState(false)
   const parsed = parseValue(value)
   const [selectedDate, setSelectedDate] = React.useState<Date | undefined>(parsed.date)
@@ -98,12 +99,13 @@ export function DateTimePicker({ value, onChange, placeholder = 'Select date & t
           </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
+      <PopoverContent className="w-auto p-0 z-[100]" align="start" sideOffset={4}>
         <div className="p-3">
           <Calendar
             mode="single"
             selected={selectedDate}
             onSelect={setSelectedDate}
+            defaultMonth={selectedDate || defaultMonth}
           />
           <div className="border-t mt-3 pt-3">
             <div className="flex items-center gap-2">

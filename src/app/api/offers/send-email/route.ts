@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
         id,
         token,
         expires_at,
+        custom_pay,
         musician:musicians(
           id,
           first_name,
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
             id,
             name,
             organization:organizations(id, name, timezone, email_logo_url, email_brand_color, email_footer_text),
-            services(id, name, service_type, call_time, start_time, end_time, venue)
+            services(id, name, service_type, call_time, start_time, end_time, venue, base_pay, leader_fee)
           )
         )
       `)
@@ -67,6 +68,18 @@ export async function POST(request: NextRequest) {
     const instrument = position?.instrument as any
     const services = project?.services as any[] || []
     const timezone = organization?.timezone || DEFAULT_TIMEZONE
+
+    // Calculate pay
+    const chairNumber = position?.chair_number || 1
+    const isLeader = chairNumber === 1
+    const firstService = services.length > 0 ? services[0] : null
+    const basePay = firstService?.base_pay ?? null
+    const leaderFee = firstService?.leader_fee ?? 0
+    const payAmount = (offer as any).custom_pay != null
+      ? Number((offer as any).custom_pay)
+      : basePay != null
+        ? basePay + (isLeader ? leaderFee : 0)
+        : null
 
     // Count total chairs for this instrument in this project
     let totalChairs = 1
@@ -146,6 +159,9 @@ export async function POST(request: NextRequest) {
       services: formattedServices,
       responseUrl,
       expiresAt: offer.expires_at,
+      payAmount,
+      leaderFee: isLeader ? leaderFee : null,
+      isLeader,
       branding: {
         logoUrl: organization?.email_logo_url,
         brandColor: organization?.email_brand_color,

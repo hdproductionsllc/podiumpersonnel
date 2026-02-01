@@ -63,6 +63,10 @@ export function SendOfferDialog({
   const [previewLoading, setPreviewLoading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showAddMusician, setShowAddMusician] = useState(false)
+  const [newFirstName, setNewFirstName] = useState('')
+  const [newLastName, setNewLastName] = useState('')
+  const [addingMusician, setAddingMusician] = useState(false)
 
   // Initialize customPay from suggestedCustomPay when dialog opens, default to 200
   useEffect(() => {
@@ -239,6 +243,92 @@ export function SendOfferDialog({
                     <strong>Warning:</strong> This musician has no email address on file.
                     The offer will be created but no notification will be sent.
                     You will need to contact them manually.
+                  </div>
+                )}
+                {!showAddMusician ? (
+                  <button
+                    type="button"
+                    className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+                    onClick={() => setShowAddMusician(true)}
+                  >
+                    + Add New Musician
+                  </button>
+                ) : (
+                  <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Quick Add Musician</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="First name"
+                        value={newFirstName}
+                        onChange={(e) => setNewFirstName(e.target.value)}
+                        className="flex-1 rounded-md border bg-background px-2 py-1.5 text-sm"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Last name"
+                        value={newLastName}
+                        onChange={(e) => setNewLastName(e.target.value)}
+                        className="flex-1 rounded-md border bg-background px-2 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={addingMusician || (!newFirstName.trim() && !newLastName.trim())}
+                        onClick={async () => {
+                          if (!newFirstName.trim() && !newLastName.trim()) return
+                          setAddingMusician(true)
+                          try {
+                            const supabase = createClient()
+                            const { data: membership } = await supabase
+                              .from('organization_members')
+                              .select('organization_id')
+                              .single()
+                            if (!membership) { setError('No organization found'); return }
+                            const { data: newMusician, error: insertErr } = await supabase
+                              .from('musicians')
+                              .insert({
+                                organization_id: membership.organization_id,
+                                first_name: newFirstName.trim() || newLastName.trim(),
+                                last_name: newFirstName.trim() ? newLastName.trim() : '',
+                                is_active: true,
+                              })
+                              .select('id')
+                              .single()
+                            if (insertErr) { setError(insertErr.message); return }
+                            // Also link to the current instrument
+                            if (newMusician) {
+                              await supabase
+                                .from('musician_instruments')
+                                .insert({
+                                  musician_id: newMusician.id,
+                                  instrument_id: instrumentId,
+                                  is_primary: true,
+                                  proficiency: 'professional',
+                                })
+                              setSelectedMusicianId(newMusician.id)
+                            }
+                            setNewFirstName('')
+                            setNewLastName('')
+                            setShowAddMusician(false)
+                          } catch {
+                            setError('Failed to add musician')
+                          } finally {
+                            setAddingMusician(false)
+                          }
+                        }}
+                      >
+                        {addingMusician ? 'Adding...' : 'Add & Select'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => { setShowAddMusician(false); setNewFirstName(''); setNewLastName('') }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
                 )}
               </>

@@ -30,6 +30,10 @@ export const projectSchema = z.object({
     .string()
     .optional()
     .or(z.literal('')),
+  internal_notes: z
+    .string()
+    .optional()
+    .or(z.literal('')),
   start_date: z
     .string()
     .optional()

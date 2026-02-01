@@ -112,7 +112,7 @@ function ServicesList({
       </div>
 
       {sorted.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-2">No services yet.</p>
+        <p className="text-sm text-muted-foreground py-2">No services yet. Add rehearsals and performances to this project — these are the events your musicians need to attend.</p>
       ) : (
         <div className="rounded-md border bg-background">
           <table className="w-full text-sm">
@@ -135,8 +135,11 @@ function ServicesList({
                     {SERVICE_TYPE_LABELS[service.service_type as ServiceType] || service.service_type}
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">
-                    {new Date(service.start_time).toLocaleString()}
-                    {service.end_time && ` – ${new Date(service.end_time).toLocaleTimeString()}`}
+                    {service.call_time && (
+                      <span className="text-xs">Call: {new Date(service.call_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} | </span>
+                    )}
+                    {new Date(service.start_time).toLocaleDateString()} {new Date(service.start_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    {service.end_time && ` – ${new Date(service.end_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">
                     {service.venue || '—'}
@@ -317,8 +320,10 @@ export function ProjectsClient({
     setEditingProject(null)
     router.refresh()
 
-    // If a new project was created, prompt to add a service
+    // If a new project was created, auto-expand and prompt to add a service
     if (newProject) {
+      // Auto-expand the new project
+      setExpandedRows((prev) => new Set([...prev, newProject.id]))
       setActiveProjectId(newProject.id)
       setActiveProjectDates({
         start: newProject.start_date,
@@ -460,7 +465,7 @@ export function ProjectsClient({
                               size="sm"
                               onClick={() => handleEditProject(project)}
                             >
-                              Edit
+                              Edit Details
                             </Button>
                             <Button
                               variant="ghost"

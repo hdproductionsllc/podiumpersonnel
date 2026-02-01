@@ -349,7 +349,7 @@ export function AddPositionDialog({
             size="sm"
             onClick={() => setMode('presets')}
           >
-            Quick Presets
+            Ensemble Presets
           </Button>
           <Button
             variant={mode === 'single' ? 'default' : 'outline'}
@@ -401,7 +401,7 @@ export function AddPositionDialog({
             {/* Built-in Presets */}
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Quick Presets
+                Ensemble Presets
               </p>
               {BUILTIN_PRESETS.map((preset) => (
                 <Button
