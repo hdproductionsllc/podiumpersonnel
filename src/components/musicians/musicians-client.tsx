@@ -311,6 +311,10 @@ export function MusiciansClient({
   }
 
   function handleSuccess() {
+    // Celebrate first musician added
+    if (!editingMusician && musicians.length === 0) {
+      toast.success('Your roster is started!')
+    }
     setFormOpen(false)
     setDeleteOpen(false)
     setEditingMusician(null)

@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
+import { toast } from 'sonner'
 
 export type MusicianScheduleEntry = {
   id: string
@@ -29,13 +30,18 @@ interface SendOfferDialogProps {
   onOpenChange: (open: boolean) => void
   positionId: string
   instrumentId: string
+  instrumentName?: string
   chairNumber: number
   musicians: MusicianForOffer[]
   existingOfferMusicianIds: string[]
   basePay?: number | null
   leaderFee?: number | null
   suggestedCustomPay?: string
+  projectEndDate?: string | null
+  nextVacantCount?: number
+  nextInstrumentName?: string
   onSuccess: (applyPayToRemaining?: { customPay: string }) => void
+  onSendNext?: () => void
 }
 
 export function SendOfferDialog({
@@ -43,13 +49,18 @@ export function SendOfferDialog({
   onOpenChange,
   positionId,
   instrumentId,
+  instrumentName,
   chairNumber,
   musicians,
   existingOfferMusicianIds,
   basePay,
   leaderFee,
   suggestedCustomPay,
+  projectEndDate,
+  nextVacantCount,
+  nextInstrumentName,
   onSuccess,
+  onSendNext,
 }: SendOfferDialogProps) {
   const [selectedMusicianId, setSelectedMusicianId] = useState('')
   const [expiresIn, setExpiresIn] = useState<string>('2')
@@ -67,16 +78,45 @@ export function SendOfferDialog({
   const [newFirstName, setNewFirstName] = useState('')
   const [newLastName, setNewLastName] = useState('')
   const [addingMusician, setAddingMusician] = useState(false)
+  const [locallyAddedMusicians, setLocallyAddedMusicians] = useState<MusicianForOffer[]>([])
+  const [personalMessage, setPersonalMessage] = useState('')
+  const [showSuccess, setShowSuccess] = useState(false)
+  const [sentMusicianName, setSentMusicianName] = useState('')
+
+  // Search state for musician picker
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchRef = useRef<HTMLDivElement>(null)
 
   // Initialize customPay from suggestedCustomPay when dialog opens, default to 200
   useEffect(() => {
     if (open) {
       setCustomPay(suggestedCustomPay || '200')
+      setLocallyAddedMusicians([])
+      setPersonalMessage('')
+      setShowSuccess(false)
+      setSentMusicianName('')
+      setSearchQuery('')
+      setSearchOpen(false)
     }
   }, [open, suggestedCustomPay])
 
+  // Click-outside for search dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setSearchOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Combine prop musicians with locally added ones
+  const allMusicians = [...musicians, ...locallyAddedMusicians]
+
   // Get selected musician's email status
-  const selectedMusician = musicians.find((m) => m.id === selectedMusicianId)
+  const selectedMusician = allMusicians.find((m) => m.id === selectedMusicianId)
   const hasEmail = selectedMusician?.email ? true : false
 
   // Calculate pay - chair 1 gets leader fee
@@ -90,7 +130,7 @@ export function SendOfferDialog({
 
   // Filter musicians who play this instrument and don't already have an offer
   // Sort by: leaders first (for chair 1), then by call_order
-  const availableMusicians = musicians
+  const availableMusicians = allMusicians
     .filter(
       (m) =>
         m.musician_instruments.some((mi) => mi.instrument_id === instrumentId) &&
@@ -105,6 +145,49 @@ export function SendOfferDialog({
       // Then sort by call order
       return (a.call_order ?? 100) - (b.call_order ?? 100)
     })
+
+  // Filter by search query
+  const filteredMusicians = searchQuery.trim()
+    ? availableMusicians.filter((m) => {
+        const q = searchQuery.toLowerCase()
+        return (
+          m.first_name.toLowerCase().includes(q) ||
+          m.last_name.toLowerCase().includes(q) ||
+          `${m.first_name} ${m.last_name}`.toLowerCase().includes(q) ||
+          `${m.last_name}, ${m.first_name}`.toLowerCase().includes(q)
+        )
+      })
+    : availableMusicians
+
+  // Calculate deadline context
+  function getDeadlineContext(): { text: string; color: string } | null {
+    if (!projectEndDate) return null
+
+    let deadlineDate: Date | null = null
+    if (expiresIn === 'custom' && customDeadline) {
+      deadlineDate = new Date(customDeadline + 'T23:59:59')
+    } else if (expiresIn === '0.17') {
+      deadlineDate = new Date(Date.now() + 4 * 60 * 60 * 1000)
+    } else if (expiresIn && expiresIn !== '') {
+      deadlineDate = new Date(Date.now() + parseInt(expiresIn) * 24 * 60 * 60 * 1000)
+    }
+
+    if (!deadlineDate) return null
+
+    const concertDate = new Date(projectEndDate + 'T23:59:59')
+    const diffMs = concertDate.getTime() - deadlineDate.getTime()
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+
+    if (diffDays < 0) {
+      return { text: 'Deadline is after the concert date!', color: 'text-red-600 dark:text-red-400' }
+    }
+    if (diffDays <= 2) {
+      return { text: `Concert is in ${diffDays} day${diffDays !== 1 ? 's' : ''} — tight timeline!`, color: 'text-amber-600 dark:text-amber-400' }
+    }
+    return { text: `${diffDays} days before the concert`, color: 'text-muted-foreground' }
+  }
+
+  const deadlineContext = getDeadlineContext()
 
   async function handleSend() {
     if (!selectedMusicianId) return
@@ -124,16 +207,21 @@ export function SendOfferDialog({
       expiresAt = new Date(Date.now() + parseInt(expiresIn) * 24 * 60 * 60 * 1000).toISOString()
     }
 
+    const insertData: Record<string, unknown> = {
+      project_position_id: positionId,
+      musician_id: selectedMusicianId,
+      status: 'pending',
+      sent_at: new Date().toISOString(),
+      expires_at: expiresAt,
+      custom_pay: customPay ? parseFloat(customPay) : null,
+    }
+    if (personalMessage.trim()) {
+      insertData.personal_message = personalMessage.trim()
+    }
+
     const { data: offerData, error: insertError } = await supabase
       .from('contract_offers')
-      .insert({
-        project_position_id: positionId,
-        musician_id: selectedMusicianId,
-        status: 'pending',
-        sent_at: new Date().toISOString(),
-        expires_at: expiresAt,
-        custom_pay: customPay ? parseFloat(customPay) : null,
-      })
+      .insert(insertData)
       .select('id')
       .single()
 
@@ -161,23 +249,35 @@ export function SendOfferDialog({
         if (!response.ok) {
           const result = await response.json()
           console.warn('Failed to send email:', result.error)
-          // Don't block on email failure, offer is already created
         }
       } catch (emailError) {
         console.warn('Failed to send email:', emailError)
-        // Don't block on email failure
       }
     }
 
     setLoading(false)
-    setSelectedMusicianId('')
-    onOpenChange(false)
 
-    // Pass pay info to parent if "apply to remaining" is checked
-    if (applyToRemaining && customPay) {
-      onSuccess({ customPay })
+    const musicianName = `${selectedMusician?.first_name} ${selectedMusician?.last_name}`
+
+    // Show celebration toast
+    if (sendEmail && hasEmail) {
+      toast.success(`Call sent to ${musicianName}! They'll receive the email in seconds.`)
     } else {
-      onSuccess()
+      toast.success(`Offer created for ${musicianName}.`)
+    }
+
+    // If there are more vacant positions, show success view with "Send Next"
+    if (nextVacantCount && nextVacantCount > 0 && onSendNext) {
+      setSentMusicianName(musicianName)
+      setShowSuccess(true)
+    } else {
+      setSelectedMusicianId('')
+      onOpenChange(false)
+      if (applyToRemaining && customPay) {
+        onSuccess({ customPay })
+      } else {
+        onSuccess()
+      }
     }
   }
 
@@ -186,8 +286,34 @@ export function SendOfferDialog({
     setCustomPay('')
     setApplyToRemaining(false)
     setShowConfirmation(false)
+    setShowSuccess(false)
+    setPersonalMessage('')
     setError(null)
     onOpenChange(false)
+  }
+
+  function handleSuccessClose() {
+    setShowSuccess(false)
+    setSelectedMusicianId('')
+    onOpenChange(false)
+    if (applyToRemaining && customPay) {
+      onSuccess({ customPay })
+    } else {
+      onSuccess()
+    }
+  }
+
+  function handleSendNext() {
+    setShowSuccess(false)
+    setSelectedMusicianId('')
+    onOpenChange(false)
+    if (applyToRemaining && customPay) {
+      onSuccess({ customPay })
+    } else {
+      onSuccess()
+    }
+    // Trigger the parent to open the next vacant position
+    setTimeout(() => onSendNext?.(), 100)
   }
 
   function handleProceedToConfirm() {
@@ -199,10 +325,50 @@ export function SendOfferDialog({
     setShowConfirmation(false)
   }
 
+  // Success view after sending
+  if (showSuccess) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 bg-black/50" onClick={handleSuccessClose} />
+        <div className="relative bg-background rounded-lg border shadow-lg w-full max-w-md p-6 space-y-4 text-center">
+          <div className="flex justify-center">
+            <div className="h-16 w-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+              <svg className="h-8 w-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+            </div>
+          </div>
+          <h3 className="text-lg font-semibold">Offer Sent!</h3>
+          <p className="text-sm text-muted-foreground">
+            {sentMusicianName} has been sent the offer.
+          </p>
+          {nextVacantCount && nextVacantCount > 0 && nextInstrumentName && (
+            <div className="rounded-md border bg-muted/30 p-4">
+              <p className="text-sm font-medium">
+                {nextVacantCount} more vacant {nextInstrumentName} position{nextVacantCount !== 1 ? 's' : ''}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">Send the next offer?</p>
+            </div>
+          )}
+          <div className="flex gap-2 justify-center">
+            <Button variant="outline" onClick={handleSuccessClose}>
+              Done
+            </Button>
+            {nextVacantCount && nextVacantCount > 0 && onSendNext && (
+              <Button onClick={handleSendNext}>
+                Send Next
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const formView = (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/50" onClick={handleClose} />
-      <div className="relative bg-background rounded-lg border shadow-lg w-full max-w-md p-6 space-y-4">
+      <div className="relative bg-background rounded-lg border shadow-lg w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <h3 className="text-lg font-semibold">Send Contract Offer</h3>
         <p className="text-sm text-muted-foreground">
           Select a musician to send an offer for this position.
@@ -223,21 +389,98 @@ export function SendOfferDialog({
               </p>
             ) : (
               <>
-                <select
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                  value={selectedMusicianId}
-                  onChange={(e) => setSelectedMusicianId(e.target.value)}
-                >
-                  <option value="">Select a musician...</option>
-                  {availableMusicians.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.last_name}, {m.first_name}
-                      {m.call_order && m.call_order < 100 ? ` (#${m.call_order})` : ''}
-                      {m.is_leader ? ' ★' : ''}
-                      {!m.email ? ' ⚠ No email' : ''}
-                    </option>
-                  ))}
-                </select>
+                {/* Searchable musician picker */}
+                <div ref={searchRef} className="relative">
+                  <input
+                    type="text"
+                    className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    placeholder="Search by name..."
+                    value={selectedMusicianId && !searchOpen
+                      ? `${selectedMusician?.last_name}, ${selectedMusician?.first_name}`
+                      : searchQuery
+                    }
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value)
+                      setSearchOpen(true)
+                      if (selectedMusicianId) {
+                        setSelectedMusicianId('')
+                      }
+                    }}
+                    onFocus={() => {
+                      setSearchOpen(true)
+                      if (selectedMusicianId) {
+                        setSearchQuery('')
+                      }
+                    }}
+                  />
+                  {selectedMusicianId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedMusicianId('')
+                        setSearchQuery('')
+                        setSearchOpen(true)
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                  {searchOpen && (
+                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-64 overflow-auto">
+                      {filteredMusicians.length > 0 ? (
+                        filteredMusicians.map((m) => {
+                          const hasConflict = m.competing_schedules && m.competing_schedules.length > 0
+                          return (
+                            <button
+                              key={m.id}
+                              type="button"
+                              className="w-full px-3 py-2 text-left hover:bg-muted flex items-center justify-between gap-2"
+                              onClick={() => {
+                                setSelectedMusicianId(m.id)
+                                setSearchQuery('')
+                                setSearchOpen(false)
+                              }}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-medium text-sm truncate">
+                                  {m.last_name}, {m.first_name}
+                                </span>
+                                {m.is_leader && (
+                                  <span className="text-amber-500 flex-shrink-0" title="Leader">&#9733;</span>
+                                )}
+                                {!m.email && (
+                                  <span className="text-xs text-amber-600 dark:text-amber-400 flex-shrink-0" title="No email">
+                                    No email
+                                  </span>
+                                )}
+                                {hasConflict && (
+                                  <span className="text-xs text-red-600 dark:text-red-400 flex-shrink-0" title="Schedule conflict">
+                                    Conflict
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                {m.call_order != null && m.call_order < 100 && (
+                                  <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium">
+                                    #{m.call_order}
+                                  </span>
+                                )}
+                              </div>
+                            </button>
+                          )
+                        })
+                      ) : (
+                        <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                          No musicians match &quot;{searchQuery}&quot;
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {selectedMusicianId && !hasEmail && (
                   <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200">
                     <strong>Warning:</strong> This musician has no email address on file.
@@ -307,6 +550,15 @@ export function SendOfferDialog({
                                   is_primary: true,
                                   proficiency: 'professional',
                                 })
+                              // Add to local list so dropdown and confirmation can find them
+                              setLocallyAddedMusicians(prev => [...prev, {
+                                id: newMusician.id,
+                                first_name: newFirstName.trim() || newLastName.trim(),
+                                last_name: newFirstName.trim() ? newLastName.trim() : '',
+                                email: null,
+                                musician_instruments: [{ instrument_id: instrumentId }],
+                                competing_schedules: [],
+                              }])
                               setSelectedMusicianId(newMusician.id)
                             }
                             setNewFirstName('')
@@ -357,6 +609,11 @@ export function SendOfferDialog({
                 onChange={(e) => setCustomDeadline(e.target.value)}
                 min={new Date().toISOString().split('T')[0]}
               />
+            )}
+            {deadlineContext && (
+              <p className={`text-xs ${deadlineContext.color}`}>
+                {deadlineContext.text}
+              </p>
             )}
           </div>
 
@@ -438,6 +695,23 @@ export function SendOfferDialog({
               <span className="text-xs text-amber-600">(No email on file)</span>
             )}
           </div>
+
+          {/* Personal Message */}
+          {sendEmail && hasEmail && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Personal Note <span className="text-xs text-muted-foreground">(optional)</span></label>
+              <textarea
+                className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                placeholder="Add a personal touch to the email..."
+                value={personalMessage}
+                onChange={(e) => setPersonalMessage(e.target.value.slice(0, 500))}
+                maxLength={500}
+              />
+              <p className="text-xs text-muted-foreground text-right">
+                {personalMessage.length}/500
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2">
@@ -489,6 +763,12 @@ export function SendOfferDialog({
                'No expiration'}
             </span>
           </div>
+          {personalMessage.trim() && (
+            <div className="pt-2 border-t">
+              <span className="text-xs text-muted-foreground">Personal note:</span>
+              <p className="text-sm mt-1 italic">&quot;{personalMessage.trim()}&quot;</p>
+            </div>
+          )}
           {sendEmail && hasEmail && (
             <div className="pt-2 border-t text-sm text-green-600">
               Email will be sent to {selectedMusician?.email}
@@ -496,7 +776,7 @@ export function SendOfferDialog({
           )}
           {sendEmail && !hasEmail && (
             <div className="pt-2 border-t text-sm text-amber-600 font-medium">
-              ⚠️ No email will be sent - musician has no email on file.
+              No email will be sent - musician has no email on file.
               You must contact them manually.
             </div>
           )}
@@ -518,7 +798,11 @@ export function SendOfferDialog({
                 const res = await fetch('/api/offers/preview-email', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ positionId, musicianId: selectedMusicianId }),
+                  body: JSON.stringify({
+                    positionId,
+                    musicianId: selectedMusicianId,
+                    personalMessage: personalMessage.trim() || undefined,
+                  }),
                 })
                 const data = await res.json()
                 if (data.html) {

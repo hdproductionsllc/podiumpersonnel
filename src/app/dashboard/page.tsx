@@ -28,6 +28,10 @@ export default async function DashboardPage() {
   const organization = membership?.organization as unknown as { id: string; name: string; slug: string; timezone: string } | null
   const orgId = organization!.id
   const timezone = organization?.timezone || DEFAULT_TIMEZONE
+  const orgName = organization?.name || 'Your Organization'
+
+  // Get user's first name from metadata
+  const userFirstName = (user?.user_metadata?.first_name as string) || (user?.user_metadata?.name as string)?.split(' ')[0] || ''
 
   // Fetch stats, upcoming services, recent activity, and staffing alerts in parallel
   const [
@@ -270,6 +274,62 @@ export default async function DashboardPage() {
 
   const allStepsComplete = steps.every((s) => s.done)
 
+  // Compute action items for the middle state
+  type ActionItem = {
+    id: string
+    text: string
+    subtext: string
+    href: string
+    urgency: 'red' | 'amber' | 'blue'
+  }
+  const actionItems: ActionItem[] = []
+
+  // Projects with vacant positions needing calls
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  projectsNeedingAttention?.forEach((project: any) => {
+    const vacantPositions = project.project_positions?.filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (p: any) => p.status === 'vacant'
+    ) || []
+
+    if (vacantPositions.length > 0) {
+      // Group by instrument
+      const instrumentCounts: Record<string, number> = {}
+      for (const pos of vacantPositions) {
+        const name = pos.instrument?.name || 'position'
+        instrumentCounts[name] = (instrumentCounts[name] || 0) + 1
+      }
+      const instrumentList = Object.entries(instrumentCounts)
+        .map(([name, count]) => `${count} ${name}${count > 1 ? 's' : ''}`)
+        .join(', ')
+
+      actionItems.push({
+        id: `vacant-${project.id}`,
+        text: `${project.name} needs ${instrumentList}`,
+        subtext: 'Send calls now?',
+        href: `/dashboard/projects?expand=${project.id}`,
+        urgency: 'red',
+      })
+    }
+
+    // Pending offers for 48+ hours
+    const pendingOffers = project.project_positions?.filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (p: any) => p.status === 'offered'
+    ) || []
+    if (pendingOffers.length > 0) {
+      actionItems.push({
+        id: `pending-${project.id}`,
+        text: `${pendingOffers.length} offer${pendingOffers.length !== 1 ? 's' : ''} pending for ${project.name}`,
+        subtext: 'Consider sending reminders',
+        href: `/dashboard/projects?expand=${project.id}`,
+        urgency: 'amber',
+      })
+    }
+  })
+
+  const hasActionItems = allStepsComplete && actionItems.length > 0
+
   // Format date helper
   function formatServiceDate(dateStr: string) {
     const date = new Date(dateStr)
@@ -344,10 +404,10 @@ export default async function DashboardPage() {
 
       <div>
         <h2 className="text-3xl font-bold tracking-tight">
-          Welcome to {organization?.name || 'Podium'}
+          {userFirstName ? `Welcome back, ${userFirstName}` : `Welcome to ${orgName}`}
         </h2>
         <p className="text-muted-foreground">
-          Manage your personnel, projects, and schedules.
+          {orgName}&apos;s personnel dashboard
         </p>
       </div>
 
@@ -361,7 +421,7 @@ export default async function DashboardPage() {
               </svg>
               <h3 className="text-xl font-bold mb-2">Add Your Musicians</h3>
               <p className="text-muted-foreground max-w-md">
-                Import a spreadsheet or add musicians one by one. Build your roster so you can start staffing projects.
+                Get {orgName} started by adding your first musicians. Import a spreadsheet or add them one by one.
               </p>
             </CardContent>
           </Card>
@@ -407,7 +467,7 @@ export default async function DashboardPage() {
             <svg className="h-5 w-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
             </svg>
-            <span className="text-sm font-medium text-green-700 dark:text-green-300">All positions filled</span>
+            <span className="text-sm font-medium text-green-700 dark:text-green-300">All positions filled — {orgName} is fully staffed!</span>
           </CardContent>
         </Card>
       ) : null}
@@ -435,7 +495,7 @@ export default async function DashboardPage() {
             <CardContent>
               <div className="text-2xl font-bold">{musicianCount ?? 0}</div>
               <p className="text-xs text-muted-foreground">
-                {musicianCount ? `${musicianCount} active musician${musicianCount !== 1 ? 's' : ''}` : 'No musicians added yet'}
+                {musicianCount ? `${musicianCount} ready to call` : 'No musicians added yet'}
               </p>
             </CardContent>
           </Card>
@@ -448,7 +508,7 @@ export default async function DashboardPage() {
             <CardContent>
               <div className="text-2xl font-bold">{pendingOfferCount ?? 0}</div>
               <p className="text-xs text-muted-foreground">
-                {pendingOfferCount ? `${pendingOfferCount} awaiting response` : 'No pending contract offers'}
+                {pendingOfferCount ? `${pendingOfferCount} waiting to hear back` : 'No pending contract offers'}
               </p>
             </CardContent>
           </Card>
@@ -509,7 +569,7 @@ export default async function DashboardPage() {
         {/* Upcoming Schedule Calendar */}
         <Card>
           <CardHeader>
-            <CardTitle>Upcoming Schedule</CardTitle>
+            <CardTitle>{orgName}&apos;s Upcoming Schedule</CardTitle>
             <CardDescription>
               Projects and services in the next 30 days
             </CardDescription>
@@ -571,7 +631,7 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Recent Activity or Getting Started */}
+        {/* Getting Started -> Action Items -> Recent Activity (three-way) */}
         {!allStepsComplete ? (
           <Card>
             <CardHeader>
@@ -613,6 +673,39 @@ export default async function DashboardPage() {
                   </svg>
                 </Link>
               ))}
+            </CardContent>
+          </Card>
+        ) : hasActionItems ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Action Items</CardTitle>
+              <CardDescription>
+                Things that need your attention
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {actionItems.slice(0, 5).map((item) => (
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    className="flex items-start gap-3 rounded-lg p-2 -mx-2 transition-colors hover:bg-muted/50"
+                  >
+                    <div className={`mt-1.5 h-2 w-2 rounded-full flex-shrink-0 ${
+                      item.urgency === 'red' ? 'bg-red-500' :
+                      item.urgency === 'amber' ? 'bg-amber-500' :
+                      'bg-blue-500'
+                    }`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{item.text}</p>
+                      <p className="text-xs text-muted-foreground">{item.subtext}</p>
+                    </div>
+                    <svg className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                    </svg>
+                  </Link>
+                ))}
+              </div>
             </CardContent>
           </Card>
         ) : (

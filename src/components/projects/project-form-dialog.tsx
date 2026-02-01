@@ -30,12 +30,33 @@ import {
 } from '@/components/ui/form'
 import type { ProjectWithServices } from './projects-client'
 
+type TemplateType = 'string-quartet' | 'orchestra' | 'custom'
+
+const TEMPLATES: Record<TemplateType, { label: string; description: string; defaultName: string }> = {
+  'string-quartet': {
+    label: 'String Quartet Gig',
+    description: '1 rehearsal + 1 performance, quartet positions',
+    defaultName: 'String Quartet Gig',
+  },
+  'orchestra': {
+    label: 'Orchestra Concert',
+    description: '2 rehearsals + 1 performance',
+    defaultName: 'Orchestra Concert',
+  },
+  'custom': {
+    label: 'Custom Project',
+    description: 'Blank form — set up everything yourself',
+    defaultName: '',
+  },
+}
+
 interface ProjectFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   project: ProjectWithServices | null
   organizationId: string
-  onSuccess: (newProject?: { id: string; start_date: string | null; end_date: string | null }) => void
+  isFirstProject?: boolean
+  onSuccess: (newProject?: { id: string; start_date: string | null; end_date: string | null; template?: TemplateType }) => void
 }
 
 export function ProjectFormDialog({
@@ -43,10 +64,13 @@ export function ProjectFormDialog({
   onOpenChange,
   project,
   organizationId,
+  isFirstProject,
   onSuccess,
 }: ProjectFormDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateType | null>(null)
   const isEditing = !!project
 
   const form = useForm<ProjectInput>({
@@ -72,6 +96,8 @@ export function ProjectFormDialog({
           end_date: project.end_date || '',
           status: project.status,
         })
+        setShowTemplatePicker(false)
+        setSelectedTemplate(null)
       } else {
         form.reset({
           name: '',
@@ -81,10 +107,21 @@ export function ProjectFormDialog({
           end_date: '',
           status: 'active',
         })
+        // Show template picker for first project
+        setShowTemplatePicker(!!isFirstProject)
+        setSelectedTemplate(null)
       }
       setError(null)
     }
-  }, [open, project, form])
+  }, [open, project, form, isFirstProject])
+
+  function handleTemplateSelect(template: TemplateType) {
+    setSelectedTemplate(template)
+    setShowTemplatePicker(false)
+    if (template !== 'custom') {
+      form.setValue('name', TEMPLATES[template].defaultName)
+    }
+  }
 
   async function onSubmit(data: ProjectInput) {
     setIsLoading(true)
@@ -136,12 +173,46 @@ export function ProjectFormDialog({
         id: newProject.id,
         start_date: data.start_date || null,
         end_date: data.end_date || null,
+        template: selectedTemplate || undefined,
       })
       return
     }
 
     setIsLoading(false)
     onSuccess()
+  }
+
+  // Template picker step
+  if (showTemplatePicker) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Choose a Template</DialogTitle>
+            <DialogDescription>
+              Start with a template or create from scratch.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            {(Object.keys(TEMPLATES) as TemplateType[]).map((key) => {
+              const t = TEMPLATES[key]
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  className="w-full rounded-lg border p-4 text-left transition-colors hover:bg-muted/50 hover:border-primary/30"
+                  onClick={() => handleTemplateSelect(key)}
+                >
+                  <p className="font-medium">{t.label}</p>
+                  <p className="text-sm text-muted-foreground">{t.description}</p>
+                </button>
+              )
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
   }
 
   return (

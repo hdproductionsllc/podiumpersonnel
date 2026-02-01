@@ -33,6 +33,7 @@ interface ContractOfferEmailProps {
   payAmount?: number | null
   leaderFee?: number | null
   isLeader?: boolean
+  personalMessage?: string
   branding?: EmailBranding
 }
 
@@ -50,6 +51,7 @@ export function ContractOfferEmail({
   payAmount,
   leaderFee,
   isLeader,
+  personalMessage,
   branding,
 }: ContractOfferEmailProps) {
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
@@ -80,6 +82,12 @@ export function ContractOfferEmail({
 
           <Section style={content}>
             <Text style={greeting}>Dear {musicianName},</Text>
+
+            {personalMessage && (
+              <Section style={personalMessageBox}>
+                <Text style={personalMessageText}>&ldquo;{personalMessage}&rdquo;</Text>
+              </Section>
+            )}
 
             <Text style={paragraph}>
               You have been called to perform with <strong>{organizationName}</strong> for the following project:
@@ -387,6 +395,22 @@ const policyText = {
   lineHeight: '18px',
   color: '#525f7f',
   marginBottom: '8px',
+}
+
+const personalMessageBox = {
+  backgroundColor: '#f0f9ff',
+  borderLeft: '4px solid #3b82f6',
+  borderRadius: '0 8px 8px 0',
+  padding: '12px 16px',
+  marginBottom: '16px',
+}
+
+const personalMessageText = {
+  fontSize: '14px',
+  lineHeight: '22px',
+  color: '#1e40af',
+  fontStyle: 'italic' as const,
+  margin: '0',
 }
 
 export default ContractOfferEmail

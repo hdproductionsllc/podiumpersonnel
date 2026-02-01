@@ -54,7 +54,24 @@ interface ServiceFormDialogProps {
   organizationId: string
   timezone: string
   initialServiceType?: 'rehearsal' | 'performance'
+  existingServiceCounts?: { rehearsal: number; performance: number }
   onSuccess: () => void
+}
+
+function getDefaultServiceName(
+  type: 'rehearsal' | 'performance',
+  counts: { rehearsal: number; performance: number }
+): string {
+  if (type === 'rehearsal') {
+    const next = counts.rehearsal + 1
+    if (next === 1) return 'Rehearsal 1'
+    if (next === 2) return 'Dress Rehearsal'
+    return `Rehearsal ${next}`
+  }
+  // performance
+  const next = counts.performance + 1
+  if (next === 1) return 'Performance'
+  return `Performance ${next}`
 }
 
 export function ServiceFormDialog({
@@ -67,6 +84,7 @@ export function ServiceFormDialog({
   organizationId,
   timezone,
   initialServiceType,
+  existingServiceCounts,
   onSuccess,
 }: ServiceFormDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
@@ -106,15 +124,21 @@ export function ServiceFormDialog({
           leader_fee: (service as any).leader_fee ?? 50,
         })
       } else {
+        const serviceType = initialServiceType || 'rehearsal'
+        const counts = existingServiceCounts || { rehearsal: 0, performance: 0 }
+        const defaultName = getDefaultServiceName(serviceType, counts)
+
         // Auto-populate date from project dates
         let defaultStartTime = ''
         let defaultEndTime = ''
         const dateToUse = projectStartDate || projectEndDate
         if (dateToUse) {
-          // Default to 7:00 PM start time
-          defaultStartTime = `${dateToUse}T19:00`
-          // Default to 10:00 PM end time (3 hours later)
-          defaultEndTime = `${dateToUse}T22:00`
+          // Rehearsals default to 10:00 AM, performances to 7:00 PM
+          const defaultHour = serviceType === 'rehearsal' ? '10:00' : '19:00'
+          defaultStartTime = `${dateToUse}T${defaultHour}`
+          // End time 3 hours later
+          const startH = serviceType === 'rehearsal' ? 13 : 22
+          defaultEndTime = `${dateToUse}T${String(startH).padStart(2, '0')}:00`
         }
 
         // Default call time to 30 min before start
@@ -129,8 +153,8 @@ export function ServiceFormDialog({
         }
 
         form.reset({
-          name: '',
-          service_type: initialServiceType || 'rehearsal',
+          name: defaultName,
+          service_type: serviceType,
           venue: '',
           venue_id: null,
           call_time: defaultCallTime,
@@ -144,7 +168,7 @@ export function ServiceFormDialog({
       setError(null)
       setDateWarning(null)
     }
-  }, [open, service, form, initialServiceType, projectStartDate, projectEndDate])
+  }, [open, service, form, initialServiceType, existingServiceCounts, projectStartDate, projectEndDate])
 
   // Auto-populate call_time and end_time when start time changes
   function handleStartTimeChange(value: string) {

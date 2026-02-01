@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { positionId, musicianId } = body
+    const { positionId, musicianId, personalMessage } = body
 
     if (!positionId || !musicianId) {
       return NextResponse.json({ error: 'Position ID and Musician ID are required' }, { status: 400 })
@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
         services: formattedServices,
         responseUrl,
         expiresAt: null,
+        personalMessage: personalMessage || undefined,
         branding: {
           logoUrl: organization?.email_logo_url,
           brandColor: organization?.email_brand_color,

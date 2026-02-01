@@ -43,6 +43,7 @@ interface SendContractOfferParams {
   payAmount?: number | null
   leaderFee?: number | null
   isLeader?: boolean
+  personalMessage?: string
   branding?: EmailBranding
 }
 
@@ -62,6 +63,7 @@ export async function sendContractOfferEmail(params: SendContractOfferParams) {
       payAmount: params.payAmount,
       leaderFee: params.leaderFee,
       isLeader: params.isLeader,
+      personalMessage: params.personalMessage,
       branding: params.branding,
     })
   )

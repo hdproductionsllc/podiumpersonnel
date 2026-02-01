@@ -159,6 +159,15 @@ export function ProjectPositions({
   const basePay = (firstService as any)?.base_pay ?? null
   const leaderFee = (firstService as any)?.leader_fee ?? 50
 
+  // Get the project's end date for deadline context
+  // We'll compute it from the latest service end_time or start_time
+  const projectEndDate = services.length > 0
+    ? services
+        .map(s => s.end_time || s.start_time)
+        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0]
+        ?.split('T')[0] || null
+    : null
+
   function handleSendOffer(position: PositionJoined) {
     const existingMusicianIds = position.contract_offers
       .filter((o) => o.status === 'pending' || o.status === 'viewed' || o.status === 'accepted')
@@ -527,17 +536,35 @@ export function ProjectPositions({
         onOpenChange={(open) => { if (!open) { setOfferPositionId(null); setOfferInstrumentId(null); setOfferChairNumber(1); setOfferExistingIds([]) } }}
         positionId={offerPositionId ?? ''}
         instrumentId={offerInstrumentId ?? ''}
+        instrumentName={offerInstrumentId ? positions.find(p => p.instrument_id === offerInstrumentId)?.instrument?.name : undefined}
         chairNumber={offerChairNumber}
         musicians={musicians}
         existingOfferMusicianIds={offerExistingIds}
         basePay={basePay}
         leaderFee={leaderFee}
         suggestedCustomPay={suggestedCustomPay}
+        projectEndDate={projectEndDate}
+        nextVacantCount={offerInstrumentId ? positions.filter(p => p.instrument_id === offerInstrumentId && p.status === 'vacant' && p.id !== offerPositionId).length : 0}
+        nextInstrumentName={offerInstrumentId ? positions.find(p => p.instrument_id === offerInstrumentId)?.instrument?.name : undefined}
         onSuccess={(applyPayToRemaining) => {
           if (applyPayToRemaining?.customPay) {
             setSuggestedCustomPay(applyPayToRemaining.customPay)
           }
+          // Check if all positions are now filled
+          const vacantAfter = positions.filter(p => p.status === 'vacant' && p.id !== offerPositionId).length
+          if (vacantAfter === 0 && positions.length > 0) {
+            toast.success('Fully staffed! All positions are filled.')
+          }
           onPositionChange()
+        }}
+        onSendNext={() => {
+          // Find next vacant position for the same instrument
+          const nextVacant = positions.find(
+            p => p.instrument_id === offerInstrumentId && p.status === 'vacant' && p.id !== offerPositionId
+          )
+          if (nextVacant) {
+            handleSendOffer(nextVacant)
+          }
         }}
       />
 

@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
         token,
         expires_at,
         custom_pay,
+        personal_message,
         musician:musicians(
           id,
           first_name,
@@ -162,6 +163,7 @@ export async function POST(request: NextRequest) {
       payAmount,
       leaderFee: isLeader ? leaderFee : null,
       isLeader,
+      personalMessage: (offer as any).personal_message || undefined,
       branding: {
         logoUrl: organization?.email_logo_url,
         brandColor: organization?.email_brand_color,

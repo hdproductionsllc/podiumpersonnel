@@ -17,6 +17,7 @@ import { detectConflicts } from './project-positions'
 import type { PositionJoined, BookForImport } from './project-positions'
 import type { MusicianForOffer } from './send-offer-dialog'
 import type { Project, Service } from '@/types'
+import { toast } from 'sonner'
 import { ContextualTooltip } from '@/components/onboarding/contextual-tooltip'
 import { TOOLTIP_DEFINITIONS } from '@/lib/tooltips'
 import {
@@ -315,22 +316,111 @@ export function ProjectsClient({
     router.refresh()
   }
 
-  function handleProjectSuccess(newProject?: { id: string; start_date: string | null; end_date: string | null }) {
+  async function handleProjectSuccess(newProject?: { id: string; start_date: string | null; end_date: string | null; template?: string }) {
     setProjectFormOpen(false)
     setEditingProject(null)
+
+    // Celebrate first project created
+    if (newProject && projects.length === 0) {
+      toast.success('Your first project is created!')
+    }
+
+    // If a template was selected, auto-create services and positions
+    if (newProject?.template && newProject.template !== 'custom') {
+      const supabase = (await import('@/lib/supabase/client')).createClient()
+
+      if (newProject.template === 'string-quartet') {
+        // 1 rehearsal + 1 performance
+        const dateStr = newProject.start_date || newProject.end_date
+        if (dateStr) {
+          await supabase.from('services').insert([
+            {
+              project_id: newProject.id,
+              name: 'Rehearsal 1',
+              service_type: 'rehearsal',
+              start_time: new Date(dateStr + 'T10:00:00').toISOString(),
+              end_time: new Date(dateStr + 'T13:00:00').toISOString(),
+              call_time: new Date(dateStr + 'T09:30:00').toISOString(),
+            },
+            {
+              project_id: newProject.id,
+              name: 'Performance',
+              service_type: 'performance',
+              start_time: new Date(dateStr + 'T19:00:00').toISOString(),
+              end_time: new Date(dateStr + 'T22:00:00').toISOString(),
+              call_time: new Date(dateStr + 'T18:30:00').toISOString(),
+            },
+          ])
+        }
+
+        // Create quartet positions: Violin 1, Violin 2, Viola, Cello
+        const { data: orgInstruments } = await supabase
+          .from('instruments')
+          .select('id, name')
+          .eq('organization_id', organizationId)
+          .in('name', ['Violin 1', 'Violin 2', 'Viola', 'Cello'])
+
+        if (orgInstruments && orgInstruments.length > 0) {
+          await supabase.from('project_positions').insert(
+            orgInstruments.map((inst) => ({
+              project_id: newProject.id,
+              instrument_id: inst.id,
+              chair_number: 1,
+              status: 'vacant',
+            }))
+          )
+        }
+      } else if (newProject.template === 'orchestra') {
+        // 2 rehearsals + 1 performance
+        const dateStr = newProject.start_date || newProject.end_date
+        if (dateStr) {
+          await supabase.from('services').insert([
+            {
+              project_id: newProject.id,
+              name: 'Rehearsal 1',
+              service_type: 'rehearsal',
+              start_time: new Date(dateStr + 'T10:00:00').toISOString(),
+              end_time: new Date(dateStr + 'T13:00:00').toISOString(),
+              call_time: new Date(dateStr + 'T09:30:00').toISOString(),
+            },
+            {
+              project_id: newProject.id,
+              name: 'Dress Rehearsal',
+              service_type: 'rehearsal',
+              start_time: new Date(dateStr + 'T10:00:00').toISOString(),
+              end_time: new Date(dateStr + 'T13:00:00').toISOString(),
+              call_time: new Date(dateStr + 'T09:30:00').toISOString(),
+            },
+            {
+              project_id: newProject.id,
+              name: 'Performance',
+              service_type: 'performance',
+              start_time: new Date(dateStr + 'T19:00:00').toISOString(),
+              end_time: new Date(dateStr + 'T22:00:00').toISOString(),
+              call_time: new Date(dateStr + 'T18:30:00').toISOString(),
+            },
+          ])
+        }
+      }
+    }
+
     router.refresh()
 
-    // If a new project was created, auto-expand and prompt to add a service
+    // If a new project was created, auto-expand and prompt to add a service (unless template already created services)
     if (newProject) {
       // Auto-expand the new project
       setExpandedRows((prev) => new Set([...prev, newProject.id]))
-      setActiveProjectId(newProject.id)
-      setActiveProjectDates({
-        start: newProject.start_date,
-        end: newProject.end_date,
-      })
-      setEditingService(null)
-      setServiceTypeOpen(true)
+
+      // Only prompt service type dialog if no template was used
+      if (!newProject.template || newProject.template === 'custom') {
+        setActiveProjectId(newProject.id)
+        setActiveProjectDates({
+          start: newProject.start_date,
+          end: newProject.end_date,
+        })
+        setEditingService(null)
+        setServiceTypeOpen(true)
+      }
     }
   }
 
@@ -545,6 +635,7 @@ export function ProjectsClient({
         onOpenChange={setProjectFormOpen}
         project={editingProject}
         organizationId={organizationId}
+        isFirstProject={projects.length === 0 && !editingProject}
         onSuccess={handleProjectSuccess}
       />
 
@@ -571,6 +662,14 @@ export function ProjectsClient({
         organizationId={organizationId}
         timezone={timezone}
         initialServiceType={editingService ? undefined : selectedServiceType}
+        existingServiceCounts={(() => {
+          const p = projects.find(proj => proj.id === activeProjectId)
+          if (!p) return { rehearsal: 0, performance: 0 }
+          return {
+            rehearsal: p.services.filter(s => s.service_type === 'rehearsal').length,
+            performance: p.services.filter(s => s.service_type === 'performance').length,
+          }
+        })()}
         onSuccess={handleSuccess}
       />
 
