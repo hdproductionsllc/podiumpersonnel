@@ -86,7 +86,15 @@ export function AdminOfferSentEmail({
                   {services.map((service, index) => (
                     <Text key={index} style={serviceItem}>
                       • {service.name} - {service.date} at {service.time}
-                      {service.venue && ` (${service.venue})`}
+                      {service.venue && (
+                        <>
+                          {' ('}
+                          <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue)}`} style={{ color: '#3b82f6', textDecoration: 'underline' }}>
+                            {service.venue}
+                          </a>
+                          {')'}
+                        </>
+                      )}
                     </Text>
                   ))}
                 </Section>

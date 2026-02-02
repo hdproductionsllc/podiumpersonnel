@@ -1,9 +1,12 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useLoadScript } from '@react-google-maps/api'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from './input'
 import type { Venue } from '@/types'
+
+const libraries: ('places')[] = ['places']
 
 interface VenueSearchProps {
   value: string
@@ -28,7 +31,24 @@ export function VenueSearch({
   const [isOpen, setIsOpen] = useState(false)
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([])
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
+
+  const { isLoaded } = useLoadScript({
+    googleMapsApiKey: apiKey,
+    libraries,
+  })
+
+  // Initialize AutocompleteService when the script loads
+  useEffect(() => {
+    if (isLoaded && apiKey) {
+      autocompleteServiceRef.current = new google.maps.places.AutocompleteService()
+    }
+  }, [isLoaded, apiKey])
 
   // Fetch venues on mount
   useEffect(() => {
@@ -81,6 +101,39 @@ export function VenueSearch({
     }
   }, [inputValue, venues])
 
+  // Fetch Google Places predictions (debounced)
+  const fetchPredictions = useCallback(
+    (input: string) => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+
+      if (!autocompleteServiceRef.current || input.trim().length < 3) {
+        setPredictions([])
+        return
+      }
+
+      debounceRef.current = setTimeout(() => {
+        autocompleteServiceRef.current!.getPlacePredictions(
+          { input, types: ['establishment', 'geocode'] },
+          (results, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+              setPredictions(results)
+            } else {
+              setPredictions([])
+            }
+          }
+        )
+      }, 300)
+    },
+    []
+  )
+
+  // Clean up debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [])
+
   // Handle click outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -100,18 +153,30 @@ export function VenueSearch({
     setSelectedVenue(null)
     // When typing, clear the venue_id and just pass the text
     onChange(newValue, null, null)
+    // Fetch Google Places predictions
+    fetchPredictions(newValue)
   }
 
   function handleVenueSelect(venue: Venue) {
     setInputValue(venue.name)
     setSelectedVenue(venue)
     setIsOpen(false)
+    setPredictions([])
     onChange(venue.name, venue.id, venue)
+  }
+
+  function handlePredictionSelect(prediction: google.maps.places.AutocompletePrediction) {
+    setInputValue(prediction.description)
+    setIsOpen(false)
+    setPredictions([])
+    setSelectedVenue(null)
+    onChange(prediction.description, null, null)
   }
 
   function handleClearVenue() {
     setInputValue('')
     setSelectedVenue(null)
+    setPredictions([])
     onChange('', null, null)
   }
 
@@ -119,6 +184,8 @@ export function VenueSearch({
     const parts = [venue.address, venue.city, venue.state, venue.zip].filter(Boolean)
     return parts.join(', ')
   }
+
+  const hasDropdownContent = filteredVenues.length > 0 || predictions.length > 0 || venues.length > 0
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -146,9 +213,10 @@ export function VenueSearch({
       </div>
 
       {/* Dropdown */}
-      {isOpen && !isLoading && (
+      {isOpen && !isLoading && hasDropdownContent && (
         <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-64 overflow-auto">
-          {filteredVenues.length > 0 ? (
+          {/* Saved Venues Section */}
+          {filteredVenues.length > 0 && (
             <>
               <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b">
                 Saved Venues
@@ -169,16 +237,45 @@ export function VenueSearch({
                 </button>
               ))}
             </>
-          ) : venues.length > 0 ? (
-            <div className="px-3 py-4 text-sm text-muted-foreground text-center">
-              No saved venues match "{inputValue}"
-              <p className="text-xs mt-1">Enter a custom address or add this venue in Settings</p>
-            </div>
-          ) : (
-            <div className="px-3 py-4 text-sm text-muted-foreground text-center">
-              No saved venues yet
-              <p className="text-xs mt-1">Add venues in the Venues page, or enter an address directly</p>
-            </div>
+          )}
+
+          {/* Google Places Suggestions Section */}
+          {predictions.length > 0 && (
+            <>
+              <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                Suggestions
+              </div>
+              {predictions.map((prediction) => (
+                <button
+                  key={prediction.place_id}
+                  type="button"
+                  className="w-full px-3 py-2 text-left hover:bg-muted flex flex-col gap-0.5"
+                  onClick={() => handlePredictionSelect(prediction)}
+                >
+                  <span className="font-medium text-sm">
+                    {prediction.structured_formatting.main_text}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {prediction.structured_formatting.secondary_text}
+                  </span>
+                </button>
+              ))}
+            </>
+          )}
+
+          {/* Empty states when no saved venues match and no predictions */}
+          {filteredVenues.length === 0 && predictions.length === 0 && (
+            venues.length > 0 ? (
+              <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                No saved venues match &quot;{inputValue}&quot;
+                <p className="text-xs mt-1">Enter a custom address or add this venue in Settings</p>
+              </div>
+            ) : (
+              <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                No saved venues yet
+                <p className="text-xs mt-1">Add venues in the Venues page, or enter an address directly</p>
+              </div>
+            )
           )}
         </div>
       )}

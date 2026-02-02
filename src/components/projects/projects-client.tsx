@@ -18,6 +18,7 @@ import type { PositionJoined, BookForImport } from './project-positions'
 import type { MusicianForOffer } from './send-offer-dialog'
 import type { Project, Service } from '@/types'
 import { toast } from 'sonner'
+import { AddressLink } from '@/components/ui/address-link'
 import { ContextualTooltip } from '@/components/onboarding/contextual-tooltip'
 import { TOOLTIP_DEFINITIONS } from '@/lib/tooltips'
 import {
@@ -146,7 +147,11 @@ function ServicesList({
                     {service.end_time && ` – ${new Date(service.end_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">
-                    {service.venue || '—'}
+                    {service.venue ? (
+                      <AddressLink address={service.venue} className="text-sm" />
+                    ) : (
+                      '—'
+                    )}
                   </td>
                   {canManage && (
                     <td className="px-3 py-2 text-right">
