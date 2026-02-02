@@ -121,6 +121,7 @@ function ServicesList({
               <tr>
                 <th className="px-3 py-2 text-left font-medium text-xs">Name</th>
                 <th className="px-3 py-2 text-left font-medium text-xs">Type</th>
+                <th className="px-3 py-2 text-left font-medium text-xs">Call Time</th>
                 <th className="px-3 py-2 text-left font-medium text-xs">Date/Time</th>
                 <th className="px-3 py-2 text-left font-medium text-xs">Venue</th>
                 {canManage && (
@@ -136,9 +137,11 @@ function ServicesList({
                     {SERVICE_TYPE_LABELS[service.service_type as ServiceType] || service.service_type}
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">
-                    {service.call_time && (
-                      <span className="text-xs">Call: {new Date(service.call_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} | </span>
-                    )}
+                    {service.call_time
+                      ? new Date(service.call_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                      : '—'}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">
                     {new Date(service.start_time).toLocaleDateString()} {new Date(service.start_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                     {service.end_time && ` – ${new Date(service.end_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}
                   </td>
@@ -424,7 +427,7 @@ export function ProjectsClient({
     }
   }
 
-  const colCount = canManage ? 6 : 5
+  const colCount = canManage ? 7 : 6
 
   return (
     <div className="space-y-6">

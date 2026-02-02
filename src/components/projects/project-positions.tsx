@@ -298,7 +298,7 @@ export function ProjectPositions({
               </Button>
             )}
             <Button size="sm" variant="outline" onClick={() => { setAddPositionMode('presets'); setAddPositionOpen(true) }}>
-              Quick Presets
+              Ensemble Presets
             </Button>
             <Button size="sm" variant="outline" onClick={() => { setAddPositionMode('single'); setAddPositionOpen(true) }}>
               Add Position
@@ -405,7 +405,7 @@ export function ProjectPositions({
                                         variant="ghost"
                                         size="sm"
                                         className="h-6 text-xs text-muted-foreground"
-                                        onClick={() => handleStatusChange(position.id, 'vacant')}
+                                        onClick={() => handleUnassign(position)}
                                         title="Release this musician from the position"
                                       >
                                         Unassign

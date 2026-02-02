@@ -143,6 +143,7 @@ export function MusiciansClient({
   const [importTag, setImportTag] = useState('')
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [showPostImportGuide, setShowPostImportGuide] = useState(false)
+  const [importStats, setImportStats] = useState<{ total: number; withEmail: number; withoutEmail: number; withPhone: number; withoutPhone: number } | null>(null)
 
   const canManage = userRole === 'owner' || userRole === 'admin'
 
@@ -444,6 +445,13 @@ export function MusiciansClient({
       if (result.success > 0) {
         const tagMsg = importTag.trim() ? ` with tag "${importTag.trim()}"` : ''
         toast.success(`Successfully imported ${result.success} musician${result.success !== 1 ? 's' : ''}${tagMsg}`)
+        setImportStats({
+          total: result.success,
+          withEmail: result.stats?.withEmail ?? 0,
+          withoutEmail: result.stats?.withoutEmail ?? 0,
+          withPhone: result.stats?.withPhone ?? 0,
+          withoutPhone: result.stats?.withoutPhone ?? 0,
+        })
         setShowPostImportGuide(true)
       }
 
@@ -1278,24 +1286,50 @@ export function MusiciansClient({
       <Dialog open={showPostImportGuide} onOpenChange={setShowPostImportGuide}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Musicians Imported!</DialogTitle>
+            <DialogTitle>
+              {importStats ? `${importStats.total} Musician${importStats.total !== 1 ? 's' : ''} Imported!` : 'Musicians Imported!'}
+            </DialogTitle>
             <DialogDescription>
-              Your musicians are in. Here&apos;s what to do next:
+              Your musicians are in. Here&apos;s a summary and what to do next:
             </DialogDescription>
           </DialogHeader>
+
+          {importStats && (
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">With email:</span>
+                  <span className="font-medium">{importStats.withEmail}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Without email:</span>
+                  <span className={`font-medium ${importStats.withoutEmail > 0 ? 'text-amber-600 dark:text-amber-400' : ''}`}>{importStats.withoutEmail}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">With phone:</span>
+                  <span className="font-medium">{importStats.withPhone}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Without phone:</span>
+                  <span className={`font-medium ${importStats.withoutPhone > 0 ? 'text-amber-600 dark:text-amber-400' : ''}`}>{importStats.withoutPhone}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-3 py-2">
             <div className="flex items-start gap-3">
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex-shrink-0">1</div>
               <div>
                 <p className="text-sm font-medium">Assign instruments</p>
-                <p className="text-xs text-muted-foreground">Use the batch edit tool to assign instruments to multiple musicians at once. Select musicians, then click &quot;Bulk Edit.&quot;</p>
+                <p className="text-xs text-muted-foreground">Use the batch edit tool to assign instruments to multiple musicians at once.</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex-shrink-0">2</div>
               <div>
                 <p className="text-sm font-medium">Fill in missing details later</p>
-                <p className="text-xs text-muted-foreground">Phone numbers, emails, and other info can be added anytime — don&apos;t let missing data slow you down.</p>
+                <p className="text-xs text-muted-foreground">Phone numbers, emails, and other info can be added anytime.</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -1306,8 +1340,14 @@ export function MusiciansClient({
               </div>
             </div>
           </div>
-          <div className="flex justify-end">
-            <Button onClick={() => setShowPostImportGuide(false)}>Got It</Button>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowPostImportGuide(false)}>Close</Button>
+            <Button onClick={() => {
+              setShowPostImportGuide(false)
+              setSelectMode(true)
+            }}>
+              Start Batch Edit
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

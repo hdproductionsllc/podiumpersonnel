@@ -99,7 +99,7 @@ export function DateTimePicker({ value, onChange, placeholder = 'Select date & t
           </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 z-[100]" align="start" sideOffset={4}>
+      <PopoverContent className="w-auto p-0 z-[100]" align="start" sideOffset={4} collisionPadding={16}>
         <div className="p-3">
           <Calendar
             mode="single"

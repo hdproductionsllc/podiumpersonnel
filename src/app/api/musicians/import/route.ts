@@ -719,6 +719,12 @@ export async function POST(request: Request) {
         errors: 0,
         errorRows: [],
         totalErrorRows: 0,
+        stats: {
+          withEmail: musiciansToInsert.filter(m => m.email).length,
+          withoutEmail: musiciansToInsert.filter(m => !m.email).length,
+          withPhone: musiciansToInsert.filter(m => m.phone).length,
+          withoutPhone: musiciansToInsert.filter(m => !m.phone).length,
+        },
       })
     }
 
@@ -819,6 +825,12 @@ export async function POST(request: Request) {
       errors: 0,
       errorRows: [],
       totalErrorRows: 0,
+      stats: {
+        withEmail: musiciansToInsert.filter(m => m.email).length,
+        withoutEmail: musiciansToInsert.filter(m => !m.email).length,
+        withPhone: musiciansToInsert.filter(m => m.phone).length,
+        withoutPhone: musiciansToInsert.filter(m => !m.phone).length,
+      },
     })
   } catch (err) {
     console.error('Excel import error:', err)
