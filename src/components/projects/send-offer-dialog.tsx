@@ -66,7 +66,7 @@ export function SendOfferDialog({
   const [expiresIn, setExpiresIn] = useState<string>('2')
   const [customDeadline, setCustomDeadline] = useState('')
   const [sendEmail, setSendEmail] = useState(true)
-  const [customPay, setCustomPay] = useState<string>(suggestedCustomPay || '200')
+  const [customPay, setCustomPay] = useState<string>(suggestedCustomPay || '')
   const [applyToRemaining, setApplyToRemaining] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
@@ -77,6 +77,7 @@ export function SendOfferDialog({
   const [showAddMusician, setShowAddMusician] = useState(false)
   const [newFirstName, setNewFirstName] = useState('')
   const [newLastName, setNewLastName] = useState('')
+  const [newEmail, setNewEmail] = useState('')
   const [addingMusician, setAddingMusician] = useState(false)
   const [locallyAddedMusicians, setLocallyAddedMusicians] = useState<MusicianForOffer[]>([])
   const [personalMessage, setPersonalMessage] = useState('')
@@ -88,10 +89,14 @@ export function SendOfferDialog({
   const [searchOpen, setSearchOpen] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
 
-  // Initialize customPay from suggestedCustomPay when dialog opens, default to 200
+  // Initialize customPay from suggestedCustomPay when dialog opens, including leader fee for Chair 1
   useEffect(() => {
     if (open) {
-      setCustomPay(suggestedCustomPay || '200')
+      const isLeader = chairNumber === 1
+      const defaultPay = basePay != null
+        ? basePay + (isLeader && leaderFee ? leaderFee : 0)
+        : null
+      setCustomPay(suggestedCustomPay || (defaultPay != null ? defaultPay.toString() : ''))
       setLocallyAddedMusicians([])
       setPersonalMessage('')
       setShowSuccess(false)
@@ -99,7 +104,7 @@ export function SendOfferDialog({
       setSearchQuery('')
       setSearchOpen(false)
     }
-  }, [open, suggestedCustomPay])
+  }, [open, suggestedCustomPay, basePay, leaderFee, chairNumber])
 
   // Click-outside for search dropdown
   useEffect(() => {
@@ -515,12 +520,20 @@ export function SendOfferDialog({
                         className="flex-1 rounded-md border bg-background px-2 py-1.5 text-sm"
                       />
                     </div>
+                    <input
+                      type="email"
+                      placeholder="Email address (required)"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                    />
                     <div className="flex gap-2">
                       <Button
                         size="sm"
-                        disabled={addingMusician || (!newFirstName.trim() && !newLastName.trim())}
+                        disabled={addingMusician || (!newFirstName.trim() && !newLastName.trim()) || !newEmail.trim() || !newEmail.includes('@')}
                         onClick={async () => {
                           if (!newFirstName.trim() && !newLastName.trim()) return
+                          if (!newEmail.trim() || !newEmail.includes('@')) return
                           setAddingMusician(true)
                           try {
                             const supabase = createClient()
@@ -535,6 +548,7 @@ export function SendOfferDialog({
                                 organization_id: membership.organization_id,
                                 first_name: newFirstName.trim() || newLastName.trim(),
                                 last_name: newFirstName.trim() ? newLastName.trim() : '',
+                                email: newEmail.trim().toLowerCase(),
                                 is_active: true,
                               })
                               .select('id')
@@ -555,7 +569,7 @@ export function SendOfferDialog({
                                 id: newMusician.id,
                                 first_name: newFirstName.trim() || newLastName.trim(),
                                 last_name: newFirstName.trim() ? newLastName.trim() : '',
-                                email: null,
+                                email: newEmail.trim().toLowerCase(),
                                 musician_instruments: [{ instrument_id: instrumentId }],
                                 competing_schedules: [],
                               }])
@@ -563,6 +577,7 @@ export function SendOfferDialog({
                             }
                             setNewFirstName('')
                             setNewLastName('')
+                            setNewEmail('')
                             setShowAddMusician(false)
                           } catch {
                             setError('Failed to add musician')
@@ -576,7 +591,7 @@ export function SendOfferDialog({
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => { setShowAddMusician(false); setNewFirstName(''); setNewLastName('') }}
+                        onClick={() => { setShowAddMusician(false); setNewFirstName(''); setNewLastName(''); setNewEmail('') }}
                       >
                         Cancel
                       </Button>
@@ -657,9 +672,9 @@ export function SendOfferDialog({
                 )}
               </div>
             )}
-            {customPay && (
+            {customPay && calculatedPay != null && parseFloat(customPay) !== calculatedPay && (
               <p className="text-xs text-amber-600">
-                Custom pay: ${customPay} {isLeaderPosition ? '(overrides calculated total)' : ''}
+                Custom pay: ${customPay} (overrides calculated ${calculatedPay})
               </p>
             )}
 
@@ -750,9 +765,23 @@ export function SendOfferDialog({
             <span className="text-muted-foreground">Email:</span>
             <span>{selectedMusician?.email || 'No email on file'}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Pay:</span>
-            <span className="font-medium">${finalPay ?? 'Not set'}</span>
+          <div className="space-y-1">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Pay:</span>
+              <span className="font-medium">${finalPay ?? 'Not set'}</span>
+            </div>
+            {calculatedPay != null && isLeaderPosition && leaderFee ? (
+              <div className="text-xs text-muted-foreground space-y-0.5 pl-2">
+                <div className="flex justify-between">
+                  <span>Base pay:</span>
+                  <span>${basePay}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Leader fee (Chair 1):</span>
+                  <span>+${leaderFee}</span>
+                </div>
+              </div>
+            ) : null}
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Expires:</span>
@@ -802,6 +831,7 @@ export function SendOfferDialog({
                     positionId,
                     musicianId: selectedMusicianId,
                     personalMessage: personalMessage.trim() || undefined,
+                    customPay: finalPay ?? undefined,
                   }),
                 })
                 const data = await res.json()
