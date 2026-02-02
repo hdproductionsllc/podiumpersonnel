@@ -12,6 +12,7 @@ interface DateTimePickerProps {
   placeholder?: string
   className?: string
   defaultMonth?: Date
+  dateOnly?: boolean
 }
 
 function parseValue(value: string) {
@@ -29,11 +30,13 @@ function parseValue(value: string) {
   }
 }
 
-function formatDisplay(value: string) {
+function formatDisplay(value: string, dateOnly?: boolean) {
   if (!value) return ''
   const { date, hour, minute, ampm } = parseValue(value)
   if (!date) return ''
-  return `${date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })} ${hour}:${String(minute).padStart(2, '0')} ${ampm}`
+  const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+  if (dateOnly) return dateStr
+  return `${dateStr} ${hour}:${String(minute).padStart(2, '0')} ${ampm}`
 }
 
 function buildValue(date: Date | undefined, hour: number, minute: number, ampm: 'AM' | 'PM'): string {
@@ -50,7 +53,7 @@ function buildValue(date: Date | undefined, hour: number, minute: number, ampm: 
 const HOURS = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
 
-export function DateTimePicker({ value, onChange, placeholder = 'Select date & time', className, defaultMonth }: DateTimePickerProps) {
+export function DateTimePicker({ value, onChange, placeholder = 'Select date & time', className, defaultMonth, dateOnly }: DateTimePickerProps) {
   const [open, setOpen] = React.useState(false)
   const parsed = parseValue(value)
   const [selectedDate, setSelectedDate] = React.useState<Date | undefined>(parsed.date)
@@ -95,7 +98,7 @@ export function DateTimePicker({ value, onChange, placeholder = 'Select date & t
             <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
           </svg>
           <span className="truncate">
-            {value ? formatDisplay(value) : placeholder}
+            {value ? formatDisplay(value, dateOnly) : placeholder}
           </span>
         </Button>
       </PopoverTrigger>
@@ -107,40 +110,42 @@ export function DateTimePicker({ value, onChange, placeholder = 'Select date & t
             onSelect={setSelectedDate}
             defaultMonth={selectedDate || defaultMonth}
           />
-          <div className="border-t mt-3 pt-3">
-            <div className="flex items-center gap-2">
-              {/* Hour */}
-              <select
-                className="rounded-md border bg-background px-2 py-1.5 text-sm flex-1"
-                value={selectedHour}
-                onChange={(e) => setSelectedHour(Number(e.target.value))}
-              >
-                {HOURS.map((h) => (
-                  <option key={h} value={h}>{h}</option>
-                ))}
-              </select>
-              <span className="text-sm font-medium">:</span>
-              {/* Minute */}
-              <select
-                className="rounded-md border bg-background px-2 py-1.5 text-sm flex-1"
-                value={selectedMinute}
-                onChange={(e) => setSelectedMinute(Number(e.target.value))}
-              >
-                {MINUTES.map((m) => (
-                  <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
-                ))}
-              </select>
-              {/* AM/PM */}
-              <select
-                className="rounded-md border bg-background px-2 py-1.5 text-sm"
-                value={selectedAmpm}
-                onChange={(e) => setSelectedAmpm(e.target.value as 'AM' | 'PM')}
-              >
-                <option value="AM">AM</option>
-                <option value="PM">PM</option>
-              </select>
+          {!dateOnly && (
+            <div className="border-t mt-3 pt-3">
+              <div className="flex items-center gap-2">
+                {/* Hour */}
+                <select
+                  className="rounded-md border bg-background px-2 py-1.5 text-sm flex-1"
+                  value={selectedHour}
+                  onChange={(e) => setSelectedHour(Number(e.target.value))}
+                >
+                  {HOURS.map((h) => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+                <span className="text-sm font-medium">:</span>
+                {/* Minute */}
+                <select
+                  className="rounded-md border bg-background px-2 py-1.5 text-sm flex-1"
+                  value={selectedMinute}
+                  onChange={(e) => setSelectedMinute(Number(e.target.value))}
+                >
+                  {MINUTES.map((m) => (
+                    <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+                  ))}
+                </select>
+                {/* AM/PM */}
+                <select
+                  className="rounded-md border bg-background px-2 py-1.5 text-sm"
+                  value={selectedAmpm}
+                  onChange={(e) => setSelectedAmpm(e.target.value as 'AM' | 'PM')}
+                >
+                  <option value="AM">AM</option>
+                  <option value="PM">PM</option>
+                </select>
+              </div>
             </div>
-          </div>
+          )}
           <div className="flex justify-between mt-3 gap-2">
             <Button variant="ghost" size="sm" onClick={handleClear}>
               Clear

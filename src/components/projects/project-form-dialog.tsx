@@ -71,6 +71,7 @@ export function ProjectFormDialog({
   const [error, setError] = useState<string | null>(null)
   const [showTemplatePicker, setShowTemplatePicker] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateType | null>(null)
+  const [isSingleDay, setIsSingleDay] = useState(false)
   const isEditing = !!project
 
   const form = useForm<ProjectInput>({
@@ -98,6 +99,10 @@ export function ProjectFormDialog({
         })
         setShowTemplatePicker(false)
         setSelectedTemplate(null)
+        // Auto-detect single-day event
+        setIsSingleDay(
+          !!project.start_date && !!project.end_date && project.start_date === project.end_date
+        )
       } else {
         form.reset({
           name: '',
@@ -110,6 +115,7 @@ export function ProjectFormDialog({
         // Show template picker for first project
         setShowTemplatePicker(!!isFirstProject)
         setSelectedTemplate(null)
+        setIsSingleDay(false)
       }
       setError(null)
     }
@@ -304,48 +310,92 @@ export function ProjectFormDialog({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="start_date"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Start Date</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="date"
-                        value={field.value}
-                        onChange={(e) => {
-                          const newValue = e.target.value
-                          field.onChange(e)
-                          // Auto-populate end_date if not already set (only when complete date entered)
-                          const currentEndDate = form.getValues('end_date')
-                          if (!currentEndDate && newValue && newValue.length === 10) {
-                            form.setValue('end_date', newValue)
-                          }
-                        }}
-                      />
-                    </FormControl>
-                    <p className="text-xs text-muted-foreground">First rehearsal date</p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isSingleDay}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    setIsSingleDay(checked)
+                    if (checked) {
+                      // Sync end_date to start_date
+                      const startDate = form.getValues('start_date')
+                      if (startDate) {
+                        form.setValue('end_date', startDate)
+                      }
+                    }
+                  }}
+                  className="rounded border-input"
+                />
+                Single-day event
+              </label>
 
-              <FormField
-                control={form.control}
-                name="end_date"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>End Date</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <p className="text-xs text-muted-foreground">Final performance date</p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {isSingleDay ? (
+                <FormField
+                  control={form.control}
+                  name="start_date"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          value={field.value}
+                          onChange={(e) => {
+                            field.onChange(e)
+                            form.setValue('end_date', e.target.value)
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="start_date"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Start Date</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="date"
+                            value={field.value}
+                            onChange={(e) => {
+                              const newValue = e.target.value
+                              field.onChange(e)
+                              const currentEndDate = form.getValues('end_date')
+                              if (!currentEndDate && newValue && newValue.length === 10) {
+                                form.setValue('end_date', newValue)
+                              }
+                            }}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">First rehearsal date</p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="end_date"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>End Date</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">Final performance date</p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
             </div>
 
             <FormField
