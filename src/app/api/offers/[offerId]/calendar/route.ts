@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 
 // Parse time strings like "2:15pm", "2:15 PM", "14:15"
 function parseTime(timeStr: string): { hours: number; minutes: number } | null {
@@ -101,7 +101,7 @@ export async function GET(
   const { searchParams } = new URL(request.url)
   const format = searchParams.get('format')
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   // Fetch offer with all related data
   const { data: offer, error } = await supabase
