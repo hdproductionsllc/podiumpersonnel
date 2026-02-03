@@ -7,8 +7,6 @@ import { createClient } from '@/lib/supabase/client'
 import {
   projectSchema,
   type ProjectInput,
-  PROJECT_STATUSES,
-  PROJECT_STATUS_LABELS,
 } from '@/lib/validations/projects'
 import {
   Dialog,
@@ -397,29 +395,6 @@ export function ProjectFormDialog({
                 </div>
               )}
             </div>
-
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status</FormLabel>
-                  <FormControl>
-                    <select
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      {...field}
-                    >
-                      {PROJECT_STATUSES.map((s) => (
-                        <option key={s} value={s}>
-                          {PROJECT_STATUS_LABELS[s]}
-                        </option>
-                      ))}
-                    </select>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <DialogFooter>
               <Button

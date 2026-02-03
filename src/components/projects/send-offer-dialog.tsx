@@ -648,29 +648,31 @@ export function SendOfferDialog({
               />
             </div>
             {calculatedPay != null && (
-              <div className="rounded-md bg-muted/50 p-2 text-xs space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Base pay:</span>
-                  <span>${basePay}</span>
-                </div>
-                {isLeaderPosition && leaderFee ? (
-                  <>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Leader fee (Chair 1):</span>
-                      <span>+${leaderFee}</span>
-                    </div>
-                    <div className="flex justify-between font-medium border-t pt-1">
-                      <span>Total (includes leader fee):</span>
-                      <span>${calculatedPay}</span>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>No leader fee (Chair {chairNumber})</span>
-                    <span>Total: ${calculatedPay}</span>
-                  </div>
-                )}
-              </div>
+              <table className="w-full rounded-md bg-muted/50 text-xs" style={{ borderCollapse: 'collapse' }}>
+                <tbody>
+                  <tr>
+                    <td className="text-muted-foreground py-0.5 px-2 pt-2">Base pay:</td>
+                    <td className="text-right py-0.5 px-2 pt-2 tabular-nums">${basePay}</td>
+                  </tr>
+                  {isLeaderPosition && leaderFee ? (
+                    <>
+                      <tr>
+                        <td className="text-muted-foreground py-0.5 px-2">Leader fee (Chair 1):</td>
+                        <td className="text-right py-0.5 px-2 tabular-nums">+${leaderFee}</td>
+                      </tr>
+                      <tr className="border-t font-medium">
+                        <td className="py-0.5 px-2 pb-2">Total:</td>
+                        <td className="text-right py-0.5 px-2 pb-2 tabular-nums">${calculatedPay}</td>
+                      </tr>
+                    </>
+                  ) : (
+                    <tr>
+                      <td className="text-muted-foreground py-0.5 px-2 pb-2">No leader fee (Chair {chairNumber})</td>
+                      <td className="text-right py-0.5 px-2 pb-2 tabular-nums">${calculatedPay}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             )}
             {customPay && calculatedPay != null && parseFloat(customPay) !== calculatedPay && (
               <p className="text-xs text-amber-600">

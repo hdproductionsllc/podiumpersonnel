@@ -255,14 +255,14 @@ DTSTART:${formatICSDate(startDate)}
 DTEND:${formatICSDate(endDate)}
 SUMMARY:${escapeICSText(summary)}
 LOCATION:${escapeICSText(location)}
-DESCRIPTION:${escapeICSText(descParts.join('\\n'))}
+DESCRIPTION:${escapeICSText(descParts.join('\n'))}
 STATUS:CONFIRMED
 END:VEVENT
 END:VCALENDAR`
 
     const filename = `${project.name.replace(/[^a-zA-Z0-9]/g, '_')}_schedule.ics`
 
-    return new NextResponse(ics, {
+    return new NextResponse(ics.replace(/\r?\n/g, '\r\n'), {
       headers: {
         'Content-Type': 'text/calendar; charset=utf-8',
         'Content-Disposition': `attachment; filename="${filename}"`,
@@ -360,7 +360,7 @@ DTSTART:${formatICSDate(startDate)}
 DTEND:${formatICSDate(endDate)}
 SUMMARY:${escapeICSText(summary)}
 LOCATION:${escapeICSText(location)}
-DESCRIPTION:${escapeICSText(descParts.join('\\n'))}
+DESCRIPTION:${escapeICSText(descParts.join('\n'))}
 STATUS:CONFIRMED
 END:VEVENT
 `
@@ -371,7 +371,7 @@ END:VEVENT
   // Return as downloadable file
   const filename = `${project.name.replace(/[^a-zA-Z0-9]/g, '_')}_schedule.ics`
 
-  return new NextResponse(ics, {
+  return new NextResponse(ics.replace(/\r?\n/g, '\r\n'), {
     headers: {
       'Content-Type': 'text/calendar; charset=utf-8',
       'Content-Disposition': `attachment; filename="${filename}"`,

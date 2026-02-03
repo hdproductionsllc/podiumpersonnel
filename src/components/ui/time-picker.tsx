@@ -71,7 +71,7 @@ export function TimePicker({ value, onChange, placeholder }: TimePickerProps) {
   return (
     <div className="flex items-center gap-0.5">
       <select
-        className="rounded-md border bg-background px-1 py-1.5 text-sm h-9 w-[44px]"
+        className="rounded-md border bg-background px-1 py-1.5 text-sm h-9 min-w-0 flex-1"
         value={hour}
         onChange={(e) => {
           const h = Number(e.target.value)
@@ -85,7 +85,7 @@ export function TimePicker({ value, onChange, placeholder }: TimePickerProps) {
       </select>
       <span className="text-xs font-medium">:</span>
       <select
-        className="rounded-md border bg-background px-1 py-1.5 text-sm h-9 w-[44px]"
+        className="rounded-md border bg-background px-1 py-1.5 text-sm h-9 min-w-0 flex-1"
         value={minute}
         onChange={(e) => {
           const m = Number(e.target.value)
@@ -98,7 +98,7 @@ export function TimePicker({ value, onChange, placeholder }: TimePickerProps) {
         ))}
       </select>
       <select
-        className="rounded-md border bg-background px-1 py-1.5 text-sm h-9 w-[46px]"
+        className="rounded-md border bg-background px-1 py-1.5 text-sm h-9 min-w-0 flex-1"
         value={ampm}
         onChange={(e) => {
           const a = e.target.value as 'AM' | 'PM'

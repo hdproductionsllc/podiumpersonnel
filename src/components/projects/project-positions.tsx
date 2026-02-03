@@ -465,7 +465,7 @@ export function ProjectPositions({
                                   Sub
                                 </Button>
                               )}
-                              {position.musician_id && (
+                              {position.musician_id && position.status !== 'confirmed' && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
