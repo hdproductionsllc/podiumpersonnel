@@ -266,6 +266,18 @@ export function ServiceFormDialog({
     setIsLoading(true)
     setError(null)
 
+    // Validate time ordering
+    if (startTime && endTime && endTime <= startTime) {
+      setError('End time must be after start time.')
+      setIsLoading(false)
+      return
+    }
+    if (callTime && startTime && callTime > startTime) {
+      setError('Call time should be before start time.')
+      setIsLoading(false)
+      return
+    }
+
     // Recombine date + times into datetime-local strings
     const finalStartTime = serviceDate && startTime ? `${serviceDate}T${startTime}` : data.start_time
     const finalCallTime = serviceDate && callTime ? `${serviceDate}T${callTime}` : data.call_time

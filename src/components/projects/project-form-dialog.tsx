@@ -163,6 +163,20 @@ export function ProjectFormDialog({
     setIsLoading(true)
     setError(null)
 
+    // Validate time ordering for single-day templates with time pickers
+    if (isSingleDay && selectedTemplate === 'string-quartet') {
+      if (endTime <= startTime) {
+        setError('End time must be after start time.')
+        setIsLoading(false)
+        return
+      }
+      if (callTime > startTime) {
+        setError('Call time should be before start time.')
+        setIsLoading(false)
+        return
+      }
+    }
+
     const supabase = createClient()
 
     if (isEditing) {
