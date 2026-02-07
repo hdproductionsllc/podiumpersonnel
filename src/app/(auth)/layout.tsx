@@ -1,3 +1,5 @@
+import { Logo } from '@/components/ui/logo'
+
 export default function AuthLayout({
   children,
 }: {
@@ -30,11 +32,7 @@ export default function AuthLayout({
 
         {/* Content */}
         <div className="relative z-10 flex flex-col items-center px-12 max-w-md">
-          <img
-            src="/logo-light.svg"
-            alt="Podium"
-            className="max-h-28 max-w-full object-contain"
-          />
+          <Logo variant="light" className="max-h-28 max-w-full" />
           <div className="mt-8 w-16 h-px bg-gold/40" />
           <p className="mt-8 text-center text-lg text-sidebar-foreground/60 leading-relaxed font-heading">
             Orchestra personnel management,
@@ -49,11 +47,7 @@ export default function AuthLayout({
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden flex justify-center mb-8">
-            <img
-              src="/logo-dark.svg"
-              alt="Podium"
-              className="max-h-16 object-contain"
-            />
+            <Logo variant="dark" className="max-h-16" />
           </div>
           {children}
         </div>

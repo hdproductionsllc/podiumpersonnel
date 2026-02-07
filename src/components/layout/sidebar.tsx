@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { Logo } from '@/components/ui/logo'
 
 function HomeIcon({ className }: { className?: string }) {
   return (
@@ -150,11 +151,7 @@ export function Sidebar() {
     <aside className="hidden md:flex h-full w-64 flex-col border-r border-sidebar-border bg-sidebar">
       <div className="flex h-36 items-center justify-center px-4">
         <Link href="/dashboard">
-          <img
-            src="/logo-light.svg"
-            alt="Podium"
-            className="max-h-[120px] max-w-full object-contain"
-          />
+          <Logo variant="light" className="max-h-[120px] max-w-full" />
         </Link>
       </div>
       <Separator className="bg-sidebar-border" />

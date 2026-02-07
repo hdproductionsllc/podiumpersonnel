@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { SidebarNav } from '@/components/layout/sidebar'
 import { Separator } from '@/components/ui/separator'
+import { Logo } from '@/components/ui/logo'
 
 interface HeaderProps {
   user: {
@@ -148,11 +149,7 @@ export function Header({ user }: HeaderProps) {
         <SheetContent side="left" className="w-64 p-0 bg-sidebar text-sidebar-foreground border-sidebar-border">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <div className="flex h-20 items-center justify-center px-4">
-            <img
-              src="/logo-light.svg"
-              alt="Podium"
-              className="max-h-[60px] max-w-full object-contain"
-            />
+            <Logo variant="light" className="max-h-[60px] max-w-full" />
           </div>
           <Separator className="bg-sidebar-border" />
           <SidebarNav onNavigate={() => setMobileMenuOpen(false)} />
