@@ -112,7 +112,7 @@ const container = {
 const header = {
   padding: '24px',
   textAlign: 'center' as const,
-  backgroundColor: '#3b82f6',
+  backgroundColor: '#1E293B',
 }
 
 const heading = {
@@ -163,7 +163,7 @@ const infoItem = {
 
 const featuresBox = {
   backgroundColor: '#eff6ff',
-  border: '1px solid #3b82f6',
+  border: '1px solid #1E293B',
   borderRadius: '8px',
   padding: '16px',
   marginBottom: '24px',
@@ -190,7 +190,7 @@ const buttonContainer = {
 }
 
 const button = {
-  backgroundColor: '#3b82f6',
+  backgroundColor: '#1E293B',
   borderRadius: '6px',
   color: '#fff',
   fontSize: '16px',

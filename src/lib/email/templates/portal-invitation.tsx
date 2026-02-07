@@ -27,7 +27,7 @@ export function PortalInvitationEmail({
   expiresAt,
   branding,
 }: PortalInvitationEmailProps) {
-  const brandColor = branding?.brandColor || '#3b82f6'
+  const brandColor = branding?.brandColor || '#1E293B'
   const logoUrl = branding?.logoUrl
   const footerText = branding?.footerText
 

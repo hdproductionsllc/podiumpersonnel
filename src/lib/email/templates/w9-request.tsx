@@ -24,7 +24,7 @@ export function W9RequestEmail({
   adminEmail,
   branding,
 }: W9RequestEmailProps) {
-  const brandColor = branding?.brandColor || '#3b82f6'
+  const brandColor = branding?.brandColor || '#1E293B'
   const logoUrl = branding?.logoUrl
   const footerText = branding?.footerText
 
@@ -160,7 +160,7 @@ const paragraph = {
 
 const infoBox = {
   backgroundColor: '#eff6ff',
-  border: '1px solid #3b82f6',
+  border: '1px solid #1E293B',
   borderRadius: '8px',
   padding: '16px',
   marginBottom: '16px',
@@ -203,7 +203,7 @@ const stepsItem = {
 }
 
 const link = {
-  color: '#3b82f6',
+  color: '#1E293B',
   textDecoration: 'underline',
 }
 

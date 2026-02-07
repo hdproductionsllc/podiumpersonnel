@@ -89,7 +89,7 @@ export function AdminOfferSentEmail({
                       {service.venue && (
                         <>
                           {' ('}
-                          <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue)}`} style={{ color: '#3b82f6', textDecoration: 'underline' }}>
+                          <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue)}`} style={{ color: '#1E293B', textDecoration: 'underline' }}>
                             {service.venue}
                           </a>
                           {')'}
@@ -157,7 +157,7 @@ const content = {
 
 const sentBanner = {
   backgroundColor: '#dbeafe',
-  border: '1px solid #3b82f6',
+  border: '1px solid #1E293B',
   borderRadius: '8px',
   padding: '16px',
   marginBottom: '24px',
@@ -249,7 +249,7 @@ const buttonContainer = {
 }
 
 const button = {
-  backgroundColor: '#3b82f6',
+  backgroundColor: '#1E293B',
   borderRadius: '6px',
   color: '#fff',
   fontSize: '14px',

@@ -103,7 +103,7 @@ const container = {
 const header = {
   padding: '24px',
   textAlign: 'center' as const,
-  backgroundColor: '#3b82f6',
+  backgroundColor: '#1E293B',
 }
 
 const heading = {
@@ -149,7 +149,7 @@ const stepNumber = {
   width: '24px',
   height: '24px',
   borderRadius: '50%',
-  backgroundColor: '#3b82f6',
+  backgroundColor: '#1E293B',
   color: '#ffffff',
   fontSize: '12px',
   fontWeight: 'bold',
@@ -175,7 +175,7 @@ const buttonContainer = {
 }
 
 const button = {
-  backgroundColor: '#3b82f6',
+  backgroundColor: '#1E293B',
   borderRadius: '6px',
   color: '#fff',
   fontSize: '14px',

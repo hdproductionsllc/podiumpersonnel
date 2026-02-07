@@ -55,7 +55,7 @@ export function ContractOfferEmail({
   branding,
 }: ContractOfferEmailProps) {
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
-  const brandColor = branding?.brandColor || '#3b82f6'
+  const brandColor = branding?.brandColor || '#1E293B'
   const logoUrl = branding?.logoUrl
   const footerText = branding?.footerText
 
@@ -124,7 +124,7 @@ export function ContractOfferEmail({
                   </Text>
                   {service.venue && (
                     <Text style={serviceVenue}>
-                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue)}`} style={{ color: '#3b82f6', textDecoration: 'underline' }}>
+                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue)}`} style={{ color: '#1E293B', textDecoration: 'underline' }}>
                         {service.venue}
                       </a>
                     </Text>
@@ -304,7 +304,7 @@ const serviceRow = {
   backgroundColor: '#f8fafc',
   borderLeftWidth: '3px',
   borderLeftStyle: 'solid' as const,
-  borderLeftColor: '#3b82f6',
+  borderLeftColor: '#1E293B',
   padding: '12px 16px',
   marginBottom: '8px',
 }
@@ -335,7 +335,7 @@ const buttonContainer = {
 }
 
 const button = {
-  backgroundColor: '#3b82f6',
+  backgroundColor: '#1E293B',
   borderRadius: '6px',
   color: '#fff',
   fontSize: '14px',
@@ -399,7 +399,7 @@ const policyText = {
 
 const personalMessageBox = {
   backgroundColor: '#f0f9ff',
-  borderLeft: '4px solid #3b82f6',
+  borderLeft: '4px solid #1E293B',
   borderRadius: '0 8px 8px 0',
   padding: '12px 16px',
   marginBottom: '16px',

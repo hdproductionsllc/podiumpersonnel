@@ -15,7 +15,7 @@ export async function PATCH(request: Request) {
     .from('organizations')
     .update({
       email_logo_url: parsed.data.email_logo_url || null,
-      email_brand_color: parsed.data.email_brand_color || '#3b82f6',
+      email_brand_color: parsed.data.email_brand_color || '#1E293B',
       email_footer_text: parsed.data.email_footer_text || null,
     })
     .eq('id', membership!.organization_id)

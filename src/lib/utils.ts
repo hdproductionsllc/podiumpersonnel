@@ -9,7 +9,7 @@ export function cn(...inputs: ClassValue[]) {
 export const DEFAULT_TIMEZONE = 'America/Los_Angeles'
 
 /** Default brand color for email templates */
-export const DEFAULT_BRAND_COLOR = '#3b82f6'
+export const DEFAULT_BRAND_COLOR = '#1E293B'
 
 /** Base URL for the application, used in emails and links */
 export function getAppUrl(): string {

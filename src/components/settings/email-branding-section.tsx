@@ -20,15 +20,15 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmailPreview } from './email-preview'
 
-const DEFAULT_BRAND_COLOR = '#3b82f6'
+const DEFAULT_BRAND_COLOR = '#1E293B'
 
 const PRESET_COLORS = [
+  { value: '#1E293B', label: 'Navy' },
   { value: '#3b82f6', label: 'Blue' },
   { value: '#10b981', label: 'Green' },
   { value: '#8b5cf6', label: 'Purple' },
   { value: '#f59e0b', label: 'Amber' },
   { value: '#ef4444', label: 'Red' },
-  { value: '#1a1a1a', label: 'Black' },
 ]
 
 interface EmailBrandingSectionProps {
@@ -154,7 +154,7 @@ export function EmailBrandingSection({ organization, role }: EmailBrandingSectio
                           {...field}
                           value={field.value || DEFAULT_BRAND_COLOR}
                           disabled={!canEdit}
-                          placeholder="#3b82f6"
+                          placeholder="#1E293B"
                           className="w-28 font-mono"
                           onChange={(e) => {
                             const val = e.target.value
