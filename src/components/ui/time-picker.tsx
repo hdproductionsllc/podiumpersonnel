@@ -58,7 +58,7 @@ export function TimePicker({ value, onChange, placeholder }: TimePickerProps) {
           setIsEmpty(false)
           onChange(to24h(hour, minute, ampm))
         }}
-        className="flex h-9 w-full items-center rounded-md border border-input bg-transparent px-2 text-sm text-muted-foreground shadow-sm hover:bg-accent"
+        className="flex h-9 w-full items-center rounded-md border border-input bg-transparent px-3 text-sm text-muted-foreground shadow-sm hover:bg-accent"
       >
         <svg className="mr-1.5 h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
@@ -68,10 +68,12 @@ export function TimePicker({ value, onChange, placeholder }: TimePickerProps) {
     )
   }
 
+  const selectClass = "appearance-none border-0 bg-transparent text-sm text-center focus:outline-none focus:ring-0 cursor-pointer py-0 h-full"
+
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex h-9 w-full items-center rounded-md border border-input bg-background px-1 text-sm shadow-sm focus-within:ring-1 focus-within:ring-ring">
       <select
-        className="rounded-md border bg-background px-1 py-1.5 text-sm h-9 min-w-0 flex-1"
+        className={`${selectClass} w-[2.5rem] pr-0`}
         value={hour}
         onChange={(e) => {
           const h = Number(e.target.value)
@@ -83,9 +85,9 @@ export function TimePicker({ value, onChange, placeholder }: TimePickerProps) {
           <option key={h} value={h}>{h}</option>
         ))}
       </select>
-      <span className="text-xs font-medium">:</span>
+      <span className="text-muted-foreground font-medium select-none">:</span>
       <select
-        className="rounded-md border bg-background px-1 py-1.5 text-sm h-9 min-w-0 flex-1"
+        className={`${selectClass} w-[2.5rem] pr-0`}
         value={minute}
         onChange={(e) => {
           const m = Number(e.target.value)
@@ -98,7 +100,7 @@ export function TimePicker({ value, onChange, placeholder }: TimePickerProps) {
         ))}
       </select>
       <select
-        className="rounded-md border bg-background px-1 py-1.5 text-sm h-9 min-w-0 flex-1"
+        className={`${selectClass} w-[2.75rem] pl-1 text-muted-foreground`}
         value={ampm}
         onChange={(e) => {
           const a = e.target.value as 'AM' | 'PM'
