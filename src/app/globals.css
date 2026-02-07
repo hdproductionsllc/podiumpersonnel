@@ -133,21 +133,21 @@
     font-family: var(--font-playfair-display), Georgia, serif;
   }
   ::selection {
-    background: oklch(0.75 0.14 65 / 0.25);
+    background: rgb(196 145 90 / 0.25);
   }
 
   /* Card depth + hover + warm border */
   [data-slot="card"] {
     box-shadow:
-      0 1px 4px oklch(0.14 0.025 260 / 0.06),
-      0 1px 2px oklch(0.14 0.025 260 / 0.04);
-    border-color: oklch(0.88 0.01 70 / 0.5);
+      0 1px 4px rgb(20 25 40 / 0.06),
+      0 1px 2px rgb(20 25 40 / 0.04);
+    border-color: rgb(210 200 185 / 0.5);
     transition: box-shadow 0.2s, transform 0.2s;
   }
   [data-slot="card"]:hover {
     box-shadow:
-      0 4px 12px oklch(0.14 0.025 260 / 0.08),
-      0 2px 4px oklch(0.14 0.025 260 / 0.05);
+      0 4px 12px rgb(20 25 40 / 0.08),
+      0 2px 4px rgb(20 25 40 / 0.05);
   }
 
   /* Table refinement */
@@ -165,7 +165,7 @@
     transition: background-color 0.15s;
   }
   tbody tr:hover {
-    background-color: oklch(0.96 0.008 80);
+    background-color: rgb(240 237 230);
   }
 
   /* Page title pattern */
@@ -181,8 +181,8 @@
 }
 .card-interactive:hover {
   box-shadow:
-    0 8px 20px oklch(0.14 0.025 260 / 0.1),
-    0 2px 6px oklch(0.14 0.025 260 / 0.06);
+    0 8px 20px rgb(20 25 40 / 0.1),
+    0 2px 6px rgb(20 25 40 / 0.06);
   transform: translateY(-2px);
 }
 
@@ -190,14 +190,14 @@
 .accent-bar {
   width: 3rem;
   height: 2px;
-  background: oklch(0.72 0.15 70 / 0.4);
+  background: rgb(196 145 90 / 0.4);
   border-radius: 9999px;
   margin-top: 0.75rem;
 }
 
 /* Gold top border for stat cards */
 .card-gold-top {
-  border-top: 2px solid oklch(0.72 0.15 70 / 0.25);
+  border-top: 2px solid rgb(196 145 90 / 0.25);
 }
 
 /* Status badge base */
@@ -211,22 +211,22 @@
   line-height: 1;
 }
 .badge-green {
-  background-color: oklch(0.93 0.04 145);
-  color: oklch(0.30 0.08 145);
+  background-color: #dcfce7;
+  color: #166534;
 }
 .badge-amber {
-  background-color: oklch(0.93 0.05 80);
-  color: oklch(0.35 0.10 60);
+  background-color: #fef3c7;
+  color: #92400e;
 }
 .badge-blue {
-  background-color: oklch(0.93 0.04 250);
-  color: oklch(0.35 0.10 250);
+  background-color: #dbeafe;
+  color: #1e40af;
 }
 .badge-red {
-  background-color: oklch(0.93 0.04 25);
-  color: oklch(0.35 0.12 25);
+  background-color: #fee2e2;
+  color: #991b1b;
 }
 .badge-gray {
-  background-color: oklch(0.92 0.005 260);
-  color: oklch(0.35 0.02 260);
+  background-color: #f3f4f6;
+  color: #374151;
 }
