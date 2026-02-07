@@ -11,7 +11,7 @@ export default function AuthLayout({
         <div
           className="absolute inset-0"
           style={{
-            background: 'radial-gradient(ellipse at 30% 50%, oklch(0.25 0.04 260) 0%, transparent 70%)',
+            background: 'radial-gradient(ellipse at 30% 50%, #1f2240 0%, transparent 70%)',
           }}
         />
         {/* Musical staff lines - decorative */}

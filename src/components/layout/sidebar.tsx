@@ -105,7 +105,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
               variant="ghost"
               className={cn(
                 'w-full justify-start text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors',
-                isActive && 'bg-sidebar-accent text-sidebar-primary font-semibold border-l-2 border-sidebar-primary rounded-l-none shadow-[inset_0_0_12px_oklch(0.72_0.15_70_/_0.08)]',
+                isActive && 'bg-sidebar-accent text-sidebar-primary font-semibold border-l-2 border-sidebar-primary rounded-l-none shadow-[inset_0_0_12px_rgb(196_145_90_/_0.08)]',
                 !isActive && item.emphasize && 'font-semibold text-sidebar-primary'
               )}
               asChild
@@ -128,7 +128,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
               variant="ghost"
               className={cn(
                 'w-full justify-start text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors',
-                isActive && 'bg-sidebar-accent text-sidebar-primary font-semibold border-l-2 border-sidebar-primary rounded-l-none shadow-[inset_0_0_12px_oklch(0.72_0.15_70_/_0.08)]'
+                isActive && 'bg-sidebar-accent text-sidebar-primary font-semibold border-l-2 border-sidebar-primary rounded-l-none shadow-[inset_0_0_12px_rgb(196_145_90_/_0.08)]'
               )}
               asChild
               onClick={onNavigate}
