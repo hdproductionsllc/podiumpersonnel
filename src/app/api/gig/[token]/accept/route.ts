@@ -179,6 +179,7 @@ export async function POST(
     if (musician?.email) {
       const baseUrl = getAppUrl()
       const calendarUrl = `${baseUrl}/api/offers/${offer.id}/calendar?token=${token}`
+      const googleCalendarUrl = `${baseUrl}/api/offers/${offer.id}/calendar?token=${token}&format=google`
 
       await sendOfferAcceptedEmail({
         to: musician.email,
@@ -191,6 +192,7 @@ export async function POST(
         totalChairs,
         services: formattedServices,
         calendarUrl,
+        googleCalendarUrl,
       }).catch((err) => console.warn('Failed to send musician confirmation:', err))
     }
 

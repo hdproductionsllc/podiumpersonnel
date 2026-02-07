@@ -25,6 +25,7 @@ interface OfferAcceptedEmailProps {
     venue: string | null
   }[]
   calendarUrl?: string
+  googleCalendarUrl?: string
 }
 
 export function OfferAcceptedEmail({
@@ -37,6 +38,7 @@ export function OfferAcceptedEmail({
   totalChairs,
   services,
   calendarUrl,
+  googleCalendarUrl,
 }: OfferAcceptedEmailProps) {
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
   return (
@@ -70,6 +72,28 @@ export function OfferAcceptedEmail({
               </Text>
             </Section>
 
+            {/* Calendar buttons — prioritized above services */}
+            {(googleCalendarUrl || calendarUrl) && (
+              <Section style={calendarSection}>
+                <Text style={calendarHeading}>📅 Add to Your Calendar</Text>
+                <Section style={calendarButtonRow}>
+                  {googleCalendarUrl && (
+                    <Button style={googleButton} href={googleCalendarUrl}>
+                      Add to Google Calendar
+                    </Button>
+                  )}
+                  {calendarUrl && (
+                    <Button style={icsButton} href={calendarUrl}>
+                      Download .ics (Outlook, Apple)
+                    </Button>
+                  )}
+                </Section>
+                <Text style={calendarHint}>
+                  Add these dates to your calendar now so you don't forget!
+                </Text>
+              </Section>
+            )}
+
             <Text style={sectionTitle}>Your Services:</Text>
             <Section style={servicesTable}>
               {services.map((service, index) => (
@@ -85,18 +109,7 @@ export function OfferAcceptedEmail({
               ))}
             </Section>
 
-            {calendarUrl && (
-              <Section style={buttonContainer}>
-                <Button style={calendarButton} href={calendarUrl}>
-                  📅 Add to Calendar
-                </Button>
-              </Section>
-            )}
-
             <Text style={paragraph}>
-              {calendarUrl
-                ? 'Click the button above to download the calendar file and add these events to your Google Calendar, Outlook, or other calendar app.'
-                : 'Please save these dates to your calendar.'}{' '}
               If you have any questions or need to report a conflict,
               please contact {organizationName}{contactEmail ? <> at <a href={`mailto:${contactEmail}`} style={emailLink}>{contactEmail}</a></> : ''} as soon as possible.
             </Text>
@@ -242,13 +255,28 @@ const serviceVenue = {
   margin: '0',
 }
 
-const buttonContainer = {
+const calendarSection = {
+  backgroundColor: '#f0f9ff',
+  border: '1px solid #bae6fd',
+  borderRadius: '8px',
+  padding: '20px',
+  marginBottom: '24px',
   textAlign: 'center' as const,
-  marginTop: '16px',
-  marginBottom: '16px',
 }
 
-const calendarButton = {
+const calendarHeading = {
+  fontSize: '16px',
+  fontWeight: 'bold',
+  color: '#0c4a6e',
+  margin: '0 0 16px 0',
+}
+
+const calendarButtonRow = {
+  textAlign: 'center' as const,
+  marginBottom: '12px',
+}
+
+const googleButton = {
   backgroundColor: '#1E293B',
   borderRadius: '6px',
   color: '#fff',
@@ -258,6 +286,26 @@ const calendarButton = {
   textAlign: 'center' as const,
   display: 'inline-block',
   padding: '12px 24px',
+  marginBottom: '8px',
+}
+
+const icsButton = {
+  backgroundColor: '#ffffff',
+  border: '1px solid #cbd5e1',
+  borderRadius: '6px',
+  color: '#475569',
+  fontSize: '13px',
+  fontWeight: '500',
+  textDecoration: 'none',
+  textAlign: 'center' as const,
+  display: 'inline-block',
+  padding: '10px 20px',
+}
+
+const calendarHint = {
+  fontSize: '12px',
+  color: '#64748b',
+  margin: '0',
 }
 
 const emailLink = {

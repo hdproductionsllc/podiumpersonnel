@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { sendMusicianWelcomeEmail } from '@/lib/email/send'
+import { getAppUrl } from '@/lib/utils'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -26,11 +28,35 @@ export async function GET(request: Request) {
         p_email: (data.user.email || '').toLowerCase(),
       })
 
+      // Check if this is a first-time login (no portal_last_login yet)
+      const { data: musicians } = await supabase
+        .from('musicians')
+        .select('id, first_name, last_name, portal_last_login, organization:organizations(name)')
+        .eq('user_id', data.user.id)
+
+      const isFirstLogin = musicians && musicians.length > 0 &&
+        musicians.every((m: any) => !m.portal_last_login)
+
       // Update last login time for all linked musicians
       await supabase
         .from('musicians')
         .update({ portal_last_login: new Date().toISOString() })
         .eq('user_id', data.user.id)
+
+      // Send welcome email on first login
+      if (isFirstLogin && data.user.email && musicians && musicians.length > 0) {
+        const firstMusician = musicians[0] as any
+        const orgNames = musicians
+          .map((m: any) => m.organization?.name)
+          .filter(Boolean)
+
+        sendMusicianWelcomeEmail({
+          to: data.user.email,
+          musicianName: `${firstMusician.first_name} ${firstMusician.last_name}`,
+          loginUrl: `${getAppUrl()}/musician/login`,
+          organizations: orgNames,
+        }).catch((err) => console.warn('Failed to send welcome email:', err))
+      }
 
       // Redirect to the specified next URL or musician dashboard
       return NextResponse.redirect(`${origin}${next}`)

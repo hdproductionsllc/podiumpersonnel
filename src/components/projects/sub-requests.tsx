@@ -65,6 +65,14 @@ export function SubRequests({
 
   if (requests.length === 0) return null
 
+  // Track distinct chairs per instrument to decide whether to show chair number
+  const chairsByInstrument: Record<string, Set<number>> = {}
+  for (const req of requests) {
+    const key = req.position_instrument
+    if (!chairsByInstrument[key]) chairsByInstrument[key] = new Set()
+    chairsByInstrument[key].add(req.position_chair)
+  }
+
   async function handleApprove(requestId: string) {
     setProcessingId(requestId)
     setError(null)
@@ -146,7 +154,7 @@ export function SubRequests({
             {requests.map((req) => (
               <tr key={req.id} className="hover:bg-muted/30">
                 <td className="px-3 py-2 text-muted-foreground">
-                  {req.position_instrument} {req.position_chair}
+                  {req.position_instrument}{(chairsByInstrument[req.position_instrument]?.size || 0) > 1 ? `, Chair ${req.position_chair}` : ''}
                 </td>
                 <td className="px-3 py-2">
                   {req.requesting_musician.first_name} {req.requesting_musician.last_name}

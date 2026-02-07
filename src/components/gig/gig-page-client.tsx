@@ -359,22 +359,42 @@ export function GigPageClient({
                 </div>
               )}
 
-              {/* Portal signup prompt - shown after responding if musician has no account */}
-              {!musicianHasAccount && (offerStatus === 'accepted' || offerStatus === 'declined') && (
+              {/* Portal link - shown after responding */}
+              {(offerStatus === 'accepted' || offerStatus === 'declined') && (
                 <div className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-4">
-                  <h4 className="font-medium text-blue-900 dark:text-blue-100 text-sm">Manage all your gigs in one place</h4>
-                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                    Create a free Podium account to view upcoming services, manage your schedule, respond to future calls faster, and request substitutes if needed.
-                  </p>
-                  <a
-                    href="/musician/register"
-                    className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
-                  >
-                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-                    </svg>
-                    Create Your Account
-                  </a>
+                  {musicianHasAccount ? (
+                    <>
+                      <h4 className="font-medium text-blue-900 dark:text-blue-100 text-sm">Musician Portal</h4>
+                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                        View your schedule, manage offers, update your profile, and more.
+                      </p>
+                      <a
+                        href="/musician"
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+                        </svg>
+                        Go to Musician Portal
+                      </a>
+                    </>
+                  ) : (
+                    <>
+                      <h4 className="font-medium text-blue-900 dark:text-blue-100 text-sm">Manage all your gigs in one place</h4>
+                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                        Create a free Podium account to view upcoming services, manage your schedule, respond to future calls faster, and request substitutes if needed.
+                      </p>
+                      <a
+                        href="/musician/register"
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                        </svg>
+                        Create Your Account
+                      </a>
+                    </>
+                  )}
                 </div>
               )}
 

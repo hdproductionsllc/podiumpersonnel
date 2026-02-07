@@ -149,6 +149,7 @@ interface SendOfferAcceptedParams {
     venue: string | null
   }[]
   calendarUrl?: string
+  googleCalendarUrl?: string
 }
 
 export async function sendOfferAcceptedEmail(params: SendOfferAcceptedParams) {
@@ -163,6 +164,7 @@ export async function sendOfferAcceptedEmail(params: SendOfferAcceptedParams) {
       totalChairs: params.totalChairs,
       services: params.services,
       calendarUrl: params.calendarUrl,
+      googleCalendarUrl: params.googleCalendarUrl,
     })
   )
 
