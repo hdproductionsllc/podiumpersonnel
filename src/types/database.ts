@@ -122,6 +122,7 @@ export type Database = {
           tags: string[] | null
           home_region: string | null
           w9_on_file: boolean
+          w9_file_url: string | null
           zelle_method: 'email' | 'phone' | null
           zelle_verified: boolean
           user_id: string | null

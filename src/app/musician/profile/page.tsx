@@ -25,6 +25,10 @@ async function ProfileContent() {
       email,
       phone,
       profile_photo_url,
+      w9_on_file,
+      w9_file_url,
+      zelle_method,
+      zelle_verified,
       organization:organizations(id, name)
     `)
     .eq('user_id', user.id)
@@ -60,6 +64,10 @@ async function ProfileContent() {
         email: primaryMusician.email,
         phone: primaryMusician.phone,
         profile_photo_url: primaryMusician.profile_photo_url,
+        w9_on_file: primaryMusician.w9_on_file,
+        w9_file_url: primaryMusician.w9_file_url,
+        zelle_method: primaryMusician.zelle_method,
+        zelle_verified: primaryMusician.zelle_verified,
       }}
       organizations={musicians.map((m: any) => ({
         id: m.organization?.id,

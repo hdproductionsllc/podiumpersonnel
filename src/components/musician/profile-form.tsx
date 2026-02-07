@@ -28,7 +28,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
-import { Building, Check, Loader2 } from 'lucide-react'
+import { Label } from '@/components/ui/label'
+import { Building, Check, Loader2, Upload, FileText, X, DollarSign } from 'lucide-react'
 
 function formatPhoneNumber(phone: string): string {
   const digits = phone.replace(/\D/g, '')
@@ -78,6 +79,10 @@ interface ProfileFormProps {
     email: string | null
     phone: string | null
     profile_photo_url: string | null
+    w9_on_file: boolean
+    w9_file_url: string | null
+    zelle_method: 'email' | 'phone' | null
+    zelle_verified: boolean
   }
   organizations: {
     id: string
@@ -110,6 +115,15 @@ export function ProfileForm({
   const [notificationError, setNotificationError] = useState<string | null>(null)
 
   const [notifications, setNotifications] = useState(notificationPreferences)
+
+  // W9 & Zelle state
+  const [zelleMethod, setZelleMethod] = useState<string>(musician.zelle_method || '')
+  const [isSavingPayment, setIsSavingPayment] = useState(false)
+  const [paymentSuccess, setPaymentSuccess] = useState(false)
+  const [paymentError, setPaymentError] = useState<string | null>(null)
+  const [isUploadingW9, setIsUploadingW9] = useState(false)
+  const [w9Uploaded, setW9Uploaded] = useState(musician.w9_on_file)
+  const [w9FileUrl, setW9FileUrl] = useState<string | null>(musician.w9_file_url)
 
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -230,6 +244,116 @@ export function ProfileForm({
         redirectTo: `${window.location.origin}/musician/auth/callback?next=/musician/profile`,
       },
     })
+  }
+
+  async function onSavePayment() {
+    setIsSavingPayment(true)
+    setPaymentError(null)
+    setPaymentSuccess(false)
+
+    try {
+      const response = await fetch('/api/musician/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zelle_method: zelleMethod }),
+      })
+
+      if (!response.ok) {
+        const result = await response.json()
+        throw new Error(result.error || 'Failed to save payment info')
+      }
+
+      setPaymentSuccess(true)
+      router.refresh()
+      setTimeout(() => setPaymentSuccess(false), 3000)
+    } catch (err) {
+      setPaymentError(err instanceof Error ? err.message : 'Failed to save payment info')
+    } finally {
+      setIsSavingPayment(false)
+    }
+  }
+
+  async function handleW9Upload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png']
+    if (!allowedTypes.includes(file.type)) {
+      setPaymentError('Please upload a PDF, JPEG, or PNG file')
+      return
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setPaymentError('File must be under 5MB')
+      return
+    }
+
+    setIsUploadingW9(true)
+    setPaymentError(null)
+
+    try {
+      const supabase = createClient()
+      const ext = file.name.split('.').pop() || 'pdf'
+      const filePath = `${user.id}/w9.${ext}`
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('w9-documents')
+        .upload(filePath, file, { upsert: true })
+
+      if (uploadError) throw new Error(uploadError.message)
+
+      // Update the musician record
+      const response = await fetch('/api/musician/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ w9_on_file: true, w9_file_url: filePath }),
+      })
+
+      if (!response.ok) throw new Error('Failed to update profile')
+
+      setW9Uploaded(true)
+      setW9FileUrl(filePath)
+      setPaymentSuccess(true)
+      router.refresh()
+      setTimeout(() => setPaymentSuccess(false), 3000)
+    } catch (err) {
+      setPaymentError(err instanceof Error ? err.message : 'Failed to upload W-9')
+    } finally {
+      setIsUploadingW9(false)
+      // Reset the file input
+      e.target.value = ''
+    }
+  }
+
+  async function handleW9Remove() {
+    setIsUploadingW9(true)
+    setPaymentError(null)
+
+    try {
+      if (w9FileUrl) {
+        const supabase = createClient()
+        await supabase.storage.from('w9-documents').remove([w9FileUrl])
+      }
+
+      const response = await fetch('/api/musician/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ w9_on_file: false, w9_file_url: null }),
+      })
+
+      if (!response.ok) throw new Error('Failed to update profile')
+
+      setW9Uploaded(false)
+      setW9FileUrl(null)
+      router.refresh()
+    } catch (err) {
+      setPaymentError(err instanceof Error ? err.message : 'Failed to remove W-9')
+    } finally {
+      setIsUploadingW9(false)
+    }
   }
 
   return (
@@ -354,6 +478,166 @@ export function ProfileForm({
                 <span className="font-medium">{org.name}</span>
               </div>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Payment & Tax Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <DollarSign className="h-5 w-5" />
+            Payment & Tax Information
+          </CardTitle>
+          <CardDescription>
+            Upload your W-9 and set up your Zelle payment preferences
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {paymentError && (
+            <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+              {paymentError}
+            </div>
+          )}
+          {paymentSuccess && (
+            <div className="rounded-md bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 p-3 text-sm text-green-800 dark:text-green-200 flex items-center gap-2">
+              <Check className="h-4 w-4" />
+              Saved successfully
+            </div>
+          )}
+
+          {/* W-9 Section */}
+          <div className="space-y-3">
+            <Label className="text-base font-medium">W-9 Form</Label>
+            <p className="text-sm text-muted-foreground">
+              Upload your W-9 form for tax purposes. Accepted formats: PDF, JPEG, PNG (max 5MB).
+            </p>
+
+            {w9Uploaded ? (
+              <div className="flex items-center gap-3 p-3 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950">
+                <FileText className="h-5 w-5 text-green-600 dark:text-green-400" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-green-800 dark:text-green-200">W-9 uploaded</p>
+                  <p className="text-xs text-green-600 dark:text-green-400">Your W-9 is on file</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleW9Remove}
+                  disabled={isUploadingW9}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  {isUploadingW9 ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  disabled={isUploadingW9}
+                  onClick={() => document.getElementById('w9-upload')?.click()}
+                >
+                  {isUploadingW9 ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload W-9
+                    </>
+                  )}
+                </Button>
+                <input
+                  id="w9-upload"
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  className="hidden"
+                  onChange={handleW9Upload}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="border-t" />
+
+          {/* Zelle Section */}
+          <div className="space-y-3">
+            <Label className="text-base font-medium">Zelle Payment</Label>
+            <p className="text-sm text-muted-foreground">
+              Select how you&apos;d like to receive Zelle payments. Your organization will use the {zelleMethod === 'phone' ? 'phone number' : 'email address'} from your profile above.
+            </p>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="zelle_method"
+                    value="email"
+                    checked={zelleMethod === 'email'}
+                    onChange={() => setZelleMethod('email')}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-sm">
+                    Email
+                    {user.email && <span className="text-muted-foreground ml-1">({user.email})</span>}
+                  </span>
+                </label>
+              </div>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="zelle_method"
+                    value="phone"
+                    checked={zelleMethod === 'phone'}
+                    onChange={() => setZelleMethod('phone')}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-sm">
+                    Phone
+                    {musician.phone && <span className="text-muted-foreground ml-1">({musician.phone})</span>}
+                  </span>
+                </label>
+              </div>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="zelle_method"
+                    value=""
+                    checked={zelleMethod === ''}
+                    onChange={() => setZelleMethod('')}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-sm text-muted-foreground">Not using Zelle</span>
+                </label>
+              </div>
+            </div>
+
+            {musician.zelle_verified && (
+              <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                <Check className="h-4 w-4" />
+                Verified by your organization
+              </div>
+            )}
+
+            <Button
+              onClick={onSavePayment}
+              disabled={isSavingPayment || zelleMethod === (musician.zelle_method || '')}
+              variant="outline"
+            >
+              {isSavingPayment ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Payment Preferences'
+              )}
+            </Button>
           </div>
         </CardContent>
       </Card>

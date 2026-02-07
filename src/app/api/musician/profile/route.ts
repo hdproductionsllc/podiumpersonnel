@@ -22,6 +22,10 @@ export async function GET() {
       email,
       phone,
       profile_photo_url,
+      w9_on_file,
+      w9_file_url,
+      zelle_method,
+      zelle_verified,
       organization:organizations(id, name)
     `)
     .eq('user_id', user.id)
@@ -76,17 +80,24 @@ export async function PATCH(request: Request) {
   }
 
   const body = await request.json()
-  const { first_name, last_name, phone } = body
+  const { first_name, last_name, phone, zelle_method, w9_on_file, w9_file_url } = body
+
+  // Build update payload — only include fields that were provided
+  const updatePayload: Record<string, any> = {
+    updated_at: new Date().toISOString(),
+  }
+
+  if (first_name !== undefined) updatePayload.first_name = first_name
+  if (last_name !== undefined) updatePayload.last_name = last_name
+  if (phone !== undefined) updatePayload.phone = phone
+  if (zelle_method !== undefined) updatePayload.zelle_method = zelle_method || null
+  if (w9_on_file !== undefined) updatePayload.w9_on_file = w9_on_file
+  if (w9_file_url !== undefined) updatePayload.w9_file_url = w9_file_url
 
   // Update all musician records for this user
   const { error } = await supabase
     .from('musicians')
-    .update({
-      first_name,
-      last_name,
-      phone,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq('user_id', user.id)
     .eq('is_active', true)
 
