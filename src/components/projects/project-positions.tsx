@@ -492,16 +492,7 @@ export function ProjectPositions({
                                   Offer
                                 </Button>
                               )}
-                              {position.status === 'confirmed' && position.musician_id && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setSubRequestPosition(position)}
-                                >
-                                  Sub
-                                </Button>
-                              )}
-                              {position.musician_id && position.status !== 'confirmed' && (
+                              {position.musician_id && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
