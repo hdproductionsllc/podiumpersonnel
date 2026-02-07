@@ -120,7 +120,7 @@ export function MusicianLoginForm() {
       if (!musicians || musicians.length === 0) {
         await supabase.rpc('link_musician_records_to_user', {
           p_user_id: authData.user.id,
-          p_email: data.email,
+          p_email: data.email.toLowerCase(),
         })
 
         // Check again

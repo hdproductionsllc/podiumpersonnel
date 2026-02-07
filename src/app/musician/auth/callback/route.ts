@@ -20,10 +20,10 @@ export async function GET(request: Request) {
         })
       }
 
-      // Link any musician records with matching email to this user
+      // Link any musician records with matching email to this user (lowercase for case-insensitive match)
       await supabase.rpc('link_musician_records_to_user', {
         p_user_id: data.user.id,
-        p_email: data.user.email || '',
+        p_email: (data.user.email || '').toLowerCase(),
       })
 
       // Update last login time for all linked musicians

@@ -30,6 +30,17 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Building, Check, Loader2 } from 'lucide-react'
 
+function formatPhoneNumber(phone: string): string {
+  const digits = phone.replace(/\D/g, '')
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+  }
+  if (digits.length === 11 && digits[0] === '1') {
+    return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`
+  }
+  return phone
+}
+
 const profileSchema = z.object({
   first_name: z.string().min(1, 'First name is required'),
   last_name: z.string().min(1, 'Last name is required'),
@@ -123,11 +134,17 @@ export function ProfileForm({
     setProfileError(null)
     setProfileSuccess(false)
 
+    // Format phone before saving
+    const formattedData = {
+      ...data,
+      phone: data.phone ? formatPhoneNumber(data.phone) : '',
+    }
+
     try {
       const response = await fetch('/api/musician/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(formattedData),
       })
 
       if (!response.ok) {
@@ -284,7 +301,17 @@ export function ProfileForm({
                   <FormItem>
                     <FormLabel>Phone</FormLabel>
                     <FormControl>
-                      <Input type="tel" placeholder="(555) 123-4567" {...field} />
+                      <Input
+                        type="tel"
+                        placeholder="(555) 123-4567"
+                        {...field}
+                        onBlur={(e) => {
+                          if (e.target.value) {
+                            field.onChange(formatPhoneNumber(e.target.value))
+                          }
+                          field.onBlur()
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
