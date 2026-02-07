@@ -339,27 +339,17 @@ export function ProjectsClient({
       const supabase = (await import('@/lib/supabase/client')).createClient()
 
       if (newProject.template === 'string-quartet') {
-        // 1 rehearsal + 1 performance
+        // Performance only — most gigs are straight performances
         const dateStr = newProject.start_date || newProject.end_date
         if (dateStr) {
-          await supabase.from('services').insert([
-            {
-              project_id: newProject.id,
-              name: 'Rehearsal 1',
-              service_type: 'rehearsal',
-              start_time: new Date(dateStr + 'T10:00:00').toISOString(),
-              end_time: new Date(dateStr + 'T13:00:00').toISOString(),
-              call_time: new Date(dateStr + 'T09:30:00').toISOString(),
-            },
-            {
-              project_id: newProject.id,
-              name: 'Performance',
-              service_type: 'performance',
-              start_time: new Date(dateStr + 'T19:00:00').toISOString(),
-              end_time: new Date(dateStr + 'T22:00:00').toISOString(),
-              call_time: new Date(dateStr + 'T18:30:00').toISOString(),
-            },
-          ])
+          await supabase.from('services').insert({
+            project_id: newProject.id,
+            name: 'Performance',
+            service_type: 'performance',
+            start_time: new Date(dateStr + 'T19:00:00').toISOString(),
+            end_time: new Date(dateStr + 'T22:00:00').toISOString(),
+            call_time: new Date(dateStr + 'T18:30:00').toISOString(),
+          })
         }
 
         // Create quartet positions: Violin 1, Violin 2, Viola, Cello

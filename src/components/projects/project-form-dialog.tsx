@@ -33,7 +33,7 @@ type TemplateType = 'string-quartet' | 'orchestra' | 'custom'
 const TEMPLATES: Record<TemplateType, { label: string; description: string; defaultName: string }> = {
   'string-quartet': {
     label: 'String Quartet Gig',
-    description: '1 rehearsal + 1 performance, quartet positions',
+    description: '1 performance, quartet positions',
     defaultName: 'String Quartet Gig',
   },
   'orchestra': {
