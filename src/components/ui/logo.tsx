@@ -3,60 +3,58 @@ import { cn } from '@/lib/utils'
 interface LogoProps {
   variant?: 'light' | 'dark'
   className?: string
+  size?: 'sm' | 'md' | 'lg'
 }
 
 /**
- * Podium logo as inline SVG — renders reliably everywhere
- * (no font dependency issues like <img> + SVG text).
+ * Podium logo using plain HTML + Tailwind font classes.
+ * Uses the actual Next.js-loaded Playfair Display font.
  *
- * - "light" = cream/gold text for dark backgrounds (sidebar, auth panel)
- * - "dark"  = navy/brass text for light backgrounds (mobile auth)
+ * - "light" = cream/gold for dark backgrounds (sidebar, auth panel)
+ * - "dark"  = navy/brass for light backgrounds (mobile auth)
  */
-export function Logo({ variant = 'light', className }: LogoProps) {
-  const textColor = variant === 'light' ? '#F5F0E8' : '#1E293B'
-  const accentColor = '#C4915A'
+export function Logo({ variant = 'light', className, size = 'md' }: LogoProps) {
+  const isLight = variant === 'light'
+
+  const sizes = {
+    sm: { monogram: 'text-4xl', wordmark: 'text-[10px] tracking-[0.25em]', bar: 'w-10 mt-0.5', gap: 'mt-1.5' },
+    md: { monogram: 'text-5xl', wordmark: 'text-xs tracking-[0.3em]', bar: 'w-14 mt-1', gap: 'mt-2' },
+    lg: { monogram: 'text-6xl', wordmark: 'text-sm tracking-[0.35em]', bar: 'w-16 mt-1', gap: 'mt-2.5' },
+  }
+
+  const s = sizes[size]
 
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 220 100"
-      className={cn('select-none', className)}
+    <div
+      className={cn('flex flex-col items-center select-none', className)}
       role="img"
       aria-label="Podium"
     >
-      {/* "pp" monogram — italic serif */}
-      <g transform="translate(110, 52)" textAnchor="middle">
-        <text
-          x="0"
-          y="0"
-          fontFamily="'Playfair Display', Georgia, 'Times New Roman', serif"
-          fontSize="52"
-          fontStyle="italic"
-          fontWeight="400"
-          fill={textColor}
-          letterSpacing="-1"
-        >
-          pp
-        </text>
-      </g>
-
-      {/* Brass accent bar */}
-      <rect x="78" y="60" width="64" height="1.5" rx="0.75" fill={accentColor} />
-
-      {/* PODIUM wordmark — tracked uppercase */}
-      <g transform="translate(113, 82)" textAnchor="middle">
-        <text
-          x="0"
-          y="0"
-          fontFamily="'Playfair Display', Georgia, 'Times New Roman', serif"
-          fontSize="14"
-          fontWeight="400"
-          fill={textColor}
-          letterSpacing="5"
-        >
-          PODIUM
-        </text>
-      </g>
-    </svg>
+      <span
+        className={cn(
+          'font-heading italic leading-none',
+          s.monogram,
+          isLight ? 'text-[#F5F0E8]' : 'text-[#1E293B]'
+        )}
+      >
+        pp
+      </span>
+      <div
+        className={cn(
+          'h-[1.5px] rounded-full bg-[#C4915A]',
+          s.bar
+        )}
+      />
+      <span
+        className={cn(
+          'font-heading leading-none',
+          s.wordmark,
+          s.gap,
+          isLight ? 'text-[#F5F0E8]' : 'text-[#1E293B]'
+        )}
+      >
+        PODIUM
+      </span>
+    </div>
   )
 }

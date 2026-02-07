@@ -151,7 +151,7 @@ export function Sidebar() {
     <aside className="hidden md:flex h-full w-64 flex-col border-r border-sidebar-border bg-sidebar">
       <div className="flex h-36 items-center justify-center px-4">
         <Link href="/dashboard">
-          <Logo variant="light" className="max-h-[120px] max-w-full" />
+          <Logo variant="light" size="lg" />
         </Link>
       </div>
       <Separator className="bg-sidebar-border" />

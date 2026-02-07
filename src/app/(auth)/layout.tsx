@@ -32,7 +32,7 @@ export default function AuthLayout({
 
         {/* Content */}
         <div className="relative z-10 flex flex-col items-center px-12 max-w-md">
-          <Logo variant="light" className="max-h-28 max-w-full" />
+          <Logo variant="light" size="lg" />
           <div className="mt-8 w-16 h-px bg-gold/40" />
           <p className="mt-8 text-center text-lg text-sidebar-foreground/60 leading-relaxed font-heading">
             Orchestra personnel management,
@@ -47,7 +47,7 @@ export default function AuthLayout({
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden flex justify-center mb-8">
-            <Logo variant="dark" className="max-h-16" />
+            <Logo variant="dark" size="md" />
           </div>
           {children}
         </div>

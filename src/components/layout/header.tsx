@@ -149,7 +149,7 @@ export function Header({ user }: HeaderProps) {
         <SheetContent side="left" className="w-64 p-0 bg-sidebar text-sidebar-foreground border-sidebar-border">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <div className="flex h-20 items-center justify-center px-4">
-            <Logo variant="light" className="max-h-[60px] max-w-full" />
+            <Logo variant="light" size="sm" />
           </div>
           <Separator className="bg-sidebar-border" />
           <SidebarNav onNavigate={() => setMobileMenuOpen(false)} />
