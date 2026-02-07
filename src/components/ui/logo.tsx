@@ -17,9 +17,9 @@ export function Logo({ variant = 'light', className, size = 'md' }: LogoProps) {
   const isLight = variant === 'light'
 
   const sizes = {
-    sm: { monogram: 'text-4xl', wordmark: 'text-[10px] tracking-[0.25em]', bar: 'w-10 mt-0.5', gap: 'mt-1.5' },
-    md: { monogram: 'text-5xl', wordmark: 'text-xs tracking-[0.3em]', bar: 'w-14 mt-1', gap: 'mt-2' },
-    lg: { monogram: 'text-6xl', wordmark: 'text-sm tracking-[0.35em]', bar: 'w-16 mt-1', gap: 'mt-2.5' },
+    sm: { monogram: 'text-4xl', wordmark: 'text-[10px] tracking-[0.25em]', bar: 'w-10 mt-2', gap: 'mt-1.5' },
+    md: { monogram: 'text-5xl', wordmark: 'text-xs tracking-[0.3em]', bar: 'w-14 mt-3', gap: 'mt-2' },
+    lg: { monogram: 'text-6xl', wordmark: 'text-sm tracking-[0.35em]', bar: 'w-16 mt-3.5', gap: 'mt-2.5' },
   }
 
   const s = sizes[size]
@@ -32,7 +32,7 @@ export function Logo({ variant = 'light', className, size = 'md' }: LogoProps) {
     >
       <span
         className={cn(
-          'font-heading italic leading-none',
+          'font-heading italic leading-tight',
           s.monogram,
           isLight ? 'text-[#F5F0E8]' : 'text-[#1E293B]'
         )}
