@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { EmptyState } from '@/components/ui/empty-state'
 import { BookFormDialog } from './book-form-dialog'
 import { DeleteBookDialog } from './delete-book-dialog'
 import { BookDetail } from './book-detail'
@@ -111,11 +112,12 @@ export function BooksClient({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="page-header">
           <h2 className="text-3xl font-bold tracking-tight">Saved Ensembles</h2>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground mt-1">
             Manage personnel lists for your orchestra.
           </p>
+          <div className="mt-3 w-12 h-px bg-gold/50" />
         </div>
         {canManage && (
           <Button onClick={handleAdd}>Add Ensemble</Button>
@@ -149,18 +151,18 @@ export function BooksClient({
       )}
 
       {books.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-muted-foreground mb-4">
-            No saved ensembles have been added yet.
-          </p>
-          {canManage && (
-            <Button onClick={handleAdd}>Add Your First Ensemble</Button>
-          )}
-        </div>
+        <EmptyState
+          icon={
+            <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
+            </svg>
+          }
+          title="No saved ensembles yet"
+          description="Save your go-to musician lineups so you can quickly staff future projects."
+          action={canManage ? <Button onClick={handleAdd}>Add Your First Ensemble</Button> : undefined}
+        />
       ) : filteredBooks.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-muted-foreground">No ensembles match your search.</p>
-        </div>
+        <EmptyState title="No ensembles match your search" />
       ) : (
         <>
           <div className="overflow-x-auto rounded-md border">

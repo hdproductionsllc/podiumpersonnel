@@ -4,11 +4,12 @@ import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { EmptyState } from '@/components/ui/empty-state'
 import { PaymentStatusDialog } from './payment-status-dialog'
 import { ExportDialog } from './export-dialog'
 import { toast } from 'sonner'
 
-type PaymentWithRelations = {
+export type PaymentWithRelations = {
   id: string
   organization_id: string
   service_id: string
@@ -222,11 +223,12 @@ export function PaymentsClient({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="page-header">
           <h2 className="text-3xl font-bold tracking-tight">Payments</h2>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground mt-1">
             Track and manage musician payments.
           </p>
+          <div className="mt-3 w-12 h-px bg-gold/50" />
         </div>
         {canManage && (
           <Button onClick={handleGeneratePayments} disabled={isGenerating}>
@@ -396,20 +398,22 @@ export function PaymentsClient({
 
       {/* Payments Table */}
       {payments.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-muted-foreground mb-4">
-            No payments have been generated yet.
-          </p>
-          {canManage && (
+        <EmptyState
+          icon={
+            <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+          }
+          title="No payments yet"
+          description="Generate payments once you have confirmed musician positions on services."
+          action={canManage ? (
             <Button onClick={handleGeneratePayments} disabled={isGenerating}>
               Generate Payments from Confirmed Positions
             </Button>
-          )}
-        </div>
+          ) : undefined}
+        />
       ) : filteredPayments.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-muted-foreground">No payments match your filters.</p>
-        </div>
+        <EmptyState title="No payments match your filters" />
       ) : (
         <div className="overflow-x-auto rounded-md border">
           <table className="w-full text-sm">

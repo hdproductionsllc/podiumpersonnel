@@ -4,6 +4,7 @@ import { useState, useEffect, Fragment } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { EmptyState } from '@/components/ui/empty-state'
 import { ProjectFormDialog } from './project-form-dialog'
 import { DeleteProjectDialog } from './delete-project-dialog'
 import { ServiceTypeDialog } from './service-type-dialog'
@@ -116,7 +117,7 @@ function ServicesList({
       {sorted.length === 0 ? (
         <p className="text-sm text-muted-foreground py-2">No services yet. Add rehearsals and performances to this project — these are the events your musicians need to attend.</p>
       ) : (
-        <div className="rounded-md border bg-background">
+        <div className="overflow-x-auto rounded-md border bg-background">
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/30">
               <tr>
@@ -437,11 +438,12 @@ export function ProjectsClient({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="page-header">
           <h2 className="text-3xl font-bold tracking-tight">Projects</h2>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground mt-1">
             Manage your projects and their services.
           </p>
+          <div className="mt-3 w-12 h-px bg-gold/50" />
         </div>
         {canManage && (
           <Button onClick={handleAddProject}>Add Project</Button>
@@ -502,18 +504,18 @@ export function ProjectsClient({
       )}
 
       {projects.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-muted-foreground mb-4">
-            No projects have been added yet.
-          </p>
-          {canManage && (
-            <Button onClick={handleAddProject}>Add Your First Project</Button>
-          )}
-        </div>
+        <EmptyState
+          icon={
+            <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" />
+            </svg>
+          }
+          title="No projects yet"
+          description="Create your first project to start managing rehearsals, performances, and musicians."
+          action={canManage ? <Button onClick={handleAddProject}>Add Your First Project</Button> : undefined}
+        />
       ) : filteredProjects.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-muted-foreground">No projects match your filters.</p>
-        </div>
+        <EmptyState title="No projects match your filters" />
       ) : (
         <div className="overflow-x-auto rounded-md border">
           <table className="w-full text-sm">

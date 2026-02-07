@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { EmptyState } from '@/components/ui/empty-state'
 import { ScheduleFormDialog } from './schedule-form-dialog'
 import { DeleteScheduleDialog } from './delete-schedule-dialog'
 import type { CompetingSchedule } from '@/types'
@@ -85,11 +86,12 @@ export function SchedulesClient({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="page-header">
           <h2 className="text-3xl font-bold tracking-tight">Schedules</h2>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground mt-1">
             Track musician availability and external commitments.
           </p>
+          <div className="mt-3 w-12 h-px bg-gold/50" />
         </div>
         {canManage && (
           <Button onClick={handleAdd}>Add Entry</Button>
@@ -133,18 +135,18 @@ export function SchedulesClient({
       )}
 
       {schedules.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-muted-foreground mb-4">
-            No schedule conflicts have been added yet.
-          </p>
-          {canManage && (
-            <Button onClick={handleAdd}>Add First Entry</Button>
-          )}
-        </div>
+        <EmptyState
+          icon={
+            <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+            </svg>
+          }
+          title="No schedule conflicts yet"
+          description="Track your musicians' outside commitments to avoid double-booking."
+          action={canManage ? <Button onClick={handleAdd}>Add First Entry</Button> : undefined}
+        />
       ) : filteredSchedules.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-muted-foreground">No schedule entries match your filters.</p>
-        </div>
+        <EmptyState title="No schedule entries match your filters" />
       ) : (
         <div className="space-y-6">
           {upcoming.length > 0 && (

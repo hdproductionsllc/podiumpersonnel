@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { EmptyState } from '@/components/ui/empty-state'
 import { InstrumentSectionGroup } from './instrument-section-group'
 import { InstrumentFormDialog } from './instrument-form-dialog'
 import { DeleteInstrumentDialog } from './delete-instrument-dialog'
@@ -94,11 +95,12 @@ export function InstrumentsClient({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="page-header">
           <h2 className="text-3xl font-bold tracking-tight">Instruments</h2>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground mt-1">
             Manage the instruments in your orchestra.
           </p>
+          <div className="mt-3 w-12 h-px bg-gold/50" />
         </div>
         {canManage && (
           <div className="flex items-center gap-2">
@@ -157,21 +159,20 @@ export function InstrumentsClient({
       )}
 
       {instruments.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-muted-foreground mb-4">
-            No instruments have been added yet.
-          </p>
-          {canManage && (
-            <PrepopulateButton
-              organizationId={organizationId}
-              onSuccess={handleSuccess}
-            />
-          )}
-        </div>
+        <EmptyState
+          icon={
+            <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m9 9 10.5-3m0 6.553v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 1 1-.99-3.467l2.31-.66a2.25 2.25 0 0 0 1.632-2.163Zm0 0V4.103A2.25 2.25 0 0 0 17.378 2h-.403a2.25 2.25 0 0 0-1.5.563L9 9m10.5-3H9m0 0v7.5m0 0-4.5 1.286v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 1 1-.99-3.467l2.31-.66A2.25 2.25 0 0 0 4.5 14.25v-7.5" />
+            </svg>
+          }
+          title="No instruments yet"
+          description="Set up your instrument library to assign musicians and build positions."
+          action={canManage ? (
+            <PrepopulateButton organizationId={organizationId} onSuccess={handleSuccess} />
+          ) : undefined}
+        />
       ) : filteredInstruments.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-muted-foreground">No instruments match your filters.</p>
-        </div>
+        <EmptyState title="No instruments match your filters" />
       ) : (
         <div className="space-y-8">
           {INSTRUMENT_SECTIONS.map((section) => {

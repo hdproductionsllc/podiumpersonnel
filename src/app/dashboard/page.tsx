@@ -402,13 +402,14 @@ export default async function DashboardPage() {
         <SetupWizard userId={user!.id} organizationId={orgId} />
       )}
 
-      <div>
+      <div className="page-header">
         <h2 className="text-3xl font-bold tracking-tight">
           {userFirstName ? `Welcome back, ${userFirstName}` : `Welcome to ${orgName}`}
         </h2>
-        <p className="text-muted-foreground">
+        <p className="text-muted-foreground mt-1">
           {orgName}&apos;s personnel dashboard
         </p>
+        <div className="mt-3 w-12 h-px bg-gold/50" />
       </div>
 
       {/* Hero CTA — prioritize what the user needs to do next */}
@@ -475,53 +476,57 @@ export default async function DashboardPage() {
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mt-2">
         <Link href="/dashboard/projects">
-          <Card className="transition-colors hover:bg-muted/50 cursor-pointer">
+          <Card className="transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Projects</CardTitle>
+              <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground" style={{ fontFamily: 'var(--font-dm-sans)' }}>Active Projects</CardTitle>
+              <svg className="h-4 w-4 text-muted-foreground/40 group-hover:text-gold transition-colors" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" /></svg>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{activeProjectCount ?? 0}</div>
-              <p className="text-xs text-muted-foreground">
-                {activeProjectCount ? `${activeProjectCount} project${activeProjectCount !== 1 ? 's' : ''} in progress` : 'No active projects yet'}
+              <div className="text-3xl font-bold tracking-tight">{activeProjectCount ?? 0}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {activeProjectCount ? `${activeProjectCount} in progress` : 'No active projects'}
               </p>
             </CardContent>
           </Card>
         </Link>
         <Link href="/dashboard/musicians">
-          <Card className="transition-colors hover:bg-muted/50 cursor-pointer">
+          <Card className="transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Musicians</CardTitle>
+              <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground" style={{ fontFamily: 'var(--font-dm-sans)' }}>Musicians</CardTitle>
+              <svg className="h-4 w-4 text-muted-foreground/40 group-hover:text-gold transition-colors" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{musicianCount ?? 0}</div>
-              <p className="text-xs text-muted-foreground">
-                {musicianCount ? `${musicianCount} ready to call` : 'No musicians added yet'}
+              <div className="text-3xl font-bold tracking-tight">{musicianCount ?? 0}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {musicianCount ? `${musicianCount} ready to call` : 'No musicians added'}
               </p>
             </CardContent>
           </Card>
         </Link>
         <Link href="/dashboard/projects">
-          <Card className="transition-colors hover:bg-muted/50 cursor-pointer">
+          <Card className="transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending Offers</CardTitle>
+              <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground" style={{ fontFamily: 'var(--font-dm-sans)' }}>Pending Offers</CardTitle>
+              <svg className="h-4 w-4 text-muted-foreground/40 group-hover:text-gold transition-colors" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" /></svg>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{pendingOfferCount ?? 0}</div>
-              <p className="text-xs text-muted-foreground">
-                {pendingOfferCount ? `${pendingOfferCount} waiting to hear back` : 'No pending contract offers'}
+              <div className="text-3xl font-bold tracking-tight">{pendingOfferCount ?? 0}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {pendingOfferCount ? `${pendingOfferCount} awaiting response` : 'No pending offers'}
               </p>
             </CardContent>
           </Card>
         </Link>
         <Link href="/dashboard/projects">
-          <Card className="transition-colors hover:bg-muted/50 cursor-pointer">
+          <Card className="transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Upcoming Services</CardTitle>
+              <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground" style={{ fontFamily: 'var(--font-dm-sans)' }}>Upcoming Services</CardTitle>
+              <svg className="h-4 w-4 text-muted-foreground/40 group-hover:text-gold transition-colors" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{upcomingServiceCount ?? 0}</div>
-              <p className="text-xs text-muted-foreground">
-                {upcomingServiceCount ? `${upcomingServiceCount} scheduled ahead` : 'No upcoming services'}
+              <div className="text-3xl font-bold tracking-tight">{upcomingServiceCount ?? 0}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {upcomingServiceCount ? `${upcomingServiceCount} scheduled` : 'No upcoming services'}
               </p>
             </CardContent>
           </Card>
@@ -581,19 +586,19 @@ export default async function DashboardPage() {
                   <Link
                     key={`${item.type}-${item.id}`}
                     href={`/dashboard/projects?expand=${item.projectId}`}
-                    className="flex items-start gap-3 rounded-lg p-2 -mx-2 transition-colors hover:bg-muted/50"
+                    className="flex items-start gap-3 rounded-lg p-2.5 -mx-2 transition-all hover:bg-muted/50 hover:shadow-sm group"
                   >
-                    <div className="flex flex-col items-center justify-center min-w-[50px] rounded bg-muted px-2 py-1">
-                      <span className="text-xs font-medium text-muted-foreground">
+                    <div className="flex flex-col items-center justify-center min-w-[56px] rounded-md bg-primary/5 border border-primary/10 px-2 py-1.5 group-hover:border-gold/30 transition-colors">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-primary/70">
                         {formatServiceDate(item.date)}
                       </span>
                       {item.callTime && (
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-[10px] text-muted-foreground">
                           Call {formatTime(item.callTime)}
                         </span>
                       )}
                       {item.time && (
-                        <span className="text-sm font-semibold">
+                        <span className="text-sm font-bold text-primary">
                           {formatTime(item.time)}
                         </span>
                       )}

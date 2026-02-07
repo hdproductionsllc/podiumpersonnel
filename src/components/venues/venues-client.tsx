@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { EmptyState } from '@/components/ui/empty-state'
 import { VenueFormDialog } from './venue-form-dialog'
 import { DeleteVenueDialog } from './delete-venue-dialog'
 import type { Venue } from '@/types'
@@ -69,11 +70,12 @@ export function VenuesClient({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="page-header">
           <h2 className="text-3xl font-bold tracking-tight">Venues</h2>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground mt-1">
             Manage venues for your services with parking info and directions.
           </p>
+          <div className="mt-3 w-12 h-px bg-gold/50" />
         </div>
         {canManage && (
           <Button onClick={handleAdd}>Add Venue</Button>
@@ -107,18 +109,19 @@ export function VenuesClient({
       )}
 
       {venues.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-muted-foreground mb-4">
-            No venues have been added yet.
-          </p>
-          {canManage && (
-            <Button onClick={handleAdd}>Add Your First Venue</Button>
-          )}
-        </div>
+        <EmptyState
+          icon={
+            <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+            </svg>
+          }
+          title="No venues yet"
+          description="Add venues with addresses and parking info so they're ready when you create services."
+          action={canManage ? <Button onClick={handleAdd}>Add Your First Venue</Button> : undefined}
+        />
       ) : filteredVenues.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-muted-foreground">No venues match your search.</p>
-        </div>
+        <EmptyState title="No venues match your search" />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredVenues.map((venue) => (
