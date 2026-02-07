@@ -84,6 +84,8 @@ export function SendOfferDialog({
   const [editingEmail, setEditingEmail] = useState('')
   const [savingEmail, setSavingEmail] = useState(false)
   const [personalMessage, setPersonalMessage] = useState('')
+  const [includeLeaderFee, setIncludeLeaderFee] = useState(false)
+  const [leaderFeeAmount, setLeaderFeeAmount] = useState<string>('')
   const [showSuccess, setShowSuccess] = useState(false)
   const [sentMusicianName, setSentMusicianName] = useState('')
 
@@ -92,25 +94,54 @@ export function SendOfferDialog({
   const [searchOpen, setSearchOpen] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
 
-  // Initialize customPay from suggestedCustomPay when dialog opens, including leader fee for Chair 1
+  // Initialize pay fields when dialog opens
   useEffect(() => {
     if (open) {
       const isLeader = chairNumber === 1
-      const defaultPay = basePay != null
-        ? basePay + (isLeader && leaderFee ? leaderFee : 0)
-        : null
-      setCustomPay(suggestedCustomPay || (defaultPay != null ? defaultPay.toString() : ''))
+      const defaultLeaderFee = leaderFee ?? 50
+      setIncludeLeaderFee(isLeader && !!leaderFee)
+      setLeaderFeeAmount(defaultLeaderFee.toString())
+
+      if (suggestedCustomPay) {
+        setCustomPay(suggestedCustomPay)
+      } else if (basePay != null) {
+        setCustomPay(basePay.toString())
+      } else {
+        setCustomPay('')
+      }
+
       setLocallyAddedMusicians([])
       setUpdatedEmails({})
       setEditingEmail('')
       setSavingEmail(false)
       setPersonalMessage('')
+      setShowConfirmation(false)
       setShowSuccess(false)
       setSentMusicianName('')
       setSearchQuery('')
       setSearchOpen(false)
+      setError(null)
     }
   }, [open, suggestedCustomPay, basePay, leaderFee, chairNumber])
+
+  // Auto-suggest the top call-order musician when the dialog opens
+  useEffect(() => {
+    if (open && !selectedMusicianId) {
+      const available = allMusicians
+        .filter((m) => !existingOfferMusicianIds.includes(m.id))
+        .filter((m) => m.musician_instruments.some((mi) => mi.instrument_id === instrumentId))
+        .sort((a, b) => {
+          if (isLeaderPosition) {
+            if (a.is_leader && !b.is_leader) return -1
+            if (!a.is_leader && b.is_leader) return 1
+          }
+          return (a.call_order ?? 100) - (b.call_order ?? 100)
+        })
+      if (available.length > 0) {
+        setSelectedMusicianId(available[0].id)
+      }
+    }
+  }, [open, instrumentId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Click-outside for search dropdown
   useEffect(() => {
@@ -130,12 +161,11 @@ export function SendOfferDialog({
   const selectedMusician = allMusicians.find((m) => m.id === selectedMusicianId)
   const hasEmail = selectedMusician?.email || updatedEmails[selectedMusicianId] ? true : false
 
-  // Calculate pay - chair 1 gets leader fee
+  // Calculate pay - base + optional leader fee
   const isLeaderPosition = chairNumber === 1
-  const calculatedPay = basePay != null
-    ? basePay + (isLeaderPosition && leaderFee ? leaderFee : 0)
-    : null
-  const finalPay = customPay ? parseFloat(customPay) : calculatedPay
+  const basePayNum = customPay ? parseFloat(customPay) : (basePay ?? 0)
+  const leaderFeeNum = includeLeaderFee && leaderFeeAmount ? parseFloat(leaderFeeAmount) : 0
+  const finalPay = customPay || basePay != null ? basePayNum + leaderFeeNum : null
 
   if (!open) return null
 
@@ -228,7 +258,7 @@ export function SendOfferDialog({
       status: 'pending',
       sent_at: new Date().toISOString(),
       expires_at: expiresAt,
-      custom_pay: customPay ? parseFloat(customPay) : null,
+      custom_pay: finalPay ?? null,
     }
     if (personalMessage.trim()) {
       insertData.personal_message = personalMessage.trim()
@@ -319,7 +349,9 @@ export function SendOfferDialog({
 
   function handleSendNext() {
     setShowSuccess(false)
+    setShowConfirmation(false)
     setSelectedMusicianId('')
+    setError(null)
     onOpenChange(false)
     if (applyToRemaining && customPay) {
       onSuccess({ customPay })
@@ -748,56 +780,66 @@ export function SendOfferDialog({
             )}
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             <label className="text-sm font-medium">Pay <span className="text-destructive">*</span></label>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">$</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                required
-                placeholder={calculatedPay != null ? calculatedPay.toString() : 'Enter amount'}
-                value={customPay}
-                onChange={(e) => setCustomPay(e.target.value)}
-                className="flex-1 rounded-md border bg-background px-3 py-2 text-sm"
-              />
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  required
+                  placeholder="Base pay amount"
+                  value={customPay}
+                  onChange={(e) => setCustomPay(e.target.value)}
+                  className="flex-1 rounded-md border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="includeLeaderFee"
+                  checked={includeLeaderFee}
+                  onChange={(e) => setIncludeLeaderFee(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <label htmlFor="includeLeaderFee" className="text-sm">
+                  Add leader fee
+                </label>
+                {includeLeaderFee && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm text-muted-foreground">+$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={leaderFeeAmount}
+                      onChange={(e) => setLeaderFeeAmount(e.target.value)}
+                      className="w-20 rounded-md border bg-background px-2 py-1 text-sm"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
-            {calculatedPay != null && (
-              <table className="w-full rounded-md bg-muted/50 text-xs" style={{ borderCollapse: 'collapse' }}>
-                <tbody>
-                  <tr>
-                    <td className="text-muted-foreground py-0.5 px-2 pt-2">Base pay:</td>
-                    <td className="text-right py-0.5 px-2 pt-2 tabular-nums">${basePay}</td>
-                  </tr>
-                  {isLeaderPosition && leaderFee ? (
-                    <>
-                      <tr>
-                        <td className="text-muted-foreground py-0.5 px-2">Leader fee (Chair 1):</td>
-                        <td className="text-right py-0.5 px-2 tabular-nums">+${leaderFee}</td>
-                      </tr>
-                      <tr className="border-t font-medium">
-                        <td className="py-0.5 px-2 pb-2">Total:</td>
-                        <td className="text-right py-0.5 px-2 pb-2 tabular-nums">${calculatedPay}</td>
-                      </tr>
-                    </>
-                  ) : (
-                    <tr>
-                      <td className="text-muted-foreground py-0.5 px-2 pb-2">No leader fee (Chair {chairNumber})</td>
-                      <td className="text-right py-0.5 px-2 pb-2 tabular-nums">${calculatedPay}</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            )}
-            {customPay && calculatedPay != null && parseFloat(customPay) !== calculatedPay && (
-              <p className="text-xs text-amber-600">
-                Custom pay: ${customPay} (overrides calculated ${calculatedPay})
-              </p>
+
+            {finalPay != null && (customPay || basePay != null) && (
+              <div className="rounded-md bg-muted/50 px-3 py-2 text-sm">
+                <div className="flex justify-between font-medium">
+                  <span>Total offer:</span>
+                  <span className="tabular-nums">${finalPay.toFixed(2)}</span>
+                </div>
+                {includeLeaderFee && leaderFeeNum > 0 && (
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                    <span>${basePayNum} base + ${leaderFeeNum} leader fee</span>
+                  </div>
+                )}
+              </div>
             )}
 
             {customPay && (
-              <div className="flex items-center gap-2 pt-2">
+              <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   id="applyToRemaining"
@@ -851,7 +893,7 @@ export function SendOfferDialog({
           <Button variant="outline" onClick={handleClose} disabled={loading}>
             Cancel
           </Button>
-          <Button onClick={handleProceedToConfirm} disabled={!selectedMusicianId || !customPay || loading}>
+          <Button onClick={handleProceedToConfirm} disabled={!selectedMusicianId || finalPay == null || finalPay <= 0 || loading}>
             Review & Send
           </Button>
         </div>
@@ -886,20 +928,13 @@ export function SendOfferDialog({
           <div className="space-y-1">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Pay:</span>
-              <span className="font-medium">${finalPay ?? 'Not set'}</span>
+              <span className="font-medium">${finalPay?.toFixed(2) ?? 'Not set'}</span>
             </div>
-            {calculatedPay != null && isLeaderPosition && leaderFee ? (
-              <div className="text-xs text-muted-foreground space-y-0.5 pl-2">
-                <div className="flex justify-between">
-                  <span>Base pay:</span>
-                  <span>${basePay}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Leader fee (Chair 1):</span>
-                  <span>+${leaderFee}</span>
-                </div>
+            {includeLeaderFee && leaderFeeNum > 0 && (
+              <div className="text-xs text-muted-foreground pl-2">
+                ${basePayNum} base + ${leaderFeeNum} leader fee
               </div>
-            ) : null}
+            )}
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Expires:</span>

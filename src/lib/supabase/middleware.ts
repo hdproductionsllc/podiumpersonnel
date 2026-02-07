@@ -48,7 +48,8 @@ export async function updateSession(request: NextRequest) {
                               pathname.startsWith('/musician/register') ||
                               pathname.startsWith('/musician/activate') ||
                               pathname.startsWith('/musician/forgot-password') ||
-                              pathname.startsWith('/musician/reset-password')
+                              pathname.startsWith('/musician/reset-password') ||
+                              pathname.startsWith('/musician/auth/callback')
   const isMusicianProtectedRoute = isMusicianRoute && !isMusicianAuthRoute
 
   // Redirect unauthenticated users from protected routes
