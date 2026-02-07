@@ -153,7 +153,11 @@ export function ProjectOffers({
   async function handleRevoke(offerId: string) {
     if (!confirm('Revoke this offer?')) return
     const supabase = createClient()
-    await supabase.from('contract_offers').delete().eq('id', offerId)
+    const { error } = await supabase.from('contract_offers').delete().eq('id', offerId)
+    if (error) {
+      toast.error('Failed to revoke offer')
+      return
+    }
     onOfferChange()
   }
 
@@ -201,7 +205,7 @@ export function ProjectOffers({
   return (
     <div className="space-y-3">
       <h4 className="text-sm font-semibold">Contract Offers</h4>
-      <div className="rounded-md border bg-background">
+      <div className="overflow-x-auto rounded-md border bg-background">
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/30">
             <tr>

@@ -31,9 +31,9 @@ export default function AuthLayout({
         {/* Content */}
         <div className="relative z-10 flex flex-col items-center px-12 max-w-md">
           <img
-            src="/logo.png"
-            alt="Podium Personnel"
-            className="max-h-28 max-w-full object-contain brightness-0 invert"
+            src="/logo-light.svg"
+            alt="Podium"
+            className="max-h-28 max-w-full object-contain"
           />
           <div className="mt-8 w-16 h-px bg-gold/40" />
           <p className="mt-8 text-center text-lg text-sidebar-foreground/60 leading-relaxed font-heading">
@@ -50,8 +50,8 @@ export default function AuthLayout({
           {/* Mobile logo */}
           <div className="lg:hidden flex justify-center mb-8">
             <img
-              src="/logo.png"
-              alt="Podium Personnel"
+              src="/logo-dark.svg"
+              alt="Podium"
               className="max-h-16 object-contain"
             />
           </div>

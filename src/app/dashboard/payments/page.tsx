@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { PaymentsClient } from '@/components/payments/payments-client'
+import { PaymentsClient, type PaymentWithRelations } from '@/components/payments/payments-client'
 
 export default async function PaymentsPage() {
   const supabase = await createClient()
@@ -70,7 +70,7 @@ export default async function PaymentsPage() {
 
   return (
     <PaymentsClient
-      payments={(payments as any) ?? []}
+      payments={(payments as unknown as PaymentWithRelations[]) ?? []}
       projects={projects ?? []}
       organizationId={organization!.id}
       userRole={membership!.role}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 // Parse time strings like "2:15pm", "2:15 PM", "14:15"
 function parseTime(timeStr: string): { hours: number; minutes: number } | null {
@@ -100,7 +100,9 @@ export async function GET(
   const { offerId } = await params
   const { searchParams } = new URL(request.url)
   const format = searchParams.get('format')
+  const token = searchParams.get('token')
 
+  // Authorization: require either a valid offer token OR authenticated org membership
   const supabase = createServiceClient()
 
   // Fetch offer with all related data
@@ -110,6 +112,7 @@ export async function GET(
       id,
       status,
       custom_pay,
+      token,
       project_position:project_positions!inner(
         id,
         chair_number,
@@ -119,6 +122,7 @@ export async function GET(
           name,
           description,
           start_date,
+          organization_id,
           organization:organizations(name)
         )
       ),
@@ -131,12 +135,36 @@ export async function GET(
     return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
   }
 
+  // Validate access: token match OR authenticated org admin
+  const position = offer.project_position as any
+  const project = position.project
+  let authorized = false
+
+  if (token && token === (offer as any).token) {
+    authorized = true
+  } else {
+    // Check if user is authenticated and a member of this org
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (user) {
+      const { data: membership } = await authClient
+        .from('organization_members')
+        .select('id')
+        .eq('organization_id', project.organization_id)
+        .eq('user_id', user.id)
+        .single()
+      if (membership) authorized = true
+    }
+  }
+
+  if (!authorized) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   if (offer.status !== 'accepted') {
     return NextResponse.json({ error: 'Offer must be accepted to download calendar' }, { status: 400 })
   }
 
-  const position = offer.project_position as any
-  const project = position.project
   const instrument = position.instrument
   const musician = offer.musician as any
 

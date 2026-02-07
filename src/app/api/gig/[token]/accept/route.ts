@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferAcceptedEmail, sendAdminOfferResponseEmail, sendMusicianReleasedEmail } from '@/lib/email/send'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
+import { getVenueName } from '@/lib/venue-helpers'
 
 export async function POST(
   _request: Request,
@@ -30,7 +31,7 @@ export async function POST(
           name,
           organization_id,
           organization:organizations(id, name, timezone),
-          services(id, name, service_type, start_time, end_time, venue)
+          services(id, name, service_type, start_time, end_time, venue, venue_id, venue_details:venues(name, address, city, state, zip))
         )
       )
     `)
@@ -166,13 +167,13 @@ export async function POST(
           minute: '2-digit',
           timeZone: timezone,
         }),
-        venue: service.venue,
+        venue: getVenueName(service),
       }))
 
     // Send confirmation to musician if they have email
     if (musician?.email) {
       const baseUrl = getAppUrl()
-      const calendarUrl = `${baseUrl}/api/offers/${offer.id}/calendar`
+      const calendarUrl = `${baseUrl}/api/offers/${offer.id}/calendar?token=${token}`
 
       await sendOfferAcceptedEmail({
         to: musician.email,

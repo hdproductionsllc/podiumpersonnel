@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
-import { ProjectsClient } from '@/components/projects/projects-client'
+import { ProjectsClient, type ProjectWithServices } from '@/components/projects/projects-client'
+import type { BookForImport } from '@/components/projects/project-positions'
+import type { MusicianForOffer } from '@/components/projects/send-offer-dialog'
 import { DEFAULT_TIMEZONE } from '@/lib/utils'
 
 export default async function ProjectsPage() {
@@ -90,9 +92,9 @@ export default async function ProjectsPage() {
 
   return (
     <ProjectsClient
-      projects={(projects as any) ?? []}
-      books={(books as any) ?? []}
-      musicians={(musicians as any) ?? []}
+      projects={(projects as unknown as ProjectWithServices[]) ?? []}
+      books={(books as unknown as BookForImport[]) ?? []}
+      musicians={(musicians as unknown as MusicianForOffer[]) ?? []}
       organizationId={organization!.id}
       timezone={timezone}
       userRole={membership!.role}

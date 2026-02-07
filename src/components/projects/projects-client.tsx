@@ -61,10 +61,10 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
 
 function StatusBadge({ status }: { status: ProjectStatus }) {
   const colors: Record<ProjectStatus, string> = {
-    draft: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-    active: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300',
-    completed: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
-    cancelled: 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300',
+    draft: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
+    active: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300',
+    completed: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300',
+    cancelled: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300',
   }
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${colors[status]}`}>
@@ -517,7 +517,7 @@ export function ProjectsClient({
       ) : filteredProjects.length === 0 ? (
         <EmptyState title="No projects match your filters" />
       ) : (
-        <div className="overflow-x-auto rounded-md border">
+        <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/50">
               <tr>

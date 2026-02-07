@@ -25,7 +25,7 @@ export function MusicianCard({
 }: MusicianCardProps) {
   return (
     <Card
-      className={`relative transition-colors ${
+      className={`relative transition-all hover:shadow-md hover:-translate-y-0.5 ${
         selectMode ? 'cursor-pointer' : ''
       } ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950/30' : ''}`}
       onClick={selectMode ? onSelect : undefined}
@@ -52,8 +52,8 @@ export function MusicianCard({
               <span
                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                   musician.is_active
-                    ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300'
-                    : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                    ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
+                    : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
                 }`}
               >
                 {musician.is_active ? 'Active' : 'Inactive'}
@@ -61,8 +61,8 @@ export function MusicianCard({
               <span
                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                   musician.w9_on_file
-                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                    : 'bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300'
+                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                    : 'bg-amber-100 text-amber-800 dark:bg-orange-950 dark:text-orange-300'
                 }`}
               >
                 {musician.w9_on_file ? 'W-9' : 'No W-9'}

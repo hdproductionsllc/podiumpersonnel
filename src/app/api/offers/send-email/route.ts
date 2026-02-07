@@ -3,6 +3,7 @@ import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendContractOfferEmail, sendAdminOfferSentEmail } from '@/lib/email/send'
 import { logEmailConfig } from '@/lib/email/client'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
+import { getVenueName } from '@/lib/venue-helpers'
 
 export async function POST(request: NextRequest) {
   console.log('📧 Send email API called')
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
             id,
             name,
             organization:organizations(id, name, timezone, email_logo_url, email_brand_color, email_footer_text),
-            services(id, name, service_type, call_time, start_time, end_time, venue, base_pay, leader_fee)
+            services(id, name, service_type, call_time, start_time, end_time, venue, venue_id, base_pay, leader_fee, venue_details:venues(name, address, city, state, zip))
           )
         )
       `)
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
               timeZone: timezone,
             })
           : null,
-        venue: service.venue,
+        venue: getVenueName(service),
       }))
 
     // Send the email

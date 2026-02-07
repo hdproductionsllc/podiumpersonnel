@@ -35,10 +35,8 @@ interface SubRequestsProps {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300',
   pending_approval: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300',
   approved: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
-  denied: 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300',
   declined: 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300',
   sub_declined: 'bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300',
   filled: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300',
@@ -46,10 +44,8 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: 'Pending',
   pending_approval: 'Pending Approval',
   approved: 'Approved',
-  denied: 'Denied',
   declined: 'Declined',
   sub_declined: 'Sub Declined',
   filled: 'Filled',
@@ -131,7 +127,7 @@ export function SubRequests({
         </div>
       )}
 
-      <div className="rounded-md border bg-background">
+      <div className="overflow-x-auto rounded-md border bg-background">
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/30">
             <tr>

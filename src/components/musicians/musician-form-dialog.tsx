@@ -147,7 +147,7 @@ export function MusicianFormDialog({
         .update({
           first_name: data.first_name,
           last_name: data.last_name,
-          email: data.email || null,
+          email: data.email?.trim().toLowerCase() || null,
           phone: data.phone || null,
           notes: data.notes || null,
           is_active: data.is_active,
@@ -205,7 +205,7 @@ export function MusicianFormDialog({
           organization_id: organizationId,
           first_name: data.first_name,
           last_name: data.last_name,
-          email: data.email || null,
+          email: data.email?.trim().toLowerCase() || null,
           phone: data.phone || null,
           notes: data.notes || null,
           is_active: data.is_active,
@@ -296,7 +296,7 @@ export function MusicianFormDialog({
                 name="first_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>First Name</FormLabel>
+                    <FormLabel required>First Name</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. John" {...field} />
                     </FormControl>
@@ -310,7 +310,7 @@ export function MusicianFormDialog({
                 name="last_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Last Name</FormLabel>
+                    <FormLabel required>Last Name</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. Smith" {...field} />
                     </FormControl>

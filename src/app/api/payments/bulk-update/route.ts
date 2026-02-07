@@ -1,27 +1,8 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { requireOrgAdmin, apiSuccess, apiError } from '@/lib/api-helpers'
 
 export async function PATCH(request: Request) {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const { data: membership } = await supabase
-    .from('organization_members')
-    .select('organization_id, role')
-    .eq('user_id', user.id)
-    .single()
-
-  if (!membership) {
-    return NextResponse.json({ error: 'No organization found' }, { status: 404 })
-  }
-
-  if (membership.role !== 'owner' && membership.role !== 'admin') {
-    return NextResponse.json({ error: 'Permission denied' }, { status: 403 })
-  }
+  const { supabase, membership, error } = await requireOrgAdmin()
+  if (error) return error
 
   try {
     const body = await request.json()
@@ -37,11 +18,11 @@ export async function PATCH(request: Request) {
     }
 
     if (!paymentIds || paymentIds.length === 0) {
-      return NextResponse.json({ error: 'No payment IDs provided' }, { status: 400 })
+      return apiError('No payment IDs provided')
     }
 
     if (!updates || Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: 'No updates provided' }, { status: 400 })
+      return apiError('No updates provided')
     }
 
     // Validate that all payments belong to the user's organization
@@ -51,12 +32,12 @@ export async function PATCH(request: Request) {
       .in('id', paymentIds)
 
     if (fetchError) {
-      return NextResponse.json({ error: fetchError.message }, { status: 500 })
+      return apiError(fetchError.message, 500)
     }
 
-    const invalidPayments = payments?.filter(p => p.organization_id !== membership.organization_id) || []
+    const invalidPayments = payments?.filter(p => p.organization_id !== membership!.organization_id) || []
     if (invalidPayments.length > 0) {
-      return NextResponse.json({ error: 'Some payments do not belong to your organization' }, { status: 403 })
+      return apiError('Some payments do not belong to your organization', 403)
     }
 
     // Prepare update data
@@ -75,15 +56,15 @@ export async function PATCH(request: Request) {
       .select()
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 })
+      return apiError(updateError.message, 500)
     }
 
-    return NextResponse.json({
+    return apiSuccess({
       updated: updated?.length || 0,
       message: `Updated ${updated?.length || 0} payments`,
     })
   } catch (err) {
     console.error('Bulk update payments error:', err)
-    return NextResponse.json({ error: 'Failed to update payments' }, { status: 500 })
+    return apiError('Failed to update payments', 500)
   }
 }

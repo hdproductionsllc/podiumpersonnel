@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { SchedulesClient } from '@/components/schedules/schedules-client'
+import { SchedulesClient, type ScheduleWithMusician } from '@/components/schedules/schedules-client'
 
 export default async function SchedulesPage() {
   const supabase = await createClient()
@@ -55,7 +55,7 @@ export default async function SchedulesPage() {
 
   return (
     <SchedulesClient
-      schedules={(schedules as any) ?? []}
+      schedules={(schedules as unknown as ScheduleWithMusician[]) ?? []}
       musicians={musicians ?? []}
       canManage={membership!.role === 'owner' || membership!.role === 'admin'}
     />

@@ -138,7 +138,7 @@ export function OnboardingForm() {
               name="fullName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Your Name</FormLabel>
+                  <FormLabel required>Your Name</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="John Smith"
@@ -154,7 +154,7 @@ export function OnboardingForm() {
               name="organizationName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Organization Name</FormLabel>
+                  <FormLabel required>Organization Name</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="Bay Area Symphony"
@@ -170,7 +170,7 @@ export function OnboardingForm() {
               name="timezone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Timezone</FormLabel>
+                  <FormLabel required>Timezone</FormLabel>
                   <FormControl>
                     <select
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"

@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { InstrumentsClient } from '@/components/instruments/instruments-client'
+import { InstrumentsClient, type InstrumentWithMusicians } from '@/components/instruments/instruments-client'
 
 export default async function InstrumentsPage() {
   const supabase = await createClient()
@@ -42,7 +42,7 @@ export default async function InstrumentsPage() {
 
   return (
     <InstrumentsClient
-      instruments={(instruments as any) ?? []}
+      instruments={(instruments as unknown as InstrumentWithMusicians[]) ?? []}
       organizationId={organization!.id}
       userRole={membership!.role}
     />

@@ -292,7 +292,7 @@ export function GigPageClient({
                   {(services.length > 0 || projectStartDate) && !currentSubRequest?.status?.includes('filled') && (
                     <div className="flex flex-col gap-2">
                       <a
-                        href={`/api/offers/${offerId}/calendar?format=google`}
+                        href={`/api/offers/${offerId}/calendar?format=google&token=${token}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 sm:py-2 text-sm sm:text-base text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-transform"
@@ -313,7 +313,7 @@ export function GigPageClient({
                         Add to Google Calendar
                       </a>
                       <a
-                        href={`/api/offers/${offerId}/calendar`}
+                        href={`/api/offers/${offerId}/calendar?token=${token}`}
                         download
                         className="flex items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-3 sm:py-2 text-xs sm:text-sm hover:bg-muted active:scale-[0.98] transition-transform"
                       >

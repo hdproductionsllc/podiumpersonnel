@@ -57,6 +57,15 @@ export async function GET(request: Request) {
 
   const organization = musician.organization as unknown as { id: string; name: string }
 
+  // Log impersonation for audit trail
+  await supabase
+    .from('impersonation_log')
+    .insert({
+      admin_user_id: user.id,
+      musician_id: musician.id,
+      organization_id: musician.organization_id,
+    })
+
   return NextResponse.json({
     musician: {
       id: musician.id,

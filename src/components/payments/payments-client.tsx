@@ -241,11 +241,11 @@ export function PaymentsClient({
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-lg border bg-card p-4">
+        <div className="card-gold-top rounded-lg border bg-card p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground">Unpaid</p>
-              <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+              <p className="text-3xl font-bold text-red-600 dark:text-red-400">
                 {formatCurrency(summary.unpaid)}
               </p>
             </div>
@@ -254,11 +254,11 @@ export function PaymentsClient({
             </div>
           </div>
         </div>
-        <div className="rounded-lg border bg-card p-4">
+        <div className="card-gold-top rounded-lg border bg-card p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground">Pending</p>
-              <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+              <p className="text-3xl font-bold text-yellow-600 dark:text-yellow-400">
                 {formatCurrency(summary.pending)}
               </p>
             </div>
@@ -267,11 +267,11 @@ export function PaymentsClient({
             </div>
           </div>
         </div>
-        <div className="rounded-lg border bg-card p-4">
+        <div className="card-gold-top rounded-lg border bg-card p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground">Paid</p>
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+              <p className="text-3xl font-bold text-green-600 dark:text-green-400">
                 {formatCurrency(summary.paid)}
               </p>
             </div>
@@ -359,7 +359,7 @@ export function PaymentsClient({
 
       {/* Bulk Actions Bar */}
       {selectedIds.size > 0 && canManage && (
-        <div className="flex items-center gap-4 rounded-lg bg-blue-50 dark:bg-blue-950 p-3">
+        <div className="flex items-center gap-4 rounded-lg bg-gold/10 border border-gold/20 dark:bg-gold/5 p-3">
           <span className="text-sm font-medium">
             {selectedIds.size} payment{selectedIds.size !== 1 ? 's' : ''} selected
             <span className="ml-2 text-muted-foreground">
@@ -494,10 +494,10 @@ export function PaymentsClient({
                   <td className="px-4 py-3 text-center">
                     <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
                       payment.status === 'paid'
-                        ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300'
+                        ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
                         : payment.status === 'pending'
-                          ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300'
-                          : 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
+                          ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300'
+                          : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
                     }`}>
                       {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
                     </span>
@@ -505,8 +505,8 @@ export function PaymentsClient({
                   <td className="px-4 py-3 text-center">
                     <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
                       payment.musician.w9_on_file
-                        ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                        : 'bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300'
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                        : 'bg-amber-100 text-amber-800 dark:bg-orange-950 dark:text-orange-300'
                     }`}>
                       {payment.musician.w9_on_file ? 'Yes' : 'No'}
                     </span>
@@ -514,10 +514,10 @@ export function PaymentsClient({
                   <td className="px-4 py-3 text-center">
                     <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
                       payment.musician.zelle_verified
-                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
                         : payment.musician.zelle_method
-                          ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300'
-                          : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                          ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300'
+                          : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
                     }`}>
                       {payment.musician.zelle_verified
                         ? payment.musician.zelle_method === 'email' ? 'Email' : 'Phone'

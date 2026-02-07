@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">
+  <!--
+    Podium Logo - Light version (for dark backgrounds)
+    Elegant pp monogram + PODIUM wordmark
+    Colors: Cream (#F5F0E8), Brass (#C4915A)
+  -->
+
+  <!-- pp monogram in elegant serif italic -->
+  <text
+    x="100" y="50"
+    font-family="Georgia, 'Palatino Linotype', 'Book Antiqua', Palatino, serif"
+    font-size="50"
+    font-style="italic"
+    fill="#F5F0E8"
+    text-anchor="middle"
+    letter-spacing="-1"
+  >pp</text>
+
+  <!-- Brass accent bar -->
+  <rect x="72" y="58" width="56" height="1.5" rx="0.75" fill="#C4915A"/>
+
+  <!-- PODIUM wordmark - tracked uppercase -->
+  <text
+    x="103" y="80"
+    font-family="Georgia, 'Palatino Linotype', 'Book Antiqua', Palatino, serif"
+    font-size="14"
+    fill="#F5F0E8"
+    text-anchor="middle"
+    letter-spacing="5"
+  >PODIUM</text>
+</svg>

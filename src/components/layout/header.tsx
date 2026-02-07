@@ -149,9 +149,9 @@ export function Header({ user }: HeaderProps) {
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <div className="flex h-20 items-center justify-center px-4">
             <img
-              src="/logo.png"
-              alt="Podium Personnel"
-              className="max-h-[60px] max-w-full object-contain brightness-0 invert"
+              src="/logo-light.svg"
+              alt="Podium"
+              className="max-h-[60px] max-w-full object-contain"
             />
           </div>
           <Separator className="bg-sidebar-border" />

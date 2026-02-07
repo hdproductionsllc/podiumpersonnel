@@ -194,11 +194,15 @@ export function ProjectPositions({
   async function handleRemovePosition(position: PositionJoined) {
     // Prevent removal of confirmed positions
     if (position.status === 'confirmed' || position.musician_id) {
-      alert('Cannot remove a position that has a confirmed musician. Unassign the musician first.')
+      toast.error('Cannot remove a position with a confirmed musician. Unassign them first.')
       return
     }
     const supabase = createClient()
-    await supabase.from('project_positions').delete().eq('id', position.id)
+    const { error } = await supabase.from('project_positions').delete().eq('id', position.id)
+    if (error) {
+      toast.error('Failed to remove position')
+      return
+    }
     onPositionChange()
   }
 
@@ -206,20 +210,28 @@ export function ProjectPositions({
     // Check if any positions are confirmed
     const confirmedPositions = positions.filter(p => p.status === 'confirmed' || p.musician_id)
     if (confirmedPositions.length > 0) {
-      alert(`Cannot clear all positions. ${confirmedPositions.length} position(s) have confirmed musicians. Unassign them first.`)
+      toast.error(`Cannot clear all positions. ${confirmedPositions.length} position(s) have confirmed musicians. Unassign them first.`)
       return
     }
     if (!confirm('Remove all positions from this project?')) return
     setClearing(true)
     const supabase = createClient()
-    await supabase.from('project_positions').delete().eq('project_id', projectId)
+    const { error } = await supabase.from('project_positions').delete().eq('project_id', projectId)
+    if (error) {
+      toast.error('Failed to clear positions')
+    } else {
+      onPositionChange()
+    }
     setClearing(false)
-    onPositionChange()
   }
 
   async function handleStatusChange(positionId: string, newStatus: string) {
     const supabase = createClient()
-    await supabase.from('project_positions').update({ status: newStatus }).eq('id', positionId)
+    const { error } = await supabase.from('project_positions').update({ status: newStatus }).eq('id', positionId)
+    if (error) {
+      toast.error('Failed to update status')
+      return
+    }
     onPositionChange()
   }
 
@@ -261,12 +273,16 @@ export function ProjectPositions({
     const nextChair = existingChairs.length > 0 ? Math.max(...existingChairs) + 1 : 1
 
     const supabase = createClient()
-    await supabase.from('project_positions').insert({
+    const { error } = await supabase.from('project_positions').insert({
       project_id: projectId,
       instrument_id: position.instrument_id,
       chair_number: nextChair,
       status: 'vacant',
     })
+    if (error) {
+      toast.error('Failed to add chair')
+      return
+    }
     onPositionChange()
   }
 
@@ -320,7 +336,7 @@ export function ProjectPositions({
           No positions defined. Import from a saved ensemble or add positions manually.
         </p>
       ) : (
-        <div className="rounded-md border bg-background">
+        <div className="overflow-x-auto rounded-md border bg-background">
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/30">
               <tr>

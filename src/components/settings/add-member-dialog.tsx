@@ -86,7 +86,7 @@ export function AddMemberDialog({ open, onOpenChange, onSuccess }: AddMemberDial
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email Address</FormLabel>
+                  <FormLabel required>Email Address</FormLabel>
                   <FormControl>
                     <Input type="email" placeholder="name@example.com" {...field} />
                   </FormControl>
@@ -99,7 +99,7 @@ export function AddMemberDialog({ open, onOpenChange, onSuccess }: AddMemberDial
               name="role"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Role</FormLabel>
+                  <FormLabel required>Role</FormLabel>
                   <FormControl>
                     <select
                       className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"

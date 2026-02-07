@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { ContractOfferEmail } from '@/lib/email/templates/contract-offer'
 import { render } from '@react-email/render'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
+import { getVenueName } from '@/lib/venue-helpers'
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { positionId, musicianId, personalMessage } = body
+    const { positionId, musicianId, personalMessage, customPay } = body
 
     if (!positionId || !musicianId) {
       return NextResponse.json({ error: 'Position ID and Musician ID are required' }, { status: 400 })
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
           id,
           name,
           organization:organizations(id, name, timezone, email_logo_url, email_brand_color, email_footer_text),
-          services(id, name, service_type, call_time, start_time, end_time, venue)
+          services(id, name, service_type, call_time, start_time, end_time, venue, venue_id, base_pay, leader_fee, venue_details:venues(name, address, city, state, zip))
         )
       `)
       .eq('id', positionId)
@@ -106,8 +107,20 @@ export async function POST(request: NextRequest) {
               timeZone: timezone,
             })
           : null,
-        venue: service.venue,
+        venue: getVenueName(service),
       }))
+
+    // Compute pay amount for preview
+    const chairNumber = posData.chair_number || 1
+    const isLeader = chairNumber === 1
+    // Use base_pay/leader_fee from the first service (they're per-service but typically uniform)
+    const firstService = services[0]
+    const serviceBasePay = firstService?.base_pay ?? null
+    const serviceLeaderFee = firstService?.leader_fee ?? null
+    let payAmount: number | null = customPay != null ? parseFloat(customPay) : null
+    if (payAmount == null && serviceBasePay != null) {
+      payAmount = serviceBasePay + (isLeader && serviceLeaderFee ? serviceLeaderFee : 0)
+    }
 
     const emailHtml = await render(
       ContractOfferEmail({
@@ -115,11 +128,14 @@ export async function POST(request: NextRequest) {
         organizationName: organization?.name || 'Orchestra',
         projectName: project?.name || 'Project',
         instrument: instrument?.name || 'Instrument',
-        chairNumber: posData.chair_number || 1,
+        chairNumber,
         totalChairs,
         services: formattedServices,
         responseUrl,
         expiresAt: null,
+        payAmount: payAmount != null && !isNaN(payAmount) ? payAmount : undefined,
+        leaderFee: isLeader && serviceLeaderFee ? serviceLeaderFee : undefined,
+        isLeader,
         personalMessage: personalMessage || undefined,
         branding: {
           logoUrl: organization?.email_logo_url,

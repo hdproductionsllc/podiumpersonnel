@@ -19,7 +19,7 @@ export function ConflictsSummary({ conflicts }: ConflictsSummaryProps) {
           Schedule Conflicts ({conflicts.length})
         </h4>
       </div>
-      <div className="rounded-md border border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20">
+      <div className="overflow-x-auto rounded-md border border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20">
         <table className="w-full text-sm">
           <thead className="border-b border-amber-200 dark:border-amber-900">
             <tr>

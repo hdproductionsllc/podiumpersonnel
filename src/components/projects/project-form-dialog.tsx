@@ -246,7 +246,7 @@ export function ProjectFormDialog({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Name</FormLabel>
+                  <FormLabel required>Name</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g. Spring Concert 2026" {...field} />
                   </FormControl>

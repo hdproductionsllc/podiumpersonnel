@@ -1,27 +1,8 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { requireOrgAdmin, apiSuccess, apiError } from '@/lib/api-helpers'
 
 export async function POST(request: Request) {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const { data: membership } = await supabase
-    .from('organization_members')
-    .select('organization_id, role')
-    .eq('user_id', user.id)
-    .single()
-
-  if (!membership) {
-    return NextResponse.json({ error: 'No organization found' }, { status: 404 })
-  }
-
-  if (membership.role !== 'owner' && membership.role !== 'admin') {
-    return NextResponse.json({ error: 'Permission denied' }, { status: 403 })
-  }
+  const { supabase, membership, error } = await requireOrgAdmin()
+  if (error) return error
 
   try {
     const body = await request.json()
@@ -56,18 +37,18 @@ export async function POST(request: Request) {
     if (projectId) {
       positionsQuery = positionsQuery.eq('project_id', projectId)
     } else {
-      positionsQuery = positionsQuery.eq('projects.organization_id', membership.organization_id)
+      positionsQuery = positionsQuery.eq('projects.organization_id', membership!.organization_id)
     }
 
     const { data: positions, error: positionsError } = await positionsQuery
 
     if (positionsError) {
       console.error('Error fetching positions:', positionsError)
-      return NextResponse.json({ error: positionsError.message }, { status: 500 })
+      return apiError(positionsError.message, 500)
     }
 
     if (!positions || positions.length === 0) {
-      return NextResponse.json({
+      return apiSuccess({
         created: 0,
         skipped: 0,
         message: 'No confirmed positions found'
@@ -132,7 +113,7 @@ export async function POST(request: Request) {
     }
 
     if (paymentsToInsert.length === 0) {
-      return NextResponse.json({
+      return apiSuccess({
         created: 0,
         skipped: 0,
         message: 'No payments to generate (services may not have pay amounts set)'
@@ -150,19 +131,19 @@ export async function POST(request: Request) {
 
     if (insertError) {
       console.error('Error inserting payments:', insertError)
-      return NextResponse.json({ error: insertError.message }, { status: 500 })
+      return apiError(insertError.message, 500)
     }
 
     const createdCount = inserted?.length || 0
     const skippedCount = paymentsToInsert.length - createdCount
 
-    return NextResponse.json({
+    return apiSuccess({
       created: createdCount,
       skipped: skippedCount,
       message: `Generated ${createdCount} payment records${skippedCount > 0 ? ` (${skippedCount} already existed)` : ''}`,
     })
   } catch (err) {
     console.error('Generate payments error:', err)
-    return NextResponse.json({ error: 'Failed to generate payments' }, { status: 500 })
+    return apiError('Failed to generate payments', 500)
   }
 }

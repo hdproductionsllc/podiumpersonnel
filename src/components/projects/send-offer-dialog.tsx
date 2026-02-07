@@ -252,11 +252,10 @@ export function SendOfferDialog({
         })
 
         if (!response.ok) {
-          const result = await response.json()
-          console.warn('Failed to send email:', result.error)
+          toast.error('Offer created but email failed to send. Contact the musician manually.')
         }
-      } catch (emailError) {
-        console.warn('Failed to send email:', emailError)
+      } catch {
+        toast.error('Offer created but email failed to send. Contact the musician manually.')
       }
     }
 

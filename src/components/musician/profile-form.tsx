@@ -96,6 +96,7 @@ export function ProfileForm({
   const [notificationSuccess, setNotificationSuccess] = useState(false)
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
+  const [notificationError, setNotificationError] = useState<string | null>(null)
 
   const [notifications, setNotifications] = useState(notificationPreferences)
 
@@ -147,6 +148,7 @@ export function ProfileForm({
   async function onSaveNotifications() {
     setIsSavingNotifications(true)
     setNotificationSuccess(false)
+    setNotificationError(null)
 
     try {
       const response = await fetch('/api/musician/notifications/preferences', {
@@ -162,7 +164,7 @@ export function ProfileForm({
       setNotificationSuccess(true)
       setTimeout(() => setNotificationSuccess(false), 3000)
     } catch (err) {
-      console.error('Failed to save notifications:', err)
+      setNotificationError(err instanceof Error ? err.message : 'Failed to save preferences')
     } finally {
       setIsSavingNotifications(false)
     }
@@ -338,6 +340,11 @@ export function ProfileForm({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {notificationError && (
+            <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+              {notificationError}
+            </div>
+          )}
           {notificationSuccess && (
             <div className="rounded-md bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 p-3 text-sm text-green-800 dark:text-green-200 flex items-center gap-2">
               <Check className="h-4 w-4" />

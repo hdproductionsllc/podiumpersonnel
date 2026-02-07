@@ -511,7 +511,7 @@ export type Database = {
           requesting_musician_id: string
           service_id: string | null
           reason: string | null
-          status: 'pending' | 'pending_approval' | 'approved' | 'denied' | 'declined' | 'sub_declined' | 'filled' | 'cancelled'
+          status: 'pending_approval' | 'approved' | 'declined' | 'sub_declined' | 'filled' | 'cancelled'
           substitute_musician_id: string | null
           suggested_sub_name: string | null
           suggested_sub_email: string | null
@@ -528,7 +528,7 @@ export type Database = {
           requesting_musician_id: string
           service_id?: string | null
           reason?: string | null
-          status?: 'pending' | 'pending_approval' | 'approved' | 'denied' | 'declined' | 'sub_declined' | 'filled' | 'cancelled'
+          status?: 'pending_approval' | 'approved' | 'declined' | 'sub_declined' | 'filled' | 'cancelled'
           substitute_musician_id?: string | null
           suggested_sub_name?: string | null
           suggested_sub_email?: string | null
@@ -545,7 +545,7 @@ export type Database = {
           requesting_musician_id?: string
           service_id?: string | null
           reason?: string | null
-          status?: 'pending' | 'pending_approval' | 'approved' | 'denied' | 'declined' | 'sub_declined' | 'filled' | 'cancelled'
+          status?: 'pending_approval' | 'approved' | 'declined' | 'sub_declined' | 'filled' | 'cancelled'
           substitute_musician_id?: string | null
           suggested_sub_name?: string | null
           suggested_sub_email?: string | null
@@ -598,6 +598,7 @@ export type Database = {
           project_position_id: string | null
           amount: number
           is_leader_fee: boolean
+          payment_type: 'standard' | 'adjustment' | 'correction' | 'bonus'
           status: 'unpaid' | 'pending' | 'paid'
           payment_date: string | null
           payment_method: string | null
@@ -616,6 +617,7 @@ export type Database = {
           project_position_id?: string | null
           amount: number
           is_leader_fee?: boolean
+          payment_type?: 'standard' | 'adjustment' | 'correction' | 'bonus'
           status?: 'unpaid' | 'pending' | 'paid'
           payment_date?: string | null
           payment_method?: string | null
@@ -634,6 +636,7 @@ export type Database = {
           project_position_id?: string | null
           amount?: number
           is_leader_fee?: boolean
+          payment_type?: 'standard' | 'adjustment' | 'correction' | 'bonus'
           status?: 'unpaid' | 'pending' | 'paid'
           payment_date?: string | null
           payment_method?: string | null
@@ -738,6 +741,29 @@ export type Database = {
           updated_at?: string
         }
       }
+      impersonation_log: {
+        Row: {
+          id: string
+          admin_user_id: string
+          musician_id: string
+          organization_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          admin_user_id: string
+          musician_id: string
+          organization_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          admin_user_id?: string
+          musician_id?: string
+          organization_id?: string
+          created_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -777,3 +803,4 @@ export type Payment = Database['public']['Tables']['payments']['Row']
 export type StaffingPreset = Database['public']['Tables']['staffing_presets']['Row']
 export type MusicianNotificationPreferences = Database['public']['Tables']['musician_notification_preferences']['Row']
 export type UserTutorialState = Database['public']['Tables']['user_tutorial_state']['Row']
+export type ImpersonationLog = Database['public']['Tables']['impersonation_log']['Row']

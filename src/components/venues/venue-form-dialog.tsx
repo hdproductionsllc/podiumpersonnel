@@ -180,7 +180,7 @@ export function VenueFormDialog({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Venue Name *</FormLabel>
+                  <FormLabel required>Venue Name</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g. Symphony Hall" {...field} />
                   </FormControl>

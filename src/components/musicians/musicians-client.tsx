@@ -916,7 +916,7 @@ export function MusiciansClient({
 
           {/* Bulk Actions Bar */}
           {selectMode && selectedIds.size > 0 && (
-            <div className="flex items-center gap-4 rounded-lg bg-blue-50 dark:bg-blue-950 p-3 mb-4">
+            <div className="flex items-center gap-4 rounded-lg bg-gold/10 border border-gold/20 dark:bg-gold/5 p-3 mb-4">
               <span className="text-sm font-medium">
                 {selectedIds.size} musician{selectedIds.size !== 1 ? 's' : ''} selected
               </span>
@@ -1109,8 +1109,8 @@ export function MusiciansClient({
                               onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
                               className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 ${
                                 musician.is_active
-                                  ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300'
-                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
+                                  : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
                               }`}
                             >
                               {musician.is_active ? 'Active' : 'Inactive'}
@@ -1119,8 +1119,8 @@ export function MusiciansClient({
                             <span
                               className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
                                 musician.is_active
-                                  ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300'
-                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
+                                  : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
                               }`}
                             >
                               {musician.is_active ? 'Active' : 'Inactive'}
@@ -1131,8 +1131,8 @@ export function MusiciansClient({
                               onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
                               className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 ${
                                 musician.w9_on_file
-                                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                                  : 'bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300'
+                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                                  : 'bg-amber-100 text-amber-800 dark:bg-orange-950 dark:text-orange-300'
                               }`}
                             >
                               {musician.w9_on_file ? 'W-9 ✓' : 'No W-9'}
@@ -1141,8 +1141,8 @@ export function MusiciansClient({
                             <span
                               className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
                                 musician.w9_on_file
-                                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                                  : 'bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300'
+                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                                  : 'bg-amber-100 text-amber-800 dark:bg-orange-950 dark:text-orange-300'
                               }`}
                             >
                               {musician.w9_on_file ? 'W-9 ✓' : 'No W-9'}
@@ -1153,10 +1153,10 @@ export function MusiciansClient({
                               onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
                               className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 ${
                                 musician.zelle_verified
-                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
                                   : musician.zelle_method
-                                    ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300'
-                                    : 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
+                                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300'
+                                    : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
                               }`}
                             >
                               {musician.zelle_verified
@@ -1169,10 +1169,10 @@ export function MusiciansClient({
                             <span
                               className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
                                 musician.zelle_verified
-                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
                                   : musician.zelle_method
-                                    ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300'
-                                    : 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
+                                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300'
+                                    : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
                               }`}
                             >
                               {musician.zelle_verified

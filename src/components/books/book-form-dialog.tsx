@@ -297,7 +297,7 @@ export function BookFormDialog({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Name</FormLabel>
+                  <FormLabel required>Name</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g. Main Roster" {...field} />
                   </FormControl>

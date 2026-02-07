@@ -359,7 +359,7 @@ export function ServiceFormDialog({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Name</FormLabel>
+                  <FormLabel required>Name</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g. Rehearsal 1" {...field} />
                   </FormControl>

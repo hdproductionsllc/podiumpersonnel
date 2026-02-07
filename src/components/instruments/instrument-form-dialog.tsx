@@ -151,7 +151,7 @@ export function InstrumentFormDialog({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Name</FormLabel>
+                  <FormLabel required>Name</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g. Violin 1" {...field} />
                   </FormControl>
