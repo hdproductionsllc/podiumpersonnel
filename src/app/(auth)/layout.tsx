@@ -35,9 +35,9 @@ export default function AuthLayout({
           <Logo variant="light" size="lg" />
           <div className="mt-8 w-16 h-px bg-gold/40" />
           <p className="mt-8 text-center text-lg text-sidebar-foreground/60 leading-relaxed font-heading">
-            Orchestra personnel management,
+            Personnel management,
             <br />
-            <span className="text-sidebar-foreground/80 italic">refined.</span>
+            <span className="text-sidebar-foreground/80 italic">beautifully composed.</span>
           </p>
         </div>
       </div>
