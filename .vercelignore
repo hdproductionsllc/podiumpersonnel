@@ -1,0 +1,14 @@
+# Exclude non-app files from Vercel deployment
+bravura-master/
+bravura-master.zip
+podium-marketing/
+podium-marketing.zip
+podium_marketing_copy.md
+podium_musician_portal_implementation.md
+podium_personnel_strategy.md
+feedback 013126.txt
+musician roster.xlsx
+nul
+public/logo-preview.html
+supabase/.temp/
+.claude/
