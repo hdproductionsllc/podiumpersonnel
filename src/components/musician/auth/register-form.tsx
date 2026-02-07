@@ -40,7 +40,7 @@ export function MusicianRegisterForm() {
   const form = useForm<MusicianSignupInput>({
     resolver: zodResolver(musicianSignupSchema),
     defaultValues: {
-      email: '',
+      email: typeof window !== 'undefined' ? localStorage.getItem('musician_email') || '' : '',
       password: '',
       confirmPassword: '',
     },

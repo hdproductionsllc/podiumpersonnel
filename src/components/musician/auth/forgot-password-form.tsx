@@ -27,7 +27,7 @@ export function MusicianForgotPasswordForm() {
   const form = useForm<ForgotPasswordInput>({
     resolver: zodResolver(forgotPasswordSchema),
     defaultValues: {
-      email: '',
+      email: typeof window !== 'undefined' ? localStorage.getItem('musician_email') || '' : '',
     },
   })
 

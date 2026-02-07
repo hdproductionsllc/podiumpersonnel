@@ -28,6 +28,16 @@ export function MusicianLoginForm() {
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
+  const form = useForm<LoginInput>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('email') || localStorage.getItem('musician_email') || ''
+        : '',
+      password: '',
+    },
+  })
+
   // Handle URL messages
   useEffect(() => {
     const message = searchParams.get('message')
@@ -69,14 +79,6 @@ export function MusicianLoginForm() {
     })
   }
 
-  const form = useForm<LoginInput>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: '',
-      password: '',
-    },
-  })
-
   async function onSubmit(data: LoginInput) {
     setIsLoading(true)
     setError(null)
@@ -95,6 +97,9 @@ export function MusicianLoginForm() {
     }
 
     if (authData.user) {
+      // Remember email for next login
+      localStorage.setItem('musician_email', data.email)
+
       // If we arrived from the activation flow, complete activation by token
       const activationToken = searchParams.get('activation_token')
       if (activationToken) {
