@@ -3,6 +3,7 @@ import { MusicianNav } from '@/components/musician/musician-nav'
 import { MusicianHeader, MusicianDesktopHeader } from '@/components/musician/musician-header'
 import { ImpersonationBanner } from '@/components/musician/impersonation-banner'
 import { MusicianSignOutButton } from '@/components/musician/musician-sign-out-button'
+import { RememberEmail } from '@/components/musician/remember-email'
 
 export default async function MusicianLayout({
   children,
@@ -166,6 +167,9 @@ export default async function MusicianLayout({
 
       {/* Navigation */}
       <MusicianNav pendingOffersCount={pendingOffersCount} />
+
+      {/* Remember email for login prefill */}
+      <RememberEmail email={musician.email || user.email || ''} />
 
       {/* Main Content */}
       <main className={`pb-20 md:pb-6 md:pl-60 ${isImpersonating ? 'pt-12' : ''}`}>
