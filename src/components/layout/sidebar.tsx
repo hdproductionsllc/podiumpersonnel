@@ -91,37 +91,28 @@ const navigation = [
   { name: 'Instruments', href: '/dashboard/instruments', icon: MusicIcon, emphasize: false },
 ]
 
-export function Sidebar() {
+export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
 
   return (
-    <aside className="flex h-full w-64 flex-col border-r bg-card">
-      <div className="flex h-36 items-center justify-center px-4">
-        <Link href="/dashboard">
-          <img
-            src="/logo.png"
-            alt="Podium Personnel"
-            className="max-h-[120px] max-w-full object-contain"
-          />
-        </Link>
-      </div>
-      <Separator />
-      <nav className="flex-1 space-y-1 px-3 py-4">
+    <>
+      <nav className="flex-1 space-y-0.5 px-3 py-4">
         {navigation.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
             <Button
               key={item.name}
-              variant={isActive ? 'secondary' : 'ghost'}
+              variant="ghost"
               className={cn(
-                'w-full justify-start',
-                isActive && 'bg-secondary',
-                !isActive && item.emphasize && 'font-semibold text-primary'
+                'w-full justify-start text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors',
+                isActive && 'bg-sidebar-accent text-sidebar-primary font-semibold border-l-2 border-sidebar-primary rounded-l-none',
+                !isActive && item.emphasize && 'font-semibold text-sidebar-primary'
               )}
               asChild
+              onClick={onNavigate}
             >
               <Link href={item.href}>
-                <item.icon className="mr-3 h-5 w-5" />
+                <item.icon className={cn('mr-3 h-5 w-5', isActive && 'text-sidebar-primary')} />
                 {item.name}
               </Link>
             </Button>
@@ -129,26 +120,45 @@ export function Sidebar() {
         })}
       </nav>
       <div className="px-3 pb-4">
-        <Separator className="mb-3" />
+        <Separator className="mb-3 bg-sidebar-border/50" />
         {(() => {
           const isActive = pathname === '/dashboard/settings' || pathname.startsWith('/dashboard/settings/')
           return (
             <Button
-              variant={isActive ? 'secondary' : 'ghost'}
+              variant="ghost"
               className={cn(
-                'w-full justify-start',
-                isActive && 'bg-secondary'
+                'w-full justify-start text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors',
+                isActive && 'bg-sidebar-accent text-sidebar-primary font-semibold border-l-2 border-sidebar-primary rounded-l-none'
               )}
               asChild
+              onClick={onNavigate}
             >
               <Link href="/dashboard/settings">
-                <SettingsIcon className="mr-3 h-5 w-5" />
+                <SettingsIcon className={cn('mr-3 h-5 w-5', isActive && 'text-sidebar-primary')} />
                 Settings
               </Link>
             </Button>
           )
         })()}
       </div>
+    </>
+  )
+}
+
+export function Sidebar() {
+  return (
+    <aside className="hidden md:flex h-full w-64 flex-col border-r border-sidebar-border bg-sidebar">
+      <div className="flex h-36 items-center justify-center px-4">
+        <Link href="/dashboard">
+          <img
+            src="/logo.png"
+            alt="Podium Personnel"
+            className="max-h-[120px] max-w-full object-contain brightness-0 invert"
+          />
+        </Link>
+      </div>
+      <Separator className="bg-sidebar-border" />
+      <SidebarNav />
     </aside>
   )
 }

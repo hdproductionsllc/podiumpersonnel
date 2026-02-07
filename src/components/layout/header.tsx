@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -13,6 +14,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
+import { SidebarNav } from '@/components/layout/sidebar'
+import { Separator } from '@/components/ui/separator'
 
 interface HeaderProps {
   user: {
@@ -22,6 +26,7 @@ interface HeaderProps {
 
 export function Header({ user }: HeaderProps) {
   const router = useRouter()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -35,9 +40,20 @@ export function Header({ user }: HeaderProps) {
     : '?'
 
   return (
-    <header className="flex h-16 items-center justify-between border-b px-6">
-      <div className="flex items-center gap-4">
-        <h1 className="text-lg font-semibold">Dashboard</h1>
+    <header className="flex h-14 items-center justify-between border-b border-border/60 px-4 md:px-6 bg-card/50 backdrop-blur-sm">
+      <div className="flex items-center gap-3">
+        {/* Mobile hamburger */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden h-9 w-9"
+          onClick={() => setMobileMenuOpen(true)}
+        >
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+          </svg>
+          <span className="sr-only">Open menu</span>
+        </Button>
       </div>
       <div className="flex items-center gap-2">
         <Link href="/dashboard/settings">
@@ -64,9 +80,9 @@ export function Header({ user }: HeaderProps) {
         </Link>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-              <Avatar className="h-10 w-10">
-                <AvatarFallback>{initials}</AvatarFallback>
+            <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+              <Avatar className="h-9 w-9">
+                <AvatarFallback className="bg-primary text-primary-foreground text-sm font-medium">{initials}</AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
@@ -126,6 +142,22 @@ export function Header({ user }: HeaderProps) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Mobile navigation sheet */}
+      <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+        <SheetContent side="left" className="w-64 p-0 bg-sidebar text-sidebar-foreground border-sidebar-border">
+          <SheetTitle className="sr-only">Navigation</SheetTitle>
+          <div className="flex h-20 items-center justify-center px-4">
+            <img
+              src="/logo.png"
+              alt="Podium Personnel"
+              className="max-h-[60px] max-w-full object-contain brightness-0 invert"
+            />
+          </div>
+          <Separator className="bg-sidebar-border" />
+          <SidebarNav onNavigate={() => setMobileMenuOpen(false)} />
+        </SheetContent>
+      </Sheet>
     </header>
   )
 }

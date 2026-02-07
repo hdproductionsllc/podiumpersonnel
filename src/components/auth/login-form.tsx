@@ -82,11 +82,11 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl font-bold">Sign in</CardTitle>
-        <CardDescription>
-          Enter your email and password to access your account
+    <Card className="w-full border-border/60 shadow-lg shadow-primary/[0.03]">
+      <CardHeader className="space-y-1 pb-4">
+        <CardTitle className="text-3xl">Sign in</CardTitle>
+        <CardDescription className="text-base">
+          Enter your credentials to access your account
         </CardDescription>
       </CardHeader>
       <CardContent>

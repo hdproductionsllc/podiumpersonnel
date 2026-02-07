@@ -3,7 +3,7 @@ import { LoginForm } from '@/components/auth/login-form'
 
 function LoginFormFallback() {
   return (
-    <div className="w-full max-w-md rounded-lg border bg-card p-8">
+    <div className="w-full rounded-lg border bg-card p-8">
       <div className="animate-pulse space-y-4">
         <div className="h-8 bg-muted rounded w-24"></div>
         <div className="h-4 bg-muted rounded w-48"></div>
@@ -23,10 +23,8 @@ function LoginFormFallback() {
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Suspense fallback={<LoginFormFallback />}>
-        <LoginForm />
-      </Suspense>
-    </div>
+    <Suspense fallback={<LoginFormFallback />}>
+      <LoginForm />
+    </Suspense>
   )
 }
