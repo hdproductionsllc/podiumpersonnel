@@ -30,11 +30,12 @@ import type { ProjectWithServices } from './projects-client'
 
 type TemplateType = 'string-quartet' | 'orchestra' | 'custom'
 
-const TEMPLATES: Record<TemplateType, { label: string; description: string; defaultName: string }> = {
+const TEMPLATES: Record<TemplateType, { label: string; description: string; defaultName: string; singleDay?: boolean }> = {
   'string-quartet': {
     label: 'String Quartet Gig',
     description: '1 performance, quartet positions',
     defaultName: 'String Quartet Gig',
+    singleDay: true,
   },
   'orchestra': {
     label: 'Orchestra Concert',
@@ -125,6 +126,7 @@ export function ProjectFormDialog({
     if (template !== 'custom') {
       form.setValue('name', TEMPLATES[template].defaultName)
     }
+    setIsSingleDay(!!TEMPLATES[template].singleDay)
   }
 
   async function onSubmit(data: ProjectInput) {

@@ -80,6 +80,9 @@ export function SendOfferDialog({
   const [newEmail, setNewEmail] = useState('')
   const [addingMusician, setAddingMusician] = useState(false)
   const [locallyAddedMusicians, setLocallyAddedMusicians] = useState<MusicianForOffer[]>([])
+  const [updatedEmails, setUpdatedEmails] = useState<Record<string, string>>({})
+  const [editingEmail, setEditingEmail] = useState('')
+  const [savingEmail, setSavingEmail] = useState(false)
   const [personalMessage, setPersonalMessage] = useState('')
   const [showSuccess, setShowSuccess] = useState(false)
   const [sentMusicianName, setSentMusicianName] = useState('')
@@ -98,6 +101,9 @@ export function SendOfferDialog({
         : null
       setCustomPay(suggestedCustomPay || (defaultPay != null ? defaultPay.toString() : ''))
       setLocallyAddedMusicians([])
+      setUpdatedEmails({})
+      setEditingEmail('')
+      setSavingEmail(false)
       setPersonalMessage('')
       setShowSuccess(false)
       setSentMusicianName('')
@@ -122,7 +128,7 @@ export function SendOfferDialog({
 
   // Get selected musician's email status
   const selectedMusician = allMusicians.find((m) => m.id === selectedMusicianId)
-  const hasEmail = selectedMusician?.email ? true : false
+  const hasEmail = selectedMusician?.email || updatedEmails[selectedMusicianId] ? true : false
 
   // Calculate pay - chair 1 gets leader fee
   const isLeaderPosition = chairNumber === 1
@@ -133,23 +139,27 @@ export function SendOfferDialog({
 
   if (!open) return null
 
-  // Filter musicians who play this instrument and don't already have an offer
-  // Sort by: leaders first (for chair 1), then by call_order
-  const availableMusicians = allMusicians
-    .filter(
-      (m) =>
-        m.musician_instruments.some((mi) => mi.instrument_id === instrumentId) &&
-        !existingOfferMusicianIds.includes(m.id)
-    )
-    .sort((a, b) => {
-      // For chair 1, prioritize leaders
-      if (isLeaderPosition) {
-        if (a.is_leader && !b.is_leader) return -1
-        if (!a.is_leader && b.is_leader) return 1
-      }
-      // Then sort by call order
-      return (a.call_order ?? 100) - (b.call_order ?? 100)
-    })
+  // All musicians without existing offers, split by instrument match
+  const allAvailable = allMusicians.filter((m) => !existingOfferMusicianIds.includes(m.id))
+
+  const playsInstrument = (m: MusicianForOffer) =>
+    m.musician_instruments.some((mi) => mi.instrument_id === instrumentId)
+
+  const sortByCallOrder = (a: MusicianForOffer, b: MusicianForOffer) => {
+    if (isLeaderPosition) {
+      if (a.is_leader && !b.is_leader) return -1
+      if (!a.is_leader && b.is_leader) return 1
+    }
+    return (a.call_order ?? 100) - (b.call_order ?? 100)
+  }
+
+  const instrumentMusicians = allAvailable.filter(playsInstrument).sort(sortByCallOrder)
+  const otherMusicians = allAvailable.filter((m) => !playsInstrument(m)).sort(sortByCallOrder)
+
+  // By default show instrument musicians; when searching, show all
+  const availableMusicians = searchQuery.trim()
+    ? [...instrumentMusicians, ...otherMusicians]
+    : instrumentMusicians
 
   // Filter by search query
   const filteredMusicians = searchQuery.trim()
@@ -387,9 +397,9 @@ export function SendOfferDialog({
         <div className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Musician</label>
-            {availableMusicians.length === 0 ? (
+            {availableMusicians.length === 0 && allAvailable.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No available musicians for this instrument.
+                No available musicians. Add one below or from the Musicians page.
               </p>
             ) : (
               <>
@@ -408,6 +418,7 @@ export function SendOfferDialog({
                       setSearchOpen(true)
                       if (selectedMusicianId) {
                         setSelectedMusicianId('')
+                        setEditingEmail('')
                       }
                     }}
                     onFocus={() => {
@@ -424,6 +435,7 @@ export function SendOfferDialog({
                         setSelectedMusicianId('')
                         setSearchQuery('')
                         setSearchOpen(true)
+                        setEditingEmail('')
                       }}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >
@@ -435,47 +447,111 @@ export function SendOfferDialog({
                   {searchOpen && (
                     <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-64 overflow-auto">
                       {filteredMusicians.length > 0 ? (
-                        filteredMusicians.map((m) => {
-                          const hasConflict = m.competing_schedules && m.competing_schedules.length > 0
+                        (() => {
+                          const instrumentGroup = filteredMusicians.filter(playsInstrument)
+                          const otherGroup = filteredMusicians.filter((m) => !playsInstrument(m))
                           return (
-                            <button
-                              key={m.id}
-                              type="button"
-                              className="w-full px-3 py-2 text-left hover:bg-muted flex items-center justify-between gap-2"
-                              onClick={() => {
-                                setSelectedMusicianId(m.id)
-                                setSearchQuery('')
-                                setSearchOpen(false)
-                              }}
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="font-medium text-sm truncate">
-                                  {m.last_name}, {m.first_name}
-                                </span>
-                                {m.is_leader && (
-                                  <span className="text-amber-500 flex-shrink-0" title="Leader">&#9733;</span>
-                                )}
-                                {!m.email && (
-                                  <span className="text-xs text-amber-600 dark:text-amber-400 flex-shrink-0" title="No email">
-                                    No email
-                                  </span>
-                                )}
-                                {hasConflict && (
-                                  <span className="text-xs text-red-600 dark:text-red-400 flex-shrink-0" title="Schedule conflict">
-                                    Conflict
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1 flex-shrink-0">
-                                {m.call_order != null && m.call_order < 100 && (
-                                  <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium">
-                                    #{m.call_order}
-                                  </span>
-                                )}
-                              </div>
-                            </button>
+                            <>
+                              {instrumentGroup.map((m) => {
+                                const hasConflict = m.competing_schedules && m.competing_schedules.length > 0
+                                return (
+                                  <button
+                                    key={m.id}
+                                    type="button"
+                                    className="w-full px-3 py-2 text-left hover:bg-muted flex items-center justify-between gap-2"
+                                    onClick={() => {
+                                      setSelectedMusicianId(m.id)
+                                      setSearchQuery('')
+                                      setSearchOpen(false)
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="font-medium text-sm truncate">
+                                        {m.last_name}, {m.first_name}
+                                      </span>
+                                      {m.is_leader && (
+                                        <span className="text-amber-500 flex-shrink-0" title="Leader">&#9733;</span>
+                                      )}
+                                      {!m.email && !updatedEmails[m.id] && (
+                                        <span className="text-xs text-amber-600 dark:text-amber-400 flex-shrink-0" title="No email">
+                                          No email
+                                        </span>
+                                      )}
+                                      {hasConflict && (
+                                        <span className="text-xs text-red-600 dark:text-red-400 flex-shrink-0" title="Schedule conflict">
+                                          Conflict
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                      {m.call_order != null && m.call_order < 100 && (
+                                        <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium">
+                                          #{m.call_order}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </button>
+                                )
+                              })}
+                              {otherGroup.length > 0 && (
+                                <>
+                                  <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted/50 border-t">
+                                    Other musicians
+                                  </div>
+                                  {otherGroup.map((m) => {
+                                    const hasConflict = m.competing_schedules && m.competing_schedules.length > 0
+                                    return (
+                                      <button
+                                        key={m.id}
+                                        type="button"
+                                        className="w-full px-3 py-2 text-left hover:bg-muted flex items-center justify-between gap-2"
+                                        onClick={async () => {
+                                          // Auto-link instrument
+                                          const supabase = createClient()
+                                          await supabase.from('musician_instruments').insert({
+                                            musician_id: m.id,
+                                            instrument_id: instrumentId,
+                                            is_primary: false,
+                                            proficiency: 'professional',
+                                          })
+                                          m.musician_instruments.push({ instrument_id: instrumentId })
+                                          toast.success(`Added ${instrumentName || 'instrument'} to ${m.first_name} ${m.last_name}'s profile`)
+                                          setSelectedMusicianId(m.id)
+                                          setSearchQuery('')
+                                          setSearchOpen(false)
+                                        }}
+                                      >
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <span className="font-medium text-sm truncate">
+                                            {m.last_name}, {m.first_name}
+                                          </span>
+                                          <span className="text-xs text-muted-foreground flex-shrink-0">(other instrument)</span>
+                                          {!m.email && !updatedEmails[m.id] && (
+                                            <span className="text-xs text-amber-600 dark:text-amber-400 flex-shrink-0" title="No email">
+                                              No email
+                                            </span>
+                                          )}
+                                          {hasConflict && (
+                                            <span className="text-xs text-red-600 dark:text-red-400 flex-shrink-0" title="Schedule conflict">
+                                              Conflict
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-1 flex-shrink-0">
+                                          {m.call_order != null && m.call_order < 100 && (
+                                            <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium">
+                                              #{m.call_order}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </button>
+                                    )
+                                  })}
+                                </>
+                              )}
+                            </>
                           )
-                        })
+                        })()
                       ) : (
                         <div className="px-3 py-4 text-sm text-muted-foreground text-center">
                           No musicians match &quot;{searchQuery}&quot;
@@ -487,115 +563,156 @@ export function SendOfferDialog({
 
                 {selectedMusicianId && !hasEmail && (
                   <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200">
-                    <strong>Warning:</strong> This musician has no email address on file.
-                    The offer will be created but no notification will be sent.
-                    You will need to contact them manually.
-                  </div>
-                )}
-                {!showAddMusician ? (
-                  <button
-                    type="button"
-                    className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
-                    onClick={() => setShowAddMusician(true)}
-                  >
-                    + Add New Musician
-                  </button>
-                ) : (
-                  <div className="rounded-md border bg-muted/30 p-3 space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Quick Add Musician</p>
+                    <p className="font-medium mb-2">This musician has no email on file.</p>
                     <div className="flex gap-2">
                       <input
-                        type="text"
-                        placeholder="First name"
-                        value={newFirstName}
-                        onChange={(e) => setNewFirstName(e.target.value)}
-                        className="flex-1 rounded-md border bg-background px-2 py-1.5 text-sm"
+                        type="email"
+                        placeholder="Enter email address"
+                        value={editingEmail}
+                        onChange={(e) => setEditingEmail(e.target.value)}
+                        className="flex-1 rounded-md border bg-background px-2 py-1.5 text-sm text-foreground"
                       />
-                      <input
-                        type="text"
-                        placeholder="Last name"
-                        value={newLastName}
-                        onChange={(e) => setNewLastName(e.target.value)}
-                        className="flex-1 rounded-md border bg-background px-2 py-1.5 text-sm"
-                      />
-                    </div>
-                    <input
-                      type="email"
-                      placeholder="Email address (required)"
-                      value={newEmail}
-                      onChange={(e) => setNewEmail(e.target.value)}
-                      className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
-                    />
-                    <div className="flex gap-2">
                       <Button
                         size="sm"
-                        disabled={addingMusician || (!newFirstName.trim() && !newLastName.trim()) || !newEmail.trim() || !newEmail.includes('@')}
+                        disabled={savingEmail || !editingEmail.trim() || !editingEmail.includes('@')}
                         onClick={async () => {
-                          if (!newFirstName.trim() && !newLastName.trim()) return
-                          if (!newEmail.trim() || !newEmail.includes('@')) return
-                          setAddingMusician(true)
+                          setSavingEmail(true)
                           try {
                             const supabase = createClient()
-                            const { data: membership } = await supabase
-                              .from('organization_members')
-                              .select('organization_id')
-                              .single()
-                            if (!membership) { setError('No organization found'); return }
-                            const { data: newMusician, error: insertErr } = await supabase
+                            const email = editingEmail.trim().toLowerCase()
+                            const { error: updateErr } = await supabase
                               .from('musicians')
-                              .insert({
-                                organization_id: membership.organization_id,
-                                first_name: newFirstName.trim() || newLastName.trim(),
-                                last_name: newFirstName.trim() ? newLastName.trim() : '',
-                                email: newEmail.trim().toLowerCase(),
-                                is_active: true,
-                              })
-                              .select('id')
-                              .single()
-                            if (insertErr) { setError(insertErr.message); return }
-                            // Also link to the current instrument
-                            if (newMusician) {
-                              await supabase
-                                .from('musician_instruments')
-                                .insert({
-                                  musician_id: newMusician.id,
-                                  instrument_id: instrumentId,
-                                  is_primary: true,
-                                  proficiency: 'professional',
-                                })
-                              // Add to local list so dropdown and confirmation can find them
-                              setLocallyAddedMusicians(prev => [...prev, {
-                                id: newMusician.id,
-                                first_name: newFirstName.trim() || newLastName.trim(),
-                                last_name: newFirstName.trim() ? newLastName.trim() : '',
-                                email: newEmail.trim().toLowerCase(),
-                                musician_instruments: [{ instrument_id: instrumentId }],
-                                competing_schedules: [],
-                              }])
-                              setSelectedMusicianId(newMusician.id)
+                              .update({ email })
+                              .eq('id', selectedMusicianId)
+                            if (updateErr) {
+                              toast.error('Failed to save email: ' + updateErr.message)
+                              return
                             }
-                            setNewFirstName('')
-                            setNewLastName('')
-                            setNewEmail('')
-                            setShowAddMusician(false)
+                            setUpdatedEmails(prev => ({ ...prev, [selectedMusicianId]: email }))
+                            setEditingEmail('')
+                            setSendEmail(true)
+                            toast.success('Email saved!')
                           } catch {
-                            setError('Failed to add musician')
+                            toast.error('Failed to save email')
                           } finally {
-                            setAddingMusician(false)
+                            setSavingEmail(false)
                           }
                         }}
                       >
-                        {addingMusician ? 'Adding...' : 'Add & Select'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => { setShowAddMusician(false); setNewFirstName(''); setNewLastName(''); setNewEmail('') }}
-                      >
-                        Cancel
+                        {savingEmail ? 'Saving...' : 'Save'}
                       </Button>
                     </div>
+                    <p className="text-xs mt-1.5 opacity-70">
+                      Add an email to send the offer notification.
+                    </p>
                   </div>
+                )}
+                {!selectedMusicianId && (
+                  !showAddMusician ? (
+                    <button
+                      type="button"
+                      className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+                      onClick={() => setShowAddMusician(true)}
+                    >
+                      + Add New Musician
+                    </button>
+                  ) : (
+                    <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Quick Add Musician</p>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="First name"
+                          value={newFirstName}
+                          onChange={(e) => setNewFirstName(e.target.value)}
+                          className="flex-1 rounded-md border bg-background px-2 py-1.5 text-sm"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Last name"
+                          value={newLastName}
+                          onChange={(e) => setNewLastName(e.target.value)}
+                          className="flex-1 rounded-md border bg-background px-2 py-1.5 text-sm"
+                        />
+                      </div>
+                      <input
+                        type="email"
+                        placeholder="Email address (required)"
+                        value={newEmail}
+                        onChange={(e) => setNewEmail(e.target.value)}
+                        className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          disabled={addingMusician || (!newFirstName.trim() && !newLastName.trim()) || !newEmail.trim() || !newEmail.includes('@')}
+                          onClick={async () => {
+                            if (!newFirstName.trim() && !newLastName.trim()) return
+                            if (!newEmail.trim() || !newEmail.includes('@')) return
+                            setAddingMusician(true)
+                            try {
+                              const supabase = createClient()
+                              const { data: membership } = await supabase
+                                .from('organization_members')
+                                .select('organization_id')
+                                .single()
+                              if (!membership) { setError('No organization found'); return }
+                              const { data: newMusician, error: insertErr } = await supabase
+                                .from('musicians')
+                                .insert({
+                                  organization_id: membership.organization_id,
+                                  first_name: newFirstName.trim() || newLastName.trim(),
+                                  last_name: newFirstName.trim() ? newLastName.trim() : '',
+                                  email: newEmail.trim().toLowerCase(),
+                                  is_active: true,
+                                })
+                                .select('id')
+                                .single()
+                              if (insertErr) { setError(insertErr.message); return }
+                              // Also link to the current instrument
+                              if (newMusician) {
+                                await supabase
+                                  .from('musician_instruments')
+                                  .insert({
+                                    musician_id: newMusician.id,
+                                    instrument_id: instrumentId,
+                                    is_primary: true,
+                                    proficiency: 'professional',
+                                  })
+                                // Add to local list so dropdown and confirmation can find them
+                                setLocallyAddedMusicians(prev => [...prev, {
+                                  id: newMusician.id,
+                                  first_name: newFirstName.trim() || newLastName.trim(),
+                                  last_name: newFirstName.trim() ? newLastName.trim() : '',
+                                  email: newEmail.trim().toLowerCase(),
+                                  musician_instruments: [{ instrument_id: instrumentId }],
+                                  competing_schedules: [],
+                                }])
+                                setSelectedMusicianId(newMusician.id)
+                              }
+                              setNewFirstName('')
+                              setNewLastName('')
+                              setNewEmail('')
+                              setShowAddMusician(false)
+                            } catch {
+                              setError('Failed to add musician')
+                            } finally {
+                              setAddingMusician(false)
+                            }
+                          }}
+                        >
+                          {addingMusician ? 'Adding...' : 'Add & Select'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => { setShowAddMusician(false); setNewFirstName(''); setNewLastName(''); setNewEmail('') }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )
                 )}
               </>
             )}
@@ -764,7 +881,7 @@ export function SendOfferDialog({
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Email:</span>
-            <span>{selectedMusician?.email || 'No email on file'}</span>
+            <span>{updatedEmails[selectedMusicianId] || selectedMusician?.email || 'No email on file'}</span>
           </div>
           <div className="space-y-1">
             <div className="flex justify-between">
@@ -801,7 +918,7 @@ export function SendOfferDialog({
           )}
           {sendEmail && hasEmail && (
             <div className="pt-2 border-t text-sm text-green-600">
-              Email will be sent to {selectedMusician?.email}
+              Email will be sent to {updatedEmails[selectedMusicianId] || selectedMusician?.email}
             </div>
           )}
           {sendEmail && !hasEmail && (
