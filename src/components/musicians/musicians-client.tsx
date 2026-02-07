@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { MusicianFormDialog } from './musician-form-dialog'
 import { DeleteMusicianDialog } from './delete-musician-dialog'
 import { BulkEditDialog } from './bulk-edit-dialog'
+import { CallOrderDialog } from './call-order-dialog'
 import { MusicianCard } from './musician-card'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -111,6 +112,9 @@ export function MusiciansClient({
   const [regionFilter, setRegionFilter] = useState('')
   const [missingInfoFilter, setMissingInfoFilter] = useState(false)
   const [w9Filter, setW9Filter] = useState<'' | 'has_w9' | 'no_w9'>('')
+
+  // Call order dialog state
+  const [callOrderOpen, setCallOrderOpen] = useState(false)
 
   // Selection state for bulk edit
   const [selectMode, setSelectMode] = useState(false)
@@ -582,6 +586,9 @@ export function MusiciansClient({
                 </div>
               )}
             </div>
+            <Button variant="outline" onClick={() => setCallOrderOpen(true)}>
+              Call Order
+            </Button>
             <Button onClick={handleAdd}>Add Musician</Button>
           </div>
         )}
@@ -1282,6 +1289,13 @@ export function MusiciansClient({
         musicians={selectedMusicians}
         instruments={instruments}
         onSuccess={handleBulkEditSuccess}
+      />
+
+      <CallOrderDialog
+        open={callOrderOpen}
+        onOpenChange={setCallOrderOpen}
+        musicians={musicians}
+        instruments={instruments}
       />
 
       {/* Post-Import Guidance Modal */}

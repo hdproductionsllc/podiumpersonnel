@@ -31,14 +31,14 @@ const STEPS = [
     ),
   },
   {
-    title: 'Build Your Roster',
+    title: 'Build Your Roster & Set Your Call Order',
     body: (
       <div className="space-y-3">
         <p className="text-muted-foreground">
-          Import a spreadsheet of your musicians or add them one by one. Include their name, email, phone, and the instruments they play.
+          Import a spreadsheet or add musicians one by one — names and instruments are all you need to get started. Emails, phones, and other details can always come later.
         </p>
         <p className="text-muted-foreground">
-          Be sure to set a <strong>call order</strong> for each musician — this tells Podium who to suggest first when you&apos;re staffing a project. The more detail you add, the easier sorting and sending calls will be.
+          Then set your <strong>call order</strong> — rank your musicians by preference so Podium always knows who to call first. When a gig opens up, your top picks get the offer automatically.
         </p>
         <div className="pt-1">
           <span className="text-xs text-muted-foreground">Find it in the sidebar:</span>{' '}
