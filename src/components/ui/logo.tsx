@@ -17,9 +17,9 @@ export function Logo({ variant = 'light', className, size = 'md' }: LogoProps) {
   const isLight = variant === 'light'
 
   const sizes = {
-    sm: { monogram: 'text-4xl', wordmark: 'text-[10px] tracking-[0.25em]', bar: 'w-10 mt-2', gap: 'mt-1.5' },
-    md: { monogram: 'text-5xl', wordmark: 'text-xs tracking-[0.3em]', bar: 'w-14 mt-3', gap: 'mt-2' },
-    lg: { monogram: 'text-6xl', wordmark: 'text-sm tracking-[0.35em]', bar: 'w-16 mt-3.5', gap: 'mt-2.5' },
+    sm: { monogram: 'text-4xl', wordmark: 'text-[9px] tracking-[0.18em]', bar: 'w-10 mt-2', gap: 'mt-1.5' },
+    md: { monogram: 'text-5xl', wordmark: 'text-[11px] tracking-[0.2em]', bar: 'w-14 mt-3', gap: 'mt-2' },
+    lg: { monogram: 'text-6xl', wordmark: 'text-xs tracking-[0.22em]', bar: 'w-16 mt-3.5', gap: 'mt-2.5' },
   }
 
   const s = sizes[size]
@@ -28,7 +28,7 @@ export function Logo({ variant = 'light', className, size = 'md' }: LogoProps) {
     <div
       className={cn('flex flex-col items-center select-none', className)}
       role="img"
-      aria-label="Podium"
+      aria-label="Podium Personnel"
     >
       <span
         className={cn(
@@ -53,7 +53,7 @@ export function Logo({ variant = 'light', className, size = 'md' }: LogoProps) {
           isLight ? 'text-[#F5F0E8]' : 'text-[#1E293B]'
         )}
       >
-        PODIUM
+        PODIUM PERSONNEL
       </span>
     </div>
   )

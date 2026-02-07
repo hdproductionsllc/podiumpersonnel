@@ -55,7 +55,7 @@ export default async function ProjectsPage() {
       )
     `)
     .eq('organization_id', organization!.id)
-    .order('start_date', { ascending: false, nullsFirst: false })
+    .order('start_date', { ascending: true, nullsFirst: false })
     .order('name', { ascending: true })
 
   // Fetch books with entries for import dialog

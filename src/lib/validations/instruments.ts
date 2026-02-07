@@ -52,12 +52,12 @@ export const STANDARD_INSTRUMENTS: {
   { name: 'Viola', abbreviation: 'Vla', section: 'strings', sort_order: 102 },
   { name: 'Cello', abbreviation: 'Vc', section: 'strings', sort_order: 103 },
   { name: 'Double Bass', abbreviation: 'Db', section: 'strings', sort_order: 104 },
-  { name: 'Harp', abbreviation: 'Hp', section: 'strings', sort_order: 105 },
-  { name: 'Guitar', abbreviation: 'Gtr', section: 'strings', sort_order: 106 },
-  { name: 'Electric Guitar', abbreviation: 'EGtr', section: 'strings', sort_order: 107 },
-  { name: 'Bass Guitar', abbreviation: 'Bass', section: 'strings', sort_order: 108 },
-  { name: 'Banjo', abbreviation: 'Bnj', section: 'strings', sort_order: 109 },
-  { name: 'Mandolin', abbreviation: 'Mand', section: 'strings', sort_order: 110 },
+  { name: 'Harp', abbreviation: 'Hp', section: 'other', sort_order: 510 },
+  { name: 'Guitar', abbreviation: 'Gtr', section: 'other', sort_order: 511 },
+  { name: 'Electric Guitar', abbreviation: 'EGtr', section: 'other', sort_order: 512 },
+  { name: 'Bass Guitar', abbreviation: 'Bass', section: 'other', sort_order: 513 },
+  { name: 'Banjo', abbreviation: 'Bnj', section: 'other', sort_order: 514 },
+  { name: 'Mandolin', abbreviation: 'Mand', section: 'other', sort_order: 515 },
 
   // Woodwinds
   { name: 'Flute', abbreviation: 'Fl', section: 'woodwinds', sort_order: 200 },

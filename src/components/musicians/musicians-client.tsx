@@ -719,9 +719,20 @@ export function MusiciansClient({
                 Clear all
               </Button>
             )}
-            <span className="text-xs text-muted-foreground ml-auto">
-              {filteredMusicians.length} of {musicians.length} musicians
-            </span>
+            <div className="flex items-center gap-2 ml-auto">
+              {canManage && (
+                <Button
+                  variant={selectMode ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+                >
+                  {selectMode ? 'Done Selecting' : 'Select & Batch Edit'}
+                </Button>
+              )}
+              <span className="text-xs text-muted-foreground">
+                {filteredMusicians.length} of {musicians.length} musicians
+              </span>
+            </div>
           </div>
 
           {/* Tag filter chips */}
@@ -903,24 +914,6 @@ export function MusiciansClient({
         <EmptyState title="No musicians match your filters" />
       ) : (
         <>
-          {/* Select & Batch Edit Button */}
-          {canManage && musicians.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant={selectMode ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
-              >
-                {selectMode ? 'Done Selecting' : 'Select & Batch Edit'}
-              </Button>
-              {selectMode && (
-                <span className="text-sm text-muted-foreground">
-                  Click rows to select, or use checkboxes
-                </span>
-              )}
-            </div>
-          )}
-
           {/* Bulk Actions Bar */}
           {selectMode && selectedIds.size > 0 && (
             <div className="flex items-center gap-4 rounded-lg bg-gold/10 border border-gold/20 dark:bg-gold/5 p-3 mb-4">
