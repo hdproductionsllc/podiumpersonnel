@@ -586,9 +586,6 @@ export function MusiciansClient({
                 </div>
               )}
             </div>
-            <Button variant="outline" onClick={() => setCallOrderOpen(true)}>
-              Call Order
-            </Button>
             <Button onClick={handleAdd}>Add Musician</Button>
           </div>
         )}
@@ -719,26 +716,15 @@ export function MusiciansClient({
                 Clear all
               </Button>
             )}
-            <div className="flex items-center gap-2 ml-auto">
-              {canManage && (
-                <Button
-                  variant={selectMode ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
-                >
-                  {selectMode ? 'Done Selecting' : 'Select & Batch Edit'}
-                </Button>
-              )}
-              <span className="text-xs text-muted-foreground">
-                {filteredMusicians.length} of {musicians.length} musicians
-              </span>
-            </div>
+            <span className="text-xs text-muted-foreground ml-auto">
+              {filteredMusicians.length} of {musicians.length} musicians
+            </span>
           </div>
 
           {/* Tag filter chips */}
           {allTags.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-muted-foreground mr-1">Filter by tag:</span>
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              <span className="text-xs text-muted-foreground mr-1 shrink-0">Filter by tag:</span>
               {allTags.map((tag) => (
                 <button
                   key={tag}
@@ -762,8 +748,8 @@ export function MusiciansClient({
 
           {/* Instrument filter chips - only show instruments that musicians have */}
           {usedInstruments.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-muted-foreground mr-1">Filter by instrument:</span>
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              <span className="text-xs text-muted-foreground mr-1 shrink-0">Filter by instrument:</span>
               {usedInstruments.map((inst) => (
                 <button
                   key={inst.id}
@@ -787,8 +773,8 @@ export function MusiciansClient({
 
           {/* Region filter chips - only show regions that musicians have */}
           {allRegions.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-muted-foreground mr-1">Filter by region:</span>
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              <span className="text-xs text-muted-foreground mr-1 shrink-0">Filter by region:</span>
               {allRegions.map((region) => (
                 <button
                   key={region}
@@ -914,6 +900,24 @@ export function MusiciansClient({
         <EmptyState title="No musicians match your filters" />
       ) : (
         <>
+          {/* Select & Batch Edit Button */}
+          {canManage && musicians.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant={selectMode ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+              >
+                {selectMode ? 'Done Selecting' : 'Select & Batch Edit'}
+              </Button>
+              {selectMode && (
+                <span className="text-sm text-muted-foreground">
+                  Click rows to select, or use checkboxes
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Bulk Actions Bar */}
           {selectMode && selectedIds.size > 0 && (
             <div className="flex items-center gap-4 rounded-lg bg-gold/10 border border-gold/20 dark:bg-gold/5 p-3 mb-4">
@@ -974,11 +978,26 @@ export function MusiciansClient({
                     />
                   </th>
                 )}
-                <th
-                  className="px-4 py-3 text-left font-medium cursor-pointer hover:bg-muted/80 select-none w-20"
-                  onClick={() => handleSort('call_order')}
-                >
-                  Order <SortIcon column="call_order" />
+                <th className="px-4 py-3 text-left font-medium select-none w-20">
+                  <div className="flex items-center gap-1">
+                    <span
+                      className="cursor-pointer hover:text-foreground"
+                      onClick={() => handleSort('call_order')}
+                    >
+                      Order <SortIcon column="call_order" />
+                    </span>
+                    {canManage && (
+                      <button
+                        onClick={() => setCallOrderOpen(true)}
+                        className="ml-1 rounded p-0.5 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                        title="Drag to reorder musicians by call preference"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 </th>
                 <th
                   className="px-4 py-3 text-left font-medium cursor-pointer hover:bg-muted/80 select-none"

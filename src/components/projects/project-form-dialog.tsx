@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { TimePicker } from '@/components/ui/time-picker'
 import {
   Form,
   FormControl,
@@ -55,7 +56,7 @@ interface ProjectFormDialogProps {
   project: ProjectWithServices | null
   organizationId: string
   isFirstProject?: boolean
-  onSuccess: (newProject?: { id: string; start_date: string | null; end_date: string | null; template?: TemplateType }) => void
+  onSuccess: (newProject?: { id: string; start_date: string | null; end_date: string | null; template?: TemplateType; callTime?: string; startTime?: string; endTime?: string }) => void
 }
 
 export function ProjectFormDialog({
@@ -71,6 +72,9 @@ export function ProjectFormDialog({
   const [showTemplatePicker, setShowTemplatePicker] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateType | null>(null)
   const [isSingleDay, setIsSingleDay] = useState(false)
+  const [callTime, setCallTime] = useState('18:30')
+  const [startTime, setStartTime] = useState('19:00')
+  const [endTime, setEndTime] = useState('22:00')
   const isEditing = !!project
 
   const form = useForm<ProjectInput>({
@@ -111,14 +115,40 @@ export function ProjectFormDialog({
           end_date: '',
           status: 'active',
         })
-        // Show template picker for first project
-        setShowTemplatePicker(!!isFirstProject)
+        // Always show template picker for new projects
+        setShowTemplatePicker(true)
         setSelectedTemplate(null)
         setIsSingleDay(false)
+        setCallTime('18:30')
+        setStartTime('19:00')
+        setEndTime('22:00')
       }
       setError(null)
     }
   }, [open, project, form, isFirstProject])
+
+  /** Add minutes to an "HH:mm" string, returning a new "HH:mm" string */
+  function addMinutes(time: string, mins: number): string {
+    const [h, m] = time.split(':').map(Number)
+    const total = h * 60 + m + mins
+    return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+  }
+
+  function handleCallTimeChange(time: string) {
+    setCallTime(time)
+    const newStart = addMinutes(time, 30)
+    setStartTime(newStart)
+    setEndTime(addMinutes(newStart, 180))
+  }
+
+  function handleStartTimeChange(time: string) {
+    setStartTime(time)
+    setEndTime(addMinutes(time, 180))
+  }
+
+  function handleEndTimeChange(time: string) {
+    setEndTime(time)
+  }
 
   function handleTemplateSelect(template: TemplateType) {
     setSelectedTemplate(template)
@@ -180,6 +210,9 @@ export function ProjectFormDialog({
         start_date: data.start_date || null,
         end_date: data.end_date || null,
         template: selectedTemplate || undefined,
+        callTime: isSingleDay && selectedTemplate === 'string-quartet' ? callTime : undefined,
+        startTime: isSingleDay && selectedTemplate === 'string-quartet' ? startTime : undefined,
+        endTime: isSingleDay && selectedTemplate === 'string-quartet' ? endTime : undefined,
       })
       return
     }
@@ -332,26 +365,57 @@ export function ProjectFormDialog({
               </label>
 
               {isSingleDay ? (
-                <FormField
-                  control={form.control}
-                  name="start_date"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Date</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="date"
-                          value={field.value}
-                          onChange={(e) => {
-                            field.onChange(e)
-                            form.setValue('end_date', e.target.value)
-                          }}
+                <>
+                  <FormField
+                    control={form.control}
+                    name="start_date"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Date</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="date"
+                            value={field.value}
+                            onChange={(e) => {
+                              field.onChange(e)
+                              form.setValue('end_date', e.target.value)
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {selectedTemplate === 'string-quartet' && (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium leading-none">Call Time</label>
+                        <TimePicker
+                          value={callTime}
+                          onChange={handleCallTimeChange}
+                          placeholder="Call"
                         />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium leading-none">Start Time</label>
+                        <TimePicker
+                          value={startTime}
+                          onChange={handleStartTimeChange}
+                          placeholder="Start"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium leading-none">End Time</label>
+                        <TimePicker
+                          value={endTime}
+                          onChange={handleEndTimeChange}
+                          placeholder="End"
+                        />
+                      </div>
+                    </div>
                   )}
-                />
+                </>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
                   <FormField

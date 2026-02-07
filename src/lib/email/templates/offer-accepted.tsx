@@ -13,6 +13,7 @@ import {
 interface OfferAcceptedEmailProps {
   musicianName: string
   organizationName: string
+  contactEmail?: string
   projectName: string
   instrument: string
   chairNumber: number
@@ -29,6 +30,7 @@ interface OfferAcceptedEmailProps {
 export function OfferAcceptedEmail({
   musicianName,
   organizationName,
+  contactEmail,
   projectName,
   instrument,
   chairNumber,
@@ -96,7 +98,7 @@ export function OfferAcceptedEmail({
                 ? 'Click the button above to download the calendar file and add these events to your Google Calendar, Outlook, or other calendar app.'
                 : 'Please save these dates to your calendar.'}{' '}
               If you have any questions or need to report a conflict,
-              please contact {organizationName} as soon as possible.
+              please contact {organizationName}{contactEmail ? <> at <a href={`mailto:${contactEmail}`} style={emailLink}>{contactEmail}</a></> : ''} as soon as possible.
             </Text>
 
             <Text style={thankYou}>
@@ -256,6 +258,11 @@ const calendarButton = {
   textAlign: 'center' as const,
   display: 'inline-block',
   padding: '12px 24px',
+}
+
+const emailLink = {
+  color: '#1E293B',
+  textDecoration: 'underline',
 }
 
 const thankYou = {

@@ -179,7 +179,7 @@ export function MusicianLoginForm() {
                   <FormControl>
                     <Input
                       type="email"
-                      placeholder="name@example.com"
+                      placeholder="you@email.com"
                       {...field}
                     />
                   </FormControl>

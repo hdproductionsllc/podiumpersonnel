@@ -15,6 +15,7 @@ import { SubDeclinedFindAnotherEmail } from './templates/sub-declined-find-anoth
 import { PortalInvitationEmail } from './templates/portal-invitation'
 import { MusicianWelcomeEmail } from './templates/musician-welcome'
 import { AdminWelcomeEmail } from './templates/admin-welcome'
+import { OfferExpiredEmail } from './templates/offer-expired'
 import { render } from '@react-email/render'
 import { type EmailBranding } from './templates/email-layout'
 
@@ -136,6 +137,7 @@ interface SendOfferAcceptedParams {
   to: string
   musicianName: string
   organizationName: string
+  contactEmail?: string
   projectName: string
   instrument: string
   chairNumber: number
@@ -154,6 +156,7 @@ export async function sendOfferAcceptedEmail(params: SendOfferAcceptedParams) {
     OfferAcceptedEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
+      contactEmail: params.contactEmail,
       projectName: params.projectName,
       instrument: params.instrument,
       chairNumber: params.chairNumber,
@@ -684,6 +687,52 @@ export async function sendMusicianWelcomeEmail(params: SendMusicianWelcomeParams
 
   if (error) {
     console.error('Failed to send musician welcome email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// Offer Expired Notification Email (to admins)
+interface SendOfferExpiredParams {
+  to: string | string[]
+  organizationName: string
+  projectName: string
+  musicianName: string
+  instrument: string
+  chairNumber: number
+  totalChairs?: number
+  nextCandidate: {
+    name: string
+    email: string
+    callOrder: number | null
+  } | null
+  dashboardUrl: string
+}
+
+export async function sendOfferExpiredEmail(params: SendOfferExpiredParams) {
+  const emailHtml = await render(
+    OfferExpiredEmail({
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      musicianName: params.musicianName,
+      instrument: params.instrument,
+      chairNumber: params.chairNumber,
+      totalChairs: params.totalChairs,
+      nextCandidate: params.nextCandidate,
+      dashboardUrl: params.dashboardUrl,
+    })
+  )
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: `Offer Expired: ${params.musicianName} - ${params.projectName}`,
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send offer expired email:', error)
     throw new Error(`Failed to send email: ${error.message}`)
   }
 

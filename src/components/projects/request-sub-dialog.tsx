@@ -42,7 +42,7 @@ export function RequestSubDialog({
       requesting_musician_id: musicianId,
       service_id: serviceId || null,
       reason: reason || null,
-      status: 'pending',
+      status: 'pending_approval',
     })
 
     setLoading(false)

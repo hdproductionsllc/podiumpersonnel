@@ -501,6 +501,7 @@ export function ServiceFormDialog({
                           onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
                         />
                       </FormControl>
+                      <p className="text-xs text-muted-foreground">Per musician per service</p>
                       <FormMessage />
                     </FormItem>
                   )}

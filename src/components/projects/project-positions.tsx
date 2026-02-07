@@ -10,6 +10,7 @@ import { SavePresetDialog } from './save-preset-dialog'
 import { SendOfferDialog, type MusicianForOffer, type MusicianScheduleEntry } from './send-offer-dialog'
 import { RequestSubDialog } from './request-sub-dialog'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
+import { getPositionTitle } from '@/lib/orchestra-positions'
 import type { Service } from '@/types'
 
 export type PositionOfferJoined = {
@@ -119,7 +120,7 @@ export function detectConflicts(
         if (schedStart < svcEnd && schedEnd > svcStart) {
           conflicts.push({
             musicianName: `${musician.first_name} ${musician.last_name}`,
-            positionLabel: `${position.instrument?.name}, Chair ${position.chair_number}`,
+            positionLabel: `${position.instrument?.name}${position.chair_number > 1 ? `, Chair ${position.chair_number}` : ''}`,
             schedule,
             service,
           })
@@ -286,6 +287,13 @@ export function ProjectPositions({
     onPositionChange()
   }
 
+  // Count chairs per instrument to determine if chair titles should be shown
+  const chairCountByInstrument = new Map<string, number>()
+  for (const p of positions) {
+    const key = p.instrument_id
+    chairCountByInstrument.set(key, (chairCountByInstrument.get(key) || 0) + 1)
+  }
+
   const totalPositions = positions.length
   const filledPositions = positions.filter((p) => p.musician_id).length
 
@@ -366,7 +374,19 @@ export function ProjectPositions({
                     {sectionPositions.map((position) => (
                       <tr key={position.id} className="hover:bg-muted/30">
                         <td className="px-3 py-2">{position.instrument?.name}</td>
-                        <td className="px-3 py-2 text-muted-foreground">Chair {position.chair_number}</td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {(chairCountByInstrument.get(position.instrument_id) || 0) > 1
+                            ? (() => {
+                                const info = getPositionTitle(position.instrument?.name || '', position.chair_number, position.instrument?.section)
+                                return (
+                                  <span className={info.isLeadership ? 'font-medium text-foreground' : ''}>
+                                    {info.title}
+                                  </span>
+                                )
+                              })()
+                            : null
+                          }
+                        </td>
                         <td className="px-3 py-2">
                           {position.musician
                             ? (() => {
@@ -612,7 +632,13 @@ export function ProjectPositions({
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Position:</span>
-                <span>{unassignPosition.instrument?.name}, Chair {unassignPosition.chair_number}</span>
+                <span>
+                  {unassignPosition.instrument?.name}
+                  {(chairCountByInstrument.get(unassignPosition.instrument_id) || 0) > 1
+                    ? `, ${getPositionTitle(unassignPosition.instrument?.name || '', unassignPosition.chair_number, unassignPosition.instrument?.section).title}`
+                    : ''
+                  }
+                </span>
               </div>
             </div>
 

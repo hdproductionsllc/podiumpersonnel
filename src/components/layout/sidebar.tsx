@@ -99,7 +99,9 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
     <>
       <nav className="flex-1 space-y-0.5 px-3 py-4">
         {navigation.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+          const isActive = item.href === '/dashboard'
+            ? pathname === '/dashboard'
+            : pathname === item.href || pathname.startsWith(item.href + '/')
           return (
             <Button
               key={item.name}

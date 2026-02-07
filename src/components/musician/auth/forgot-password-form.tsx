@@ -107,7 +107,7 @@ export function MusicianForgotPasswordForm() {
                   <FormControl>
                     <Input
                       type="email"
-                      placeholder="name@example.com"
+                      placeholder="you@email.com"
                       {...field}
                     />
                   </FormControl>

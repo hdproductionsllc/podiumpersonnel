@@ -1,8 +1,8 @@
-import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { MusicianNav } from '@/components/musician/musician-nav'
 import { MusicianHeader, MusicianDesktopHeader } from '@/components/musician/musician-header'
 import { ImpersonationBanner } from '@/components/musician/impersonation-banner'
+import { MusicianSignOutButton } from '@/components/musician/musician-sign-out-button'
 
 export default async function MusicianLayout({
   children,
@@ -20,7 +20,8 @@ export default async function MusicianLayout({
   } = await supabase.auth.getUser()
 
   if (!user) {
-    redirect('/musician/login')
+    // No user — render children bare (login/register pages handle their own layout)
+    return <>{children}</>
   }
 
   let musician: { id: string; first_name: string; last_name: string; email: string | null; profile_photo_url: string | null } | null = null
@@ -73,13 +74,32 @@ export default async function MusicianLayout({
       .limit(1)
 
     if (!musicians || musicians.length === 0) {
-      // User has no musician records, redirect to login with error
-      redirect('/musician/login?error=no_musician_records')
+      return (
+        <div className="flex min-h-screen items-center justify-center px-4 bg-gradient-to-b from-background to-muted/20">
+          <div className="w-full max-w-md rounded-lg border bg-card p-8 text-center space-y-4">
+            <h2 className="text-xl font-semibold">No Musician Account Found</h2>
+            <p className="text-sm text-muted-foreground">
+              Your login doesn&apos;t have a musician profile linked to it. If you were invited to perform, check your email for a registration link.
+            </p>
+            <MusicianSignOutButton />
+          </div>
+        </div>
+      )
     }
 
     // Check if portal access is disabled
     if ((musicians[0] as any).portal_enabled === false) {
-      redirect('/musician/login?error=portal_disabled')
+      return (
+        <div className="flex min-h-screen items-center justify-center px-4 bg-gradient-to-b from-background to-muted/20">
+          <div className="w-full max-w-md rounded-lg border bg-card p-8 text-center space-y-4">
+            <h2 className="text-xl font-semibold">Portal Access Disabled</h2>
+            <p className="text-sm text-muted-foreground">
+              Your portal access has been disabled by your organization. Please contact them for assistance.
+            </p>
+            <MusicianSignOutButton />
+          </div>
+        </div>
+      )
     }
 
     musician = musicians[0]

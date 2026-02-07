@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createClient } from '@/lib/supabase/client'
-import { signupSchema, type SignupInput } from '@/lib/validations/auth'
+import { musicianSignupSchema, type MusicianSignupInput } from '@/lib/validations/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -37,8 +37,8 @@ export function MusicianRegisterForm() {
     })
   }
 
-  const form = useForm<SignupInput>({
-    resolver: zodResolver(signupSchema),
+  const form = useForm<MusicianSignupInput>({
+    resolver: zodResolver(musicianSignupSchema),
     defaultValues: {
       email: '',
       password: '',
@@ -46,7 +46,7 @@ export function MusicianRegisterForm() {
     },
   })
 
-  async function onSubmit(data: SignupInput) {
+  async function onSubmit(data: MusicianSignupInput) {
     setIsLoading(true)
     setError(null)
 
@@ -131,7 +131,7 @@ export function MusicianRegisterForm() {
                   <FormControl>
                     <Input
                       type="email"
-                      placeholder="name@example.com"
+                      placeholder="you@email.com"
                       {...field}
                     />
                   </FormControl>

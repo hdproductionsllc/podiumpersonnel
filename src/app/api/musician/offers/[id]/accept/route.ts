@@ -197,6 +197,11 @@ export async function POST(
         venue: getVenueName(service),
       }))
 
+    // Get admin emails for both musician confirmation and admin notification
+    const adminEmails = project?.organization_id
+      ? await getOrgAdminEmails(project.organization_id)
+      : []
+
     if (musician?.email) {
       const baseUrl = getAppUrl()
       const calendarUrl = `${baseUrl}/api/offers/${offer.id}/calendar?token=${(offer as any).token}`
@@ -205,6 +210,7 @@ export async function POST(
         to: musician.email,
         musicianName: `${musician.first_name} ${musician.last_name}`,
         organizationName: organization?.name || 'Orchestra',
+        contactEmail: adminEmails[0],
         projectName: project?.name || 'Project',
         instrument: instrument?.name || 'Instrument',
         chairNumber: position?.chair_number || 1,
@@ -215,7 +221,6 @@ export async function POST(
     }
 
     if (project?.organization_id) {
-      const adminEmails = await getOrgAdminEmails(project.organization_id)
 
       if (adminEmails.length > 0) {
         const baseUrl = getAppUrl()

@@ -73,7 +73,9 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Redirect authenticated musicians away from musician auth routes
-  if (user && isMusicianAuthRoute && !pathname.startsWith('/musician/reset-password')) {
+  // But allow through if there's an error param (e.g. no_musician_records) to avoid redirect loops
+  const hasErrorParam = request.nextUrl.searchParams.has('error')
+  if (user && isMusicianAuthRoute && !pathname.startsWith('/musician/reset-password') && !hasErrorParam) {
     const url = request.nextUrl.clone()
     url.pathname = '/musician'
     return NextResponse.redirect(url)

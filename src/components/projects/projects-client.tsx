@@ -81,6 +81,7 @@ function formatDateRange(start: string | null, end: string | null): string {
   if (!start && !end) return '—'
   if (start && !end) return parseDate(start).toLocaleDateString()
   if (!start && end) return `until ${parseDate(end).toLocaleDateString()}`
+  if (start === end) return parseDate(start!).toLocaleDateString()
   return `${parseDate(start!).toLocaleDateString()} – ${parseDate(end!).toLocaleDateString()}`
 }
 
@@ -325,7 +326,7 @@ export function ProjectsClient({
     router.refresh()
   }
 
-  async function handleProjectSuccess(newProject?: { id: string; start_date: string | null; end_date: string | null; template?: string }) {
+  async function handleProjectSuccess(newProject?: { id: string; start_date: string | null; end_date: string | null; template?: string; callTime?: string; startTime?: string; endTime?: string }) {
     setProjectFormOpen(false)
     setEditingProject(null)
 
@@ -342,13 +343,16 @@ export function ProjectsClient({
         // Performance only — most gigs are straight performances
         const dateStr = newProject.start_date || newProject.end_date
         if (dateStr) {
+          const ct = newProject.callTime || '18:30'
+          const st = newProject.startTime || '19:00'
+          const et = newProject.endTime || '22:00'
           await supabase.from('services').insert({
             project_id: newProject.id,
             name: 'Performance',
             service_type: 'performance',
-            start_time: new Date(dateStr + 'T19:00:00').toISOString(),
-            end_time: new Date(dateStr + 'T22:00:00').toISOString(),
-            call_time: new Date(dateStr + 'T18:30:00').toISOString(),
+            start_time: new Date(`${dateStr}T${st}:00`).toISOString(),
+            end_time: new Date(`${dateStr}T${et}:00`).toISOString(),
+            call_time: new Date(`${dateStr}T${ct}:00`).toISOString(),
           })
         }
 
@@ -360,8 +364,13 @@ export function ProjectsClient({
           .in('name', ['Violin 1', 'Violin 2', 'Viola', 'Cello'])
 
         if (orgInstruments && orgInstruments.length > 0) {
+          // Deduplicate by name (org may have duplicate instrument entries)
+          const uniqueByName = new Map<string, typeof orgInstruments[0]>()
+          for (const inst of orgInstruments) {
+            if (!uniqueByName.has(inst.name)) uniqueByName.set(inst.name, inst)
+          }
           await supabase.from('project_positions').insert(
-            orgInstruments.map((inst) => ({
+            Array.from(uniqueByName.values()).map((inst) => ({
               project_id: newProject.id,
               instrument_id: inst.id,
               chair_number: 1,
