@@ -602,7 +602,7 @@ export function MusiciansClient({
             </div>
           ) : '\u2014'}
         </td>
-        <td className="px-4 py-2">
+        <td className="px-4 py-2 text-center">
           {musician.user_id ? (
             canManage ? (
               <Button
@@ -1369,15 +1369,14 @@ export function MusiciansClient({
                                 </th>
                               )}
                               <th
-                                className="w-[70px] px-4 py-2 text-left text-xs font-medium text-muted-foreground select-none"
+                                className="w-[70px] px-4 py-2 text-center text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 title="Call order determines the waterfall sequence"
+                                onClick={() => handleSort('call_order')}
                               >
-                                <span className="cursor-pointer hover:text-foreground" onClick={() => handleSort('call_order')}>
-                                  Order <SortIcon column="call_order" />
-                                </span>
+                                Order <SortIcon column="call_order" />
                               </th>
                               <th
-                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('name')}
                               >
                                 Name <SortIcon column="name" />
@@ -1385,26 +1384,26 @@ export function MusiciansClient({
                               <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
                               <th className="w-[140px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
                               <th
-                                className="w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                className="w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('home_region')}
                               >
                                 Region <SortIcon column="home_region" />
                               </th>
                               <th
-                                className="w-[240px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                className="w-[240px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('status')}
                               >
                                 Status <SortIcon column="status" />
                               </th>
                               <th
-                                className="w-[120px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                className="w-[120px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('tags')}
                               >
                                 Tags <SortIcon column="tags" />
                               </th>
-                              <th className="w-[80px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Portal</th>
+                              <th className="w-[100px] px-4 py-2 text-center text-xs font-medium text-muted-foreground">Portal</th>
                               {canManage && (
-                                <th className="w-[150px] px-4 py-2 text-right text-xs font-medium text-muted-foreground">Actions</th>
+                                <th className="w-[120px] px-4 py-2 text-right text-xs font-medium text-muted-foreground">Actions</th>
                               )}
                             </tr>
                           </thead>
@@ -1472,13 +1471,15 @@ export function MusiciansClient({
                                   />
                                 </th>
                               )}
-                              <th className="w-[70px] px-4 py-2 text-left text-xs font-medium text-muted-foreground select-none">
-                                <span className="cursor-pointer hover:text-foreground" onClick={() => handleSort('call_order')}>
-                                  Order <SortIcon column="call_order" />
-                                </span>
+                              <th
+                                className="w-[70px] px-4 py-2 text-center text-xs font-medium text-muted-foreground cursor-pointer select-none"
+                                title="Call order determines the waterfall sequence"
+                                onClick={() => handleSort('call_order')}
+                              >
+                                Order <SortIcon column="call_order" />
                               </th>
                               <th
-                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('name')}
                               >
                                 Name <SortIcon column="name" />
@@ -1486,26 +1487,26 @@ export function MusiciansClient({
                               <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
                               <th className="w-[140px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
                               <th
-                                className="w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                className="w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('home_region')}
                               >
                                 Region <SortIcon column="home_region" />
                               </th>
                               <th
-                                className="w-[240px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                className="w-[240px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('status')}
                               >
                                 Status <SortIcon column="status" />
                               </th>
                               <th
-                                className="w-[120px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                className="w-[120px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('tags')}
                               >
                                 Tags <SortIcon column="tags" />
                               </th>
-                              <th className="w-[80px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Portal</th>
+                              <th className="w-[100px] px-4 py-2 text-center text-xs font-medium text-muted-foreground">Portal</th>
                               {canManage && (
-                                <th className="w-[150px] px-4 py-2 text-right text-xs font-medium text-muted-foreground">Actions</th>
+                                <th className="w-[120px] px-4 py-2 text-right text-xs font-medium text-muted-foreground">Actions</th>
                               )}
                             </tr>
                           </thead>
