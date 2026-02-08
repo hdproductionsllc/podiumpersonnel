@@ -53,6 +53,7 @@ export type MusicianWithInstruments = Musician & {
   call_order?: number
   is_leader?: boolean
   w9_on_file?: boolean
+  w9_file_url?: string | null
   zelle_method?: 'email' | 'phone' | null
   zelle_verified?: boolean
   user_id?: string | null

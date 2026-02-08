@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { MusicianNav } from '@/components/musician/musician-nav'
 import { MusicianHeader, MusicianDesktopHeader } from '@/components/musician/musician-header'
@@ -7,14 +8,12 @@ import { RememberEmail } from '@/components/musician/remember-email'
 
 export default async function MusicianLayout({
   children,
-  searchParams,
 }: {
   children: React.ReactNode
-  searchParams?: Promise<{ impersonate?: string }>
 }) {
   const supabase = await createClient()
-  const params = await searchParams
-  const impersonateId = params?.impersonate
+  const cookieStore = await cookies()
+  const impersonateId = cookieStore.get('impersonate-musician')?.value
 
   const {
     data: { user },

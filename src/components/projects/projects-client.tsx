@@ -335,8 +335,8 @@ export function ProjectsClient({
       toast.success('Your first project is created!')
     }
 
-    // If a template was selected, auto-create services and positions
-    if (newProject?.template && newProject.template !== 'custom') {
+    // Auto-create services and positions based on template
+    if (newProject?.template) {
       const supabase = (await import('@/lib/supabase/client')).createClient()
 
       if (newProject.template === 'string-quartet') {
@@ -409,6 +409,19 @@ export function ProjectsClient({
             },
           ])
         }
+      } else if (newProject.template === 'custom') {
+        // Auto-create a performance with default times
+        const dateStr = newProject.start_date || newProject.end_date
+        if (dateStr) {
+          await supabase.from('services').insert({
+            project_id: newProject.id,
+            name: 'Performance',
+            service_type: 'performance',
+            start_time: new Date(dateStr + 'T19:00:00').toISOString(),
+            end_time: new Date(dateStr + 'T22:00:00').toISOString(),
+            call_time: new Date(dateStr + 'T18:30:00').toISOString(),
+          })
+        }
       }
     }
 
@@ -420,7 +433,7 @@ export function ProjectsClient({
       setExpandedRows((prev) => new Set([...prev, newProject.id]))
 
       // Only prompt service type dialog if no template was used
-      if (!newProject.template || newProject.template === 'custom') {
+      if (!newProject.template) {
         setActiveProjectId(newProject.id)
         setActiveProjectDates({
           start: newProject.start_date,

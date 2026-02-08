@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { FileText } from 'lucide-react'
 import {
   Form,
   FormControl,
@@ -569,7 +570,7 @@ export function MusicianFormDialog({
               </button>
               {complianceOpen && (
                 <div className="px-4 pb-4 space-y-4 border-t">
-                  <div className="pt-4">
+                  <div className="pt-4 space-y-2">
                     <FormField
                       control={form.control}
                       name="w9_on_file"
@@ -588,6 +589,17 @@ export function MusicianFormDialog({
                         </FormItem>
                       )}
                     />
+                    {musician && (musician as any).w9_file_url && (
+                      <a
+                        href={`/api/musicians/${musician.id}/w9`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+                      >
+                        <FileText className="h-4 w-4" />
+                        View uploaded W-9
+                      </a>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">

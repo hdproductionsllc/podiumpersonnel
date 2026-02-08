@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { sendEmail } from '@/lib/email/send'
+import { getAppUrl } from '@/lib/utils'
 
 export async function GET() {
   const supabase = await createClient()
@@ -105,5 +108,58 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  // Notify org admins when musician uploads W9
+  if (w9_on_file === true && w9_file_url) {
+    notifyAdminsW9Uploaded(user.id).catch((err) =>
+      console.warn('Failed to send W9 notification:', err)
+    )
+  }
+
   return NextResponse.json({ success: true })
+}
+
+async function notifyAdminsW9Uploaded(userId: string) {
+  const admin = createAdminClient()
+
+  // Get musician info
+  const { data: musician } = await admin
+    .from('musicians')
+    .select('id, first_name, last_name, organization_id')
+    .eq('user_id', userId)
+    .limit(1)
+    .single()
+
+  if (!musician) return
+
+  // Get org admin user IDs
+  const { data: admins } = await admin
+    .from('organization_members')
+    .select('user_id')
+    .eq('organization_id', musician.organization_id)
+    .in('role', ['owner', 'admin'])
+
+  if (!admins || admins.length === 0) return
+
+  // Look up emails from auth.users
+  const adminEmails: string[] = []
+  for (const a of admins) {
+    const { data: { user } } = await admin.auth.admin.getUserById(a.user_id)
+    if (user?.email) adminEmails.push(user.email)
+  }
+
+  if (adminEmails.length === 0) return
+
+  const musicianName = `${musician.first_name} ${musician.last_name}`
+  const dashboardUrl = `${getAppUrl()}/dashboard/musicians`
+
+  await sendEmail({
+    to: adminEmails,
+    subject: `W-9 Submitted: ${musicianName}`,
+    html: `
+      <p>Hi,</p>
+      <p><strong>${musicianName}</strong> has uploaded their W-9 form.</p>
+      <p>You can view and download it from the <a href="${dashboardUrl}">Musicians dashboard</a>.</p>
+      <p>— Podium</p>
+    `,
+  })
 }

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
 export type SubRequestJoined = {
   id: string
@@ -92,6 +93,30 @@ export function SubRequests({
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to approve request')
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  async function handleDelete(requestId: string) {
+    if (!confirm('Remove this substitution request?')) return
+
+    setProcessingId(requestId)
+    setError(null)
+
+    try {
+      const supabase = createClient()
+      const { error: deleteError } = await supabase
+        .from('substitution_requests')
+        .delete()
+        .eq('id', requestId)
+
+      if (deleteError) throw new Error(deleteError.message)
+
+      onRequestChange()
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete request')
     } finally {
       setProcessingId(null)
     }
@@ -252,6 +277,15 @@ export function SubRequests({
                       {req.status === 'approved' && !req.substitute_musician_id && (
                         <span className="text-xs text-muted-foreground">Offer sent to sub</span>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(req.id)}
+                        disabled={processingId === req.id}
+                      >
+                        Remove
+                      </Button>
                     </div>
                   </td>
                 )}

@@ -82,5 +82,22 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Pass impersonate param as a cookie so the musician layout can read it
+  // (layouts don't receive searchParams in Next.js App Router)
+  const impersonateId = request.nextUrl.searchParams.get('impersonate')
+  if (isMusicianRoute) {
+    if (impersonateId) {
+      supabaseResponse.cookies.set('impersonate-musician', impersonateId, {
+        path: '/musician',
+        maxAge: 60 * 60, // 1 hour
+        httpOnly: true,
+        sameSite: 'lax',
+      })
+    } else {
+      // Clear the cookie when navigating without impersonate param
+      supabaseResponse.cookies.delete('impersonate-musician')
+    }
+  }
+
   return supabaseResponse
 }

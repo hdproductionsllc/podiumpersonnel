@@ -104,23 +104,17 @@ export function ProfileForm({
   notificationPreferences,
 }: ProfileFormProps) {
   const router = useRouter()
-  const [isSavingProfile, setIsSavingProfile] = useState(false)
-  const [isSavingNotifications, setIsSavingNotifications] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [showPasswordDialog, setShowPasswordDialog] = useState(false)
   const [isChangingPassword, setIsChangingPassword] = useState(false)
-  const [profileSuccess, setProfileSuccess] = useState(false)
-  const [notificationSuccess, setNotificationSuccess] = useState(false)
   const [passwordError, setPasswordError] = useState<string | null>(null)
-  const [profileError, setProfileError] = useState<string | null>(null)
-  const [notificationError, setNotificationError] = useState<string | null>(null)
 
   const [notifications, setNotifications] = useState(notificationPreferences)
 
   // W9 & Zelle state
   const [zelleMethod, setZelleMethod] = useState<string>(musician.zelle_method || '')
-  const [isSavingPayment, setIsSavingPayment] = useState(false)
-  const [paymentSuccess, setPaymentSuccess] = useState(false)
-  const [paymentError, setPaymentError] = useState<string | null>(null)
   const [isUploadingW9, setIsUploadingW9] = useState(false)
   const [w9Uploaded, setW9Uploaded] = useState(musician.w9_on_file)
   const [w9FileUrl, setW9FileUrl] = useState<string | null>(musician.w9_file_url)
@@ -143,61 +137,53 @@ export function ProfileForm({
     },
   })
 
-  async function onSaveProfile(data: ProfileFormValues) {
-    setIsSavingProfile(true)
-    setProfileError(null)
-    setProfileSuccess(false)
+  async function onSaveAll() {
+    // Validate profile form first
+    const isValid = await profileForm.trigger()
+    if (!isValid) return
 
-    // Format phone before saving
-    const formattedData = {
-      ...data,
-      phone: data.phone ? formatPhoneNumber(data.phone) : '',
-    }
+    setIsSaving(true)
+    setSaveError(null)
+    setSaveSuccess(false)
+
+    const profileData = profileForm.getValues()
 
     try {
-      const response = await fetch('/api/musician/profile', {
+      // Save profile + payment data in one call
+      const profileResponse = await fetch('/api/musician/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formattedData),
+        body: JSON.stringify({
+          first_name: profileData.first_name,
+          last_name: profileData.last_name,
+          phone: profileData.phone ? formatPhoneNumber(profileData.phone) : '',
+          zelle_method: zelleMethod,
+        }),
       })
 
-      if (!response.ok) {
-        const result = await response.json()
+      if (!profileResponse.ok) {
+        const result = await profileResponse.json()
         throw new Error(result.error || 'Failed to save profile')
       }
 
-      setProfileSuccess(true)
-      router.refresh()
-      setTimeout(() => setProfileSuccess(false), 3000)
-    } catch (err) {
-      setProfileError(err instanceof Error ? err.message : 'Failed to save profile')
-    } finally {
-      setIsSavingProfile(false)
-    }
-  }
-
-  async function onSaveNotifications() {
-    setIsSavingNotifications(true)
-    setNotificationSuccess(false)
-    setNotificationError(null)
-
-    try {
-      const response = await fetch('/api/musician/notifications/preferences', {
+      // Save notification preferences
+      const notifResponse = await fetch('/api/musician/notifications/preferences', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(notifications),
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to save preferences')
+      if (!notifResponse.ok) {
+        throw new Error('Failed to save notification preferences')
       }
 
-      setNotificationSuccess(true)
-      setTimeout(() => setNotificationSuccess(false), 3000)
+      setSaveSuccess(true)
+      router.refresh()
+      setTimeout(() => setSaveSuccess(false), 3000)
     } catch (err) {
-      setNotificationError(err instanceof Error ? err.message : 'Failed to save preferences')
+      setSaveError(err instanceof Error ? err.message : 'Failed to save')
     } finally {
-      setIsSavingNotifications(false)
+      setIsSaving(false)
     }
   }
 
@@ -246,33 +232,6 @@ export function ProfileForm({
     })
   }
 
-  async function onSavePayment() {
-    setIsSavingPayment(true)
-    setPaymentError(null)
-    setPaymentSuccess(false)
-
-    try {
-      const response = await fetch('/api/musician/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ zelle_method: zelleMethod }),
-      })
-
-      if (!response.ok) {
-        const result = await response.json()
-        throw new Error(result.error || 'Failed to save payment info')
-      }
-
-      setPaymentSuccess(true)
-      router.refresh()
-      setTimeout(() => setPaymentSuccess(false), 3000)
-    } catch (err) {
-      setPaymentError(err instanceof Error ? err.message : 'Failed to save payment info')
-    } finally {
-      setIsSavingPayment(false)
-    }
-  }
-
   async function handleW9Upload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -280,18 +239,18 @@ export function ProfileForm({
     // Validate file type
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png']
     if (!allowedTypes.includes(file.type)) {
-      setPaymentError('Please upload a PDF, JPEG, or PNG file')
+      setSaveError('Please upload a PDF, JPEG, or PNG file')
       return
     }
 
     // Validate file size (5MB)
     if (file.size > 5 * 1024 * 1024) {
-      setPaymentError('File must be under 5MB')
+      setSaveError('File must be under 5MB')
       return
     }
 
     setIsUploadingW9(true)
-    setPaymentError(null)
+    setSaveError(null)
 
     try {
       const supabase = createClient()
@@ -316,11 +275,11 @@ export function ProfileForm({
 
       setW9Uploaded(true)
       setW9FileUrl(filePath)
-      setPaymentSuccess(true)
+      setSaveSuccess(true)
       router.refresh()
-      setTimeout(() => setPaymentSuccess(false), 3000)
+      setTimeout(() => setSaveSuccess(false), 3000)
     } catch (err) {
-      setPaymentError(err instanceof Error ? err.message : 'Failed to upload W-9')
+      setSaveError(err instanceof Error ? err.message : 'Failed to upload W-9')
     } finally {
       setIsUploadingW9(false)
       // Reset the file input
@@ -330,7 +289,7 @@ export function ProfileForm({
 
   async function handleW9Remove() {
     setIsUploadingW9(true)
-    setPaymentError(null)
+    setSaveError(null)
 
     try {
       if (w9FileUrl) {
@@ -350,7 +309,7 @@ export function ProfileForm({
       setW9FileUrl(null)
       router.refresh()
     } catch (err) {
-      setPaymentError(err instanceof Error ? err.message : 'Failed to remove W-9')
+      setSaveError(err instanceof Error ? err.message : 'Failed to remove W-9')
     } finally {
       setIsUploadingW9(false)
     }
@@ -358,6 +317,19 @@ export function ProfileForm({
 
   return (
     <div className="space-y-6">
+      {/* Global save feedback */}
+      {saveError && (
+        <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+          {saveError}
+        </div>
+      )}
+      {saveSuccess && (
+        <div className="rounded-md bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 p-3 text-sm text-green-800 dark:text-green-200 flex items-center gap-2">
+          <Check className="h-4 w-4" />
+          Changes saved successfully
+        </div>
+      )}
+
       {/* Basic Info */}
       <Card>
         <CardHeader>
@@ -368,19 +340,7 @@ export function ProfileForm({
         </CardHeader>
         <CardContent>
           <Form {...profileForm}>
-            <form onSubmit={profileForm.handleSubmit(onSaveProfile)} className="space-y-4">
-              {profileError && (
-                <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
-                  {profileError}
-                </div>
-              )}
-              {profileSuccess && (
-                <div className="rounded-md bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 p-3 text-sm text-green-800 dark:text-green-200 flex items-center gap-2">
-                  <Check className="h-4 w-4" />
-                  Profile updated successfully
-                </div>
-              )}
-
+            <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
                   control={profileForm.control}
@@ -442,17 +402,7 @@ export function ProfileForm({
                 )}
               />
 
-              <Button type="submit" disabled={isSavingProfile}>
-                {isSavingProfile ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  'Save Changes'
-                )}
-              </Button>
-            </form>
+            </div>
           </Form>
         </CardContent>
       </Card>
@@ -494,18 +444,6 @@ export function ProfileForm({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {paymentError && (
-            <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
-              {paymentError}
-            </div>
-          )}
-          {paymentSuccess && (
-            <div className="rounded-md bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 p-3 text-sm text-green-800 dark:text-green-200 flex items-center gap-2">
-              <Check className="h-4 w-4" />
-              Saved successfully
-            </div>
-          )}
-
           {/* W-9 Section */}
           <div className="space-y-3">
             <Label className="text-base font-medium">W-9 Form</Label>
@@ -598,7 +536,7 @@ export function ProfileForm({
                   />
                   <span className="text-sm">
                     Phone
-                    {musician.phone && <span className="text-muted-foreground ml-1">({musician.phone})</span>}
+                    {musician.phone && <span className="text-muted-foreground ml-1">({formatPhoneNumber(musician.phone)})</span>}
                   </span>
                 </label>
               </div>
@@ -624,20 +562,6 @@ export function ProfileForm({
               </div>
             )}
 
-            <Button
-              onClick={onSavePayment}
-              disabled={isSavingPayment || zelleMethod === (musician.zelle_method || '')}
-              variant="outline"
-            >
-              {isSavingPayment ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Save Payment Preferences'
-              )}
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -651,18 +575,6 @@ export function ProfileForm({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {notificationError && (
-            <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
-              {notificationError}
-            </div>
-          )}
-          {notificationSuccess && (
-            <div className="rounded-md bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 p-3 text-sm text-green-800 dark:text-green-200 flex items-center gap-2">
-              <Check className="h-4 w-4" />
-              Preferences saved
-            </div>
-          )}
-
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -717,22 +629,25 @@ export function ProfileForm({
             </div>
           </div>
 
-          <Button
-            onClick={onSaveNotifications}
-            disabled={isSavingNotifications}
-            variant="outline"
-          >
-            {isSavingNotifications ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              'Save Preferences'
-            )}
-          </Button>
         </CardContent>
       </Card>
+
+      {/* Save All Button */}
+      <Button
+        onClick={onSaveAll}
+        disabled={isSaving}
+        size="lg"
+        className="w-full"
+      >
+        {isSaving ? (
+          <>
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            Saving...
+          </>
+        ) : (
+          'Save Changes'
+        )}
+      </Button>
 
       {/* Account Security */}
       <Card id="settings">

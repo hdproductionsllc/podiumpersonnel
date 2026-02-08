@@ -76,6 +76,7 @@ export function ProjectFormDialog({
   const [startTime, setStartTime] = useState('19:00')
   const [endTime, setEndTime] = useState('22:00')
   const isEditing = !!project
+  const today = new Date().toISOString().split('T')[0]
 
   const form = useForm<ProjectInput>({
     resolver: zodResolver(projectSchema),
@@ -162,6 +163,13 @@ export function ProjectFormDialog({
   async function onSubmit(data: ProjectInput) {
     setIsLoading(true)
     setError(null)
+
+    // Validate date is not in the past (for new projects only)
+    if (!isEditing && data.start_date && data.start_date < today) {
+      setError('Date cannot be in the past.')
+      setIsLoading(false)
+      return
+    }
 
     // Validate time ordering for single-day templates with time pickers
     if (isSingleDay && selectedTemplate === 'string-quartet') {
@@ -389,6 +397,7 @@ export function ProjectFormDialog({
                         <FormControl>
                           <Input
                             type="date"
+                            min={isEditing ? undefined : today}
                             value={field.value}
                             onChange={(e) => {
                               field.onChange(e)
@@ -441,6 +450,7 @@ export function ProjectFormDialog({
                         <FormControl>
                           <Input
                             type="date"
+                            min={isEditing ? undefined : today}
                             value={field.value}
                             onChange={(e) => {
                               const newValue = e.target.value
@@ -465,7 +475,7 @@ export function ProjectFormDialog({
                       <FormItem>
                         <FormLabel>End Date</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} />
+                          <Input type="date" min={isEditing ? undefined : today} {...field} />
                         </FormControl>
                         <p className="text-xs text-muted-foreground">Final performance date</p>
                         <FormMessage />
