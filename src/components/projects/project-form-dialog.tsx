@@ -29,13 +29,31 @@ import {
 } from '@/components/ui/form'
 import type { ProjectWithServices } from './projects-client'
 
-type TemplateType = 'string-quartet' | 'orchestra' | 'custom'
+type TemplateType = 'string-quartet' | 'string-trio' | 'duo' | 'solo' | 'orchestra' | 'custom'
 
 const TEMPLATES: Record<TemplateType, { label: string; description: string; defaultName: string; singleDay?: boolean }> = {
   'string-quartet': {
     label: 'String Quartet Gig',
-    description: '1 performance, quartet positions',
+    description: '1 performance — Violin 1, Violin 2, Viola, Cello',
     defaultName: 'String Quartet Gig',
+    singleDay: true,
+  },
+  'string-trio': {
+    label: 'String Trio Gig',
+    description: '1 performance — Violin 1, Violin 2, Cello',
+    defaultName: 'String Trio Gig',
+    singleDay: true,
+  },
+  'duo': {
+    label: 'Violin & Cello Duo',
+    description: '1 performance — Violin, Cello',
+    defaultName: 'Violin & Cello Duo',
+    singleDay: true,
+  },
+  'solo': {
+    label: 'Solo Performance',
+    description: '1 performance — single position',
+    defaultName: 'Solo Performance',
     singleDay: true,
   },
   'orchestra': {
@@ -172,7 +190,8 @@ export function ProjectFormDialog({
     }
 
     // Validate time ordering for single-day templates with time pickers
-    if (isSingleDay && selectedTemplate === 'string-quartet') {
+    const showTimePicker = isSingleDay && selectedTemplate !== null && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra'
+    if (showTimePicker) {
       if (endTime <= startTime) {
         setError('End time must be after start time.')
         setIsLoading(false)
@@ -232,9 +251,9 @@ export function ProjectFormDialog({
         start_date: data.start_date || null,
         end_date: data.end_date || null,
         template: selectedTemplate || undefined,
-        callTime: isSingleDay && selectedTemplate === 'string-quartet' ? callTime : undefined,
-        startTime: isSingleDay && selectedTemplate === 'string-quartet' ? startTime : undefined,
-        endTime: isSingleDay && selectedTemplate === 'string-quartet' ? endTime : undefined,
+        callTime: isSingleDay && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' ? callTime : undefined,
+        startTime: isSingleDay && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' ? startTime : undefined,
+        endTime: isSingleDay && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' ? endTime : undefined,
       })
       return
     }
@@ -397,7 +416,7 @@ export function ProjectFormDialog({
                         <FormControl>
                           <Input
                             type="date"
-                            min={isEditing ? undefined : today}
+                            {...(!isEditing ? { min: today } : {})}
                             value={field.value}
                             onChange={(e) => {
                               field.onChange(e)
@@ -410,7 +429,7 @@ export function ProjectFormDialog({
                     )}
                   />
 
-                  {selectedTemplate === 'string-quartet' && (
+                  {selectedTemplate !== null && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' && (
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1.5">
                         <label className="text-sm font-medium leading-none">Call Time</label>
@@ -450,7 +469,7 @@ export function ProjectFormDialog({
                         <FormControl>
                           <Input
                             type="date"
-                            min={isEditing ? undefined : today}
+                            {...(!isEditing ? { min: today } : {})}
                             value={field.value}
                             onChange={(e) => {
                               const newValue = e.target.value
@@ -475,7 +494,7 @@ export function ProjectFormDialog({
                       <FormItem>
                         <FormLabel>End Date</FormLabel>
                         <FormControl>
-                          <Input type="date" min={isEditing ? undefined : today} {...field} />
+                          <Input type="date" {...(!isEditing ? { min: today } : {})} {...field} />
                         </FormControl>
                         <p className="text-xs text-muted-foreground">Final performance date</p>
                         <FormMessage />

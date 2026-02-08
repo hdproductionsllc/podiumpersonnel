@@ -378,6 +378,98 @@ export function ProjectsClient({
             }))
           )
         }
+      } else if (newProject.template === 'string-trio') {
+        // Performance only
+        const dateStr = newProject.start_date || newProject.end_date
+        if (dateStr) {
+          const ct = newProject.callTime || '18:30'
+          const st = newProject.startTime || '19:00'
+          const et = newProject.endTime || '22:00'
+          await supabase.from('services').insert({
+            project_id: newProject.id,
+            name: 'Performance',
+            service_type: 'performance',
+            start_time: new Date(`${dateStr}T${st}:00`).toISOString(),
+            end_time: new Date(`${dateStr}T${et}:00`).toISOString(),
+            call_time: new Date(`${dateStr}T${ct}:00`).toISOString(),
+          })
+        }
+
+        // Create trio positions: Violin 1, Violin 2, Cello
+        const { data: trioInstruments } = await supabase
+          .from('instruments')
+          .select('id, name')
+          .eq('organization_id', organizationId)
+          .in('name', ['Violin 1', 'Violin 2', 'Cello'])
+
+        if (trioInstruments && trioInstruments.length > 0) {
+          const uniqueByName = new Map<string, typeof trioInstruments[0]>()
+          for (const inst of trioInstruments) {
+            if (!uniqueByName.has(inst.name)) uniqueByName.set(inst.name, inst)
+          }
+          await supabase.from('project_positions').insert(
+            Array.from(uniqueByName.values()).map((inst) => ({
+              project_id: newProject.id,
+              instrument_id: inst.id,
+              chair_number: 1,
+              status: 'vacant',
+            }))
+          )
+        }
+      } else if (newProject.template === 'duo') {
+        // Performance only
+        const dateStr = newProject.start_date || newProject.end_date
+        if (dateStr) {
+          const ct = newProject.callTime || '18:30'
+          const st = newProject.startTime || '19:00'
+          const et = newProject.endTime || '22:00'
+          await supabase.from('services').insert({
+            project_id: newProject.id,
+            name: 'Performance',
+            service_type: 'performance',
+            start_time: new Date(`${dateStr}T${st}:00`).toISOString(),
+            end_time: new Date(`${dateStr}T${et}:00`).toISOString(),
+            call_time: new Date(`${dateStr}T${ct}:00`).toISOString(),
+          })
+        }
+
+        // Create duo positions: Violin 1, Cello
+        const { data: duoInstruments } = await supabase
+          .from('instruments')
+          .select('id, name')
+          .eq('organization_id', organizationId)
+          .in('name', ['Violin 1', 'Cello'])
+
+        if (duoInstruments && duoInstruments.length > 0) {
+          const uniqueByName = new Map<string, typeof duoInstruments[0]>()
+          for (const inst of duoInstruments) {
+            if (!uniqueByName.has(inst.name)) uniqueByName.set(inst.name, inst)
+          }
+          await supabase.from('project_positions').insert(
+            Array.from(uniqueByName.values()).map((inst) => ({
+              project_id: newProject.id,
+              instrument_id: inst.id,
+              chair_number: 1,
+              status: 'vacant',
+            }))
+          )
+        }
+      } else if (newProject.template === 'solo') {
+        // Performance only — no positions created, admin picks the instrument
+        const dateStr = newProject.start_date || newProject.end_date
+        if (dateStr) {
+          const ct = newProject.callTime || '18:30'
+          const st = newProject.startTime || '19:00'
+          const et = newProject.endTime || '22:00'
+          await supabase.from('services').insert({
+            project_id: newProject.id,
+            name: 'Performance',
+            service_type: 'performance',
+            start_time: new Date(`${dateStr}T${st}:00`).toISOString(),
+            end_time: new Date(`${dateStr}T${et}:00`).toISOString(),
+            call_time: new Date(`${dateStr}T${ct}:00`).toISOString(),
+          })
+        }
       } else if (newProject.template === 'orchestra') {
         // 2 rehearsals + 1 performance
         const dateStr = newProject.start_date || newProject.end_date
