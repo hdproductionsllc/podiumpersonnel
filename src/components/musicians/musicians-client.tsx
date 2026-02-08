@@ -10,7 +10,6 @@ import { MusicianFormDialog } from './musician-form-dialog'
 import { DeleteMusicianDialog } from './delete-musician-dialog'
 import { BulkEditDialog } from './bulk-edit-dialog'
 import { CallOrderDialog } from './call-order-dialog'
-import { MusicianCard } from './musician-card'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import type { Musician } from '@/types'
@@ -100,8 +99,7 @@ export function MusiciansClient({
   const [editingMusician, setEditingMusician] = useState<MusicianWithInstruments | null>(null)
   const [deletingMusician, setDeletingMusician] = useState<MusicianWithInstruments | null>(null)
 
-  // View mode state
-  const [viewMode, setViewMode] = useState<'table' | 'card' | 'grouped'>('table')
+  // Collapsible section state for grouped-by-instrument view
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
 
   // Filter state
@@ -132,8 +130,8 @@ export function MusiciansClient({
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
 
   // Sort state
-  type SortColumn = 'name' | 'email' | 'phone' | 'instruments' | 'tags' | 'status' | 'call_order' | 'home_region'
-  const [sortColumn, setSortColumn] = useState<SortColumn>('name')
+  type SortColumn = 'name' | 'email' | 'phone' | 'tags' | 'status' | 'call_order' | 'home_region'
+  const [sortColumn, setSortColumn] = useState<SortColumn>('call_order')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
   // Get unique tags from all musicians
@@ -257,14 +255,6 @@ export function MusiciansClient({
           if (!bPhone) return -1
           return aPhone.localeCompare(bPhone) * dir
         }
-        case 'instruments': {
-          const aInst = a.musician_instruments.map((mi) => mi.instrument.name).sort().join(', ').toLowerCase()
-          const bInst = b.musician_instruments.map((mi) => mi.instrument.name).sort().join(', ').toLowerCase()
-          if (!aInst && !bInst) return 0
-          if (!aInst) return 1
-          if (!bInst) return -1
-          return aInst.localeCompare(bInst) * dir
-        }
         case 'tags': {
           const aTags = (a.tags || []).sort().join(', ').toLowerCase()
           const bTags = (b.tags || []).sort().join(', ').toLowerCase()
@@ -296,12 +286,17 @@ export function MusiciansClient({
       }
     })
 
-  // Grouped by instrument data for the "By Instrument" view
+  // Grouped by instrument data
   const groupedByInstrument = useMemo(() => {
     // Build a map: instrument -> musicians who play it
     const groups = new Map<string, { instrument: InstrumentOption; musicians: MusicianWithInstruments[] }>()
+    const unassigned: MusicianWithInstruments[] = []
 
     for (const musician of filteredMusicians) {
+      if (musician.musician_instruments.length === 0) {
+        unassigned.push(musician)
+        continue
+      }
       for (const mi of musician.musician_instruments) {
         const inst = instruments.find((i) => i.id === mi.instrument_id)
         if (!inst) continue
@@ -312,25 +307,78 @@ export function MusiciansClient({
       }
     }
 
-    // Sort musicians within each group: by call_order ascending, then alphabetical
-    for (const group of groups.values()) {
-      group.musicians.sort((a, b) => {
-        const aOrder = a.call_order ?? 999999
-        const bOrder = b.call_order ?? 999999
-        if (aOrder !== bOrder) return aOrder - bOrder
-        return `${a.last_name}, ${a.first_name}`.localeCompare(`${b.last_name}, ${b.first_name}`)
-      })
+    // Sort musicians within each group using current sort column/direction
+    const sortFn = (a: MusicianWithInstruments, b: MusicianWithInstruments) => {
+      const dir = sortDirection === 'asc' ? 1 : -1
+      switch (sortColumn) {
+        case 'name': {
+          const aName = `${a.last_name}, ${a.first_name}`.toLowerCase()
+          const bName = `${b.last_name}, ${b.first_name}`.toLowerCase()
+          return aName.localeCompare(bName) * dir
+        }
+        case 'email': {
+          const aEmail = (a.email || '').toLowerCase()
+          const bEmail = (b.email || '').toLowerCase()
+          if (!aEmail && !bEmail) return 0
+          if (!aEmail) return 1
+          if (!bEmail) return -1
+          return aEmail.localeCompare(bEmail) * dir
+        }
+        case 'phone': {
+          const aPhone = a.phone || ''
+          const bPhone = b.phone || ''
+          if (!aPhone && !bPhone) return 0
+          if (!aPhone) return 1
+          if (!bPhone) return -1
+          return aPhone.localeCompare(bPhone) * dir
+        }
+        case 'tags': {
+          const aTags = (a.tags || []).sort().join(', ').toLowerCase()
+          const bTags = (b.tags || []).sort().join(', ').toLowerCase()
+          if (!aTags && !bTags) return 0
+          if (!aTags) return 1
+          if (!bTags) return -1
+          return aTags.localeCompare(bTags) * dir
+        }
+        case 'status': {
+          const aActive = a.is_active ? 1 : 0
+          const bActive = b.is_active ? 1 : 0
+          return (aActive - bActive) * dir
+        }
+        case 'home_region': {
+          const aRegion = (a.home_region || '').toLowerCase()
+          const bRegion = (b.home_region || '').toLowerCase()
+          if (!aRegion && !bRegion) return 0
+          if (!aRegion) return 1
+          if (!bRegion) return -1
+          return aRegion.localeCompare(bRegion) * dir
+        }
+        case 'call_order':
+        default: {
+          const aOrder = a.call_order ?? 999999
+          const bOrder = b.call_order ?? 999999
+          if (aOrder !== bOrder) return (aOrder - bOrder) * dir
+          return `${a.last_name}, ${a.first_name}`.localeCompare(`${b.last_name}, ${b.first_name}`)
+        }
+      }
     }
+
+    for (const group of groups.values()) {
+      group.musicians.sort(sortFn)
+    }
+    unassigned.sort(sortFn)
 
     // Sort groups: by INSTRUMENT_SECTIONS order, then by sort_order
     const sectionOrder = INSTRUMENT_SECTIONS as readonly string[]
-    return Array.from(groups.values()).sort((a, b) => {
+    const sorted = Array.from(groups.values()).sort((a, b) => {
       const aSec = sectionOrder.indexOf(a.instrument.section || 'other')
       const bSec = sectionOrder.indexOf(b.instrument.section || 'other')
       if (aSec !== bSec) return aSec - bSec
       return a.instrument.sort_order - b.instrument.sort_order
     })
-  }, [filteredMusicians, instruments])
+
+    return { groups: sorted, unassigned }
+  }, [filteredMusicians, instruments, sortColumn, sortDirection])
 
   function toggleSection(instrumentId: string) {
     setCollapsedSections((prev) => {
@@ -369,6 +417,230 @@ export function MusiciansClient({
       <svg className="ml-1 h-3 w-3 inline-block" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
       </svg>
+    )
+  }
+
+  function renderMusicianRow(musician: MusicianWithInstruments) {
+    return (
+      <tr
+        key={musician.id}
+        className={`hover:bg-muted/30 ${selectMode && selectedIds.has(musician.id) ? 'bg-blue-50 dark:bg-blue-950/30' : ''}`}
+        onClick={selectMode ? () => toggleSelect(musician.id) : undefined}
+      >
+        {selectMode && (
+          <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300"
+              checked={selectedIds.has(musician.id)}
+              onChange={() => toggleSelect(musician.id)}
+            />
+          </td>
+        )}
+        <td className="px-4 py-2 text-center text-muted-foreground">
+          {musician.call_order ?? '\u2014'}
+        </td>
+        <td className="px-4 py-2 font-medium">
+          <div className="flex items-center gap-2">
+            {canManage && !selectMode ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
+                className="text-left hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer"
+              >
+                {musician.last_name}, {musician.first_name}
+              </button>
+            ) : (
+              <span>{musician.last_name}, {musician.first_name}</span>
+            )}
+            {(!musician.email || !musician.phone) && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
+                className="inline-flex items-center rounded bg-amber-100 dark:bg-amber-900/50 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors"
+                title={`Missing: ${[!musician.email && 'email', !musician.phone && 'phone'].filter(Boolean).join(', ')} - Click to edit`}
+              >
+                <svg className="h-3 w-3 mr-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                </svg>
+                Info
+              </button>
+            )}
+          </div>
+        </td>
+        <td className="px-4 py-2 text-muted-foreground">
+          {musician.email ? (
+            <a
+              href={`mailto:${musician.email}`}
+              className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {musician.email}
+            </a>
+          ) : '\u2014'}
+        </td>
+        <td className="px-4 py-2 text-muted-foreground whitespace-nowrap">
+          {musician.phone ? (
+            <a
+              href={`tel:${musician.phone.replace(/[^\d+]/g, '')}`}
+              className="hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {formatPhoneNumber(musician.phone)}
+            </a>
+          ) : '\u2014'}
+        </td>
+        <td className="px-4 py-2 text-muted-foreground">
+          {musician.home_region || '\u2014'}
+        </td>
+        <td className="px-4 py-2">
+          <div className="flex flex-col gap-1">
+            {canManage && !selectMode ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 ${
+                  musician.is_active
+                    ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
+                    : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
+                }`}
+              >
+                {musician.is_active ? 'Active' : 'Inactive'}
+              </button>
+            ) : (
+              <span
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                  musician.is_active
+                    ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
+                    : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
+                }`}
+              >
+                {musician.is_active ? 'Active' : 'Inactive'}
+              </span>
+            )}
+            {canManage && !selectMode ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 ${
+                  musician.w9_on_file
+                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                    : 'bg-amber-100 text-amber-800 dark:bg-orange-950 dark:text-orange-300'
+                }`}
+              >
+                {musician.w9_on_file ? 'W-9 \u2713' : 'No W-9'}
+              </button>
+            ) : (
+              <span
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                  musician.w9_on_file
+                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                    : 'bg-amber-100 text-amber-800 dark:bg-orange-950 dark:text-orange-300'
+                }`}
+              >
+                {musician.w9_on_file ? 'W-9 \u2713' : 'No W-9'}
+              </span>
+            )}
+            {canManage && !selectMode ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 ${
+                  musician.zelle_verified
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                    : musician.zelle_method
+                      ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300'
+                      : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
+                }`}
+              >
+                {musician.zelle_verified
+                  ? `Zelle \u2713 (${musician.zelle_method})`
+                  : musician.zelle_method
+                    ? `Zelle? (${musician.zelle_method})`
+                    : 'No Zelle'}
+              </button>
+            ) : (
+              <span
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                  musician.zelle_verified
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                    : musician.zelle_method
+                      ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300'
+                      : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
+                }`}
+              >
+                {musician.zelle_verified
+                  ? `Zelle \u2713 (${musician.zelle_method})`
+                  : musician.zelle_method
+                    ? `Zelle? (${musician.zelle_method})`
+                    : 'No Zelle'}
+              </span>
+            )}
+          </div>
+        </td>
+        <td className="px-4 py-2">
+          {musician.tags && musician.tags.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {musician.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          ) : '\u2014'}
+        </td>
+        <td className="px-4 py-2">
+          {musician.user_id ? (
+            <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-950 dark:text-green-300">
+              <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+              Active
+            </span>
+          ) : (
+            <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+              \u2014
+            </span>
+          )}
+        </td>
+        {canManage && (
+          <td className="px-4 py-2 text-right">
+            <div
+              className="flex items-center justify-end gap-1"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {musician.user_id && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-blue-600 hover:text-blue-700"
+                  onClick={() => window.open(`/musician?impersonate=${musician.id}`, '_blank')}
+                  title="View portal as this musician"
+                >
+                  <svg className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                  </svg>
+                  View As
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleEdit(musician)}
+              >
+                Edit
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={() => handleDelete(musician)}
+              >
+                Delete
+              </Button>
+            </div>
+          </td>
+        )}
+      </tr>
     )
   }
 
@@ -706,51 +978,8 @@ export function MusiciansClient({
 
       {musicians.length > 0 && (
         <div className="space-y-3">
-          {/* View toggle and Search */}
+          {/* Search and filters */}
           <div className="flex flex-wrap items-center gap-3">
-            {/* View toggle */}
-            <div className="flex rounded-md border bg-muted/30 p-1">
-              <button
-                onClick={() => setViewMode('table')}
-                className={`px-3 py-1 text-sm rounded transition-colors ${
-                  viewMode === 'table'
-                    ? 'bg-background shadow-sm font-medium'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <svg className="h-4 w-4 inline-block mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0 1 12 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5" />
-                </svg>
-                Table
-              </button>
-              <button
-                onClick={() => setViewMode('card')}
-                className={`px-3 py-1 text-sm rounded transition-colors ${
-                  viewMode === 'card'
-                    ? 'bg-background shadow-sm font-medium'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <svg className="h-4 w-4 inline-block mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
-                </svg>
-                Cards
-              </button>
-              <button
-                onClick={() => setViewMode('grouped')}
-                className={`px-3 py-1 text-sm rounded transition-colors ${
-                  viewMode === 'grouped'
-                    ? 'bg-background shadow-sm font-medium'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <svg className="h-4 w-4 inline-block mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
-                </svg>
-                By Instrument
-              </button>
-            </div>
-
             <input
               type="text"
               placeholder="Search by name or email..."
@@ -1024,8 +1253,8 @@ export function MusiciansClient({
         <EmptyState title="No musicians match your filters" />
       ) : (
         <>
-          {/* Select & Batch Edit Button - hidden in grouped mode */}
-          {canManage && musicians.length > 0 && viewMode !== 'grouped' && (
+          {/* Select & Batch Edit Button */}
+          {canManage && musicians.length > 0 && (
             <div className="flex items-center gap-2">
               <Button
                 variant={selectMode ? 'default' : 'outline'}
@@ -1071,11 +1300,11 @@ export function MusiciansClient({
             </div>
           )}
 
-          {viewMode === 'grouped' ? (
-            <div className="space-y-4">
-              {groupedByInstrument.map(({ instrument, musicians: groupMusicians }) => {
+          <div className="space-y-4">
+              {groupedByInstrument.groups.map(({ instrument, musicians: groupMusicians }) => {
                 const isCollapsed = collapsedSections.has(instrument.id)
                 const sectionLabel = instrument.section ? SECTION_LABELS[instrument.section as InstrumentSection] : ''
+                const allGroupSelected = groupMusicians.length > 0 && groupMusicians.every((m) => selectedIds.has(m.id))
                 return (
                   <div key={instrument.id} className="rounded-lg border bg-background">
                     <button
@@ -1102,62 +1331,73 @@ export function MusiciansClient({
                       </span>
                     </button>
                     {!isCollapsed && (
-                      <div className="border-t">
+                      <div className="border-t overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead className="bg-muted/30">
                             <tr>
-                              <th className="w-12 px-4 py-2 text-left text-xs font-medium text-muted-foreground">#</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Name</th>
+                              {selectMode && (
+                                <th className="w-10 px-2 py-2">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-gray-300"
+                                    checked={allGroupSelected}
+                                    onChange={() => {
+                                      setSelectedIds((prev) => {
+                                        const next = new Set(prev)
+                                        if (allGroupSelected) {
+                                          groupMusicians.forEach((m) => next.delete(m.id))
+                                        } else {
+                                          groupMusicians.forEach((m) => next.add(m.id))
+                                        }
+                                        return next
+                                      })
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                </th>
+                              )}
+                              <th
+                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground select-none w-20"
+                                title="Call order determines the waterfall sequence"
+                              >
+                                <span className="cursor-pointer hover:text-foreground" onClick={() => handleSort('call_order')}>
+                                  Order <SortIcon column="call_order" />
+                                </span>
+                              </th>
+                              <th
+                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                onClick={() => handleSort('name')}
+                              >
+                                Name <SortIcon column="name" />
+                              </th>
                               <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
                               <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Region</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Status</th>
+                              <th
+                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                onClick={() => handleSort('home_region')}
+                              >
+                                Region <SortIcon column="home_region" />
+                              </th>
+                              <th
+                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                onClick={() => handleSort('status')}
+                              >
+                                Status <SortIcon column="status" />
+                              </th>
+                              <th
+                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                onClick={() => handleSort('tags')}
+                              >
+                                Tags <SortIcon column="tags" />
+                              </th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Portal</th>
+                              {canManage && (
+                                <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Actions</th>
+                              )}
                             </tr>
                           </thead>
                           <tbody className="divide-y">
-                            {groupMusicians.map((musician, index) => (
-                              <tr key={musician.id} className="hover:bg-muted/30">
-                                <td className="px-4 py-2 text-muted-foreground">{index + 1}</td>
-                                <td className="px-4 py-2 font-medium">
-                                  {canManage ? (
-                                    <button
-                                      onClick={() => handleEdit(musician)}
-                                      className="text-left hover:text-blue-600 dark:hover:text-blue-400 hover:underline"
-                                    >
-                                      {musician.last_name}, {musician.first_name}
-                                    </button>
-                                  ) : (
-                                    <span>{musician.last_name}, {musician.first_name}</span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-2 text-muted-foreground">
-                                  {musician.email ? (
-                                    <a href={`mailto:${musician.email}`} className="text-blue-600 hover:underline dark:text-blue-400">
-                                      {musician.email}
-                                    </a>
-                                  ) : '\u2014'}
-                                </td>
-                                <td className="px-4 py-2 text-muted-foreground whitespace-nowrap">
-                                  {musician.phone ? (
-                                    <a href={`tel:${musician.phone.replace(/[^\d+]/g, '')}`} className="hover:underline">
-                                      {formatPhoneNumber(musician.phone)}
-                                    </a>
-                                  ) : '\u2014'}
-                                </td>
-                                <td className="px-4 py-2 text-muted-foreground">
-                                  {musician.home_region || '\u2014'}
-                                </td>
-                                <td className="px-4 py-2">
-                                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                                    musician.is_active
-                                      ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
-                                      : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
-                                  }`}>
-                                    {musician.is_active ? 'Active' : 'Inactive'}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
+                            {groupMusicians.map((musician) => renderMusicianRow(musician))}
                           </tbody>
                         </table>
                       </div>
@@ -1165,345 +1405,114 @@ export function MusiciansClient({
                   </div>
                 )
               })}
-              {groupedByInstrument.length === 0 && (
+
+              {/* Unassigned section */}
+              {groupedByInstrument.unassigned.length > 0 && (() => {
+                const isCollapsed = collapsedSections.has('__unassigned__')
+                const unassigned = groupedByInstrument.unassigned
+                const allGroupSelected = unassigned.length > 0 && unassigned.every((m) => selectedIds.has(m.id))
+                return (
+                  <div className="rounded-lg border bg-background border-dashed">
+                    <button
+                      onClick={() => toggleSection('__unassigned__')}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
+                    >
+                      <svg
+                        className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isCollapsed ? '' : 'rotate-90'}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth={2}
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                      </svg>
+                      <span className="font-semibold text-muted-foreground">Unassigned</span>
+                      <span className="rounded-full bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-300">
+                        No instrument
+                      </span>
+                      <span className="ml-auto text-sm text-muted-foreground">
+                        {unassigned.length} musician{unassigned.length !== 1 ? 's' : ''}
+                      </span>
+                    </button>
+                    {!isCollapsed && (
+                      <div className="border-t overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/30">
+                            <tr>
+                              {selectMode && (
+                                <th className="w-10 px-2 py-2">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-gray-300"
+                                    checked={allGroupSelected}
+                                    onChange={() => {
+                                      setSelectedIds((prev) => {
+                                        const next = new Set(prev)
+                                        if (allGroupSelected) {
+                                          unassigned.forEach((m) => next.delete(m.id))
+                                        } else {
+                                          unassigned.forEach((m) => next.add(m.id))
+                                        }
+                                        return next
+                                      })
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                </th>
+                              )}
+                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground select-none w-20">
+                                <span className="cursor-pointer hover:text-foreground" onClick={() => handleSort('call_order')}>
+                                  Order <SortIcon column="call_order" />
+                                </span>
+                              </th>
+                              <th
+                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                onClick={() => handleSort('name')}
+                              >
+                                Name <SortIcon column="name" />
+                              </th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
+                              <th
+                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                onClick={() => handleSort('home_region')}
+                              >
+                                Region <SortIcon column="home_region" />
+                              </th>
+                              <th
+                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                onClick={() => handleSort('status')}
+                              >
+                                Status <SortIcon column="status" />
+                              </th>
+                              <th
+                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                onClick={() => handleSort('tags')}
+                              >
+                                Tags <SortIcon column="tags" />
+                              </th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Portal</th>
+                              {canManage && (
+                                <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Actions</th>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {unassigned.map((musician) => renderMusicianRow(musician))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+
+              {groupedByInstrument.groups.length === 0 && groupedByInstrument.unassigned.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-8">
-                  No musicians have instruments assigned. Assign instruments to see them grouped here.
+                  No musicians match the current filters.
                 </p>
               )}
             </div>
-          ) : viewMode === 'card' ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredMusicians.map((musician) => (
-                <MusicianCard
-                  key={musician.id}
-                  musician={musician}
-                  canManage={canManage}
-                  selectMode={selectMode}
-                  isSelected={selectedIds.has(musician.id)}
-                  onSelect={() => toggleSelect(musician.id)}
-                  onEdit={() => handleEdit(musician)}
-                  onDelete={() => handleDelete(musician)}
-                />
-              ))}
-            </div>
-          ) : (
-          <div className="overflow-x-auto rounded-md border">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted/50">
-              <tr>
-                {selectMode && (
-                  <th className="w-10 px-2 py-3">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-gray-300"
-                      checked={selectedIds.size === filteredMusicians.length && filteredMusicians.length > 0}
-                      onChange={toggleSelectAll}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </th>
-                )}
-                <th
-                  className="px-4 py-3 text-left font-medium select-none w-24"
-                  title="Call order determines the waterfall sequence — when a musician declines a gig, the next in order is automatically suggested"
-                >
-                  <div className="flex items-center gap-1">
-                    <span
-                      className="cursor-pointer hover:text-foreground"
-                      onClick={() => handleSort('call_order')}
-                    >
-                      Order <SortIcon column="call_order" />
-                    </span>
-                    {canManage && (
-                      <button
-                        onClick={() => setCallOrderOpen(true)}
-                        className="ml-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-gold hover:bg-gold/10 border border-gold/30 transition-colors"
-                        title="Edit call order — drag to reorder musicians by call preference"
-                      >
-                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
-                        </svg>
-                        Edit
-                      </button>
-                    )}
-                  </div>
-                </th>
-                <th
-                  className="px-4 py-3 text-left font-medium cursor-pointer hover:bg-muted/80 select-none"
-                  onClick={() => handleSort('name')}
-                >
-                  Name <SortIcon column="name" />
-                </th>
-                <th className="px-4 py-3 text-left font-medium">
-                  Email
-                </th>
-                <th className="px-4 py-3 text-left font-medium">
-                  Phone
-                </th>
-                <th
-                  className="px-4 py-3 text-left font-medium cursor-pointer hover:bg-muted/80 select-none"
-                  onClick={() => handleSort('instruments')}
-                >
-                  Instruments <SortIcon column="instruments" />
-                </th>
-                <th
-                  className="px-4 py-3 text-left font-medium cursor-pointer hover:bg-muted/80 select-none"
-                  onClick={() => handleSort('home_region')}
-                >
-                  Region <SortIcon column="home_region" />
-                </th>
-                <th
-                  className="px-4 py-3 text-left font-medium cursor-pointer hover:bg-muted/80 select-none"
-                  onClick={() => handleSort('status')}
-                >
-                  Status <SortIcon column="status" />
-                </th>
-                <th
-                  className="px-4 py-3 text-left font-medium cursor-pointer hover:bg-muted/80 select-none"
-                  onClick={() => handleSort('tags')}
-                >
-                  Tags <SortIcon column="tags" />
-                </th>
-                <th className="px-4 py-3 text-left font-medium">
-                  Portal
-                </th>
-                {canManage && (
-                  <th className="px-4 py-3 text-right font-medium">Actions</th>
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {filteredMusicians.map((musician) => (
-                  <tr
-                    key={musician.id}
-                    className={`hover:bg-muted/50 ${selectMode && selectedIds.has(musician.id) ? 'bg-blue-50 dark:bg-blue-950/30' : ''}`}
-                    onClick={selectMode ? () => toggleSelect(musician.id) : undefined}
-                  >
-                    {selectMode && (
-                      <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-gray-300"
-                          checked={selectedIds.has(musician.id)}
-                            onChange={() => toggleSelect(musician.id)}
-                          />
-                        </td>
-                    )}
-                    <td className="px-4 py-3 text-center text-muted-foreground">
-                      {musician.call_order ?? '—'}
-                    </td>
-                    <td className="px-4 py-3 font-medium">
-                        <div className="flex items-center gap-2">
-                          {canManage && !selectMode ? (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
-                              className="text-left hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer"
-                            >
-                              {musician.last_name}, {musician.first_name}
-                            </button>
-                          ) : (
-                            <span>{musician.last_name}, {musician.first_name}</span>
-                          )}
-                          {(!musician.email || !musician.phone) && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
-                              className="inline-flex items-center rounded bg-amber-100 dark:bg-amber-900/50 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors"
-                              title={`Missing: ${[!musician.email && 'email', !musician.phone && 'phone'].filter(Boolean).join(', ')} - Click to edit`}
-                            >
-                              <svg className="h-3 w-3 mr-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-                              </svg>
-                              Info
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {musician.email ? (
-                          <a
-                            href={`mailto:${musician.email}`}
-                            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {musician.email}
-                          </a>
-                        ) : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                        {musician.phone ? (
-                          <a
-                            href={`tel:${musician.phone.replace(/[^\d+]/g, '')}`}
-                            className="hover:underline"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {formatPhoneNumber(musician.phone)}
-                          </a>
-                        ) : '\u2014'}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {musician.musician_instruments.length > 0
-                          ? musician.musician_instruments
-                              .map((mi) => mi.instrument.abbreviation || mi.instrument.name)
-                              .join(', ')
-                          : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {musician.home_region || '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col gap-1">
-                          {canManage && !selectMode ? (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
-                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 ${
-                                musician.is_active
-                                  ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
-                                  : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
-                              }`}
-                            >
-                              {musician.is_active ? 'Active' : 'Inactive'}
-                            </button>
-                          ) : (
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                                musician.is_active
-                                  ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
-                                  : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
-                              }`}
-                            >
-                              {musician.is_active ? 'Active' : 'Inactive'}
-                            </span>
-                          )}
-                          {canManage && !selectMode ? (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
-                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 ${
-                                musician.w9_on_file
-                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                                  : 'bg-amber-100 text-amber-800 dark:bg-orange-950 dark:text-orange-300'
-                              }`}
-                            >
-                              {musician.w9_on_file ? 'W-9 ✓' : 'No W-9'}
-                            </button>
-                          ) : (
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                                musician.w9_on_file
-                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                                  : 'bg-amber-100 text-amber-800 dark:bg-orange-950 dark:text-orange-300'
-                              }`}
-                            >
-                              {musician.w9_on_file ? 'W-9 ✓' : 'No W-9'}
-                            </span>
-                          )}
-                          {canManage && !selectMode ? (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
-                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 ${
-                                musician.zelle_verified
-                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                  : musician.zelle_method
-                                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300'
-                                    : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
-                              }`}
-                            >
-                              {musician.zelle_verified
-                                ? `Zelle ✓ (${musician.zelle_method})`
-                                : musician.zelle_method
-                                  ? `Zelle? (${musician.zelle_method})`
-                                  : 'No Zelle'}
-                            </button>
-                          ) : (
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                                musician.zelle_verified
-                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                  : musician.zelle_method
-                                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300'
-                                    : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
-                              }`}
-                            >
-                              {musician.zelle_verified
-                                ? `Zelle ✓ (${musician.zelle_method})`
-                                : musician.zelle_method
-                                  ? `Zelle? (${musician.zelle_method})`
-                                  : 'No Zelle'}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {musician.tags && musician.tags.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {musician.tags.map((tag) => (
-                              <span
-                                key={tag}
-                                className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300"
-                              >
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        ) : '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        {musician.user_id ? (
-                          <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-950 dark:text-green-300">
-                            <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                            </svg>
-                            Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
-                            —
-                          </span>
-                        )}
-                      </td>
-                      {canManage && (
-                        <td className="px-4 py-3 text-right">
-                          <div
-                            className="flex items-center justify-end gap-1"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {musician.user_id && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-blue-600 hover:text-blue-700"
-                                onClick={() => window.open(`/musician?impersonate=${musician.id}`, '_blank')}
-                                title="View portal as this musician"
-                              >
-                                <svg className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                                </svg>
-                                View As
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit(musician)}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-destructive hover:text-destructive"
-                              onClick={() => handleDelete(musician)}
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        </td>
-                      )}
-                  </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-          )}
         </>
       )}
 

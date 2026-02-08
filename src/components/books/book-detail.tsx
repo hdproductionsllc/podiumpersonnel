@@ -5,6 +5,7 @@ import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
 import { BookSectionGroup } from './book-section-group'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
+import { toast } from 'sonner'
 import type { BookWithEntries, InstrumentOption, MusicianForDropdown } from './books-client'
 
 interface BookDetailProps {
@@ -93,16 +94,20 @@ export function BookDetail({
                         size="sm"
                         className="h-7 text-xs"
                         onClick={async () => {
-                          // Add a placeholder entry to add this instrument to the book
                           const { createClient } = await import('@/lib/supabase/client')
                           const supabase = createClient()
-                          await supabase.from('book_entries').insert({
+                          const { error } = await supabase.from('book_entries').insert({
                             book_id: book.id,
                             instrument_id: inst.id,
                             musician_id: null,
                             chair_number: 1,
                             priority: 1,
                           })
+                          if (error) {
+                            toast.error(`Failed to add ${inst.name}: ${error.message}`)
+                            return
+                          }
+                          toast.success(`Added ${inst.name}`)
                           onEntryChange()
                         }}
                       >

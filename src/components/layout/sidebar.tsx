@@ -88,7 +88,7 @@ const navigation = [
   { name: 'Saved Ensembles', href: '/dashboard/books', icon: BookIcon, emphasize: false },
   // { name: 'Payments', href: '/dashboard/payments', icon: CurrencyIcon, emphasize: false },
   { name: 'Venues', href: '/dashboard/venues', icon: MapPinIcon, emphasize: false },
-  { name: 'Schedules', href: '/dashboard/schedules', icon: CalendarIcon, emphasize: false },
+  // { name: 'Schedules', href: '/dashboard/schedules', icon: CalendarIcon, emphasize: false },
   { name: 'Instruments', href: '/dashboard/instruments', icon: MusicIcon, emphasize: false },
 ]
 

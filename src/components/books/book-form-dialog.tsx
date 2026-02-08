@@ -204,7 +204,7 @@ export function BookFormDialog({
         return
       }
 
-      // If a preset was selected, add the instruments
+      // If a preset was selected, add the instruments and auto-populate musicians
       const preset = ENSEMBLE_PRESETS.find(p => p.id === selectedPreset)
       if (preset && preset.instruments.length > 0) {
         // Fetch all instruments to get their IDs
@@ -216,17 +216,58 @@ export function BookFormDialog({
         if (instruments) {
           const instrumentMap = new Map(instruments.map(i => [i.name, i.id]))
 
-          // Create book entries for each instrument in the preset
-          const entries: { book_id: string; instrument_id: string; chair_number: number; priority: number }[] = []
+          // Collect unique instrument IDs we need musicians for
+          const neededInstrumentIds = new Set<string>()
+          for (const item of preset.instruments) {
+            const instrumentId = instrumentMap.get(item.name)
+            if (instrumentId) neededInstrumentIds.add(instrumentId)
+          }
+
+          // Fetch active musicians for each instrument with their call_order
+          const { data: musicianInstruments } = await supabase
+            .from('musician_instruments')
+            .select('instrument_id, musician_id, musicians!inner(call_order, is_active)')
+            .in('instrument_id', Array.from(neededInstrumentIds))
+
+          // Build a map: instrument_id -> musicians sorted by call_order
+          const musiciansByInstrument = new Map<string, string[]>()
+          if (musicianInstruments) {
+            // Collect with call_order for sorting
+            const grouped = new Map<string, { musician_id: string; call_order: number }[]>()
+            for (const mi of musicianInstruments) {
+              const musician = mi.musicians as unknown as { call_order: number | null; is_active: boolean }
+              if (!musician.is_active) continue
+              if (!grouped.has(mi.instrument_id)) {
+                grouped.set(mi.instrument_id, [])
+              }
+              grouped.get(mi.instrument_id)!.push({
+                musician_id: mi.musician_id,
+                call_order: musician.call_order ?? 999999,
+              })
+            }
+            // Sort each group by call_order ascending
+            for (const [instId, list] of grouped) {
+              list.sort((a, b) => a.call_order - b.call_order)
+              musiciansByInstrument.set(instId, list.map(m => m.musician_id))
+            }
+          }
+
+          // Create book entries for each instrument, assigning musicians by call order
+          const entries: { book_id: string; instrument_id: string; musician_id: string | null; chair_number: number; priority: number }[] = []
+          const usedMusicianIds = new Set<string>()
 
           for (const item of preset.instruments) {
             const instrumentId = instrumentMap.get(item.name)
             if (instrumentId) {
-              // Add entries for each chair
+              const available = musiciansByInstrument.get(instrumentId) || []
               for (let chair = 1; chair <= item.chairs; chair++) {
+                // Find next available musician not already used in this book
+                const musicianId = available.find(id => !usedMusicianIds.has(id)) || null
+                if (musicianId) usedMusicianIds.add(musicianId)
                 entries.push({
                   book_id: newBook.id,
                   instrument_id: instrumentId,
+                  musician_id: musicianId,
                   chair_number: chair,
                   priority: 1,
                 })
