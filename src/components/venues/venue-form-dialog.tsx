@@ -1,11 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useState, useEffect } from 'react'
 import { useLoadScript } from '@react-google-maps/api'
 import { createClient } from '@/lib/supabase/client'
-import { venueSchema, type VenueInput } from '@/lib/validations/venues'
 import {
   Dialog,
   DialogContent,
@@ -15,15 +12,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form'
+import { VenueSearch } from '@/components/ui/venue-search'
 import type { Venue } from '@/types'
 
 const MAPS_LIBRARIES: ('places')[] = ['places']
@@ -47,179 +36,127 @@ export function VenueFormDialog({
   const [error, setError] = useState<string | null>(null)
   const isEditing = !!venue
 
-  const form = useForm<VenueInput>({
-    resolver: zodResolver(venueSchema),
-    defaultValues: {
-      name: '',
-      address: '',
-      city: '',
-      state: '',
-      zip: '',
-      google_maps_url: '',
-      parking_info: '',
-      directions: '',
-      notes: '',
-    },
-  })
+  // Form state
+  const [name, setName] = useState('')
+  const [address, setAddress] = useState('')
+  const [city, setCity] = useState('')
+  const [state, setState] = useState('')
+  const [zip, setZip] = useState('')
+  const [googleMapsUrl, setGoogleMapsUrl] = useState('')
+  const [parkingInfo, setParkingInfo] = useState('')
+  const [directions, setDirections] = useState('')
+  const [notes, setNotes] = useState('')
 
-  // Google Places autocomplete — same pattern as VenueSearch component.
-  // Uses AutocompleteService + custom React dropdown (no .pac-container),
-  // so it works inside Radix Dialog without z-index/pointer-events issues.
+  // For geocoding Google predictions
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
   const { isLoaded: mapsLoaded } = useLoadScript({
     googleMapsApiKey: apiKey,
     libraries: MAPS_LIBRARIES,
   })
-  const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null)
-  const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([])
-  const [showPredictions, setShowPredictions] = useState(false)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const wrapperRef = useRef<HTMLDivElement>(null)
 
-  // Initialize AutocompleteService when script loads
-  useEffect(() => {
-    if (mapsLoaded && apiKey) {
-      autocompleteServiceRef.current = new google.maps.places.AutocompleteService()
-    }
-  }, [mapsLoaded, apiKey])
-
-  // Close dropdown on click outside
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setShowPredictions(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  // Clean up debounce on unmount
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
-  }, [])
-
-  // Fetch predictions (debounced) — same as VenueSearch
-  const fetchPredictions = useCallback((input: string) => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (!autocompleteServiceRef.current || input.trim().length < 3) {
-      setPredictions([])
-      return
-    }
-    debounceRef.current = setTimeout(() => {
-      autocompleteServiceRef.current!.getPlacePredictions(
-        { input, types: ['establishment', 'geocode'] },
-        (results, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-            setPredictions(results)
-            setShowPredictions(true)
-          } else {
-            setPredictions([])
-          }
-        }
-      )
-    }, 300)
-  }, [])
-
-  // When user picks a prediction, geocode it to get address components
-  function selectPrediction(prediction: google.maps.places.AutocompletePrediction) {
-    setShowPredictions(false)
-    setPredictions([])
-
-    // Set the name immediately from the prediction
-    form.setValue('name', prediction.structured_formatting.main_text, { shouldDirty: true })
-
-    // Use Geocoder to get address components (no DOM node needed, unlike PlacesService)
-    const geocoder = new google.maps.Geocoder()
-    geocoder.geocode({ placeId: prediction.place_id }, (results, status) => {
-      if (status !== 'OK' || !results || results.length === 0) return
-      const result = results[0]
-
-      const components = result.address_components || []
-      const get = (type: string) => components.find(c => c.types.includes(type))
-
-      const streetNumber = get('street_number')?.long_name || ''
-      const route = get('route')?.long_name || ''
-      const streetAddress = [streetNumber, route].filter(Boolean).join(' ')
-      const city = get('locality')?.long_name || get('sublocality')?.long_name || ''
-      const state = get('administrative_area_level_1')?.short_name || ''
-      const zip = get('postal_code')?.long_name || ''
-
-      if (streetAddress) form.setValue('address', streetAddress, { shouldDirty: true })
-      if (city) form.setValue('city', city, { shouldDirty: true })
-      if (state) form.setValue('state', state, { shouldDirty: true })
-      if (zip) form.setValue('zip', zip, { shouldDirty: true })
-
-      // Build Google Maps URL from the place
-      const mapsUrl = `https://www.google.com/maps/place/?q=place_id:${prediction.place_id}`
-      form.setValue('google_maps_url', mapsUrl, { shouldDirty: true })
-    })
-  }
-
+  // Reset form when dialog opens
   useEffect(() => {
     if (open) {
       if (venue) {
-        form.reset({
-          name: venue.name,
-          address: venue.address || '',
-          city: venue.city || '',
-          state: venue.state || '',
-          zip: venue.zip || '',
-          google_maps_url: venue.google_maps_url || '',
-          parking_info: venue.parking_info || '',
-          directions: venue.directions || '',
-          notes: venue.notes || '',
-        })
+        setName(venue.name)
+        setAddress(venue.address || '')
+        setCity(venue.city || '')
+        setState(venue.state || '')
+        setZip(venue.zip || '')
+        setGoogleMapsUrl(venue.google_maps_url || '')
+        setParkingInfo(venue.parking_info || '')
+        setDirections(venue.directions || '')
+        setNotes(venue.notes || '')
       } else {
-        form.reset({
-          name: '',
-          address: '',
-          city: '',
-          state: '',
-          zip: '',
-          google_maps_url: '',
-          parking_info: '',
-          directions: '',
-          notes: '',
-        })
+        setName('')
+        setAddress('')
+        setCity('')
+        setState('')
+        setZip('')
+        setGoogleMapsUrl('')
+        setParkingInfo('')
+        setDirections('')
+        setNotes('')
       }
       setError(null)
-      setPredictions([])
-      setShowPredictions(false)
     }
-  }, [open, venue, form])
+  }, [open, venue])
 
-  async function onSubmit(data: VenueInput) {
+  function handleVenueSearchChange(
+    venueName: string,
+    _venueId: string | null,
+    venueData?: Venue | null,
+    placeId?: string | null,
+  ) {
+    setName(venueName)
+
+    if (venueData) {
+      // Selected a saved venue — copy its data
+      setAddress(venueData.address || '')
+      setCity(venueData.city || '')
+      setState(venueData.state || '')
+      setZip(venueData.zip || '')
+      setGoogleMapsUrl(venueData.google_maps_url || '')
+      setParkingInfo(venueData.parking_info || '')
+      setDirections(venueData.directions || '')
+      setNotes(venueData.notes || '')
+    } else if (placeId && mapsLoaded) {
+      // Selected a Google prediction — geocode to get address components
+      const geocoder = new google.maps.Geocoder()
+      geocoder.geocode({ placeId }, (results, status) => {
+        if (status !== 'OK' || !results || results.length === 0) return
+        const result = results[0]
+
+        const components = result.address_components || []
+        const get = (type: string) => components.find(c => c.types.includes(type))
+
+        const streetNumber = get('street_number')?.long_name || ''
+        const route = get('route')?.long_name || ''
+        const streetAddress = [streetNumber, route].filter(Boolean).join(' ')
+
+        setAddress(streetAddress)
+        setCity(get('locality')?.long_name || get('sublocality')?.long_name || '')
+        setState(get('administrative_area_level_1')?.short_name || '')
+        setZip(get('postal_code')?.long_name || '')
+        setGoogleMapsUrl(`https://www.google.com/maps/place/?q=place_id:${placeId}`)
+      })
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) return
+
     setIsLoading(true)
     setError(null)
 
     const supabase = createClient()
 
     // Generate Google Maps URL if address is provided but URL isn't
-    let mapsUrl = data.google_maps_url || null
-    if (!mapsUrl && data.address) {
-      const addressParts = [data.address, data.city, data.state, data.zip].filter(Boolean)
+    let mapsUrl = googleMapsUrl || null
+    if (!mapsUrl && address) {
+      const addressParts = [address, city, state, zip].filter(Boolean)
       if (addressParts.length > 0) {
         mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressParts.join(', '))}`
       }
     }
 
+    const payload = {
+      name: name.trim(),
+      address: address || null,
+      city: city || null,
+      state: state || null,
+      zip: zip || null,
+      google_maps_url: mapsUrl,
+      parking_info: parkingInfo || null,
+      directions: directions || null,
+      notes: notes || null,
+    }
+
     if (isEditing) {
       const { error: updateError } = await supabase
         .from('venues')
-        .update({
-          name: data.name,
-          address: data.address || null,
-          city: data.city || null,
-          state: data.state || null,
-          zip: data.zip || null,
-          google_maps_url: mapsUrl,
-          parking_info: data.parking_info || null,
-          directions: data.directions || null,
-          notes: data.notes || null,
-        })
+        .update(payload)
         .eq('id', venue.id)
 
       if (updateError) {
@@ -230,18 +167,7 @@ export function VenueFormDialog({
     } else {
       const { error: insertError } = await supabase
         .from('venues')
-        .insert({
-          organization_id: organizationId,
-          name: data.name,
-          address: data.address || null,
-          city: data.city || null,
-          state: data.state || null,
-          zip: data.zip || null,
-          google_maps_url: mapsUrl,
-          parking_info: data.parking_info || null,
-          directions: data.directions || null,
-          notes: data.notes || null,
-        })
+        .insert({ organization_id: organizationId, ...payload })
 
       if (insertError) {
         setError(insertError.message)
@@ -264,219 +190,82 @@ export function VenueFormDialog({
           <DialogDescription>
             {isEditing
               ? 'Update the venue details.'
-              : 'Add a new venue for your services.'}
+              : 'Search for a venue or enter a name to add it.'}
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {error && (
-              <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
-                {error}
-              </div>
-            )}
-
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel required>Venue Name</FormLabel>
-                  <div className="relative" ref={wrapperRef}>
-                    <FormControl>
-                      <Input
-                        placeholder="e.g. Symphony Hall or 123 Main St"
-                        {...field}
-                        onChange={(e) => {
-                          field.onChange(e)
-                          if (mapsLoaded && apiKey) {
-                            fetchPredictions(e.target.value)
-                          }
-                        }}
-                        onFocus={() => {
-                          if (predictions.length > 0) setShowPredictions(true)
-                        }}
-                        autoComplete="off"
-                      />
-                    </FormControl>
-                    {showPredictions && predictions.length > 0 && (
-                      <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-60 overflow-auto">
-                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-                          Suggestions
-                        </div>
-                        {predictions.map((prediction) => (
-                          <button
-                            key={prediction.place_id}
-                            type="button"
-                            className="w-full px-3 py-2 text-left hover:bg-muted flex flex-col gap-0.5"
-                            onClick={() => selectPrediction(prediction)}
-                          >
-                            <span className="font-medium text-sm">
-                              {prediction.structured_formatting.main_text}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {prediction.structured_formatting.secondary_text}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {apiKey && mapsLoaded && (
-                    <p className="text-xs text-muted-foreground">
-                      Start typing to search Google Maps and auto-fill address fields
-                    </p>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="address"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Street Address</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g. 123 Main St" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-3 gap-3">
-              <FormField
-                control={form.control}
-                name="city"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>City</FormLabel>
-                    <FormControl>
-                      <Input placeholder="City" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="state"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>State</FormLabel>
-                    <FormControl>
-                      <Input placeholder="CA" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="zip"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>ZIP</FormLabel>
-                    <FormControl>
-                      <Input placeholder="90210" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+              {error}
             </div>
+          )}
 
-            <FormField
-              control={form.control}
-              name="google_maps_url"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Google Maps Link</FormLabel>
-                  <FormControl>
-                    <Input placeholder="https://maps.google.com/..." {...field} />
-                  </FormControl>
-                  <p className="text-xs text-muted-foreground">
-                    Auto-generated from address if left blank
-                  </p>
-                  <FormMessage />
-                </FormItem>
-              )}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              Venue <span className="text-destructive">*</span>
+            </label>
+            <VenueSearch
+              value={name}
+              venueId={null}
+              organizationId={organizationId}
+              onChange={handleVenueSearchChange}
+              placeholder="Search venues or enter name..."
             />
+          </div>
 
-            <FormField
-              control={form.control}
-              name="parking_info"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Parking Information</FormLabel>
-                  <FormControl>
-                    <textarea
-                      className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      placeholder="Parking lot locations, valet info, validation details..."
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          {/* Show auto-filled address summary */}
+          {(address || city) && (
+            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+              {[address, city, state, zip].filter(Boolean).join(', ')}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Parking Information</label>
+            <textarea
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              placeholder="Parking lot locations, valet info, validation details..."
+              value={parkingInfo}
+              onChange={(e) => setParkingInfo(e.target.value)}
             />
+          </div>
 
-            <FormField
-              control={form.control}
-              name="directions"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Directions & Access</FormLabel>
-                  <FormControl>
-                    <textarea
-                      className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      placeholder="Stage door location, who to see for access, load-in instructions..."
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Directions & Access</label>
+            <textarea
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              placeholder="Stage door location, who to see for access, load-in instructions..."
+              value={directions}
+              onChange={(e) => setDirections(e.target.value)}
             />
+          </div>
 
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Additional Notes</FormLabel>
-                  <FormControl>
-                    <textarea
-                      className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      placeholder="Any other notes about this venue..."
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Additional Notes</label>
+            <textarea
+              className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              placeholder="Any other notes about this venue..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
             />
+          </div>
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading
-                  ? isEditing ? 'Saving...' : 'Adding...'
-                  : isEditing ? 'Save Changes' : 'Add Venue'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isLoading || !name.trim()}>
+              {isLoading
+                ? isEditing ? 'Saving...' : 'Adding...'
+                : isEditing ? 'Save Changes' : 'Add Venue'}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

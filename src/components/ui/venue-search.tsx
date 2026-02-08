@@ -12,7 +12,7 @@ interface VenueSearchProps {
   value: string
   venueId: string | null
   organizationId: string
-  onChange: (venue: string, venueId: string | null, venueData?: Venue | null) => void
+  onChange: (venue: string, venueId: string | null, venueData?: Venue | null, placeId?: string | null) => void
   placeholder?: string
   className?: string
 }
@@ -166,11 +166,11 @@ export function VenueSearch({
   }
 
   function handlePredictionSelect(prediction: google.maps.places.AutocompletePrediction) {
-    setInputValue(prediction.description)
+    setInputValue(prediction.structured_formatting.main_text)
     setIsOpen(false)
     setPredictions([])
     setSelectedVenue(null)
-    onChange(prediction.description, null, null)
+    onChange(prediction.structured_formatting.main_text, null, null, prediction.place_id)
   }
 
   function handleClearVenue() {
