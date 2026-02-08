@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useLoadScript, Autocomplete } from '@react-google-maps/api'
+import { useLoadScript } from '@react-google-maps/api'
 import { createClient } from '@/lib/supabase/client'
 import { venueSchema, type VenueInput } from '@/lib/validations/venues'
 import {
@@ -62,52 +62,100 @@ export function VenueFormDialog({
     },
   })
 
-  // Fix: Radix Dialog sets pointer-events: none on <body>, which blocks
-  // Google's .pac-container autocomplete dropdown (appended to <body>).
-  // Restore pointer-events so the dropdown is clickable.
-  useEffect(() => {
-    if (open) {
-      const timer = setTimeout(() => {
-        document.body.style.pointerEvents = ''
-      }, 0)
-      return () => clearTimeout(timer)
-    }
-  }, [open])
-
-  // Google Places autocomplete using the Autocomplete widget
+  // Google Places autocomplete — same pattern as VenueSearch component.
+  // Uses AutocompleteService + custom React dropdown (no .pac-container),
+  // so it works inside Radix Dialog without z-index/pointer-events issues.
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
   const { isLoaded: mapsLoaded } = useLoadScript({
     googleMapsApiKey: apiKey,
     libraries: MAPS_LIBRARIES,
   })
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
+  const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null)
+  const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([])
+  const [showPredictions, setShowPredictions] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
 
-  function onAutocompleteLoad(autocomplete: google.maps.places.Autocomplete) {
-    autocompleteRef.current = autocomplete
-  }
+  // Initialize AutocompleteService when script loads
+  useEffect(() => {
+    if (mapsLoaded && apiKey) {
+      autocompleteServiceRef.current = new google.maps.places.AutocompleteService()
+    }
+  }, [mapsLoaded, apiKey])
 
-  function onPlaceChanged() {
-    if (!autocompleteRef.current) return
-    const place = autocompleteRef.current.getPlace()
-    if (!place) return
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowPredictions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
-    // Extract address components
-    const components = place.address_components || []
-    const get = (type: string) => components.find(c => c.types.includes(type))
+  // Clean up debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [])
 
-    const streetNumber = get('street_number')?.long_name || ''
-    const route = get('route')?.long_name || ''
-    const streetAddress = [streetNumber, route].filter(Boolean).join(' ')
-    const city = get('locality')?.long_name || get('sublocality')?.long_name || ''
-    const state = get('administrative_area_level_1')?.short_name || ''
-    const zip = get('postal_code')?.long_name || ''
+  // Fetch predictions (debounced) — same as VenueSearch
+  const fetchPredictions = useCallback((input: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!autocompleteServiceRef.current || input.trim().length < 3) {
+      setPredictions([])
+      return
+    }
+    debounceRef.current = setTimeout(() => {
+      autocompleteServiceRef.current!.getPlacePredictions(
+        { input, types: ['establishment', 'geocode'] },
+        (results, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+            setPredictions(results)
+            setShowPredictions(true)
+          } else {
+            setPredictions([])
+          }
+        }
+      )
+    }, 300)
+  }, [])
 
-    if (place.name) form.setValue('name', place.name, { shouldDirty: true })
-    if (streetAddress) form.setValue('address', streetAddress, { shouldDirty: true })
-    if (city) form.setValue('city', city, { shouldDirty: true })
-    if (state) form.setValue('state', state, { shouldDirty: true })
-    if (zip) form.setValue('zip', zip, { shouldDirty: true })
-    if (place.url) form.setValue('google_maps_url', place.url, { shouldDirty: true })
+  // When user picks a prediction, geocode it to get address components
+  function selectPrediction(prediction: google.maps.places.AutocompletePrediction) {
+    setShowPredictions(false)
+    setPredictions([])
+
+    // Set the name immediately from the prediction
+    form.setValue('name', prediction.structured_formatting.main_text, { shouldDirty: true })
+
+    // Use Geocoder to get address components (no DOM node needed, unlike PlacesService)
+    const geocoder = new google.maps.Geocoder()
+    geocoder.geocode({ placeId: prediction.place_id }, (results, status) => {
+      if (status !== 'OK' || !results || results.length === 0) return
+      const result = results[0]
+
+      const components = result.address_components || []
+      const get = (type: string) => components.find(c => c.types.includes(type))
+
+      const streetNumber = get('street_number')?.long_name || ''
+      const route = get('route')?.long_name || ''
+      const streetAddress = [streetNumber, route].filter(Boolean).join(' ')
+      const city = get('locality')?.long_name || get('sublocality')?.long_name || ''
+      const state = get('administrative_area_level_1')?.short_name || ''
+      const zip = get('postal_code')?.long_name || ''
+
+      if (streetAddress) form.setValue('address', streetAddress, { shouldDirty: true })
+      if (city) form.setValue('city', city, { shouldDirty: true })
+      if (state) form.setValue('state', state, { shouldDirty: true })
+      if (zip) form.setValue('zip', zip, { shouldDirty: true })
+
+      // Build Google Maps URL from the place
+      const mapsUrl = `https://www.google.com/maps/place/?q=place_id:${prediction.place_id}`
+      form.setValue('google_maps_url', mapsUrl, { shouldDirty: true })
+    })
   }
 
   useEffect(() => {
@@ -138,6 +186,8 @@ export function VenueFormDialog({
         })
       }
       setError(null)
+      setPredictions([])
+      setShowPredictions(false)
     }
   }, [open, venue, form])
 
@@ -206,16 +256,7 @@ export function VenueFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="max-h-[90vh] overflow-y-auto"
-        onInteractOutside={(e) => {
-          // Prevent dialog from closing when clicking Google autocomplete suggestions
-          const target = e.target as Element | null
-          if (target?.closest?.('.pac-container')) {
-            e.preventDefault()
-          }
-        }}
-      >
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? 'Edit Venue' : 'Add Venue'}
@@ -241,29 +282,46 @@ export function VenueFormDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel required>Venue Name</FormLabel>
-                  <FormControl>
-                    {apiKey && mapsLoaded ? (
-                      <Autocomplete
-                        onLoad={onAutocompleteLoad}
-                        onPlaceChanged={onPlaceChanged}
-                        options={{
-                          types: ['establishment', 'geocode'],
-                          fields: ['name', 'address_components', 'formatted_address', 'url', 'geometry'],
-                        }}
-                      >
-                        <Input
-                          placeholder="e.g. Symphony Hall or 123 Main St"
-                          {...field}
-                          autoComplete="off"
-                        />
-                      </Autocomplete>
-                    ) : (
+                  <div className="relative" ref={wrapperRef}>
+                    <FormControl>
                       <Input
-                        placeholder="e.g. Symphony Hall"
+                        placeholder="e.g. Symphony Hall or 123 Main St"
                         {...field}
+                        onChange={(e) => {
+                          field.onChange(e)
+                          if (mapsLoaded && apiKey) {
+                            fetchPredictions(e.target.value)
+                          }
+                        }}
+                        onFocus={() => {
+                          if (predictions.length > 0) setShowPredictions(true)
+                        }}
+                        autoComplete="off"
                       />
+                    </FormControl>
+                    {showPredictions && predictions.length > 0 && (
+                      <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-60 overflow-auto">
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                          Suggestions
+                        </div>
+                        {predictions.map((prediction) => (
+                          <button
+                            key={prediction.place_id}
+                            type="button"
+                            className="w-full px-3 py-2 text-left hover:bg-muted flex flex-col gap-0.5"
+                            onClick={() => selectPrediction(prediction)}
+                          >
+                            <span className="font-medium text-sm">
+                              {prediction.structured_formatting.main_text}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {prediction.structured_formatting.secondary_text}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     )}
-                  </FormControl>
+                  </div>
                   {apiKey && mapsLoaded && (
                     <p className="text-xs text-muted-foreground">
                       Start typing to search Google Maps and auto-fill address fields
