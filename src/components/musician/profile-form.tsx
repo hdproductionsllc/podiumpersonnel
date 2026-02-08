@@ -157,14 +157,38 @@ export function ProfileForm({
   }, [profileForm.formState.isDirty, notifications, notificationPreferences, zelleMethod, musician.zelle_method])
 
   useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
+    // Warn on tab close / browser refresh
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasUnsavedChanges()) {
         e.preventDefault()
       }
     }
 
-    window.addEventListener('beforeunload', handler)
-    return () => window.removeEventListener('beforeunload', handler)
+    // Warn on in-app navigation (sidebar links, etc.)
+    const handleLinkClick = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement).closest('a')
+      if (!anchor) return
+      // Only intercept same-origin navigation links
+      if (anchor.getAttribute('target') === '_blank') return
+      if (!anchor.href || !anchor.href.startsWith(window.location.origin)) return
+      // Don't block same-page anchors
+      if (anchor.pathname === window.location.pathname) return
+
+      if (hasUnsavedChanges()) {
+        const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave this page?')
+        if (!confirmed) {
+          e.preventDefault()
+          e.stopPropagation()
+        }
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('click', handleLinkClick, true)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('click', handleLinkClick, true)
+    }
   }, [hasUnsavedChanges])
 
   async function onSaveAll() {
@@ -604,6 +628,12 @@ export function ProfileForm({
                 </label>
               </div>
             </div>
+
+            {zelleMethod === '' && (
+              <p className="text-sm text-muted-foreground bg-muted/50 rounded-md p-3">
+                If you prefer a different payment method, please contact your organization to make arrangements.
+              </p>
+            )}
 
             {musician.zelle_verified && (
               <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">

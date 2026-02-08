@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, resolveMusicianIds } from '@/lib/supabase/server'
 import { OfferDetail } from '@/components/musician/offer-detail'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -7,10 +7,12 @@ import { ArrowLeft } from 'lucide-react'
 
 interface OfferDetailPageProps {
   params: Promise<{ id: string }>
+  searchParams?: Promise<{ impersonate?: string }>
 }
 
-export default async function MusicianOfferDetailPage({ params }: OfferDetailPageProps) {
+export default async function MusicianOfferDetailPage({ params, searchParams }: OfferDetailPageProps) {
   const { id } = await params
+  const sp = await searchParams
   const supabase = await createClient()
 
   const {
@@ -21,18 +23,14 @@ export default async function MusicianOfferDetailPage({ params }: OfferDetailPag
     redirect('/musician/login')
   }
 
-  // Get all musician records for this user
-  const { data: musicians } = await supabase
-    .from('musicians')
-    .select('id')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
+  // Resolve musician IDs (supports admin impersonation)
+  const { musicianIds, error: resolveError } = await resolveMusicianIds(
+    supabase, user.id, sp?.impersonate
+  )
 
-  if (!musicians || musicians.length === 0) {
+  if (resolveError || musicianIds.length === 0) {
     redirect('/musician/login?error=no_musician_records')
   }
-
-  const musicianIds = musicians.map((m) => m.id)
 
   // Fetch the offer
   const { data: offer, error } = await supabase
@@ -133,9 +131,54 @@ export default async function MusicianOfferDetailPage({ params }: OfferDetailPag
       .eq('id', offer.id)
   }
 
+  // Fetch instruments for the organization (needed for sub request form)
+  const musician = offer.musician as any
+  let instruments: { id: string; name: string }[] = []
+  if (musician?.organization?.id) {
+    const { data: instrumentData } = await supabase
+      .from('instruments')
+      .select('id, name')
+      .eq('organization_id', musician.organization.id)
+      .order('name')
+
+    instruments = instrumentData || []
+  }
+
+  // Fetch existing sub request for this position + musician (for status display)
+  let existingSubRequest: {
+    id: string
+    status: string
+    reason: string | null
+    suggested_sub_name: string | null
+    suggested_sub_email: string | null
+    admin_notes: string | null
+    service: { id: string; name: string; start_time: string } | null
+  } | null = null
+
+  if (offer.status === 'accepted' && position?.id) {
+    const { data: subRequestData } = await supabase
+      .from('substitution_requests')
+      .select(`
+        id,
+        status,
+        reason,
+        suggested_sub_name,
+        suggested_sub_email,
+        admin_notes,
+        service:services(id, name, start_time)
+      `)
+      .eq('project_position_id', position.id)
+      .in('requesting_musician_id', musicianIds)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    existingSubRequest = subRequestData as any
+  }
+
   return (
     <div className="space-y-4">
-      <Link href="/musician/offers">
+      <Link href={sp?.impersonate ? `/musician/offers?impersonate=${sp.impersonate}` : '/musician/offers'}>
         <Button variant="ghost" size="sm" className="-ml-2">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Offers
@@ -147,6 +190,8 @@ export default async function MusicianOfferDetailPage({ params }: OfferDetailPag
         services={services}
         totalPay={totalPay}
         totalChairs={totalChairs}
+        instruments={instruments}
+        existingSubRequest={existingSubRequest}
       />
     </div>
   )

@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, resolveMusicianIds } from '@/lib/supabase/server'
 import { ProfileForm } from '@/components/musician/profile-form'
 import { Suspense } from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
 
-async function ProfileContent() {
+async function ProfileContent({ impersonateId }: { impersonateId?: string }) {
   const supabase = await createClient()
 
   const {
@@ -15,7 +15,16 @@ async function ProfileContent() {
     redirect('/musician/login')
   }
 
-  // Get all musician records for this user
+  // Resolve musician IDs (supports admin impersonation)
+  const { musicianIds, error: resolveError } = await resolveMusicianIds(
+    supabase, user.id, impersonateId
+  )
+
+  if (resolveError || musicianIds.length === 0) {
+    redirect('/musician/login?error=no_musician_records')
+  }
+
+  // Get full musician data for resolved IDs
   const { data: musicians, error } = await supabase
     .from('musicians')
     .select(`
@@ -31,7 +40,7 @@ async function ProfileContent() {
       zelle_verified,
       organization:organizations(id, name)
     `)
-    .eq('user_id', user.id)
+    .in('id', musicianIds)
     .eq('is_active', true)
 
   if (error || !musicians || musicians.length === 0) {
@@ -95,12 +104,17 @@ function ProfileSkeleton() {
   )
 }
 
-export default function MusicianProfilePage() {
+export default async function MusicianProfilePage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ impersonate?: string }>
+}) {
+  const params = await searchParams
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Profile</h1>
       <Suspense fallback={<ProfileSkeleton />}>
-        <ProfileContent />
+        <ProfileContent impersonateId={params?.impersonate} />
       </Suspense>
     </div>
   )
