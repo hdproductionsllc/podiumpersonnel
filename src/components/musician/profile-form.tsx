@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -137,6 +137,36 @@ export function ProfileForm({
     },
   })
 
+  // Watch phone field for live Zelle display
+  const watchedPhone = profileForm.watch('phone')
+
+  // Unsaved changes warning
+  const hasUnsavedChanges = useCallback(() => {
+    // Check profile form fields
+    if (profileForm.formState.isDirty) return true
+    // Check notification preferences
+    if (
+      notifications.email_new_offers !== notificationPreferences.email_new_offers ||
+      notifications.email_offer_reminders !== notificationPreferences.email_offer_reminders ||
+      notifications.email_schedule_changes !== notificationPreferences.email_schedule_changes ||
+      notifications.email_payment_updates !== notificationPreferences.email_payment_updates
+    ) return true
+    // Check zelle method
+    if (zelleMethod !== (musician.zelle_method || '')) return true
+    return false
+  }, [profileForm.formState.isDirty, notifications, notificationPreferences, zelleMethod, musician.zelle_method])
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges()) {
+        e.preventDefault()
+      }
+    }
+
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [hasUnsavedChanges])
+
   async function onSaveAll() {
     // Validate profile form first
     const isValid = await profileForm.trigger()
@@ -176,6 +206,9 @@ export function ProfileForm({
       if (!notifResponse.ok) {
         throw new Error('Failed to save notification preferences')
       }
+
+      // Reset dirty state so beforeunload warning clears
+      profileForm.reset(profileData)
 
       setSaveSuccess(true)
       router.refresh()
@@ -329,6 +362,23 @@ export function ProfileForm({
           Changes saved successfully
         </div>
       )}
+
+      {/* Save All Button */}
+      <Button
+        onClick={onSaveAll}
+        disabled={isSaving}
+        size="lg"
+        className="w-full"
+      >
+        {isSaving ? (
+          <>
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            Saving...
+          </>
+        ) : (
+          'Save Changes'
+        )}
+      </Button>
 
       {/* Basic Info */}
       <Card>
@@ -536,7 +586,7 @@ export function ProfileForm({
                   />
                   <span className="text-sm">
                     Phone
-                    {musician.phone && <span className="text-muted-foreground ml-1">({formatPhoneNumber(musician.phone)})</span>}
+                    {watchedPhone && <span className="text-muted-foreground ml-1">({formatPhoneNumber(watchedPhone)})</span>}
                   </span>
                 </label>
               </div>
@@ -631,23 +681,6 @@ export function ProfileForm({
 
         </CardContent>
       </Card>
-
-      {/* Save All Button */}
-      <Button
-        onClick={onSaveAll}
-        disabled={isSaving}
-        size="lg"
-        className="w-full"
-      >
-        {isSaving ? (
-          <>
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            Saving...
-          </>
-        ) : (
-          'Save Changes'
-        )}
-      </Button>
 
       {/* Account Security */}
       <Card id="settings">
