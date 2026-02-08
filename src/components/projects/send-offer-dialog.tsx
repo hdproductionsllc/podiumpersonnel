@@ -252,6 +252,35 @@ export function SendOfferDialog({
       expiresAt = new Date(Date.now() + parseInt(expiresIn) * 24 * 60 * 60 * 1000).toISOString()
     }
 
+    // Server-side guard: check if musician already has an active offer in this project
+    const { data: thisPosition } = await supabase
+      .from('project_positions')
+      .select('project_id')
+      .eq('id', positionId)
+      .single()
+
+    if (thisPosition) {
+      const { data: projectPositions } = await supabase
+        .from('project_positions')
+        .select('id')
+        .eq('project_id', thisPosition.project_id)
+
+      const allPosIds = (projectPositions || []).map((p: { id: string }) => p.id)
+      const { data: existingActive } = await supabase
+        .from('contract_offers')
+        .select('id')
+        .eq('musician_id', selectedMusicianId)
+        .in('project_position_id', allPosIds)
+        .in('status', ['pending', 'viewed', 'accepted'])
+        .limit(1)
+
+      if (existingActive && existingActive.length > 0) {
+        setLoading(false)
+        setError('This musician already has an active offer for another position in this project.')
+        return
+      }
+    }
+
     const insertData: Record<string, unknown> = {
       project_position_id: positionId,
       musician_id: selectedMusicianId,

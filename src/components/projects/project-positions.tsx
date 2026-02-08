@@ -169,14 +169,19 @@ export function ProjectPositions({
         ?.split('T')[0] || null
     : null
 
+  // Collect all musician IDs with active offers across ALL positions in this project
+  const projectWideOfferMusicianIds = positions.flatMap(p =>
+    p.contract_offers
+      .filter(o => o.status === 'pending' || o.status === 'viewed' || o.status === 'accepted')
+      .map(o => o.musician_id)
+  )
+  const uniqueProjectOfferIds = [...new Set(projectWideOfferMusicianIds)]
+
   function handleSendOffer(position: PositionJoined) {
-    const existingMusicianIds = position.contract_offers
-      .filter((o) => o.status === 'pending' || o.status === 'viewed' || o.status === 'accepted')
-      .map((o) => o.musician_id)
     setOfferPositionId(position.id)
     setOfferInstrumentId(position.instrument_id)
     setOfferChairNumber(position.chair_number)
-    setOfferExistingIds(existingMusicianIds)
+    setOfferExistingIds(uniqueProjectOfferIds)
   }
 
   // Group positions by section

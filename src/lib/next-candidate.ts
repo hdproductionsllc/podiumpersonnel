@@ -56,11 +56,19 @@ export async function getNextCandidates(
     }
   }
 
-  // Get all musicians who have been offered this position (to exclude)
+  // Get all musicians who have active offers for ANY position in this project (to exclude)
+  const { data: projectPositionIds } = await supabase
+    .from('project_positions')
+    .select('id')
+    .eq('project_id', project.id)
+
+  const allPositionIds = (projectPositionIds || []).map(p => p.id)
+
   const { data: existingOffers } = await supabase
     .from('contract_offers')
-    .select('musician_id')
-    .eq('project_position_id', positionId)
+    .select('musician_id, status')
+    .in('project_position_id', allPositionIds)
+    .in('status', ['pending', 'viewed', 'accepted'])
 
   const offeredMusicianIds = (existingOffers || []).map(o => o.musician_id)
 

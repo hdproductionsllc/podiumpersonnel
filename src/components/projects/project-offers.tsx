@@ -105,6 +105,35 @@ export function ProjectOffers({
     try {
       const supabase = createClient()
 
+      // Check if musician already has an active offer for another position in this project
+      const { data: position } = await supabase
+        .from('project_positions')
+        .select('project_id')
+        .eq('id', positionId)
+        .single()
+
+      if (position) {
+        const { data: projectPositions } = await supabase
+          .from('project_positions')
+          .select('id')
+          .eq('project_id', position.project_id)
+
+        const allPosIds = (projectPositions || []).map(p => p.id)
+        const { data: existingOffers } = await supabase
+          .from('contract_offers')
+          .select('id')
+          .eq('musician_id', musicianId)
+          .in('project_position_id', allPosIds)
+          .in('status', ['pending', 'viewed', 'accepted'])
+          .limit(1)
+
+        if (existingOffers && existingOffers.length > 0) {
+          toast.error(`${candidate.first_name} ${candidate.last_name} already has an active offer for another position in this project.`)
+          setSendingWaterfall(null)
+          return
+        }
+      }
+
       // Create new offer
       const { data: offerData, error } = await supabase
         .from('contract_offers')
