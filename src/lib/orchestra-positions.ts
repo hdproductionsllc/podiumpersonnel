@@ -38,8 +38,14 @@ const PERCUSSION_PATTERNS = /percussion|drums|drum\s*set|snare|bass\s*drum|cymba
 export function getPositionTitle(
   instrumentName: string,
   chairNumber: number,
-  section?: string | null
+  section?: string | null,
+  totalChairs?: number
 ): PositionInfo {
+  // For chamber ensembles (1 chair per instrument), skip orchestral titles
+  if (totalChairs !== undefined && totalChairs <= 1) {
+    return { title: `Chair ${chairNumber}`, shortTitle: `Ch ${chairNumber}`, isLeadership: false }
+  }
+
   const name = instrumentName.toLowerCase()
 
   // Violin 1 - Concertmaster

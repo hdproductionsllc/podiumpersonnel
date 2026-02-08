@@ -188,7 +188,7 @@ export function BookInstrumentChairs({
       <div className="space-y-1">
         {entries.map((entry) => {
           const dropdownMusicians = getDropdownMusicians(entry.musician_id)
-          const position = getPositionTitle(instrument.name, entry.chair_number ?? 1, instrument.section)
+          const position = getPositionTitle(instrument.name, entry.chair_number ?? 1, instrument.section, entries.length)
           return (
             <div key={entry.id} className="flex items-center gap-3">
               <span className={`text-xs w-28 ${position.isLeadership ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
@@ -229,8 +229,8 @@ export function BookInstrumentChairs({
 
         {pendingChair !== null && (
           <div className="flex items-center gap-3">
-            <span className={`text-xs w-28 ${getPositionTitle(instrument.name, pendingChair, instrument.section).isLeadership ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
-              {getPositionTitle(instrument.name, pendingChair, instrument.section).title}
+            <span className={`text-xs w-28 ${getPositionTitle(instrument.name, pendingChair, instrument.section, entries.length + 1).isLeadership ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+              {getPositionTitle(instrument.name, pendingChair, instrument.section, entries.length + 1).title}
             </span>
             <select
               className="flex h-8 w-full max-w-xs rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"

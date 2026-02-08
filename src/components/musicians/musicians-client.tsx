@@ -492,7 +492,7 @@ export function MusiciansClient({
           {musician.home_region || '\u2014'}
         </td>
         <td className="px-4 py-2">
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap gap-1">
             {canManage && !selectMode ? (
               <button
                 onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
@@ -597,7 +597,7 @@ export function MusiciansClient({
             </span>
           ) : (
             <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
-              \u2014
+              {'\u2014'}
             </span>
           )}
         </td>
