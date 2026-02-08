@@ -95,6 +95,7 @@ interface ProfileFormProps {
     email_schedule_changes: boolean
     email_payment_updates: boolean
   }
+  isReadOnly?: boolean
 }
 
 export function ProfileForm({
@@ -102,6 +103,7 @@ export function ProfileForm({
   musician,
   organizations,
   notificationPreferences,
+  isReadOnly = false,
 }: ProfileFormProps) {
   const router = useRouter()
   const [isSaving, setIsSaving] = useState(false)
@@ -374,6 +376,12 @@ export function ProfileForm({
 
   return (
     <div className="space-y-6">
+      {isReadOnly && (
+        <div className="rounded-md bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-3 text-sm text-blue-800 dark:text-blue-200">
+          You are viewing this profile as an admin. Changes cannot be made in this mode.
+        </div>
+      )}
+
       {/* Global save feedback */}
       {saveError && (
         <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
@@ -388,21 +396,23 @@ export function ProfileForm({
       )}
 
       {/* Save All Button */}
-      <Button
-        onClick={onSaveAll}
-        disabled={isSaving}
-        size="lg"
-        className="w-full"
-      >
-        {isSaving ? (
-          <>
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            Saving...
-          </>
-        ) : (
-          'Save Changes'
-        )}
-      </Button>
+      {!isReadOnly && (
+        <Button
+          onClick={onSaveAll}
+          disabled={isSaving}
+          size="lg"
+          className="w-full"
+        >
+          {isSaving ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            'Save Changes'
+          )}
+        </Button>
+      )}
 
       {/* Basic Info */}
       <Card>
@@ -423,7 +433,7 @@ export function ProfileForm({
                     <FormItem>
                       <FormLabel>First Name</FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Input {...field} disabled={isReadOnly} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -436,7 +446,7 @@ export function ProfileForm({
                     <FormItem>
                       <FormLabel>Last Name</FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Input {...field} disabled={isReadOnly} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -462,6 +472,7 @@ export function ProfileForm({
                       <Input
                         type="tel"
                         placeholder="(555) 123-4567"
+                        disabled={isReadOnly}
                         {...field}
                         onBlur={(e) => {
                           if (e.target.value) {
@@ -536,7 +547,7 @@ export function ProfileForm({
                   variant="ghost"
                   size="sm"
                   onClick={handleW9Remove}
-                  disabled={isUploadingW9}
+                  disabled={isUploadingW9 || isReadOnly}
                   className="text-muted-foreground hover:text-destructive"
                 >
                   {isUploadingW9 ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
@@ -546,7 +557,7 @@ export function ProfileForm({
               <div className="flex items-center gap-3">
                 <Button
                   variant="outline"
-                  disabled={isUploadingW9}
+                  disabled={isUploadingW9 || isReadOnly}
                   onClick={() => document.getElementById('w9-upload')?.click()}
                 >
                   {isUploadingW9 ? (
@@ -590,6 +601,7 @@ export function ProfileForm({
                     value="email"
                     checked={zelleMethod === 'email'}
                     onChange={() => setZelleMethod('email')}
+                    disabled={isReadOnly}
                     className="h-4 w-4"
                   />
                   <span className="text-sm">
@@ -606,6 +618,7 @@ export function ProfileForm({
                     value="phone"
                     checked={zelleMethod === 'phone'}
                     onChange={() => setZelleMethod('phone')}
+                    disabled={isReadOnly}
                     className="h-4 w-4"
                   />
                   <span className="text-sm">
@@ -622,6 +635,7 @@ export function ProfileForm({
                     value=""
                     checked={zelleMethod === ''}
                     onChange={() => setZelleMethod('')}
+                    disabled={isReadOnly}
                     className="h-4 w-4"
                   />
                   <span className="text-sm text-muted-foreground">Not using Zelle</span>
@@ -663,6 +677,7 @@ export function ProfileForm({
               </div>
               <Switch
                 checked={notifications.email_new_offers}
+                disabled={isReadOnly}
                 onCheckedChange={(checked) =>
                   setNotifications((prev) => ({ ...prev, email_new_offers: checked }))
                 }
@@ -676,6 +691,7 @@ export function ProfileForm({
               </div>
               <Switch
                 checked={notifications.email_offer_reminders}
+                disabled={isReadOnly}
                 onCheckedChange={(checked) =>
                   setNotifications((prev) => ({ ...prev, email_offer_reminders: checked }))
                 }
@@ -689,6 +705,7 @@ export function ProfileForm({
               </div>
               <Switch
                 checked={notifications.email_schedule_changes}
+                disabled={isReadOnly}
                 onCheckedChange={(checked) =>
                   setNotifications((prev) => ({ ...prev, email_schedule_changes: checked }))
                 }
@@ -702,6 +719,7 @@ export function ProfileForm({
               </div>
               <Switch
                 checked={notifications.email_payment_updates}
+                disabled={isReadOnly}
                 onCheckedChange={(checked) =>
                   setNotifications((prev) => ({ ...prev, email_payment_updates: checked }))
                 }
@@ -712,8 +730,8 @@ export function ProfileForm({
         </CardContent>
       </Card>
 
-      {/* Account Security */}
-      <Card id="settings">
+      {/* Account Security — hidden when admin is impersonating */}
+      {!isReadOnly && <Card id="settings">
         <CardHeader>
           <CardTitle>Account Security</CardTitle>
           <CardDescription>
@@ -749,7 +767,7 @@ export function ProfileForm({
             Change Password
           </Button>
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* Password Change Dialog */}
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>

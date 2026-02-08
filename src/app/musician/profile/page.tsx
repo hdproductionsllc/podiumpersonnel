@@ -89,6 +89,7 @@ async function ProfileContent({ impersonateId }: { impersonateId?: string }) {
         email_schedule_changes: true,
         email_payment_updates: true,
       }}
+      isReadOnly={!!impersonateId}
     />
   )
 }
