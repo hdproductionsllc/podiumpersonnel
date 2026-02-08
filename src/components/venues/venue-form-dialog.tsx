@@ -62,6 +62,18 @@ export function VenueFormDialog({
     },
   })
 
+  // Fix: Radix Dialog sets pointer-events: none on <body>, which blocks
+  // Google's .pac-container autocomplete dropdown (appended to <body>).
+  // Restore pointer-events so the dropdown is clickable.
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => {
+        document.body.style.pointerEvents = ''
+      }, 0)
+      return () => clearTimeout(timer)
+    }
+  }, [open])
+
   // Google Places autocomplete using the Autocomplete widget
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
   const { isLoaded: mapsLoaded } = useLoadScript({
@@ -194,7 +206,16 @@ export function VenueFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="max-h-[90vh] overflow-y-auto"
+        onInteractOutside={(e) => {
+          // Prevent dialog from closing when clicking Google autocomplete suggestions
+          const target = e.target as Element | null
+          if (target?.closest?.('.pac-container')) {
+            e.preventDefault()
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>
             {isEditing ? 'Edit Venue' : 'Add Venue'}

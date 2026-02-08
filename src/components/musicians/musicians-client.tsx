@@ -466,12 +466,13 @@ export function MusiciansClient({
             )}
           </div>
         </td>
-        <td className="px-4 py-2 text-muted-foreground">
+        <td className="px-4 py-2 text-muted-foreground truncate">
           {musician.email ? (
             <a
               href={`mailto:${musician.email}`}
               className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
               onClick={(e) => e.stopPropagation()}
+              title={musician.email}
             >
               {musician.email}
             </a>
@@ -1332,11 +1333,11 @@ export function MusiciansClient({
                     </button>
                     {!isCollapsed && (
                       <div className="border-t overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <table className="w-full text-sm table-fixed">
                           <thead className="bg-muted/30">
                             <tr>
                               {selectMode && (
-                                <th className="w-10 px-2 py-2">
+                                <th className="w-[40px] px-2 py-2">
                                   <input
                                     type="checkbox"
                                     className="h-4 w-4 rounded border-gray-300"
@@ -1357,7 +1358,7 @@ export function MusiciansClient({
                                 </th>
                               )}
                               <th
-                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground select-none w-20"
+                                className="w-[70px] px-4 py-2 text-left text-xs font-medium text-muted-foreground select-none"
                                 title="Call order determines the waterfall sequence"
                               >
                                 <span className="cursor-pointer hover:text-foreground" onClick={() => handleSort('call_order')}>
@@ -1370,29 +1371,29 @@ export function MusiciansClient({
                               >
                                 Name <SortIcon column="name" />
                               </th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
+                              <th className="w-[200px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
+                              <th className="w-[140px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
                               <th
-                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                className="w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
                                 onClick={() => handleSort('home_region')}
                               >
                                 Region <SortIcon column="home_region" />
                               </th>
                               <th
-                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                className="w-[240px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
                                 onClick={() => handleSort('status')}
                               >
                                 Status <SortIcon column="status" />
                               </th>
                               <th
-                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                className="w-[120px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
                                 onClick={() => handleSort('tags')}
                               >
                                 Tags <SortIcon column="tags" />
                               </th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Portal</th>
+                              <th className="w-[80px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Portal</th>
                               {canManage && (
-                                <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Actions</th>
+                                <th className="w-[150px] px-4 py-2 text-right text-xs font-medium text-muted-foreground">Actions</th>
                               )}
                             </tr>
                           </thead>
@@ -1436,11 +1437,11 @@ export function MusiciansClient({
                     </button>
                     {!isCollapsed && (
                       <div className="border-t overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <table className="w-full text-sm table-fixed">
                           <thead className="bg-muted/30">
                             <tr>
                               {selectMode && (
-                                <th className="w-10 px-2 py-2">
+                                <th className="w-[40px] px-2 py-2">
                                   <input
                                     type="checkbox"
                                     className="h-4 w-4 rounded border-gray-300"
@@ -1460,7 +1461,7 @@ export function MusiciansClient({
                                   />
                                 </th>
                               )}
-                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground select-none w-20">
+                              <th className="w-[70px] px-4 py-2 text-left text-xs font-medium text-muted-foreground select-none">
                                 <span className="cursor-pointer hover:text-foreground" onClick={() => handleSort('call_order')}>
                                   Order <SortIcon column="call_order" />
                                 </span>
@@ -1471,29 +1472,29 @@ export function MusiciansClient({
                               >
                                 Name <SortIcon column="name" />
                               </th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
+                              <th className="w-[200px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
+                              <th className="w-[140px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
                               <th
-                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                className="w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
                                 onClick={() => handleSort('home_region')}
                               >
                                 Region <SortIcon column="home_region" />
                               </th>
                               <th
-                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                className="w-[240px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
                                 onClick={() => handleSort('status')}
                               >
                                 Status <SortIcon column="status" />
                               </th>
                               <th
-                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
+                                className="w-[120px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
                                 onClick={() => handleSort('tags')}
                               >
                                 Tags <SortIcon column="tags" />
                               </th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Portal</th>
+                              <th className="w-[80px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Portal</th>
                               {canManage && (
-                                <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Actions</th>
+                                <th className="w-[150px] px-4 py-2 text-right text-xs font-medium text-muted-foreground">Actions</th>
                               )}
                             </tr>
                           </thead>
