@@ -76,15 +76,15 @@ export function VenueFormDialog({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const suggestionsRef = useRef<HTMLDivElement>(null)
 
+  // Initialize services when Maps is loaded AND the dialog is open (so refs are available)
   useEffect(() => {
-    if (mapsLoaded && apiKey) {
+    if (mapsLoaded && apiKey && open) {
       autocompleteServiceRef.current = new google.maps.places.AutocompleteService()
-      // PlacesService needs a DOM node (can be hidden)
       if (placesNodeRef.current) {
         placesServiceRef.current = new google.maps.places.PlacesService(placesNodeRef.current)
       }
     }
-  }, [mapsLoaded, apiKey])
+  }, [mapsLoaded, apiKey, open])
 
   // Close suggestions on click outside
   useEffect(() => {
@@ -265,8 +265,8 @@ export function VenueFormDialog({
               </div>
             )}
 
-            {/* Hidden node for PlacesService */}
-            <div ref={placesNodeRef} style={{ display: 'none' }} />
+            {/* Attribution node for PlacesService (required by Google API) */}
+            <div ref={placesNodeRef} style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }} />
 
             <FormField
               control={form.control}
