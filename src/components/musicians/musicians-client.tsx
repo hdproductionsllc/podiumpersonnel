@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -101,7 +101,8 @@ export function MusiciansClient({
   const [deletingMusician, setDeletingMusician] = useState<MusicianWithInstruments | null>(null)
 
   // View mode state
-  const [viewMode, setViewMode] = useState<'table' | 'card'>('table')
+  const [viewMode, setViewMode] = useState<'table' | 'card' | 'grouped'>('table')
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
 
   // Filter state
   const [search, setSearch] = useState('')
@@ -116,6 +117,14 @@ export function MusiciansClient({
 
   // Call order dialog state
   const [callOrderOpen, setCallOrderOpen] = useState(false)
+
+  // Call order banner state
+  const [callOrderBannerDismissed, setCallOrderBannerDismissed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('podium_call_order_banner_dismissed') === 'true'
+    }
+    return false
+  })
 
   // Selection state for bulk edit
   const [selectMode, setSelectMode] = useState(false)
@@ -152,6 +161,19 @@ export function MusiciansClient({
   const [importStats, setImportStats] = useState<{ total: number; withEmail: number; withoutEmail: number; withPhone: number; withoutPhone: number } | null>(null)
 
   const canManage = userRole === 'owner' || userRole === 'admin'
+
+  // Check if call order has been configured for any active musician with instruments
+  const callOrderNotConfigured = useMemo(() => {
+    const activeWithInstruments = musicians.filter(
+      (m) => m.is_active && m.musician_instruments.length > 0
+    )
+    if (activeWithInstruments.length === 0) return false
+    return activeWithInstruments.every(
+      (m) => m.call_order === null || m.call_order === undefined || m.call_order === 100
+    )
+  }, [musicians])
+
+  const showCallOrderBanner = canManage && callOrderNotConfigured && !callOrderBannerDismissed
 
   const hasFilters = search !== '' || instrumentFilter !== '' || sectionFilter !== '' || bookFilter !== '' || statusFilter !== '' || tagFilter !== '' || regionFilter !== '' || missingInfoFilter || w9Filter !== ''
 
@@ -273,6 +295,54 @@ export function MusiciansClient({
           return 0
       }
     })
+
+  // Grouped by instrument data for the "By Instrument" view
+  const groupedByInstrument = useMemo(() => {
+    // Build a map: instrument -> musicians who play it
+    const groups = new Map<string, { instrument: InstrumentOption; musicians: MusicianWithInstruments[] }>()
+
+    for (const musician of filteredMusicians) {
+      for (const mi of musician.musician_instruments) {
+        const inst = instruments.find((i) => i.id === mi.instrument_id)
+        if (!inst) continue
+        if (!groups.has(inst.id)) {
+          groups.set(inst.id, { instrument: inst, musicians: [] })
+        }
+        groups.get(inst.id)!.musicians.push(musician)
+      }
+    }
+
+    // Sort musicians within each group: by call_order ascending, then alphabetical
+    for (const group of groups.values()) {
+      group.musicians.sort((a, b) => {
+        const aOrder = a.call_order ?? 999999
+        const bOrder = b.call_order ?? 999999
+        if (aOrder !== bOrder) return aOrder - bOrder
+        return `${a.last_name}, ${a.first_name}`.localeCompare(`${b.last_name}, ${b.first_name}`)
+      })
+    }
+
+    // Sort groups: by INSTRUMENT_SECTIONS order, then by sort_order
+    const sectionOrder = INSTRUMENT_SECTIONS as readonly string[]
+    return Array.from(groups.values()).sort((a, b) => {
+      const aSec = sectionOrder.indexOf(a.instrument.section || 'other')
+      const bSec = sectionOrder.indexOf(b.instrument.section || 'other')
+      if (aSec !== bSec) return aSec - bSec
+      return a.instrument.sort_order - b.instrument.sort_order
+    })
+  }, [filteredMusicians, instruments])
+
+  function toggleSection(instrumentId: string) {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev)
+      if (next.has(instrumentId)) {
+        next.delete(instrumentId)
+      } else {
+        next.add(instrumentId)
+      }
+      return next
+    })
+  }
 
   function handleSort(column: SortColumn) {
     if (sortColumn === column) {
@@ -594,6 +664,46 @@ export function MusiciansClient({
 
       <Separator />
 
+      {showCallOrderBanner && (
+        <div className="relative rounded-lg border border-gold/30 bg-gradient-to-r from-gold/10 via-gold/5 to-transparent p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gold/20 shrink-0">
+              <svg className="h-5 w-5 text-gold" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold">Set your call order</p>
+              <p className="text-sm text-muted-foreground">
+                Rank musicians by instrument so the best fit gets called first when filling gig positions.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              className="shrink-0 bg-gold hover:bg-gold/90 text-black"
+              onClick={() => setCallOrderOpen(true)}
+            >
+              <svg className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
+              </svg>
+              Set Call Order
+            </Button>
+            <button
+              onClick={() => {
+                setCallOrderBannerDismissed(true)
+                localStorage.setItem('podium_call_order_banner_dismissed', 'true')
+              }}
+              className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              title="Dismiss"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {musicians.length > 0 && (
         <div className="space-y-3">
           {/* View toggle and Search */}
@@ -625,6 +735,19 @@ export function MusiciansClient({
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
                 </svg>
                 Cards
+              </button>
+              <button
+                onClick={() => setViewMode('grouped')}
+                className={`px-3 py-1 text-sm rounded transition-colors ${
+                  viewMode === 'grouped'
+                    ? 'bg-background shadow-sm font-medium'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <svg className="h-4 w-4 inline-block mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
+                </svg>
+                By Instrument
               </button>
             </div>
 
@@ -901,8 +1024,8 @@ export function MusiciansClient({
         <EmptyState title="No musicians match your filters" />
       ) : (
         <>
-          {/* Select & Batch Edit Button */}
-          {canManage && musicians.length > 0 && (
+          {/* Select & Batch Edit Button - hidden in grouped mode */}
+          {canManage && musicians.length > 0 && viewMode !== 'grouped' && (
             <div className="flex items-center gap-2">
               <Button
                 variant={selectMode ? 'default' : 'outline'}
@@ -948,7 +1071,107 @@ export function MusiciansClient({
             </div>
           )}
 
-          {viewMode === 'card' ? (
+          {viewMode === 'grouped' ? (
+            <div className="space-y-4">
+              {groupedByInstrument.map(({ instrument, musicians: groupMusicians }) => {
+                const isCollapsed = collapsedSections.has(instrument.id)
+                const sectionLabel = instrument.section ? SECTION_LABELS[instrument.section as InstrumentSection] : ''
+                return (
+                  <div key={instrument.id} className="rounded-lg border bg-background">
+                    <button
+                      onClick={() => toggleSection(instrument.id)}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
+                    >
+                      <svg
+                        className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isCollapsed ? '' : 'rotate-90'}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth={2}
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                      </svg>
+                      <span className="font-semibold">{instrument.name}</span>
+                      {sectionLabel && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                          {sectionLabel}
+                        </span>
+                      )}
+                      <span className="ml-auto text-sm text-muted-foreground">
+                        {groupMusicians.length} musician{groupMusicians.length !== 1 ? 's' : ''}
+                      </span>
+                    </button>
+                    {!isCollapsed && (
+                      <div className="border-t">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/30">
+                            <tr>
+                              <th className="w-12 px-4 py-2 text-left text-xs font-medium text-muted-foreground">#</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Name</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Region</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {groupMusicians.map((musician, index) => (
+                              <tr key={musician.id} className="hover:bg-muted/30">
+                                <td className="px-4 py-2 text-muted-foreground">{index + 1}</td>
+                                <td className="px-4 py-2 font-medium">
+                                  {canManage ? (
+                                    <button
+                                      onClick={() => handleEdit(musician)}
+                                      className="text-left hover:text-blue-600 dark:hover:text-blue-400 hover:underline"
+                                    >
+                                      {musician.last_name}, {musician.first_name}
+                                    </button>
+                                  ) : (
+                                    <span>{musician.last_name}, {musician.first_name}</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-2 text-muted-foreground">
+                                  {musician.email ? (
+                                    <a href={`mailto:${musician.email}`} className="text-blue-600 hover:underline dark:text-blue-400">
+                                      {musician.email}
+                                    </a>
+                                  ) : '\u2014'}
+                                </td>
+                                <td className="px-4 py-2 text-muted-foreground whitespace-nowrap">
+                                  {musician.phone ? (
+                                    <a href={`tel:${musician.phone.replace(/[^\d+]/g, '')}`} className="hover:underline">
+                                      {formatPhoneNumber(musician.phone)}
+                                    </a>
+                                  ) : '\u2014'}
+                                </td>
+                                <td className="px-4 py-2 text-muted-foreground">
+                                  {musician.home_region || '\u2014'}
+                                </td>
+                                <td className="px-4 py-2">
+                                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                                    musician.is_active
+                                      ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
+                                      : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
+                                  }`}>
+                                    {musician.is_active ? 'Active' : 'Inactive'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+              {groupedByInstrument.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No musicians have instruments assigned. Assign instruments to see them grouped here.
+                </p>
+              )}
+            </div>
+          ) : viewMode === 'card' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filteredMusicians.map((musician) => (
                 <MusicianCard
@@ -979,7 +1202,10 @@ export function MusiciansClient({
                     />
                   </th>
                 )}
-                <th className="px-4 py-3 text-left font-medium select-none w-20">
+                <th
+                  className="px-4 py-3 text-left font-medium select-none w-24"
+                  title="Call order determines the waterfall sequence — when a musician declines a gig, the next in order is automatically suggested"
+                >
                   <div className="flex items-center gap-1">
                     <span
                       className="cursor-pointer hover:text-foreground"
@@ -990,12 +1216,13 @@ export function MusiciansClient({
                     {canManage && (
                       <button
                         onClick={() => setCallOrderOpen(true)}
-                        className="ml-1 rounded p-0.5 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                        title="Drag to reorder musicians by call preference"
+                        className="ml-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-gold hover:bg-gold/10 border border-gold/30 transition-colors"
+                        title="Edit call order — drag to reorder musicians by call preference"
                       >
-                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
                         </svg>
+                        Edit
                       </button>
                     )}
                   </div>
