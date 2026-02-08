@@ -286,9 +286,14 @@ export function MusiciansClient({
       }
     })
 
-  // Grouped by instrument data
+  // Grouped by instrument family (e.g. "Violin 1" + "Violin 2" → "Violin")
   const groupedByInstrument = useMemo(() => {
-    // Build a map: instrument -> musicians who play it
+    // Get the family name: strip trailing " 1", " 2", etc.
+    function instrumentFamily(name: string): string {
+      return name.replace(/\s+\d+$/, '')
+    }
+
+    // Build a map: instrument family → musicians who play any variant
     const groups = new Map<string, { instrument: InstrumentOption; musicians: MusicianWithInstruments[] }>()
     const unassigned: MusicianWithInstruments[] = []
 
@@ -300,10 +305,20 @@ export function MusiciansClient({
       for (const mi of musician.musician_instruments) {
         const inst = instruments.find((i) => i.id === mi.instrument_id)
         if (!inst) continue
-        if (!groups.has(inst.id)) {
-          groups.set(inst.id, { instrument: inst, musicians: [] })
+        const family = instrumentFamily(inst.name)
+        if (!groups.has(family)) {
+          // Use the first instrument in the family as the representative
+          // but override the name to the family name
+          groups.set(family, {
+            instrument: { ...inst, name: family },
+            musicians: [],
+          })
         }
-        groups.get(inst.id)!.musicians.push(musician)
+        const group = groups.get(family)!
+        // Deduplicate: only add if this musician isn't already in the group
+        if (!group.musicians.some((m) => m.id === musician.id)) {
+          group.musicians.push(musician)
+        }
       }
     }
 
@@ -466,13 +481,12 @@ export function MusiciansClient({
             )}
           </div>
         </td>
-        <td className="px-4 py-2 text-muted-foreground truncate">
+        <td className="px-4 py-2 text-muted-foreground">
           {musician.email ? (
             <a
               href={`mailto:${musician.email}`}
               className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
               onClick={(e) => e.stopPropagation()}
-              title={musician.email}
             >
               {musician.email}
             </a>
@@ -612,15 +626,14 @@ export function MusiciansClient({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-blue-600 hover:text-blue-700"
+                  className="text-blue-600 hover:text-blue-700 h-8 w-8 p-0"
                   onClick={() => window.open(`/musician?impersonate=${musician.id}`, '_blank')}
                   title="View portal as this musician"
                 >
-                  <svg className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                   </svg>
-                  View As
                 </Button>
               )}
               <Button
@@ -1303,13 +1316,14 @@ export function MusiciansClient({
 
           <div className="space-y-4">
               {groupedByInstrument.groups.map(({ instrument, musicians: groupMusicians }) => {
-                const isCollapsed = collapsedSections.has(instrument.id)
+                const groupKey = instrument.name
+                const isCollapsed = collapsedSections.has(groupKey)
                 const sectionLabel = instrument.section ? SECTION_LABELS[instrument.section as InstrumentSection] : ''
                 const allGroupSelected = groupMusicians.length > 0 && groupMusicians.every((m) => selectedIds.has(m.id))
                 return (
-                  <div key={instrument.id} className="rounded-lg border bg-background">
+                  <div key={groupKey} className="rounded-lg border bg-background">
                     <button
-                      onClick={() => toggleSection(instrument.id)}
+                      onClick={() => toggleSection(groupKey)}
                       className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
                     >
                       <svg
@@ -1371,7 +1385,7 @@ export function MusiciansClient({
                               >
                                 Name <SortIcon column="name" />
                               </th>
-                              <th className="w-[200px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
                               <th className="w-[140px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
                               <th
                                 className="w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
@@ -1472,7 +1486,7 @@ export function MusiciansClient({
                               >
                                 Name <SortIcon column="name" />
                               </th>
-                              <th className="w-[200px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
                               <th className="w-[140px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
                               <th
                                 className="w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/80 select-none"
