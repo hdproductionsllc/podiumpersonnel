@@ -94,13 +94,16 @@ export function BooksClient({
     setDeleteOpen(true)
   }
 
-  function handleSuccess() {
+  function handleSuccess(newBookId?: string) {
     setFormOpen(false)
     setDeleteOpen(false)
     setEditingBook(null)
     setDeletingBook(null)
     if (deletingBook && deletingBook.id === selectedBookId) {
       setSelectedBookId(null)
+    }
+    if (newBookId) {
+      setSelectedBookId(newBookId)
     }
     router.refresh()
   }

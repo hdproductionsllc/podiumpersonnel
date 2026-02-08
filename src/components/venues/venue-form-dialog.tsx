@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useLoadScript } from '@react-google-maps/api'
+import { useLoadScript, Autocomplete } from '@react-google-maps/api'
 import { createClient } from '@/lib/supabase/client'
 import { venueSchema, type VenueInput } from '@/lib/validations/venues'
 import {
@@ -62,91 +62,40 @@ export function VenueFormDialog({
     },
   })
 
-  // Google Places autocomplete
+  // Google Places autocomplete using the Autocomplete widget
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
   const { isLoaded: mapsLoaded } = useLoadScript({
     googleMapsApiKey: apiKey,
     libraries: MAPS_LIBRARIES,
   })
-  const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null)
-  const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null)
-  const placesNodeRef = useRef<HTMLDivElement | null>(null)
-  const [suggestions, setSuggestions] = useState<google.maps.places.AutocompletePrediction[]>([])
-  const [showSuggestions, setShowSuggestions] = useState(false)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const suggestionsRef = useRef<HTMLDivElement>(null)
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
 
-  // Initialize services when Maps is loaded AND the dialog is open (so refs are available)
-  useEffect(() => {
-    if (mapsLoaded && apiKey && open) {
-      autocompleteServiceRef.current = new google.maps.places.AutocompleteService()
-      if (placesNodeRef.current) {
-        placesServiceRef.current = new google.maps.places.PlacesService(placesNodeRef.current)
-      }
-    }
-  }, [mapsLoaded, apiKey, open])
+  function onAutocompleteLoad(autocomplete: google.maps.places.Autocomplete) {
+    autocompleteRef.current = autocomplete
+  }
 
-  // Close suggestions on click outside
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  function onPlaceChanged() {
+    if (!autocompleteRef.current) return
+    const place = autocompleteRef.current.getPlace()
+    if (!place) return
 
-  const fetchSuggestions = useCallback((input: string) => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (!autocompleteServiceRef.current || input.trim().length < 2) {
-      setSuggestions([])
-      return
-    }
-    debounceRef.current = setTimeout(() => {
-      autocompleteServiceRef.current!.getPlacePredictions(
-        { input, types: ['establishment'] },
-        (results, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-            setSuggestions(results)
-            setShowSuggestions(true)
-          } else {
-            setSuggestions([])
-          }
-        }
-      )
-    }, 300)
-  }, [])
+    // Extract address components
+    const components = place.address_components || []
+    const get = (type: string) => components.find(c => c.types.includes(type))
 
-  function selectPlace(placeId: string) {
-    if (!placesServiceRef.current) return
-    setShowSuggestions(false)
-    setSuggestions([])
+    const streetNumber = get('street_number')?.long_name || ''
+    const route = get('route')?.long_name || ''
+    const streetAddress = [streetNumber, route].filter(Boolean).join(' ')
+    const city = get('locality')?.long_name || get('sublocality')?.long_name || ''
+    const state = get('administrative_area_level_1')?.short_name || ''
+    const zip = get('postal_code')?.long_name || ''
 
-    placesServiceRef.current.getDetails(
-      { placeId, fields: ['name', 'address_components', 'formatted_address', 'url', 'geometry'] },
-      (place, status) => {
-        if (status !== google.maps.places.PlacesServiceStatus.OK || !place) return
-
-        // Extract address components
-        const components = place.address_components || []
-        const get = (type: string) => components.find(c => c.types.includes(type))
-
-        const streetNumber = get('street_number')?.long_name || ''
-        const route = get('route')?.long_name || ''
-        const streetAddress = [streetNumber, route].filter(Boolean).join(' ')
-        const city = get('locality')?.long_name || get('sublocality')?.long_name || ''
-        const state = get('administrative_area_level_1')?.short_name || ''
-        const zip = get('postal_code')?.long_name || ''
-
-        if (place.name) form.setValue('name', place.name, { shouldDirty: true })
-        if (streetAddress) form.setValue('address', streetAddress, { shouldDirty: true })
-        if (city) form.setValue('city', city, { shouldDirty: true })
-        if (state) form.setValue('state', state, { shouldDirty: true })
-        if (zip) form.setValue('zip', zip, { shouldDirty: true })
-        if (place.url) form.setValue('google_maps_url', place.url, { shouldDirty: true })
-      }
-    )
+    if (place.name) form.setValue('name', place.name, { shouldDirty: true })
+    if (streetAddress) form.setValue('address', streetAddress, { shouldDirty: true })
+    if (city) form.setValue('city', city, { shouldDirty: true })
+    if (state) form.setValue('state', state, { shouldDirty: true })
+    if (zip) form.setValue('zip', zip, { shouldDirty: true })
+    if (place.url) form.setValue('google_maps_url', place.url, { shouldDirty: true })
   }
 
   useEffect(() => {
@@ -265,50 +214,35 @@ export function VenueFormDialog({
               </div>
             )}
 
-            {/* Attribution node for PlacesService (required by Google API) */}
-            <div ref={placesNodeRef} style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }} />
-
             <FormField
               control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel required>Venue Name</FormLabel>
-                  <div className="relative" ref={suggestionsRef}>
-                    <FormControl>
+                  <FormControl>
+                    {apiKey && mapsLoaded ? (
+                      <Autocomplete
+                        onLoad={onAutocompleteLoad}
+                        onPlaceChanged={onPlaceChanged}
+                        options={{
+                          types: ['establishment', 'geocode'],
+                          fields: ['name', 'address_components', 'formatted_address', 'url', 'geometry'],
+                        }}
+                      >
+                        <Input
+                          placeholder="e.g. Symphony Hall or 123 Main St"
+                          {...field}
+                          autoComplete="off"
+                        />
+                      </Autocomplete>
+                    ) : (
                       <Input
                         placeholder="e.g. Symphony Hall"
                         {...field}
-                        onChange={(e) => {
-                          field.onChange(e)
-                          if (apiKey && mapsLoaded) {
-                            fetchSuggestions(e.target.value)
-                          }
-                        }}
-                        onFocus={() => {
-                          if (suggestions.length > 0) setShowSuggestions(true)
-                        }}
-                        autoComplete="off"
                       />
-                    </FormControl>
-                    {showSuggestions && suggestions.length > 0 && (
-                      <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-md border bg-popover shadow-lg max-h-60 overflow-y-auto">
-                        {suggestions.map((s) => (
-                          <button
-                            key={s.place_id}
-                            type="button"
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors border-b last:border-b-0"
-                            onClick={() => selectPlace(s.place_id)}
-                          >
-                            <span className="font-medium">{s.structured_formatting.main_text}</span>
-                            <span className="text-muted-foreground ml-1 text-xs">
-                              {s.structured_formatting.secondary_text}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
                     )}
-                  </div>
+                  </FormControl>
                   {apiKey && mapsLoaded && (
                     <p className="text-xs text-muted-foreground">
                       Start typing to search Google Maps and auto-fill address fields

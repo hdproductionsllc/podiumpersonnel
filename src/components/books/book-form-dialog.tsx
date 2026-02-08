@@ -102,7 +102,7 @@ interface BookFormDialogProps {
   onOpenChange: (open: boolean) => void
   book: BookWithEntries | null
   organizationId: string
-  onSuccess: () => void
+  onSuccess: (newBookId?: string) => void
 }
 
 export function BookFormDialog({
@@ -158,6 +158,7 @@ export function BookFormDialog({
   async function onSubmit(data: BookInput) {
     setIsLoading(true)
     setError(null)
+    let createdBookId: string | undefined
 
     const supabase = createClient()
 
@@ -203,6 +204,7 @@ export function BookFormDialog({
         setIsLoading(false)
         return
       }
+      createdBookId = newBook.id
 
       // If a preset was selected, add the instruments and auto-populate musicians
       const preset = ENSEMBLE_PRESETS.find(p => p.id === selectedPreset)
@@ -283,7 +285,7 @@ export function BookFormDialog({
     }
 
     setIsLoading(false)
-    onSuccess()
+    onSuccess(createdBookId)
   }
 
   return (
