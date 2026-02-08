@@ -86,7 +86,7 @@ export function MusicianCard({
                 {musician.email}
               </a>
             ) : (
-              <span className="text-muted-foreground">No email</span>
+              <span className="block text-muted-foreground">No email</span>
             )}
             {musician.phone ? (
               <a
@@ -97,7 +97,7 @@ export function MusicianCard({
                 {musician.phone}
               </a>
             ) : (
-              <span className="text-muted-foreground">No phone</span>
+              <span className="block text-muted-foreground">No phone</span>
             )}
           </div>
 
