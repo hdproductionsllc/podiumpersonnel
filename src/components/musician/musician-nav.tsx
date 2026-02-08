@@ -30,10 +30,16 @@ const navItems = [
 
 interface MusicianNavProps {
   pendingOffersCount?: number
+  impersonateId?: string | null
 }
 
-export function MusicianNav({ pendingOffersCount = 0 }: MusicianNavProps) {
+export function MusicianNav({ pendingOffersCount = 0, impersonateId }: MusicianNavProps) {
   const pathname = usePathname()
+
+  // When impersonating, append ?impersonate= to all nav links
+  function navHref(base: string) {
+    return impersonateId ? `${base}?impersonate=${impersonateId}` : base
+  }
 
   return (
     <>
@@ -49,7 +55,7 @@ export function MusicianNav({ pendingOffersCount = 0 }: MusicianNavProps) {
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={navHref(item.href)}
                 className={cn(
                   'flex flex-col items-center justify-center gap-1 px-3 py-2 min-w-[64px] relative',
                   isActive
@@ -75,7 +81,7 @@ export function MusicianNav({ pendingOffersCount = 0 }: MusicianNavProps) {
       {/* Desktop Side Rail */}
       <nav className="hidden md:flex fixed left-0 top-0 bottom-0 z-40 w-60 flex-col border-r bg-background">
         <div className="flex h-16 items-center border-b px-6">
-          <Link href="/musician" className="flex items-center gap-2">
+          <Link href={navHref('/musician')} className="flex items-center gap-2">
             <div className="rounded-lg bg-primary p-1.5">
               <svg
                 className="h-5 w-5 text-primary-foreground"
@@ -106,7 +112,7 @@ export function MusicianNav({ pendingOffersCount = 0 }: MusicianNavProps) {
               return (
                 <Link
                   key={item.href}
-                  href={item.href}
+                  href={navHref(item.href)}
                   className={cn(
                     'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors relative',
                     isActive

@@ -26,8 +26,10 @@ import {
   Music2,
   X,
   Building,
+  UserRoundPlus,
 } from 'lucide-react'
 import { cn, DEFAULT_TIMEZONE } from '@/lib/utils'
+import { SubRequestForm } from '@/components/gig/sub-request-form'
 
 interface OfferDetailProps {
   offer: {
@@ -84,13 +86,24 @@ interface OfferDetailProps {
   }[]
   totalPay: number | null
   totalChairs: number
+  instruments: { id: string; name: string }[]
+  existingSubRequest: {
+    id: string
+    status: string
+    reason: string | null
+    suggested_sub_name: string | null
+    suggested_sub_email: string | null
+    admin_notes: string | null
+    service: { id: string; name: string; start_time: string } | null
+  } | null
 }
 
-export function OfferDetail({ offer, services, totalPay, totalChairs }: OfferDetailProps) {
+export function OfferDetail({ offer, services, totalPay, totalChairs, instruments, existingSubRequest }: OfferDetailProps) {
   const router = useRouter()
   const [isAccepting, setIsAccepting] = useState(false)
   const [isDeclining, setIsDeclining] = useState(false)
   const [showDeclineDialog, setShowDeclineDialog] = useState(false)
+  const [showSubForm, setShowSubForm] = useState(false)
   const [declineReason, setDeclineReason] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -348,8 +361,55 @@ export function OfferDetail({ offer, services, totalPay, totalChairs }: OfferDet
         </div>
       )}
 
-      {/* Already Responded Message */}
-      {!canRespond && (
+      {/* Accepted — Sub Request Section */}
+      {offer.status === 'accepted' && (
+        <Card>
+          <CardContent className="py-4 space-y-4">
+            <p className="text-sm text-muted-foreground text-center">
+              You have accepted this offer.
+            </p>
+
+            {/* Existing sub request status */}
+            {existingSubRequest && !showSubForm && (
+              <SubRequestStatus request={existingSubRequest} onNewRequest={() => setShowSubForm(true)} />
+            )}
+
+            {/* Show sub request form */}
+            {showSubForm && (
+              <div className="border-t pt-4">
+                <h3 className="font-medium mb-3">Request a Substitute</h3>
+                <SubRequestForm
+                  token={offer.token}
+                  services={services.map(s => ({ id: s.id, name: s.name, start_time: s.start_time }))}
+                  instruments={instruments}
+                  currentInstrumentId={position?.instrument?.id || ''}
+                  onSuccess={() => {
+                    setShowSubForm(false)
+                    router.refresh()
+                  }}
+                  onCancel={() => setShowSubForm(false)}
+                />
+              </div>
+            )}
+
+            {/* No existing request — show button */}
+            {!existingSubRequest && !showSubForm && (
+              <div className="flex justify-center">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowSubForm(true)}
+                >
+                  <UserRoundPlus className="h-4 w-4 mr-2" />
+                  Request a Substitute
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Other non-respondable statuses (declined, expired) */}
+      {!canRespond && offer.status !== 'accepted' && (
         <Card>
           <CardContent className="py-4">
             <p className="text-sm text-muted-foreground text-center">
@@ -397,6 +457,81 @@ export function OfferDetail({ offer, services, totalPay, totalChairs }: OfferDet
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+const SUB_STATUS_CONFIG: Record<string, { color: string; message: string }> = {
+  pending_approval: {
+    color: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800',
+    message: 'Your sub request is pending admin approval.',
+  },
+  approved: {
+    color: 'bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-800',
+    message: 'Your sub request has been approved. An offer has been sent to your suggested substitute.',
+  },
+  declined: {
+    color: 'bg-red-50 text-red-800 border-red-200 dark:bg-red-950 dark:text-red-200 dark:border-red-800',
+    message: 'Your sub request was declined.',
+  },
+  sub_declined: {
+    color: 'bg-orange-50 text-orange-800 border-orange-200 dark:bg-orange-950 dark:text-orange-200 dark:border-orange-800',
+    message: 'Your suggested substitute declined. Please submit a new request.',
+  },
+  filled: {
+    color: 'bg-green-50 text-green-800 border-green-200 dark:bg-green-950 dark:text-green-200 dark:border-green-800',
+    message: 'A substitute has been confirmed for this position.',
+  },
+  cancelled: {
+    color: 'bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-950 dark:text-gray-200 dark:border-gray-800',
+    message: 'This sub request was cancelled.',
+  },
+}
+
+function SubRequestStatus({
+  request,
+  onNewRequest,
+}: {
+  request: {
+    id: string
+    status: string
+    reason: string | null
+    suggested_sub_name: string | null
+    suggested_sub_email: string | null
+    admin_notes: string | null
+    service: { id: string; name: string; start_time: string } | null
+  }
+  onNewRequest: () => void
+}) {
+  const config = SUB_STATUS_CONFIG[request.status] || SUB_STATUS_CONFIG.pending_approval
+  const canResubmit = request.status === 'declined' || request.status === 'sub_declined' || request.status === 'cancelled'
+
+  return (
+    <div className={cn('rounded-lg border p-4 space-y-2', config.color)}>
+      <div className="flex items-center justify-between">
+        <h4 className="font-medium text-sm">Substitution Request</h4>
+        <Badge variant="outline" className="text-xs">
+          {request.status === 'pending_approval' ? 'Pending' : request.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+        </Badge>
+      </div>
+      <p className="text-sm">{config.message}</p>
+      {request.admin_notes && request.status === 'declined' && (
+        <p className="text-sm italic">&ldquo;{request.admin_notes}&rdquo;</p>
+      )}
+      {request.suggested_sub_name && (
+        <p className="text-xs opacity-75">
+          Suggested sub: {request.suggested_sub_name}
+          {request.suggested_sub_email && ` (${request.suggested_sub_email})`}
+        </p>
+      )}
+      {canResubmit && (
+        <div className="pt-2">
+          <Button size="sm" variant="outline" onClick={onNewRequest}>
+            <UserRoundPlus className="h-3.5 w-3.5 mr-1.5" />
+            Submit New Request
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

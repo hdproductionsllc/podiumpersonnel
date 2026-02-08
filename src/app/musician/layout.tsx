@@ -165,7 +165,7 @@ export default async function MusicianLayout({
       </div>
 
       {/* Navigation */}
-      <MusicianNav pendingOffersCount={pendingOffersCount} />
+      <MusicianNav pendingOffersCount={pendingOffersCount} impersonateId={isImpersonating ? musician.id : null} />
 
       {/* Remember email for login prefill */}
       <RememberEmail email={musician.email || user.email || ''} />

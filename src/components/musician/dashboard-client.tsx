@@ -80,7 +80,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
               <OfferCard key={offer.id} offer={offer} variant="compact" />
             ))}
             {pendingOffers.length > 3 && (
-              <Link href="/musician/offers">
+              <Link href={impersonateId ? `/musician/offers?impersonate=${impersonateId}` : '/musician/offers'}>
                 <Button variant="outline" className="w-full">
                   View all {pendingOffers.length} offers
                 </Button>
@@ -112,7 +112,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
           </div>
           {upcomingServices.length > 0 && (
             <Link
-              href="/musician/schedule"
+              href={impersonateId ? `/musician/schedule?impersonate=${impersonateId}` : '/musician/schedule'}
               className="text-sm text-primary hover:underline"
             >
               View all

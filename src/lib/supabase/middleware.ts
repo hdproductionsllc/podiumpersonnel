@@ -93,10 +93,10 @@ export async function updateSession(request: NextRequest) {
         httpOnly: true,
         sameSite: 'lax',
       })
-    } else {
-      // Clear the cookie when navigating without impersonate param
-      supabaseResponse.cookies.delete('impersonate-musician')
     }
+    // Cookie is NOT cleared on navigation without the param — it persists
+    // for its 1-hour maxAge. The "Exit" button navigates to /dashboard
+    // which leaves the /musician path scope, effectively ending impersonation.
   }
 
   return supabaseResponse
