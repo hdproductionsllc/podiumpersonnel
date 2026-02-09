@@ -44,6 +44,8 @@ interface SendOfferDialogProps {
   onSendNext?: () => void
 }
 
+const DEFAULT_LEADER_MESSAGE = 'You will be the lead musician for this engagement.'
+
 export function SendOfferDialog({
   open,
   onOpenChange,
@@ -114,7 +116,7 @@ export function SendOfferDialog({
       setUpdatedEmails({})
       setEditingEmail('')
       setSavingEmail(false)
-      setPersonalMessage('')
+      setPersonalMessage(isLeader && !!leaderFee ? DEFAULT_LEADER_MESSAGE : '')
       setShowConfirmation(false)
       setShowSuccess(false)
       setSentMusicianName('')
@@ -831,7 +833,15 @@ export function SendOfferDialog({
                   type="checkbox"
                   id="includeLeaderFee"
                   checked={includeLeaderFee}
-                  onChange={(e) => setIncludeLeaderFee(e.target.checked)}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    setIncludeLeaderFee(checked)
+                    if (checked) {
+                      setPersonalMessage((prev) => prev === '' ? DEFAULT_LEADER_MESSAGE : prev)
+                    } else {
+                      setPersonalMessage((prev) => prev === DEFAULT_LEADER_MESSAGE ? '' : prev)
+                    }
+                  }}
                   className="h-4 w-4 rounded border-gray-300"
                 />
                 <label htmlFor="includeLeaderFee" className="text-sm">
