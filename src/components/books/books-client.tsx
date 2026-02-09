@@ -12,12 +12,12 @@ import type { Book } from '@/types'
 
 export type BookEntryJoined = {
   id: string
-  musician_id: string
+  musician_id: string | null
   instrument_id: string
   chair_number: number | null
   priority: number
   notes: string | null
-  musician: { id: string; first_name: string; last_name: string }
+  musician: { id: string; first_name: string; last_name: string } | null
   instrument: { id: string; name: string; abbreviation: string | null; section: string | null; sort_order: number }
 }
 

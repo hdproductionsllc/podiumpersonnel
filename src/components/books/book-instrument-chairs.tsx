@@ -27,7 +27,7 @@ export function BookInstrumentChairs({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const assignedMusicianIds = new Set(entries.map((e) => e.musician_id))
+  const assignedMusicianIds = new Set(entries.map((e) => e.musician_id).filter(Boolean))
 
   const availableMusicians = musicians.filter((m) =>
     m.musician_instruments.some((mi) => mi.instrument_id === instrument.id)
@@ -187,7 +187,7 @@ export function BookInstrumentChairs({
 
       <div className="space-y-1">
         {entries.map((entry) => {
-          const dropdownMusicians = getDropdownMusicians(entry.musician_id)
+          const dropdownMusicians = getDropdownMusicians(entry.musician_id ?? undefined)
           const position = getPositionTitle(instrument.name, entry.chair_number ?? 1, instrument.section, entries.length)
           return (
             <div key={entry.id} className="flex items-center gap-3">
@@ -197,10 +197,13 @@ export function BookInstrumentChairs({
               {canManage ? (
                 <select
                   className="flex h-8 w-full max-w-xs rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  value={entry.musician_id}
+                  value={entry.musician_id || ''}
                   onChange={(e) => handleMusicianChange(entry.id, e.target.value)}
                   disabled={isLoading}
                 >
+                  {!entry.musician_id && (
+                    <option value="">-- Select musician --</option>
+                  )}
                   {dropdownMusicians.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.last_name}, {m.first_name}
@@ -209,7 +212,9 @@ export function BookInstrumentChairs({
                 </select>
               ) : (
                 <span className="text-sm">
-                  {entry.musician.last_name}, {entry.musician.first_name}
+                  {entry.musician
+                    ? `${entry.musician.last_name}, ${entry.musician.first_name}`
+                    : <span className="text-muted-foreground italic">Unassigned</span>}
                 </span>
               )}
               {canManage && (
