@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { TimePicker } from '@/components/ui/time-picker'
+import { VenueSearch } from '@/components/ui/venue-search'
 import {
   Form,
   FormControl,
@@ -74,7 +75,7 @@ interface ProjectFormDialogProps {
   project: ProjectWithServices | null
   organizationId: string
   isFirstProject?: boolean
-  onSuccess: (newProject?: { id: string; start_date: string | null; end_date: string | null; template?: TemplateType; callTime?: string; startTime?: string; endTime?: string }) => void
+  onSuccess: (newProject?: { id: string; start_date: string | null; end_date: string | null; template?: TemplateType; callTime?: string; startTime?: string; endTime?: string; venueName?: string; venueId?: string | null }) => void
 }
 
 export function ProjectFormDialog({
@@ -93,6 +94,8 @@ export function ProjectFormDialog({
   const [callTime, setCallTime] = useState('18:30')
   const [startTime, setStartTime] = useState('19:00')
   const [endTime, setEndTime] = useState('22:00')
+  const [venueName, setVenueName] = useState('')
+  const [venueId, setVenueId] = useState<string | null>(null)
   const isEditing = !!project
   const today = new Date().toISOString().split('T')[0]
 
@@ -141,6 +144,8 @@ export function ProjectFormDialog({
         setCallTime('18:30')
         setStartTime('19:00')
         setEndTime('22:00')
+        setVenueName('')
+        setVenueId(null)
       }
       setError(null)
     }
@@ -185,6 +190,13 @@ export function ProjectFormDialog({
     // Validate date is not in the past (for new projects only)
     if (!isEditing && data.start_date && data.start_date < today) {
       setError('Date cannot be in the past.')
+      setIsLoading(false)
+      return
+    }
+
+    // Validate venue for template-based projects (services will be auto-created)
+    if (!isEditing && selectedTemplate && selectedTemplate !== 'custom' && !venueName.trim()) {
+      setError('Please select a performance venue.')
       setIsLoading(false)
       return
     }
@@ -254,6 +266,8 @@ export function ProjectFormDialog({
         callTime: isSingleDay && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' ? callTime : undefined,
         startTime: isSingleDay && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' ? startTime : undefined,
         endTime: isSingleDay && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' ? endTime : undefined,
+        venueName: venueName || undefined,
+        venueId: venueId,
       })
       return
     }
@@ -504,6 +518,24 @@ export function ProjectFormDialog({
                 </div>
               )}
             </div>
+
+            {!isEditing && selectedTemplate && selectedTemplate !== 'custom' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium leading-none">
+                  Performance Venue <span className="text-destructive">*</span>
+                </label>
+                <VenueSearch
+                  value={venueName}
+                  venueId={venueId}
+                  organizationId={organizationId}
+                  onChange={(name, id) => {
+                    setVenueName(name)
+                    setVenueId(id)
+                  }}
+                  placeholder="Search saved venues or enter address..."
+                />
+              </div>
+            )}
 
             <DialogFooter>
               <Button

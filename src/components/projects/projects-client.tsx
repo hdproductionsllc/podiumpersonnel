@@ -328,7 +328,7 @@ export function ProjectsClient({
     router.refresh()
   }
 
-  async function handleProjectSuccess(newProject?: { id: string; start_date: string | null; end_date: string | null; template?: string; callTime?: string; startTime?: string; endTime?: string }) {
+  async function handleProjectSuccess(newProject?: { id: string; start_date: string | null; end_date: string | null; template?: string; callTime?: string; startTime?: string; endTime?: string; venueName?: string; venueId?: string | null }) {
     setProjectFormOpen(false)
     setEditingProject(null)
 
@@ -340,6 +340,11 @@ export function ProjectsClient({
     // Auto-create services and positions based on template
     if (newProject?.template) {
       const supabase = (await import('@/lib/supabase/client')).createClient()
+
+      const venueFields = {
+        ...(newProject.venueName ? { venue: newProject.venueName } : {}),
+        ...(newProject.venueId ? { venue_id: newProject.venueId } : {}),
+      }
 
       if (newProject.template === 'string-quartet') {
         // Performance only — most gigs are straight performances
@@ -355,6 +360,7 @@ export function ProjectsClient({
             start_time: new Date(`${dateStr}T${st}:00`).toISOString(),
             end_time: new Date(`${dateStr}T${et}:00`).toISOString(),
             call_time: new Date(`${dateStr}T${ct}:00`).toISOString(),
+            ...venueFields,
           })
         }
 
@@ -394,6 +400,7 @@ export function ProjectsClient({
             start_time: new Date(`${dateStr}T${st}:00`).toISOString(),
             end_time: new Date(`${dateStr}T${et}:00`).toISOString(),
             call_time: new Date(`${dateStr}T${ct}:00`).toISOString(),
+            ...venueFields,
           })
         }
 
@@ -432,6 +439,7 @@ export function ProjectsClient({
             start_time: new Date(`${dateStr}T${st}:00`).toISOString(),
             end_time: new Date(`${dateStr}T${et}:00`).toISOString(),
             call_time: new Date(`${dateStr}T${ct}:00`).toISOString(),
+            ...venueFields,
           })
         }
 
@@ -470,6 +478,7 @@ export function ProjectsClient({
             start_time: new Date(`${dateStr}T${st}:00`).toISOString(),
             end_time: new Date(`${dateStr}T${et}:00`).toISOString(),
             call_time: new Date(`${dateStr}T${ct}:00`).toISOString(),
+            ...venueFields,
           })
         }
       } else if (newProject.template === 'orchestra') {
@@ -484,6 +493,7 @@ export function ProjectsClient({
               start_time: new Date(dateStr + 'T10:00:00').toISOString(),
               end_time: new Date(dateStr + 'T13:00:00').toISOString(),
               call_time: new Date(dateStr + 'T09:30:00').toISOString(),
+              ...venueFields,
             },
             {
               project_id: newProject.id,
@@ -492,6 +502,7 @@ export function ProjectsClient({
               start_time: new Date(dateStr + 'T10:00:00').toISOString(),
               end_time: new Date(dateStr + 'T13:00:00').toISOString(),
               call_time: new Date(dateStr + 'T09:30:00').toISOString(),
+              ...venueFields,
             },
             {
               project_id: newProject.id,
@@ -500,6 +511,7 @@ export function ProjectsClient({
               start_time: new Date(dateStr + 'T19:00:00').toISOString(),
               end_time: new Date(dateStr + 'T22:00:00').toISOString(),
               call_time: new Date(dateStr + 'T18:30:00').toISOString(),
+              ...venueFields,
             },
           ])
         }
@@ -514,6 +526,7 @@ export function ProjectsClient({
             start_time: new Date(dateStr + 'T19:00:00').toISOString(),
             end_time: new Date(dateStr + 'T22:00:00').toISOString(),
             call_time: new Date(dateStr + 'T18:30:00').toISOString(),
+            ...venueFields,
           })
         }
       }
