@@ -319,7 +319,11 @@ export function SendOfferDialog({
         const response = await fetch('/api/offers/send-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ offerId: offerData.id }),
+          body: JSON.stringify({
+            offerId: offerData.id,
+            includeLeaderFee,
+            leaderFeeAmount: includeLeaderFee ? parseFloat(leaderFeeAmount) || 0 : 0,
+          }),
         })
 
         if (!response.ok) {
@@ -887,7 +891,8 @@ export function SendOfferDialog({
                   className="h-4 w-4 rounded border-gray-300"
                 />
                 <label htmlFor="applyToRemaining" className="text-sm">
-                  Apply this pay to remaining unsent offers
+                  Apply ${customPay} base pay to remaining unsent offers
+                  {includeLeaderFee && <span className="text-muted-foreground"> (leader fee not included)</span>}
                 </label>
               </div>
             )}
@@ -1024,6 +1029,8 @@ export function SendOfferDialog({
                     musicianId: selectedMusicianId,
                     personalMessage: personalMessage.trim() || undefined,
                     customPay: finalPay ?? undefined,
+                    includeLeaderFee,
+                    leaderFeeAmount: includeLeaderFee ? parseFloat(leaderFeeAmount) || 0 : 0,
                   }),
                 })
                 const data = await res.json()

@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { positionId, musicianId, personalMessage, customPay } = body
+    const { positionId, musicianId, personalMessage, customPay, includeLeaderFee, leaderFeeAmount } = body
 
     if (!positionId || !musicianId) {
       return NextResponse.json({ error: 'Position ID and Musician ID are required' }, { status: 400 })
@@ -112,14 +112,13 @@ export async function POST(request: NextRequest) {
 
     // Compute pay amount for preview
     const chairNumber = posData.chair_number || 1
-    const isLeader = chairNumber === 1
-    // Use base_pay/leader_fee from the first service (they're per-service but typically uniform)
+    // Use the admin's explicit leader fee decision instead of assuming from chair number
+    const isLeader = !!includeLeaderFee
     const firstService = services[0]
     const serviceBasePay = firstService?.base_pay ?? null
-    const serviceLeaderFee = firstService?.leader_fee ?? null
     let payAmount: number | null = customPay != null ? parseFloat(customPay) : null
     if (payAmount == null && serviceBasePay != null) {
-      payAmount = serviceBasePay + (isLeader && serviceLeaderFee ? serviceLeaderFee : 0)
+      payAmount = serviceBasePay + (isLeader ? (leaderFeeAmount || 0) : 0)
     }
 
     const emailHtml = await render(
@@ -134,7 +133,7 @@ export async function POST(request: NextRequest) {
         responseUrl,
         expiresAt: null,
         payAmount: payAmount != null && !isNaN(payAmount) ? payAmount : undefined,
-        leaderFee: isLeader && serviceLeaderFee ? serviceLeaderFee : undefined,
+        leaderFee: isLeader && leaderFeeAmount ? leaderFeeAmount : undefined,
         isLeader,
         personalMessage: personalMessage || undefined,
         branding: {

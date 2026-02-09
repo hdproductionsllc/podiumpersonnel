@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { offerId } = body
+    const { offerId, includeLeaderFee: explicitLeaderFee, leaderFeeAmount: explicitLeaderFeeAmount } = body
 
     if (!offerId) {
       return NextResponse.json({ error: 'Offer ID is required' }, { status: 400 })
@@ -73,10 +73,11 @@ export async function POST(request: NextRequest) {
 
     // Calculate pay
     const chairNumber = position?.chair_number || 1
-    const isLeader = chairNumber === 1
+    // Use explicit leader fee flag from dialog if provided, otherwise fall back to chair number
+    const isLeader = explicitLeaderFee != null ? !!explicitLeaderFee : chairNumber === 1
     const firstService = services.length > 0 ? services[0] : null
     const basePay = firstService?.base_pay ?? null
-    const leaderFee = firstService?.leader_fee ?? 0
+    const leaderFee = explicitLeaderFeeAmount != null ? Number(explicitLeaderFeeAmount) : (firstService?.leader_fee ?? 0)
     const payAmount = (offer as any).custom_pay != null
       ? Number((offer as any).custom_pay)
       : basePay != null
