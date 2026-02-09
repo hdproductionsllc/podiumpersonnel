@@ -1375,13 +1375,13 @@ export function MusiciansClient({
                                 Order <SortIcon column="call_order" />
                               </th>
                               <th
-                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
+                                className="w-[200px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('name')}
                               >
                                 Name <SortIcon column="name" />
                               </th>
-                              <th className="w-[200px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
-                              <th className="w-[130px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
+                              <th className="w-[220px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
+                              <th className="w-[120px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
                               <th
                                 className="w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('home_region')}
@@ -1478,13 +1478,13 @@ export function MusiciansClient({
                                 Order <SortIcon column="call_order" />
                               </th>
                               <th
-                                className="px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
+                                className="w-[200px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('name')}
                               >
                                 Name <SortIcon column="name" />
                               </th>
-                              <th className="w-[200px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
-                              <th className="w-[130px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
+                              <th className="w-[220px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
+                              <th className="w-[120px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
                               <th
                                 className="w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('home_region')}
