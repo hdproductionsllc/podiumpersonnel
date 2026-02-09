@@ -50,7 +50,7 @@ export default async function ProjectsPage() {
         notes,
         instrument:instruments(id, name, section, sort_order),
         musician:musicians(id, first_name, last_name),
-        contract_offers(id, musician_id, status, sent_at, expires_at, responded_at, token, musician:musicians(id, first_name, last_name)),
+        contract_offers(id, musician_id, status, sent_at, expires_at, responded_at, token, custom_pay, musician:musicians(id, first_name, last_name)),
         substitution_requests(id, requesting_musician_id, service_id, reason, status, substitute_musician_id, suggested_sub_name, suggested_sub_email, suggested_sub_phone, suggested_sub_instrument_id, admin_notes, offer_id, requesting_musician:musicians!substitution_requests_requesting_musician_id_fkey(id, first_name, last_name), substitute_musician:musicians!substitution_requests_substitute_musician_id_fkey(id, first_name, last_name), suggested_sub_instrument:instruments(id, name), service:services(id, name, start_time))
       )
     `)
@@ -96,6 +96,7 @@ export default async function ProjectsPage() {
       books={(books as unknown as BookForImport[]) ?? []}
       musicians={(musicians as unknown as MusicianForOffer[]) ?? []}
       organizationId={organization!.id}
+      organizationName={organization!.name}
       timezone={timezone}
       userRole={membership!.role}
       userId={user!.id}

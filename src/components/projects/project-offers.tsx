@@ -14,6 +14,7 @@ export type OfferJoined = {
   sent_at: string | null
   expires_at: string | null
   responded_at: string | null
+  custom_pay: number | null
   musician: { id: string; first_name: string; last_name: string; email?: string | null }
   position_instrument: string
   position_chair: number
@@ -31,6 +32,7 @@ type WaterfallCandidate = {
 
 interface ProjectOffersProps {
   offers: OfferJoined[]
+  organizationName: string
   canManage: boolean
   onOfferChange: () => void
 }
@@ -53,6 +55,7 @@ const OFFER_STATUS_LABELS: Record<string, string> = {
 
 export function ProjectOffers({
   offers,
+  organizationName,
   canManage,
   onOfferChange,
 }: ProjectOffersProps) {
@@ -134,7 +137,7 @@ export function ProjectOffers({
         }
       }
 
-      // Create new offer
+      // Create new offer, carrying forward payment from the declined offer
       const { data: offerData, error } = await supabase
         .from('contract_offers')
         .insert({
@@ -143,6 +146,7 @@ export function ProjectOffers({
           status: 'pending',
           sent_at: new Date().toISOString(),
           expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          custom_pay: confirmWaterfall.offer.custom_pay ?? null,
         })
         .select('id')
         .single()
@@ -419,11 +423,8 @@ export function ProjectOffers({
               <div className="p-4 space-y-3 text-sm">
                 <p>Dear {confirmWaterfall.candidate.first_name} {confirmWaterfall.candidate.last_name},</p>
                 <p className="text-muted-foreground">
-                  We are pleased to offer you a position as{' '}
-                  <strong>{confirmWaterfall.offer.position_instrument}</strong>.
-                </p>
-                <p className="text-muted-foreground">
-                  Please review the details and respond to this offer within 7 days.
+                  You have been called to perform with{' '}
+                  <strong>{organizationName}</strong> for the following project:
                 </p>
                 <p className="text-xs text-muted-foreground italic">
                   [Full project details and response link will be included]

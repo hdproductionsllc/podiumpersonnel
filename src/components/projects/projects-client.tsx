@@ -39,6 +39,7 @@ interface ProjectsClientProps {
   books: BookForImport[]
   musicians: MusicianForOffer[]
   organizationId: string
+  organizationName: string
   timezone: string
   userRole: string
   userId?: string
@@ -191,6 +192,7 @@ export function ProjectsClient({
   books,
   musicians,
   organizationId,
+  organizationName,
   timezone,
   userRole,
   userId,
@@ -714,6 +716,7 @@ export function ProjectsClient({
                                 position_chair: p.chair_number,
                               }))
                             )}
+                            organizationName={organizationName}
                             canManage={canManage}
                             onOfferChange={handleSuccess}
                           />

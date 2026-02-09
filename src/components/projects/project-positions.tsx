@@ -21,6 +21,7 @@ export type PositionOfferJoined = {
   expires_at: string | null
   responded_at: string | null
   token: string
+  custom_pay: number | null
   musician: { id: string; first_name: string; last_name: string }
 }
 
