@@ -178,6 +178,15 @@ export function ProjectPositions({
   const uniqueProjectOfferIds = [...new Set(projectWideOfferMusicianIds)]
 
   function handleSendOffer(position: PositionJoined) {
+    if (services.length === 0) {
+      toast.error('Add at least one service (rehearsal, concert, etc.) before sending offers.')
+      return
+    }
+    const missingVenue = services.filter(s => !s.venue && !s.venue_id)
+    if (missingVenue.length > 0) {
+      toast.error('All services need a venue before sending offers. A venue can be "TBD" if not yet confirmed.')
+      return
+    }
     setOfferPositionId(position.id)
     setOfferInstrumentId(position.instrument_id)
     setOfferChairNumber(position.chair_number)
