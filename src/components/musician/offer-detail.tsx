@@ -461,31 +461,32 @@ export function OfferDetail({ offer, services, totalPay, totalChairs, instrument
   )
 }
 
-const SUB_STATUS_CONFIG: Record<string, { color: string; message: string }> = {
-  pending_approval: {
-    color: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800',
-    message: 'Your sub request is pending admin approval.',
-  },
-  approved: {
-    color: 'bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-800',
-    message: 'Your sub request has been approved. An offer has been sent to your suggested substitute.',
-  },
-  declined: {
-    color: 'bg-red-50 text-red-800 border-red-200 dark:bg-red-950 dark:text-red-200 dark:border-red-800',
-    message: 'Your sub request was declined.',
-  },
-  sub_declined: {
-    color: 'bg-orange-50 text-orange-800 border-orange-200 dark:bg-orange-950 dark:text-orange-200 dark:border-orange-800',
-    message: 'Your suggested substitute declined. Please submit a new request.',
-  },
-  filled: {
-    color: 'bg-green-50 text-green-800 border-green-200 dark:bg-green-950 dark:text-green-200 dark:border-green-800',
-    message: 'A substitute has been confirmed for this position.',
-  },
-  cancelled: {
-    color: 'bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-950 dark:text-gray-200 dark:border-gray-800',
-    message: 'This sub request was cancelled.',
-  },
+const SUB_STATUS_COLORS: Record<string, string> = {
+  pending_approval: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800',
+  approved: 'bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-800',
+  declined: 'bg-red-50 text-red-800 border-red-200 dark:bg-red-950 dark:text-red-200 dark:border-red-800',
+  sub_declined: 'bg-orange-50 text-orange-800 border-orange-200 dark:bg-orange-950 dark:text-orange-200 dark:border-orange-800',
+  filled: 'bg-green-50 text-green-800 border-green-200 dark:bg-green-950 dark:text-green-200 dark:border-green-800',
+  cancelled: 'bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-950 dark:text-gray-200 dark:border-gray-800',
+}
+
+function getSubStatusMessage(status: string, subName: string | null): string {
+  switch (status) {
+    case 'pending_approval':
+      return 'Your sub request is being reviewed.'
+    case 'approved':
+      return `We've approved your suggestion and sent an offer to ${subName || 'your substitute'}. Waiting for their response.`
+    case 'filled':
+      return `Substitution confirmed! ${subName || 'Your substitute'} has accepted and will cover this engagement.`
+    case 'sub_declined':
+      return `${subName || 'Your suggested substitute'} declined the offer. Please submit a new request.`
+    case 'declined':
+      return 'Your sub request was declined by the admin.'
+    case 'cancelled':
+      return 'This sub request was cancelled.'
+    default:
+      return 'Your sub request is being reviewed.'
+  }
 }
 
 function SubRequestStatus({
@@ -503,18 +504,19 @@ function SubRequestStatus({
   }
   onNewRequest: () => void
 }) {
-  const config = SUB_STATUS_CONFIG[request.status] || SUB_STATUS_CONFIG.pending_approval
+  const colorClass = SUB_STATUS_COLORS[request.status] || SUB_STATUS_COLORS.pending_approval
+  const message = getSubStatusMessage(request.status, request.suggested_sub_name)
   const canResubmit = request.status === 'declined' || request.status === 'sub_declined' || request.status === 'cancelled'
 
   return (
-    <div className={cn('rounded-lg border p-4 space-y-2', config.color)}>
+    <div className={cn('rounded-lg border p-4 space-y-2', colorClass)}>
       <div className="flex items-center justify-between">
         <h4 className="font-medium text-sm">Substitution Request</h4>
         <Badge variant="outline" className="text-xs">
           {request.status === 'pending_approval' ? 'Pending' : request.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
         </Badge>
       </div>
-      <p className="text-sm">{config.message}</p>
+      <p className="text-sm">{message}</p>
       {request.admin_notes && request.status === 'declined' && (
         <p className="text-sm italic">&ldquo;{request.admin_notes}&rdquo;</p>
       )}

@@ -35,7 +35,7 @@ export function SubRequestApprovedEmail({
     <Html>
       <Head />
       <Preview>
-        Your sub request for {projectName} has been approved
+        We&apos;re reaching out to {suggestedSubName} about subbing for {projectName}
       </Preview>
       <Body style={main}>
         <Container style={container}>
@@ -46,13 +46,13 @@ export function SubRequestApprovedEmail({
           <Section style={content}>
             <Text style={greeting}>Dear {musicianName},</Text>
 
-            <Section style={successBanner}>
-              <Text style={successText}>Your Sub Request Has Been Approved</Text>
+            <Section style={progressBanner}>
+              <Text style={progressText}>Contacting Your Suggested Substitute</Text>
             </Section>
 
             <Text style={paragraph}>
-              Great news! Your substitution request has been approved.
-              We are now contacting <strong>{suggestedSubName}</strong> with a contract offer.
+              Good news — we&apos;ve approved your suggestion of <strong>{suggestedSubName}</strong> and
+              are now reaching out to see if they&apos;re available for this engagement.
             </Text>
 
             <Section style={detailsBox}>
@@ -133,15 +133,15 @@ const greeting = {
   marginBottom: '16px',
 }
 
-const successBanner = {
-  backgroundColor: '#dcfce7',
+const progressBanner = {
+  backgroundColor: '#dbeafe',
   padding: '16px',
   borderRadius: '8px',
   marginBottom: '20px',
 }
 
-const successText = {
-  color: '#166534',
+const progressText = {
+  color: '#1e40af',
   fontSize: '16px',
   fontWeight: 'bold',
   textAlign: 'center' as const,
