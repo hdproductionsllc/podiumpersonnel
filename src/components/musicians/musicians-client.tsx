@@ -608,15 +608,14 @@ export function MusiciansClient({
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-blue-600 hover:text-blue-700"
+                className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700"
                 onClick={(e) => { e.stopPropagation(); window.open(`/musician?impersonate=${musician.id}`, '_blank') }}
                 title="View portal as this musician"
               >
-                <svg className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                 </svg>
-                View As
               </Button>
             ) : (
               <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-950 dark:text-green-300">
@@ -1381,8 +1380,8 @@ export function MusiciansClient({
                               >
                                 Name <SortIcon column="name" />
                               </th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
-                              <th className="w-[140px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
+                              <th className="w-[200px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
+                              <th className="w-[130px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
                               <th
                                 className="w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('home_region')}
@@ -1484,8 +1483,8 @@ export function MusiciansClient({
                               >
                                 Name <SortIcon column="name" />
                               </th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
-                              <th className="w-[140px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
+                              <th className="w-[200px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
+                              <th className="w-[130px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
                               <th
                                 className="w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('home_region')}
