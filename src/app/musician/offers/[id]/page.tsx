@@ -58,6 +58,7 @@ export default async function MusicianOfferDetailPage({ params, searchParams }: 
           id,
           name,
           description,
+          ensemble_type,
           start_date,
           end_date,
           organization_id

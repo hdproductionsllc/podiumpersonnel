@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
         project:projects(
           id,
           name,
+          ensemble_type,
           organization:organizations(id, name, timezone, email_logo_url, email_brand_color, email_footer_text),
           services(id, name, service_type, call_time, start_time, end_time, venue, venue_id, base_pay, leader_fee, venue_details:venues(name, address, city, state, zip))
         )
@@ -136,6 +137,7 @@ export async function POST(request: NextRequest) {
         leaderFee: isLeader && leaderFeeAmount ? leaderFeeAmount : undefined,
         isLeader,
         personalMessage: personalMessage || undefined,
+        ensembleType: project?.ensemble_type || null,
         branding: {
           logoUrl: organization?.email_logo_url,
           brandColor: organization?.email_brand_color,

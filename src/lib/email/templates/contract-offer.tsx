@@ -34,6 +34,7 @@ interface ContractOfferEmailProps {
   leaderFee?: number | null
   isLeader?: boolean
   personalMessage?: string
+  ensembleType?: string | null
   branding?: EmailBranding
 }
 
@@ -52,6 +53,7 @@ export function ContractOfferEmail({
   leaderFee,
   isLeader,
   personalMessage,
+  ensembleType,
   branding,
 }: ContractOfferEmailProps) {
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
@@ -95,6 +97,11 @@ export function ContractOfferEmail({
 
             <Section style={detailsBox}>
               <Text style={detailsTitle}>{projectName}</Text>
+              {ensembleType && (
+                <Text style={detailsItem}>
+                  <strong>Ensemble:</strong> {ensembleType}
+                </Text>
+              )}
               <Text style={detailsItem}>
                 <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
               </Text>

@@ -45,6 +45,7 @@ interface SendContractOfferParams {
   leaderFee?: number | null
   isLeader?: boolean
   personalMessage?: string
+  ensembleType?: string | null
   branding?: EmailBranding
 }
 
@@ -65,6 +66,7 @@ export async function sendContractOfferEmail(params: SendContractOfferParams) {
       leaderFee: params.leaderFee,
       isLeader: params.isLeader,
       personalMessage: params.personalMessage,
+      ensembleType: params.ensembleType,
       branding: params.branding,
     })
   )

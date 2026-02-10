@@ -32,6 +32,14 @@ import type { ProjectWithServices } from './projects-client'
 
 type TemplateType = 'string-quartet' | 'string-trio' | 'duo' | 'solo' | 'orchestra' | 'custom'
 
+const ENSEMBLE_LABELS: Partial<Record<TemplateType, string>> = {
+  'string-quartet': 'String Quartet',
+  'string-trio': 'String Trio',
+  'duo': 'Duo',
+  'solo': 'Solo',
+  'orchestra': 'Orchestra',
+}
+
 const TEMPLATES: Record<TemplateType, { label: string; description: string; defaultName: string; singleDay?: boolean }> = {
   'string-quartet': {
     label: 'String Quartet Gig',
@@ -247,6 +255,7 @@ export function ProjectFormDialog({
           start_date: data.start_date || null,
           end_date: data.end_date || null,
           status: data.status,
+          ensemble_type: selectedTemplate ? ENSEMBLE_LABELS[selectedTemplate] || null : null,
         })
         .select('id')
         .single()

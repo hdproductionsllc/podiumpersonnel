@@ -293,6 +293,7 @@ export type Database = {
           end_date: string | null
           status: 'draft' | 'active' | 'completed' | 'cancelled'
           book_id: string | null
+          ensemble_type: string | null
           created_at: string
           updated_at: string
         }
@@ -306,6 +307,7 @@ export type Database = {
           end_date?: string | null
           status?: 'draft' | 'active' | 'completed' | 'cancelled'
           book_id?: string | null
+          ensemble_type?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -319,6 +321,7 @@ export type Database = {
           end_date?: string | null
           status?: 'draft' | 'active' | 'completed' | 'cancelled'
           book_id?: string | null
+          ensemble_type?: string | null
           created_at?: string
           updated_at?: string
         }

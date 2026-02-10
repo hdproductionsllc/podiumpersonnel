@@ -63,6 +63,7 @@ interface OfferDetailProps {
         id: string
         name: string
         description: string | null
+        ensemble_type: string | null
         start_date: string | null
         end_date: string | null
       }
@@ -189,6 +190,9 @@ export function OfferDetail({ offer, services, totalPay, totalChairs, instrument
           <span>{organization?.name}</span>
         </div>
         <h1 className="text-2xl font-bold">{project?.name}</h1>
+        {project?.ensemble_type && (
+          <p className="text-muted-foreground">{project.ensemble_type}</p>
+        )}
         <div className="flex items-center gap-2">
           {statusBadge()}
           {isExpiringSoon && canRespond && (

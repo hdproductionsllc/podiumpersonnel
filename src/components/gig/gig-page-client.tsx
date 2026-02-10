@@ -38,6 +38,7 @@ interface GigPageClientProps {
   organizationId: string
   projectName: string
   projectDescription: string | null
+  ensembleType: string | null
   projectStartDate: string | null
   projectEndDate: string | null
   instrumentId: string
@@ -60,6 +61,7 @@ export function GigPageClient({
   organizationId,
   projectName,
   projectDescription,
+  ensembleType,
   projectStartDate,
   projectEndDate,
   instrumentId,
@@ -154,6 +156,12 @@ export function GigPageClient({
                   <span className="text-muted-foreground text-xs sm:text-sm">Project</span>
                   <span className="font-medium">{projectName}</span>
                 </div>
+                {ensembleType && (
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-2">
+                    <span className="text-muted-foreground text-xs sm:text-sm">Ensemble</span>
+                    <span className="font-medium">{ensembleType}</span>
+                  </div>
+                )}
                 <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-2">
                   <span className="text-muted-foreground text-xs sm:text-sm">Position</span>
                   <span className="font-medium">{instrumentName}</span>

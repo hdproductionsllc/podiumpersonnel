@@ -31,6 +31,7 @@ export default async function GigPage({ params }: GigPageProps) {
           id,
           name,
           description,
+          ensemble_type,
           start_date,
           end_date,
           organization_id,
@@ -57,6 +58,7 @@ export default async function GigPage({ params }: GigPageProps) {
       id: string
       name: string
       description: string | null
+      ensemble_type: string | null
       start_date: string | null
       end_date: string | null
       organization_id: string
@@ -140,6 +142,7 @@ export default async function GigPage({ params }: GigPageProps) {
       organizationId={position?.project?.organization_id || ''}
       projectName={position?.project?.name || 'Project'}
       projectDescription={position?.project?.description || null}
+      ensembleType={position?.project?.ensemble_type || null}
       projectStartDate={position?.project?.start_date || null}
       projectEndDate={position?.project?.end_date || null}
       instrumentId={position?.instrument?.id || ''}
