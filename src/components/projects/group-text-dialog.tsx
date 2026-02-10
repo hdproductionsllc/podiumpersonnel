@@ -47,11 +47,6 @@ export function GroupTextDialog({
     }
   }, [open])
 
-  function getPhone(m: MusicianPhone): string {
-    if (phoneEdits[m.musicianId] !== undefined) return phoneEdits[m.musicianId]
-    return m.phone || ''
-  }
-
   function getAllPhones(): string[] {
     return musicians
       .map((m) => {
@@ -61,35 +56,50 @@ export function GroupTextDialog({
       .filter((p) => p.length >= 10)
   }
 
-  async function handleSaveAndText() {
+  function getFormattedPhones(): string[] {
+    return musicians
+      .map((m) => {
+        const raw = phoneEdits[m.musicianId] ?? m.phone ?? ''
+        const digits = raw.replace(/\D/g, '')
+        if (digits.length < 10) return null
+        return digits
+      })
+      .filter((p): p is string => p !== null)
+  }
+
+  async function saveEdits(): Promise<boolean> {
+    const supabase = createClient()
+
+    const editsToSave = Object.entries(phoneEdits).filter(
+      ([, value]) => value.trim().length > 0
+    )
+
+    for (const [musicianId, phone] of editsToSave) {
+      const { error } = await supabase
+        .from('musicians')
+        .update({ phone: phone.trim() })
+        .eq('id', musicianId)
+
+      if (error) {
+        toast.error(`Failed to save phone for ${musicians.find((m) => m.musicianId === musicianId)?.firstName}: ${error.message}`)
+        return false
+      }
+    }
+
+    if (editsToSave.length > 0) {
+      toast.success(`Saved ${editsToSave.length} phone number${editsToSave.length !== 1 ? 's' : ''}`)
+      onPhonesSaved()
+    }
+
+    return true
+  }
+
+  async function handleOpenText() {
     setSaving(true)
     try {
-      const supabase = createClient()
+      const saved = await saveEdits()
+      if (!saved) return
 
-      // Save any new/updated phone numbers
-      const editsToSave = Object.entries(phoneEdits).filter(
-        ([, value]) => value.trim().length > 0
-      )
-
-      for (const [musicianId, phone] of editsToSave) {
-        const { error } = await supabase
-          .from('musicians')
-          .update({ phone: phone.trim() })
-          .eq('id', musicianId)
-
-        if (error) {
-          toast.error(`Failed to save phone for ${musicians.find((m) => m.musicianId === musicianId)?.firstName}: ${error.message}`)
-          setSaving(false)
-          return
-        }
-      }
-
-      if (editsToSave.length > 0) {
-        toast.success(`Saved ${editsToSave.length} phone number${editsToSave.length !== 1 ? 's' : ''}`)
-        onPhonesSaved()
-      }
-
-      // Open SMS
       const phones = getAllPhones()
       if (phones.length > 0) {
         window.location.href = `sms:${phones.join(',')}`
@@ -98,6 +108,24 @@ export function GroupTextDialog({
       onOpenChange(false)
     } catch {
       toast.error('Failed to save phone numbers')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleCopyNumbers() {
+    setSaving(true)
+    try {
+      const saved = await saveEdits()
+      if (!saved) return
+
+      const phones = getFormattedPhones()
+      if (phones.length === 0) return
+
+      await navigator.clipboard.writeText(phones.join(', '))
+      toast.success(`Copied ${phones.length} phone number${phones.length !== 1 ? 's' : ''} to clipboard`)
+    } catch {
+      toast.error('Failed to copy to clipboard')
     } finally {
       setSaving(false)
     }
@@ -173,12 +201,22 @@ export function GroupTextDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
-            onClick={handleSaveAndText}
+            variant="outline"
+            onClick={handleCopyNumbers}
+            disabled={saving || readyCount === 0}
+          >
+            <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9.75a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184" />
+            </svg>
+            Copy Numbers
+          </Button>
+          <Button
+            onClick={handleOpenText}
             disabled={saving || readyCount === 0}
           >
             {saving
