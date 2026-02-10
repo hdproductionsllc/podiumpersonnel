@@ -209,10 +209,21 @@ export default async function DashboardPage() {
   // Sort alerts by count (most urgent first)
   staffingAlerts.sort((a, b) => b.count - a.count)
 
-  // Calculate total vacancies for hero CTA
+  // Calculate total vacancies and pending offers for hero CTA
   const totalVacancies = staffingAlerts
     .filter(a => a.alertType === 'vacant')
     .reduce((sum, a) => sum + a.count, 0)
+  const totalPending = staffingAlerts
+    .filter(a => a.alertType === 'pending')
+    .reduce((sum, a) => sum + a.count, 0)
+
+  // Find projects that are fully confirmed (all positions filled)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fullyStaffedProjects = (projectsNeedingAttention || []).filter((project: any) => {
+    const positions = project.project_positions || []
+    return positions.length > 0 && positions.every((p: any) => p.status === 'filled')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  }).map((p: any) => p.name as string)
 
   // Combine services and projects into unified calendar items
   type CalendarItem = {
@@ -462,13 +473,38 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
         </Link>
-      ) : (activeProjectCount ?? 0) > 0 ? (
+      ) : totalPending > 0 ? (
+        <Link href="/dashboard/projects">
+          <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors cursor-pointer">
+            <CardContent className="flex items-center gap-4 py-4">
+              <svg className="h-8 w-8 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              </svg>
+              <div className="flex-1">
+                <h3 className="font-bold text-blue-900 dark:text-blue-100">
+                  {totalPending} offer{totalPending !== 1 ? 's' : ''} awaiting response
+                </h3>
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  All positions have been offered — waiting for musicians to respond
+                </p>
+              </div>
+              <svg className="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+              </svg>
+            </CardContent>
+          </Card>
+        </Link>
+      ) : fullyStaffedProjects.length > 0 ? (
         <Card className="border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20">
           <CardContent className="flex items-center gap-3 py-3">
             <svg className="h-5 w-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
             </svg>
-            <span className="text-sm font-medium text-green-700 dark:text-green-300">All positions filled — {orgName} is fully staffed!</span>
+            <span className="text-sm font-medium text-green-700 dark:text-green-300">
+              {fullyStaffedProjects.length === 1
+                ? `${fullyStaffedProjects[0]} is fully staffed!`
+                : `${fullyStaffedProjects.length} projects fully staffed!`}
+            </span>
           </CardContent>
         </Card>
       ) : null}
