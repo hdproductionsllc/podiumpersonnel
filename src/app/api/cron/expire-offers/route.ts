@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { getNextCandidates } from '@/lib/next-candidate'
 import { sendOfferExpiredEmail } from '@/lib/email/send'
+import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
 
 export async function GET(request: NextRequest) {
@@ -106,7 +107,7 @@ export async function GET(request: NextRequest) {
       const adminEmails = await getOrgAdminEmails(project.organization_id)
 
       if (adminEmails.length > 0) {
-        await sendOfferExpiredEmail({
+        const expiredResult = await sendOfferExpiredEmail({
           to: adminEmails,
           organizationName: organization?.name || 'Your Organization',
           projectName: project.name,
@@ -118,6 +119,19 @@ export async function GET(request: NextRequest) {
           dashboardUrl: `${baseUrl}/dashboard/projects?expand=${project.id}`,
         })
         emailsSent++
+
+        await logEmail({
+          organizationId: project.organization_id,
+          recipientEmail: adminEmails[0],
+          recipientName: undefined,
+          subject: `Offer Expired: ${musician.first_name} ${musician.last_name} - ${project.name}`,
+          emailType: 'offer_expired',
+          musicianId: musician.id,
+          projectId: project.id,
+          offerId: offer.id,
+          resendEmailId: expiredResult?.id || null,
+          metadata: { allRecipients: adminEmails },
+        })
       }
     } catch (emailError) {
       console.error(`Failed to send expiration email for offer ${offer.id}:`, emailError)

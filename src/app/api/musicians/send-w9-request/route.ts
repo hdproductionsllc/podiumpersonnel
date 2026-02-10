@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendW9RequestEmail } from '@/lib/email/send'
+import { logEmail } from '@/lib/email/log'
 
 export async function POST(request: NextRequest) {
   try {
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
     // Send emails
     for (const musician of eligibleMusicians) {
       try {
-        await sendW9RequestEmail({
+        const w9Result = await sendW9RequestEmail({
           to: musician.email!,
           musicianName: `${musician.first_name} ${musician.last_name}`,
           organizationName: organization.name,
@@ -77,6 +78,16 @@ export async function POST(request: NextRequest) {
           },
         })
         successCount++
+
+        await logEmail({
+          organizationId: organization.id,
+          recipientEmail: musician.email!,
+          recipientName: `${musician.first_name} ${musician.last_name}`,
+          subject: `W-9 Form Request - ${organization.name}`,
+          emailType: 'w9_request',
+          musicianId: musician.id,
+          resendEmailId: w9Result?.id || null,
+        })
       } catch (err) {
         errorCount++
         errors.push(`${musician.first_name} ${musician.last_name}: ${err instanceof Error ? err.message : 'Unknown error'}`)

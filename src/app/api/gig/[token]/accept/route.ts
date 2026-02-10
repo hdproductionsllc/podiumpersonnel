@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferAcceptedEmail, sendAdminOfferResponseEmail, sendMusicianReleasedEmail } from '@/lib/email/send'
+import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName } from '@/lib/venue-helpers'
 
@@ -181,7 +182,7 @@ export async function POST(
       const calendarUrl = `${baseUrl}/api/offers/${offer.id}/calendar?token=${token}`
       const googleCalendarUrl = `${baseUrl}/api/offers/${offer.id}/calendar?token=${token}&format=google`
 
-      await sendOfferAcceptedEmail({
+      const acceptedResult = await sendOfferAcceptedEmail({
         to: musician.email,
         musicianName: `${musician.first_name} ${musician.last_name}`,
         organizationName: organization?.name || 'Orchestra',
@@ -194,6 +195,20 @@ export async function POST(
         calendarUrl,
         googleCalendarUrl,
       }).catch((err) => console.warn('Failed to send musician confirmation:', err))
+
+      if (acceptedResult) {
+        await logEmail({
+          organizationId: project.organization_id,
+          recipientEmail: musician.email,
+          recipientName: `${musician.first_name} ${musician.last_name}`,
+          subject: `Confirmed: You're booked for ${project?.name || 'Project'}`,
+          emailType: 'offer_accepted',
+          musicianId: musician.id,
+          projectId: project.id,
+          offerId: offer.id,
+          resendEmailId: acceptedResult.id || null,
+        })
+      }
     }
 
     // Send notification to organization admins

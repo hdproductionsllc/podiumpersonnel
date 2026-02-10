@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendOfferReminderEmail } from '@/lib/email/send'
+import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
 
 export async function POST(request: NextRequest) {
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
     const responseUrl = `${baseUrl}/gig/${offer.token}`
 
     // Send the reminder email
-    await sendOfferReminderEmail({
+    const result = await sendOfferReminderEmail({
       to: musician.email,
       musicianName: `${musician.first_name} ${musician.last_name}`,
       organizationName: organization?.name || 'Orchestra',
@@ -113,6 +114,18 @@ export async function POST(request: NextRequest) {
       responseUrl,
       expiresAt: offer.expires_at,
       daysRemaining,
+    })
+
+    await logEmail({
+      organizationId: organization?.id,
+      recipientEmail: musician.email,
+      recipientName: `${musician.first_name} ${musician.last_name}`,
+      subject: `Reminder: ${project?.name} - ${instrument?.name}`,
+      emailType: 'offer_reminder',
+      musicianId: musician.id,
+      projectId: project?.id,
+      offerId,
+      resendEmailId: result?.id || null,
     })
 
     return NextResponse.json({ success: true })

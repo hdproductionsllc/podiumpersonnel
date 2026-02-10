@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendContractOfferEmail, sendAdminOfferSentEmail } from '@/lib/email/send'
+import { logEmail } from '@/lib/email/log'
 import { logEmailConfig } from '@/lib/email/client'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName } from '@/lib/venue-helpers'
@@ -176,6 +177,25 @@ export async function POST(request: NextRequest) {
     })
 
     console.log('📧 Email sent successfully:', result)
+
+    // Log to email audit trail
+    await logEmail({
+      organizationId: organization?.id,
+      recipientEmail: musician.email,
+      recipientName: `${musician.first_name} ${musician.last_name}`,
+      subject: `Call: ${project?.name} - ${instrument?.name}`,
+      emailType: 'contract_offer',
+      musicianId: musician.id,
+      projectId: project?.id,
+      offerId: offerId,
+      resendEmailId: result?.id || null,
+      metadata: {
+        instrument: instrument?.name,
+        chairNumber: position?.chair_number,
+        payAmount,
+        ensembleType: project?.ensemble_type,
+      },
+    })
 
     // Send notification to organization admins
     try {

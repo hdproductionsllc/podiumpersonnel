@@ -807,4 +807,21 @@ export type Payment = Database['public']['Tables']['payments']['Row']
 export type StaffingPreset = Database['public']['Tables']['staffing_presets']['Row']
 export type MusicianNotificationPreferences = Database['public']['Tables']['musician_notification_preferences']['Row']
 export type UserTutorialState = Database['public']['Tables']['user_tutorial_state']['Row']
+
+// Email audit log (manual type — table added in migration 038)
+export interface EmailLog {
+  id: string
+  organization_id: string
+  recipient_email: string
+  recipient_name: string | null
+  subject: string
+  email_type: string
+  musician_id: string | null
+  project_id: string | null
+  offer_id: string | null
+  resend_email_id: string | null
+  status: string
+  metadata: Record<string, unknown>
+  sent_at: string
+}
 export type ImpersonationLog = Database['public']['Tables']['impersonation_log']['Row']

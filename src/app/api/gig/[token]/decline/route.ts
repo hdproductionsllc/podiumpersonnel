@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferDeclinedEmail, sendAdminOfferResponseEmail, sendSubDeclinedFindAnotherEmail } from '@/lib/email/send'
+import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
 
 export async function POST(
@@ -160,7 +161,7 @@ export async function POST(
 
     // Send confirmation to musician if they have email
     if (musician?.email) {
-      await sendOfferDeclinedEmail({
+      const declinedResult = await sendOfferDeclinedEmail({
         to: musician.email,
         musicianName: `${musician.first_name} ${musician.last_name}`,
         organizationName: organization?.name || 'Orchestra',
@@ -170,6 +171,20 @@ export async function POST(
         totalChairs,
         declineReason: offer.response_notes,
       }).catch((err) => console.warn('Failed to send musician confirmation:', err))
+
+      if (declinedResult) {
+        await logEmail({
+          organizationId: project.organization_id,
+          recipientEmail: musician.email,
+          recipientName: `${musician.first_name} ${musician.last_name}`,
+          subject: `Thank you for your response - ${project?.name || 'Project'}`,
+          emailType: 'offer_declined',
+          musicianId: musician.id,
+          projectId: project.id,
+          offerId: offer.id,
+          resendEmailId: declinedResult.id || null,
+        })
+      }
     }
 
     // Send notification to organization admins

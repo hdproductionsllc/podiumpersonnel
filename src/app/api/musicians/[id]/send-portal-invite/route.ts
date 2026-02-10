@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendPortalInvitationEmail } from '@/lib/email/send'
+import { logEmail } from '@/lib/email/log'
 import crypto from 'crypto'
 import { getAppUrl } from '@/lib/utils'
 
@@ -98,6 +99,16 @@ export async function POST(
       },
     })
     console.log('Portal invite email sent successfully:', emailResult)
+
+    await logEmail({
+      organizationId: organization.id,
+      recipientEmail: musician.email,
+      recipientName: `${musician.first_name} ${musician.last_name}`,
+      subject: `${organization.name} has invited you to Podium`,
+      emailType: 'portal_invitation',
+      musicianId: musician.id,
+      resendEmailId: emailResult?.id || null,
+    })
   } catch (emailError) {
     console.error('Failed to send portal invitation email:', emailError)
     return NextResponse.json({ error: 'Failed to send invitation email' }, { status: 500 })
