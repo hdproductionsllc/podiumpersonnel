@@ -11,7 +11,7 @@ import { DeleteMusicianDialog } from './delete-musician-dialog'
 import { BulkEditDialog } from './bulk-edit-dialog'
 import { CallOrderDialog } from './call-order-dialog'
 import { toast } from 'sonner'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import type { Musician } from '@/types'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS, type InstrumentSection } from '@/lib/validations/instruments'
 
@@ -98,6 +98,10 @@ export function MusiciansClient({
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [editingMusician, setEditingMusician] = useState<MusicianWithInstruments | null>(null)
   const [deletingMusician, setDeletingMusician] = useState<MusicianWithInstruments | null>(null)
+  const [removeInstrumentOpen, setRemoveInstrumentOpen] = useState(false)
+  const [removingMusician, setRemovingMusician] = useState<MusicianWithInstruments | null>(null)
+  const [removingInstrument, setRemovingInstrument] = useState<{ id: string; name: string } | null>(null)
+  const [isRemoving, setIsRemoving] = useState(false)
 
   // Collapsible section state for grouped-by-instrument view
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
@@ -435,7 +439,7 @@ export function MusiciansClient({
     )
   }
 
-  function renderMusicianRow(musician: MusicianWithInstruments) {
+  function renderMusicianRow(musician: MusicianWithInstruments, groupInstrument?: { id: string; name: string }) {
     return (
       <tr
         key={musician.id}
@@ -639,14 +643,25 @@ export function MusiciansClient({
               >
                 Edit
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-                onClick={() => handleDelete(musician)}
-              >
-                Delete
-              </Button>
+              {groupInstrument ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => handleRemoveInstrument(musician, groupInstrument)}
+                >
+                  Remove
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => handleDelete(musician)}
+                >
+                  Delete
+                </Button>
+              )}
             </div>
           </td>
         )}
@@ -667,6 +682,34 @@ export function MusiciansClient({
   function handleDelete(musician: MusicianWithInstruments) {
     setDeletingMusician(musician)
     setDeleteOpen(true)
+  }
+
+  function handleRemoveInstrument(musician: MusicianWithInstruments, instrument: { id: string; name: string }) {
+    setRemovingMusician(musician)
+    setRemovingInstrument(instrument)
+    setRemoveInstrumentOpen(true)
+  }
+
+  async function confirmRemoveInstrument() {
+    if (!removingMusician || !removingInstrument) return
+    setIsRemoving(true)
+    const supabase = (await import('@/lib/supabase/client')).createClient()
+    const { error } = await supabase
+      .from('musician_instruments')
+      .delete()
+      .eq('musician_id', removingMusician.id)
+      .eq('instrument_id', removingInstrument.id)
+
+    if (error) {
+      toast.error('Failed to remove instrument: ' + error.message)
+    } else {
+      toast.success(`Removed ${removingMusician.first_name} from ${removingInstrument.name}`)
+    }
+    setIsRemoving(false)
+    setRemoveInstrumentOpen(false)
+    setRemovingMusician(null)
+    setRemovingInstrument(null)
+    router.refresh()
   }
 
   function handleSuccess() {
@@ -1416,7 +1459,7 @@ export function MusiciansClient({
                             </tr>
                           </thead>
                           <tbody className="divide-y">
-                            {groupMusicians.map((musician) => renderMusicianRow(musician))}
+                            {groupMusicians.map((musician) => renderMusicianRow(musician, instrument))}
                           </tbody>
                         </table>
                       </div>
@@ -1552,6 +1595,25 @@ export function MusiciansClient({
         musician={deletingMusician}
         onSuccess={handleSuccess}
       />
+
+      <Dialog open={removeInstrumentOpen} onOpenChange={setRemoveInstrumentOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove from {removingInstrument?.name}?</DialogTitle>
+            <DialogDescription>
+              This will remove {removingMusician?.first_name} {removingMusician?.last_name} from the {removingInstrument?.name} section. They will remain in your roster and keep any other instrument assignments.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRemoveInstrumentOpen(false)} disabled={isRemoving}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmRemoveInstrument} disabled={isRemoving}>
+              {isRemoving ? 'Removing...' : 'Remove'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <BulkEditDialog
         open={bulkEditOpen}
