@@ -16,6 +16,7 @@ import { PortalInvitationEmail } from './templates/portal-invitation'
 import { MusicianWelcomeEmail } from './templates/musician-welcome'
 import { AdminWelcomeEmail } from './templates/admin-welcome'
 import { OfferExpiredEmail } from './templates/offer-expired'
+import { OfferExpiringSoonEmail } from './templates/offer-expiring-soon'
 import { GigDetailsEmail } from './templates/gig-details'
 import { GigDetailsReminderEmail } from './templates/gig-details-reminder'
 import { render } from '@react-email/render'
@@ -739,6 +740,48 @@ export async function sendOfferExpiredEmail(params: SendOfferExpiredParams) {
 
   if (error) {
     console.error('Failed to send offer expired email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// Offer Expiring Soon Notification Email (to admins — 24hr warning)
+interface SendOfferExpiringSoonParams {
+  to: string | string[]
+  organizationName: string
+  projectName: string
+  musicianName: string
+  instrument: string
+  chairNumber: number
+  totalChairs?: number
+  hoursRemaining: number
+  dashboardUrl: string
+}
+
+export async function sendOfferExpiringSoonEmail(params: SendOfferExpiringSoonParams) {
+  const emailHtml = await render(
+    OfferExpiringSoonEmail({
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      musicianName: params.musicianName,
+      instrument: params.instrument,
+      chairNumber: params.chairNumber,
+      totalChairs: params.totalChairs,
+      hoursRemaining: params.hoursRemaining,
+      dashboardUrl: params.dashboardUrl,
+    })
+  )
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: `⚠️ Offer Expiring: ${params.musicianName} has not responded — ${params.projectName}`,
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send offer expiring soon email:', error)
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
