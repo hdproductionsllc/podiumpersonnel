@@ -39,7 +39,7 @@ export default async function ProjectsPage() {
     .from('projects')
     .select(`
       *,
-      services(*),
+      services(*, venue_details:venues(name, address, city, state, zip, parking_info, directions)),
       project_positions(
         id,
         project_id,

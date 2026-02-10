@@ -225,6 +225,10 @@ export function ProjectsClient({
     if (expandProjectId) {
       return new Set([expandProjectId])
     }
+    // Auto-expand first project (closest date) by default
+    if (projects.length > 0) {
+      return new Set([projects[0].id])
+    }
     return new Set()
   })
 
