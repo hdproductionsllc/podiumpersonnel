@@ -144,7 +144,11 @@ export function SendGigDetailsDialog({
         throw new Error(data.error || 'Failed to send reminders')
       }
 
-      toast.success(`Reminder sent to ${data.reminded} musician${data.reminded !== 1 ? 's' : ''}`)
+      if (data.skipped > 0) {
+        toast.success(`Reminder sent to ${data.reminded} of ${data.total} musicians (${data.skipped} failed — may be missing email)`)
+      } else {
+        toast.success(`Reminder sent to ${data.reminded} musician${data.reminded !== 1 ? 's' : ''}`)
+      }
 
       // Refresh status
       await checkExistingSends()

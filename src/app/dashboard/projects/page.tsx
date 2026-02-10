@@ -40,6 +40,7 @@ export default async function ProjectsPage() {
     .select(`
       *,
       services(*, venue_details:venues(name, address, city, state, zip, parking_info, directions)),
+      gig_detail_sends(id, sent_at, musician_count, gig_detail_confirmations(id, musician_id, confirmed_at)),
       project_positions(
         id,
         project_id,

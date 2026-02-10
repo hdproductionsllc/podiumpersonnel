@@ -155,7 +155,8 @@ export async function POST(
       }
     }
 
-    return NextResponse.json({ success: true, reminded: sentCount })
+    const skipped = unconfirmed.length - sentCount
+    return NextResponse.json({ success: true, reminded: sentCount, total: unconfirmed.length, skipped })
   } catch (error) {
     console.error('Failed to send gig details reminders:', error)
     return NextResponse.json(
