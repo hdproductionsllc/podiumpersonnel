@@ -84,7 +84,7 @@ export async function POST(
 
     // Only include filled positions (musician assigned and offer accepted)
     const filledPositions = positions.filter(
-      (p: any) => p.status === 'filled' && p.musician_id && p.musician?.email
+      (p: any) => p.status === 'confirmed' && p.musician_id && p.musician?.email
     )
 
     if (filledPositions.length === 0) {

@@ -221,7 +221,7 @@ export default async function DashboardPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fullyStaffedProjects = (projectsNeedingAttention || []).filter((project: any) => {
     const positions = project.project_positions || []
-    return positions.length > 0 && positions.every((p: any) => p.status === 'filled')
+    return positions.length > 0 && positions.every((p: any) => p.status === 'confirmed')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }).map((p: any) => p.name as string)
 

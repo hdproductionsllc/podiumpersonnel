@@ -53,7 +53,7 @@ export type PositionJoined = {
   status: string
   notes: string | null
   instrument: { id: string; name: string; section: string | null; sort_order: number }
-  musician: { id: string; first_name: string; last_name: string } | null
+  musician: { id: string; first_name: string; last_name: string; phone?: string | null } | null
   contract_offers: PositionOfferJoined[]
   substitution_requests: PositionSubRequestJoined[]
 }

@@ -57,7 +57,7 @@ export function SendGigDetailsDialog({
 
   // Get filled positions with musicians who have emails
   const filledPositions = positions.filter(
-    (p) => p.status === 'filled' && p.musician_id && p.musician
+    (p) => p.status === 'confirmed' && p.musician_id && p.musician
   )
 
   const musiciansWithEmail = filledPositions.filter((p) => {
