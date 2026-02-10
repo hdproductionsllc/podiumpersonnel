@@ -24,6 +24,7 @@ interface MusicianPhone {
 interface GroupTextDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  projectName: string
   musicians: MusicianPhone[]
   onPhonesSaved: () => void
 }
@@ -31,11 +32,14 @@ interface GroupTextDialogProps {
 export function GroupTextDialog({
   open,
   onOpenChange,
+  projectName,
   musicians,
   onPhonesSaved,
 }: GroupTextDialogProps) {
   const [phoneEdits, setPhoneEdits] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
+  const defaultMessage = `Hi everyone — connecting you all for the ${projectName} gig. Please use this thread to coordinate. Looking forward to it!`
+  const [message, setMessage] = useState(defaultMessage)
 
   const missingPhones = musicians.filter((m) => !m.phone)
   const hasPhones = musicians.filter((m) => m.phone)
@@ -44,8 +48,9 @@ export function GroupTextDialog({
   useEffect(() => {
     if (open) {
       setPhoneEdits({})
+      setMessage(`Hi everyone — connecting you all for the ${projectName} gig. Please use this thread to coordinate. Looking forward to it!`)
     }
-  }, [open])
+  }, [open, projectName])
 
   function getAllPhones(): string[] {
     return musicians
@@ -102,7 +107,8 @@ export function GroupTextDialog({
 
       const phones = getAllPhones()
       if (phones.length > 0) {
-        window.location.href = `sms:${phones.join(',')}`
+        const body = encodeURIComponent(message.trim())
+        window.location.href = `sms:${phones.join(',')}?&body=${body}`
       }
 
       onOpenChange(false)
@@ -122,8 +128,9 @@ export function GroupTextDialog({
       const phones = getFormattedPhones()
       if (phones.length === 0) return
 
-      await navigator.clipboard.writeText(phones.join(', '))
-      toast.success(`Copied ${phones.length} phone number${phones.length !== 1 ? 's' : ''} to clipboard`)
+      const text = `${message.trim()}\n\nRecipients: ${phones.join(', ')}`
+      await navigator.clipboard.writeText(text)
+      toast.success(`Copied message and ${phones.length} number${phones.length !== 1 ? 's' : ''} to clipboard`)
     } catch {
       toast.error('Failed to copy to clipboard')
     } finally {
@@ -199,6 +206,15 @@ export function GroupTextDialog({
               </div>
             ))}
           </div>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium block mb-2">Message</label>
+          <textarea
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[80px] resize-y"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+          />
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">

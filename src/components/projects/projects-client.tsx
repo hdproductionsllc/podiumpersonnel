@@ -888,6 +888,7 @@ export function ProjectsClient({
         <GroupTextDialog
           open={groupTextOpen}
           onOpenChange={setGroupTextOpen}
+          projectName={groupTextProject.name}
           musicians={groupTextProject.project_positions
             .filter((p) => p.status === 'confirmed' && p.musician)
             .sort((a, b) => {
