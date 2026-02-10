@@ -426,30 +426,9 @@ export function MusicianFormDialog({
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
-                      name="call_order"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Call Order</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min={1}
-                              max={999}
-                              placeholder="1-999 (lower = higher priority)"
-                              {...field}
-                              onChange={(e) => field.onChange(Number(e.target.value) || 50)}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
                       name="is_leader"
                       render={({ field }) => (
-                        <FormItem className="flex items-center gap-2 pt-8">
+                        <FormItem className="flex items-center gap-2 pt-2">
                           <FormControl>
                             <input
                               type="checkbox"
