@@ -220,12 +220,21 @@ export function ProjectsClient({
   // Expandable row state
   const searchParams = useSearchParams()
   const expandProjectId = searchParams.get('expand')
+  const EXPANDED_STORAGE_KEY = 'podium-expanded-projects'
   const [expandedRows, setExpandedRows] = useState<Set<string>>(() => {
-    // Initialize with the project ID from query param if present
+    // URL query param takes priority
     if (expandProjectId) {
       return new Set([expandProjectId])
     }
-    // Auto-expand first project (closest date) by default
+    // Check sessionStorage for previously saved state
+    try {
+      const saved = sessionStorage.getItem(EXPANDED_STORAGE_KEY)
+      if (saved) {
+        const ids = JSON.parse(saved) as string[]
+        if (Array.isArray(ids)) return new Set(ids)
+      }
+    } catch { /* ignore */ }
+    // First visit default: expand the first project (closest date)
     if (projects.length > 0) {
       return new Set([projects[0].id])
     }
@@ -236,7 +245,11 @@ export function ProjectsClient({
   useEffect(() => {
     if (expandProjectId) {
       if (!expandedRows.has(expandProjectId)) {
-        setExpandedRows((prev) => new Set([...prev, expandProjectId]))
+        setExpandedRows((prev) => {
+          const next = new Set([...prev, expandProjectId])
+          try { sessionStorage.setItem(EXPANDED_STORAGE_KEY, JSON.stringify([...next])) } catch { /* ignore */ }
+          return next
+        })
       }
       // Scroll to the project row after a brief delay for render
       setTimeout(() => {
@@ -277,6 +290,7 @@ export function ProjectsClient({
       } else {
         next.add(projectId)
       }
+      try { sessionStorage.setItem(EXPANDED_STORAGE_KEY, JSON.stringify([...next])) } catch { /* ignore */ }
       return next
     })
   }
@@ -546,7 +560,11 @@ export function ProjectsClient({
     // If a new project was created, auto-expand and prompt to add a service (unless template already created services)
     if (newProject) {
       // Auto-expand the new project
-      setExpandedRows((prev) => new Set([...prev, newProject.id]))
+      setExpandedRows((prev) => {
+        const next = new Set([...prev, newProject.id])
+        try { sessionStorage.setItem(EXPANDED_STORAGE_KEY, JSON.stringify([...next])) } catch { /* ignore */ }
+        return next
+      })
 
       // Only prompt service type dialog if no template was used
       if (!newProject.template) {
