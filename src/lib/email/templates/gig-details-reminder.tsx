@@ -1,0 +1,194 @@
+import {
+  Html,
+  Head,
+  Body,
+  Container,
+  Section,
+  Text,
+  Button,
+  Hr,
+  Preview,
+  Img,
+} from '@react-email/components'
+import { type EmailBranding } from './email-layout'
+
+interface GigDetailsReminderEmailProps {
+  musicianName: string
+  organizationName: string
+  projectName: string
+  services: {
+    name: string
+    date: string
+    venue: string | null
+  }[]
+  confirmUrl: string
+  originalSentDate: string
+  branding?: EmailBranding
+}
+
+export function GigDetailsReminderEmail({
+  musicianName,
+  organizationName,
+  projectName,
+  services,
+  confirmUrl,
+  originalSentDate,
+  branding,
+}: GigDetailsReminderEmailProps) {
+  const brandColor = branding?.brandColor || '#1E293B'
+  const logoUrl = branding?.logoUrl
+  const footerText = branding?.footerText
+
+  return (
+    <Html>
+      <Head />
+      <Preview>
+        Reminder: Please confirm — {projectName}
+      </Preview>
+      <Body style={main}>
+        <Container style={container}>
+          <Section style={{ ...header, backgroundColor: brandColor }}>
+            {logoUrl ? (
+              <Img
+                src={logoUrl}
+                alt={organizationName}
+                height="48"
+                style={{ margin: '0 auto', maxWidth: '200px' }}
+              />
+            ) : (
+              <Text style={heading}>{organizationName}</Text>
+            )}
+          </Section>
+
+          <Section style={content}>
+            <Text style={greeting}>Hi {musicianName},</Text>
+
+            <Text style={paragraph}>
+              Just a quick reminder — we still need your confirmation for <strong>{projectName}</strong>.
+            </Text>
+
+            {services.map((service, index) => (
+              <Text key={index} style={detailsItem}>
+                {service.name} — {service.date}{service.venue ? ` at ${service.venue}` : ''}
+              </Text>
+            ))}
+
+            <Section style={buttonContainer}>
+              <Button style={{ ...button, backgroundColor: brandColor }} href={confirmUrl}>
+                Confirm Now
+              </Button>
+            </Section>
+
+            <Text style={smallText}>
+              Full details were sent on {originalSentDate}.
+              Questions? Just reply to this email.
+            </Text>
+          </Section>
+
+          <Hr style={hr} />
+
+          <Section style={footer}>
+            {footerText && (
+              <Text style={footerTextStyle}>{footerText}</Text>
+            )}
+            <Text style={footerTextStyle}>
+              This email was sent by {organizationName} via Podium.
+            </Text>
+          </Section>
+        </Container>
+      </Body>
+    </Html>
+  )
+}
+
+const main = {
+  backgroundColor: '#f6f9fc',
+  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Ubuntu, sans-serif',
+}
+
+const container = {
+  backgroundColor: '#ffffff',
+  margin: '0 auto',
+  padding: '20px 0 48px',
+  marginBottom: '64px',
+  maxWidth: '600px',
+}
+
+const header = {
+  padding: '24px',
+  textAlign: 'center' as const,
+}
+
+const heading = {
+  color: '#ffffff',
+  fontSize: '24px',
+  fontWeight: 'bold',
+  margin: '0',
+  textAlign: 'center' as const,
+}
+
+const content = {
+  padding: '24px',
+}
+
+const greeting = {
+  fontSize: '16px',
+  lineHeight: '24px',
+  marginBottom: '16px',
+}
+
+const paragraph = {
+  fontSize: '14px',
+  lineHeight: '22px',
+  color: '#525f7f',
+  marginBottom: '16px',
+}
+
+const detailsItem = {
+  fontSize: '14px',
+  color: '#525f7f',
+  marginBottom: '4px',
+}
+
+const buttonContainer = {
+  textAlign: 'center' as const,
+  marginTop: '24px',
+  marginBottom: '16px',
+}
+
+const button = {
+  backgroundColor: '#1E293B',
+  borderRadius: '6px',
+  color: '#fff',
+  fontSize: '14px',
+  fontWeight: 'bold',
+  textDecoration: 'none',
+  textAlign: 'center' as const,
+  display: 'inline-block',
+  padding: '12px 24px',
+}
+
+const smallText = {
+  fontSize: '12px',
+  color: '#8898aa',
+  textAlign: 'center' as const,
+}
+
+const hr = {
+  borderColor: '#e6ebf1',
+  margin: '20px 0',
+}
+
+const footer = {
+  padding: '0 24px',
+}
+
+const footerTextStyle = {
+  color: '#8898aa',
+  fontSize: '12px',
+  lineHeight: '16px',
+  textAlign: 'center' as const,
+  marginBottom: '4px',
+}
+
+export default GigDetailsReminderEmail

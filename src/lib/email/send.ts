@@ -16,6 +16,8 @@ import { PortalInvitationEmail } from './templates/portal-invitation'
 import { MusicianWelcomeEmail } from './templates/musician-welcome'
 import { AdminWelcomeEmail } from './templates/admin-welcome'
 import { OfferExpiredEmail } from './templates/offer-expired'
+import { GigDetailsEmail } from './templates/gig-details'
+import { GigDetailsReminderEmail } from './templates/gig-details-reminder'
 import { render } from '@react-email/render'
 import { type EmailBranding } from './templates/email-layout'
 
@@ -796,6 +798,110 @@ export async function sendAdminWelcomeEmail(params: SendAdminWelcomeParams) {
 
   if (error) {
     console.error('Failed to send admin welcome email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// Gig Details Email
+interface SendGigDetailsEmailParams {
+  to: string
+  musicianName: string
+  organizationName: string
+  projectName: string
+  ensembleType: string | null
+  services: {
+    name: string
+    date: string
+    callTime?: string | null
+    time: string
+    endTime?: string | null
+    venue: string | null
+    parkingInfo?: string | null
+    directions?: string | null
+  }[]
+  roster: {
+    name: string
+    instrument: string
+    email: string
+    phone: string | null
+    isRecipient: boolean
+  }[]
+  confirmUrl: string
+  notes?: string
+  branding?: EmailBranding
+}
+
+export async function sendGigDetailsEmail(params: SendGigDetailsEmailParams) {
+  const emailHtml = await render(
+    GigDetailsEmail({
+      musicianName: params.musicianName,
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      ensembleType: params.ensembleType,
+      services: params.services,
+      roster: params.roster,
+      confirmUrl: params.confirmUrl,
+      notes: params.notes,
+      branding: params.branding,
+    })
+  )
+
+  const firstDate = params.services[0]?.date
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: `Gig Details — ${params.projectName}${firstDate ? ` | ${firstDate}` : ''}`,
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send gig details email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// Gig Details Reminder Email
+interface SendGigDetailsReminderEmailParams {
+  to: string
+  musicianName: string
+  organizationName: string
+  projectName: string
+  services: {
+    name: string
+    date: string
+    venue: string | null
+  }[]
+  confirmUrl: string
+  originalSentDate: string
+  branding?: EmailBranding
+}
+
+export async function sendGigDetailsReminderEmail(params: SendGigDetailsReminderEmailParams) {
+  const emailHtml = await render(
+    GigDetailsReminderEmail({
+      musicianName: params.musicianName,
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      services: params.services,
+      confirmUrl: params.confirmUrl,
+      originalSentDate: params.originalSentDate,
+      branding: params.branding,
+    })
+  )
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: `Reminder: Please confirm — ${params.projectName}`,
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send gig details reminder email:', error)
     throw new Error(`Failed to send email: ${error.message}`)
   }
 

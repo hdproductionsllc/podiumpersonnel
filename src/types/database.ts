@@ -824,4 +824,22 @@ export interface EmailLog {
   metadata: Record<string, unknown>
   sent_at: string
 }
+export interface GigDetailSend {
+  id: string
+  project_id: string
+  organization_id: string
+  sent_at: string
+  sent_by: string
+  musician_count: number
+}
+
+export interface GigDetailConfirmation {
+  id: string
+  send_id: string
+  musician_id: string
+  token: string
+  email_sent_at: string
+  confirmed_at: string | null
+}
+
 export type ImpersonationLog = Database['public']['Tables']['impersonation_log']['Row']

@@ -14,6 +14,7 @@ import { ProjectPositions } from './project-positions'
 import { ProjectOffers } from './project-offers'
 import { SubRequests } from './sub-requests'
 import { ConflictsSummary } from './conflicts-summary'
+import { SendGigDetailsDialog } from './send-gig-details-dialog'
 import { detectConflicts } from './project-positions'
 import type { PositionJoined, BookForImport } from './project-positions'
 import type { MusicianForOffer } from './send-offer-dialog'
@@ -242,6 +243,10 @@ export function ProjectsClient({
       }, 100)
     }
   }, [expandProjectId])
+
+  // Gig details dialog state
+  const [gigDetailsOpen, setGigDetailsOpen] = useState(false)
+  const [gigDetailsProject, setGigDetailsProject] = useState<ProjectWithServices | null>(null)
 
   // Filter state
   const [search, setSearch] = useState('')
@@ -749,6 +754,24 @@ export function ProjectsClient({
                           <ConflictsSummary
                             conflicts={detectConflicts(project.project_positions, musicians, project.services)}
                           />
+                          {/* Send Gig Details */}
+                          {canManage && project.project_positions.some((p) => p.status === 'filled') && (
+                            <div className="flex items-center gap-3 pt-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setGigDetailsProject(project)
+                                  setGigDetailsOpen(true)
+                                }}
+                              >
+                                <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+                                </svg>
+                                Send Gig Details
+                              </Button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )}
@@ -809,6 +832,19 @@ export function ProjectsClient({
         service={deletingService}
         onSuccess={handleSuccess}
       />
+
+      {gigDetailsProject && (
+        <SendGigDetailsDialog
+          open={gigDetailsOpen}
+          onOpenChange={setGigDetailsOpen}
+          projectId={gigDetailsProject.id}
+          projectName={gigDetailsProject.name}
+          positions={gigDetailsProject.project_positions}
+          services={gigDetailsProject.services}
+          organizationId={organizationId}
+          timezone={timezone}
+        />
+      )}
     </div>
   )
 }
