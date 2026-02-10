@@ -1,6 +1,6 @@
 -- Email audit log: track every email sent from the platform
 CREATE TABLE email_logs (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   recipient_email TEXT NOT NULL,
   recipient_name TEXT,
