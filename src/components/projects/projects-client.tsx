@@ -755,7 +755,7 @@ export function ProjectsClient({
                             conflicts={detectConflicts(project.project_positions, musicians, project.services)}
                           />
                           {/* Send Gig Details */}
-                          {canManage && project.project_positions.some((p) => p.status === 'confirmed') && (
+                          {canManage && project.project_positions.length > 0 && project.project_positions.every((p) => p.status === 'confirmed') && (
                             <div className="flex items-center gap-3 pt-2">
                               <Button
                                 variant="outline"
