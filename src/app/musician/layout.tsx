@@ -79,9 +79,17 @@ export default async function MusicianLayout({
           <div className="w-full max-w-md rounded-lg border bg-card p-8 text-center space-y-4">
             <h2 className="text-xl font-semibold">No Musician Account Found</h2>
             <p className="text-sm text-muted-foreground">
-              Your login doesn&apos;t have a musician profile linked to it. If you were invited to perform, check your email for a registration link.
+              Your login doesn&apos;t have a musician profile linked to it. If you were invited to perform, try registering with the email your organization has on file.
             </p>
-            <MusicianSignOutButton />
+            <div className="flex flex-col gap-2">
+              <a
+                href="/musician/register"
+                className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                Register as a Musician
+              </a>
+              <MusicianSignOutButton />
+            </div>
           </div>
         </div>
       )
