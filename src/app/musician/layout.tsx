@@ -1,7 +1,6 @@
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
-import { MusicianNav } from '@/components/musician/musician-nav'
-import { MusicianHeader, MusicianDesktopHeader } from '@/components/musician/musician-header'
+import { MusicianPortalHeader } from '@/components/musician/musician-header'
 import { ImpersonationBanner } from '@/components/musician/impersonation-banner'
 import { MusicianSignOutButton } from '@/components/musician/musician-sign-out-button'
 import { RememberEmail } from '@/components/musician/remember-email'
@@ -30,7 +29,6 @@ export default async function MusicianLayout({
 
   // Check if we're impersonating a musician
   if (impersonateId) {
-    // Verify the musician exists and has a portal account
     const { data: impersonatedMusician } = await supabase
       .from('musicians')
       .select(`
@@ -41,7 +39,6 @@ export default async function MusicianLayout({
       .single()
 
     if (impersonatedMusician && impersonatedMusician.user_id) {
-      // Verify the current user is an admin of this musician's organization
       const { data: membership } = await supabase
         .from('organization_members')
         .select('role')
@@ -115,37 +112,6 @@ export default async function MusicianLayout({
 
   const musicianName = `${musician.first_name} ${musician.last_name}`
 
-  // Get count of pending offers
-  let pendingOffersCount = 0
-  if (isImpersonating) {
-    // When impersonating, just get offers for this specific musician
-    const { count } = await supabase
-      .from('contract_offers')
-      .select('*', { count: 'exact', head: true })
-      .eq('musician_id', musician.id)
-      .in('status', ['pending', 'viewed'])
-
-    pendingOffersCount = count || 0
-  } else {
-    // Normal flow: get all musician records for this user
-    const { data: musicianIds } = await supabase
-      .from('musicians')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-
-    if (musicianIds && musicianIds.length > 0) {
-      const ids = musicianIds.map((m) => m.id)
-      const { count } = await supabase
-        .from('contract_offers')
-        .select('*', { count: 'exact', head: true })
-        .in('musician_id', ids)
-        .in('status', ['pending', 'viewed'])
-
-      pendingOffersCount = count || 0
-    }
-  }
-
   return (
     <div className="min-h-screen bg-background">
       {/* Impersonation Banner */}
@@ -156,31 +122,19 @@ export default async function MusicianLayout({
         />
       )}
 
-      {/* Mobile Header */}
-      <MusicianHeader
+      {/* Unified Header */}
+      <MusicianPortalHeader
         musicianName={musicianName}
         email={musician.email || user.email || ''}
         profilePhotoUrl={musician.profile_photo_url}
       />
 
-      {/* Desktop Header (shown in main content area) */}
-      <div className="md:pl-60">
-        <MusicianDesktopHeader
-          musicianName={musicianName}
-          email={musician.email || user.email || ''}
-          profilePhotoUrl={musician.profile_photo_url}
-        />
-      </div>
-
-      {/* Navigation */}
-      <MusicianNav pendingOffersCount={pendingOffersCount} impersonateId={isImpersonating ? musician.id : null} />
-
       {/* Remember email for login prefill */}
       <RememberEmail email={musician.email || user.email || ''} />
 
       {/* Main Content */}
-      <main className={`pb-20 md:pb-6 md:pl-60 ${isImpersonating ? 'pt-12' : ''}`}>
-        <div className="mx-auto max-w-4xl p-4 md:p-6">
+      <main className={isImpersonating ? 'pt-10' : ''}>
+        <div className="mx-auto max-w-3xl px-4 py-6">
           {children}
         </div>
       </main>

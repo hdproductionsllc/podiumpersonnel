@@ -135,7 +135,7 @@ export function OfferDetail({ offer, services, totalPay, totalChairs, instrument
         throw new Error(data.error || 'Failed to accept offer')
       }
 
-      router.push('/musician/offers?status=history&message=accepted')
+      router.push('/musician')
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to accept offer')
@@ -160,7 +160,7 @@ export function OfferDetail({ offer, services, totalPay, totalChairs, instrument
       }
 
       setShowDeclineDialog(false)
-      router.push('/musician/offers?status=history&message=declined')
+      router.push('/musician')
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to decline offer')
@@ -336,8 +336,8 @@ export function OfferDetail({ offer, services, totalPay, totalChairs, instrument
 
       {/* Action Buttons */}
       {canRespond && !isExpired && (
-        <div className="fixed bottom-20 md:bottom-0 left-0 right-0 md:left-60 p-4 bg-background border-t md:sticky md:border-0 md:bg-transparent md:p-0">
-          <div className="flex gap-3 max-w-4xl mx-auto">
+        <div className="sticky bottom-0 left-0 right-0 p-4 bg-background border-t md:border-0 md:bg-transparent md:p-0">
+          <div className="flex gap-3 max-w-3xl mx-auto">
             <Button
               variant="outline"
               className="flex-1"

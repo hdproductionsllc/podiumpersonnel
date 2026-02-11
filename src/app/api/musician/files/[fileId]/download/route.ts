@@ -73,10 +73,12 @@ export async function POST(
         musician_id: position.musician_id,
       })
 
-    // Generate signed URL (1 hour)
+    // Generate signed URL (1 hour) with original filename
     const { data: signedUrl, error: signError } = await supabase.storage
       .from('project-files')
-      .createSignedUrl(fileRecord.storage_path, 3600)
+      .createSignedUrl(fileRecord.storage_path, 3600, {
+        download: fileRecord.file_name,
+      })
 
     if (signError || !signedUrl) {
       console.error('Failed to create signed URL:', signError)

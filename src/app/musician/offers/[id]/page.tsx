@@ -179,10 +179,10 @@ export default async function MusicianOfferDetailPage({ params, searchParams }: 
 
   return (
     <div className="space-y-4">
-      <Link href={sp?.impersonate ? `/musician/offers?impersonate=${sp.impersonate}` : '/musician/offers'}>
+      <Link href={sp?.impersonate ? `/musician?impersonate=${sp.impersonate}` : '/musician'}>
         <Button variant="ghost" size="sm" className="-ml-2">
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Offers
+          Back to Dashboard
         </Button>
       </Link>
 
