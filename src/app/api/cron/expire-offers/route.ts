@@ -56,7 +56,9 @@ export async function GET(request: NextRequest) {
   let processed = 0
   let emailsSent = 0
 
-  for (const offer of expiredOffers) {
+  for (let i = 0; i < expiredOffers.length; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 600))
+    const offer = expiredOffers[i]
     const musician = offer.musician as any
     const position = offer.project_position as any
     const project = position?.project as any

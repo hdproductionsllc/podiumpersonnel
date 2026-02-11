@@ -129,7 +129,10 @@ export async function POST(
 
     let sentCount = 0
     const skippedReasons: string[] = []
-    for (const conf of unconfirmed) {
+    for (let i = 0; i < unconfirmed.length; i++) {
+      const conf = unconfirmed[i]
+      // Delay between sends to avoid Resend rate limit (2 req/sec)
+      if (i > 0) await new Promise((r) => setTimeout(r, 600))
       const musician = conf.musician as any
       if (!musician?.email) {
         skippedReasons.push(`${musician?.first_name || 'Unknown'} ${musician?.last_name || ''}: no email address`)

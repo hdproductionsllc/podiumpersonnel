@@ -64,7 +64,9 @@ export async function POST(request: NextRequest) {
     const errors: string[] = []
 
     // Send emails
-    for (const musician of eligibleMusicians) {
+    for (let i = 0; i < eligibleMusicians.length; i++) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 600))
+      const musician = eligibleMusicians[i]
       try {
         const w9Result = await sendW9RequestEmail({
           to: musician.email!,

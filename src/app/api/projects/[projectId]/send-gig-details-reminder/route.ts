@@ -120,7 +120,9 @@ export async function POST(
     }
 
     let sentCount = 0
-    for (const conf of unconfirmed) {
+    for (let i = 0; i < unconfirmed.length; i++) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 600))
+      const conf = unconfirmed[i]
       const musician = conf.musician as any
       if (!musician?.email) continue
 

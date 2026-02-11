@@ -69,7 +69,9 @@ export async function GET(request: NextRequest) {
   let musicianEmails = 0
   let adminEmails = 0
 
-  for (const offer of expiringOffers) {
+  for (let i = 0; i < expiringOffers.length; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 600))
+    const offer = expiringOffers[i]
     const musician = offer.musician as any
     const position = offer.project_position as any
     const project = position?.project as any

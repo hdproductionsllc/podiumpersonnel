@@ -147,7 +147,10 @@ export async function POST(
 
     // Send email to each musician with their specific files + direct download links
     let sentCount = 0
-    for (const pos of filledPositions) {
+    for (let i = 0; i < filledPositions.length; i++) {
+      const pos = filledPositions[i]
+      // Delay between sends to avoid Resend rate limit (2 req/sec)
+      if (i > 0) await new Promise((r) => setTimeout(r, 600))
       const musician = pos.musician as any
       const instrumentId = pos.instrument_id
       const token = tokenByMusician[pos.musician_id]

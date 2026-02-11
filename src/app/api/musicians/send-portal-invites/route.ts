@@ -64,7 +64,9 @@ export async function POST(request: Request) {
   let failed = 0
   const baseUrl = getAppUrl()
 
-  for (const musician of eligibleMusicians) {
+  for (let i = 0; i < eligibleMusicians.length; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 600))
+    const musician = eligibleMusicians[i]
     try {
       // Generate invite token
       const token = crypto.randomBytes(32).toString('hex')

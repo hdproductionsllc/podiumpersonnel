@@ -194,7 +194,9 @@ export async function POST(
 
     // Send email to each musician
     let sentCount = 0
-    for (const member of roster) {
+    for (let i = 0; i < roster.length; i++) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 600))
+      const member = roster[i]
       const token = tokenMap.get(member.musicianId)
       if (!token) continue
 
