@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendMusicReminderEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
@@ -124,13 +124,23 @@ export async function POST(
       footerText: organization?.email_footer_text,
     }
 
+    const adminEmails = await getOrgAdminEmails(organization.id)
+    const contactEmail = adminEmails[0]
+
     let sentCount = 0
+    const skippedReasons: string[] = []
     for (const conf of unconfirmed) {
       const musician = conf.musician as any
-      if (!musician?.email) continue
+      if (!musician?.email) {
+        skippedReasons.push(`${musician?.first_name || 'Unknown'} ${musician?.last_name || ''}: no email address`)
+        continue
+      }
 
       const musicianFiles = getFilesForMusician(conf.musician_id)
-      if (musicianFiles.length === 0) continue
+      if (musicianFiles.length === 0) {
+        skippedReasons.push(`${musician.first_name} ${musician.last_name}: no matching files`)
+        continue
+      }
 
       const token = conf.token
       const confirmUrl = `${baseUrl}/confirm-music/${token}`
@@ -147,28 +157,40 @@ export async function POST(
             downloadUrl: `${baseUrl}/api/music-download/${f.id}?token=${token}`,
           })),
           confirmUrl,
+          contactEmail,
           branding,
         })
 
-        await logEmail({
-          organizationId: organization.id,
-          recipientEmail: musician.email,
-          recipientName: `${musician.first_name} ${musician.last_name}`,
-          subject: `Reminder: Download your music — ${project.name}`,
-          emailType: 'music_reminder',
-          musicianId: musician.id,
-          projectId: projectId,
-          resendEmailId: result?.id || null,
-        })
-
         sentCount++
+
+        try {
+          await logEmail({
+            organizationId: organization.id,
+            recipientEmail: musician.email,
+            recipientName: `${musician.first_name} ${musician.last_name}`,
+            subject: `Reminder: Download your music — ${project.name}`,
+            emailType: 'music_reminder',
+            musicianId: musician.id,
+            projectId: projectId,
+            resendEmailId: result?.id || null,
+          })
+        } catch (logError) {
+          console.error(`Email sent but failed to log for ${musician.email}:`, logError)
+        }
       } catch (emailError) {
+        skippedReasons.push(`${musician.first_name} ${musician.last_name}: send failed`)
         console.error(`Failed to send music reminder to ${musician.email}:`, emailError)
       }
     }
 
     const skipped = unconfirmed.length - sentCount
-    return NextResponse.json({ success: true, reminded: sentCount, total: unconfirmed.length, skipped })
+    return NextResponse.json({
+      success: true,
+      reminded: sentCount,
+      total: unconfirmed.length,
+      skipped,
+      skippedReasons: skippedReasons.length > 0 ? skippedReasons : undefined,
+    })
   } catch (error) {
     console.error('Failed to send music reminders:', error)
     return NextResponse.json(

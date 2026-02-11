@@ -23,6 +23,7 @@ interface MusicReminderEmailProps {
     downloadUrl: string
   }[]
   confirmUrl: string
+  contactEmail?: string
   branding?: EmailBranding
 }
 
@@ -38,6 +39,7 @@ export function MusicReminderEmail({
   projectName,
   files,
   confirmUrl,
+  contactEmail,
   branding,
 }: MusicReminderEmailProps) {
   const brandColor = branding?.brandColor || '#1E293B'
@@ -88,7 +90,7 @@ export function MusicReminderEmail({
             <Hr style={divider} />
 
             <Text style={paragraph}>
-              After downloading, please confirm receipt:
+              After downloading, please confirm you've received and loaded all files on your iPad/tablet successfully:
             </Text>
 
             <Section style={buttonContainer}>
@@ -98,7 +100,7 @@ export function MusicReminderEmail({
             </Section>
 
             <Text style={smallText}>
-              Questions? Just reply to this email.
+              Questions? Contact {organizationName}{contactEmail ? <> at <Link href={`mailto:${contactEmail}`} style={{ color: '#8898aa' }}>{contactEmail}</Link></> : ''}.
             </Text>
           </Section>
 

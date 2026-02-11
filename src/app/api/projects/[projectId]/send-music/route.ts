@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendMusicUploadedEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
@@ -135,6 +135,10 @@ export async function POST(
       footerText: organization?.email_footer_text,
     }
 
+    // Get admin contact email for the "Questions?" line
+    const adminEmails = await getOrgAdminEmails(organization.id)
+    const contactEmail = adminEmails[0]
+
     // Build a map of musician_id → confirmation token
     const tokenByMusician: Record<string, string> = {}
     for (const conf of confirmations) {
@@ -177,25 +181,30 @@ export async function POST(
           })),
           confirmUrl,
           notes,
+          contactEmail,
           branding,
         })
 
-        await logEmail({
-          organizationId: organization.id,
-          recipientEmail: musician.email,
-          recipientName: `${musician.first_name} ${musician.last_name}`,
-          subject: `Music Available — ${project.name}`,
-          emailType: 'music_available',
-          musicianId: musician.id,
-          projectId: projectId,
-          resendEmailId: result?.id || null,
-          metadata: {
-            sendId: sendRecord.id,
-            fileCount: musicianFiles.length,
-          },
-        })
-
         sentCount++
+
+        try {
+          await logEmail({
+            organizationId: organization.id,
+            recipientEmail: musician.email,
+            recipientName: `${musician.first_name} ${musician.last_name}`,
+            subject: `Music Available — ${project.name}`,
+            emailType: 'music_available',
+            musicianId: musician.id,
+            projectId: projectId,
+            resendEmailId: result?.id || null,
+            metadata: {
+              sendId: sendRecord.id,
+              fileCount: musicianFiles.length,
+            },
+          })
+        } catch (logError) {
+          console.error(`Email sent but failed to log for ${musician.email}:`, logError)
+        }
       } catch (emailError) {
         console.error(`Failed to send music email to ${musician.email}:`, emailError)
       }

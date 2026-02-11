@@ -24,6 +24,7 @@ interface MusicUploadedEmailProps {
   }[]
   confirmUrl: string
   notes?: string
+  contactEmail?: string
   branding?: EmailBranding
 }
 
@@ -40,6 +41,7 @@ export function MusicUploadedEmail({
   files,
   confirmUrl,
   notes,
+  contactEmail,
   branding,
 }: MusicUploadedEmailProps) {
   const brandColor = branding?.brandColor || '#1E293B'
@@ -96,7 +98,7 @@ export function MusicUploadedEmail({
             <Hr style={divider} />
 
             <Text style={paragraph}>
-              After downloading all your files, please confirm receipt:
+              After downloading, please confirm you've received and loaded all files on your iPad/tablet successfully:
             </Text>
 
             <Section style={buttonContainer}>
@@ -106,7 +108,7 @@ export function MusicUploadedEmail({
             </Section>
 
             <Text style={smallText}>
-              Questions? Just reply to this email.
+              Questions? Contact {organizationName}{contactEmail ? <> at <Link href={`mailto:${contactEmail}`} style={{ color: '#8898aa' }}>{contactEmail}</Link></> : ''}.
             </Text>
           </Section>
 
