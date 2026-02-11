@@ -48,7 +48,7 @@ export function MusicUploadedEmail({
     <Html>
       <Head />
       <Preview>
-        Music uploaded for {projectName}
+        Music available for download — {projectName}
       </Preview>
       <Body style={main}>
         <Container style={container}>
@@ -69,7 +69,7 @@ export function MusicUploadedEmail({
             <Text style={greeting}>Hi {musicianName}!</Text>
 
             <Text style={paragraph}>
-              Music/parts have been uploaded for <strong>{projectName}</strong>.
+              Your music book for <strong>{projectName}</strong> is ready for download.
             </Text>
 
             {notes && (

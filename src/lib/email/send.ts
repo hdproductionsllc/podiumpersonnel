@@ -981,7 +981,7 @@ export async function sendMusicUploadedEmail(params: SendMusicUploadedEmailParam
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Music Uploaded — ${params.projectName}`,
+    subject: `Music Available — ${params.projectName}`,
     html: emailHtml,
   })
 
