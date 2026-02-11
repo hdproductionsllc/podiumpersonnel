@@ -178,7 +178,8 @@ export async function POST(
           console.error(`Email sent but failed to log for ${musician.email}:`, logError)
         }
       } catch (emailError) {
-        skippedReasons.push(`${musician.first_name} ${musician.last_name}: send failed`)
+        const errMsg = emailError instanceof Error ? emailError.message : 'unknown error'
+        skippedReasons.push(`${musician.first_name} ${musician.last_name}: ${errMsg}`)
         console.error(`Failed to send music reminder to ${musician.email}:`, emailError)
       }
     }
