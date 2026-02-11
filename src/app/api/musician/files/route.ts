@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
-import { createClient, resolveMusicianIds } from '@/lib/supabase/server'
+import { createClient, createServiceClient, resolveMusicianIds } from '@/lib/supabase/server'
 
 export async function GET(request: Request) {
   try {
     const supabase = await createClient()
+    const serviceClient = createServiceClient()
 
     const {
       data: { user },
@@ -25,8 +26,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'No musician records found' }, { status: 404 })
     }
 
-    // Get confirmed positions for these musicians
-    const { data: confirmedPositions } = await supabase
+    // Get confirmed positions for these musicians (use serviceClient to bypass RLS)
+    const { data: confirmedPositions } = await serviceClient
       .from('project_positions')
       .select(`
         id,
@@ -52,8 +53,8 @@ export async function GET(request: Request) {
     // Get project IDs
     const projectIds = [...new Set(confirmedPositions.map((p: any) => p.project_id))]
 
-    // Get all files for these projects
-    const { data: allFiles } = await supabase
+    // Get all files for these projects (use serviceClient to bypass RLS)
+    const { data: allFiles } = await serviceClient
       .from('project_files')
       .select(`
         id,
@@ -72,7 +73,7 @@ export async function GET(request: Request) {
     let downloadedFileIds = new Set<string>()
 
     if (fileIds.length > 0) {
-      const { data: downloads } = await supabase
+      const { data: downloads } = await serviceClient
         .from('project_file_downloads')
         .select('file_id')
         .in('file_id', fileIds)
@@ -84,7 +85,7 @@ export async function GET(request: Request) {
     }
 
     // Get music confirmation status
-    const { data: musicSends } = await supabase
+    const { data: musicSends } = await serviceClient
       .from('music_sends')
       .select('id, project_id')
       .in('project_id', projectIds)
@@ -94,7 +95,7 @@ export async function GET(request: Request) {
     let confirmationsByProject: Record<string, { token: string; confirmed_at: string | null }> = {}
 
     if (sendIds.length > 0) {
-      const { data: confirmations } = await supabase
+      const { data: confirmations } = await serviceClient
         .from('music_confirmations')
         .select('send_id, token, confirmed_at, musician_id')
         .in('send_id', sendIds)
@@ -104,7 +105,6 @@ export async function GET(request: Request) {
         for (const conf of confirmations) {
           const send = musicSends!.find((s) => s.id === conf.send_id)
           if (send) {
-            // Keep the latest confirmation per project
             confirmationsByProject[send.project_id] = {
               token: conf.token,
               confirmed_at: conf.confirmed_at,

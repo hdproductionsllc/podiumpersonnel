@@ -79,11 +79,43 @@ export async function POST(
 
     const organization = project.organization as any
 
-    // Get files for display in reminder
+    // Get files with instrument scoping
     const { data: files } = await supabase
       .from('project_files')
-      .select('id, file_name, file_size')
+      .select('id, file_name, file_size, scope, project_file_instruments(instrument_id)')
       .eq('project_id', projectId)
+
+    // Get each musician's instrument from their position
+    const musicianIds = unconfirmed.map((c: any) => c.musician_id)
+    const { data: positions } = await serviceClient
+      .from('project_positions')
+      .select('musician_id, instrument_id')
+      .eq('project_id', projectId)
+      .in('musician_id', musicianIds)
+      .eq('status', 'confirmed')
+
+    const instrumentByMusician: Record<string, string> = {}
+    if (positions) {
+      for (const pos of positions) {
+        if (pos.musician_id) {
+          instrumentByMusician[pos.musician_id] = pos.instrument_id
+        }
+      }
+    }
+
+    // Filter files for a specific musician's instrument
+    function getFilesForMusician(musicianId: string) {
+      const instrumentId = instrumentByMusician[musicianId]
+      return (files || []).filter((f: any) => {
+        if (f.scope === 'all') return true
+        if (f.scope === 'assigned' && instrumentId) {
+          return (f.project_file_instruments || []).some(
+            (fi: any) => fi.instrument_id === instrumentId
+          )
+        }
+        return false
+      })
+    }
 
     const baseUrl = getAppUrl()
     const branding = {
@@ -97,6 +129,9 @@ export async function POST(
       const musician = conf.musician as any
       if (!musician?.email) continue
 
+      const musicianFiles = getFilesForMusician(conf.musician_id)
+      if (musicianFiles.length === 0) continue
+
       const portalUrl = `${baseUrl}/musician/music?project=${projectId}`
 
       try {
@@ -105,7 +140,7 @@ export async function POST(
           musicianName: musician.first_name,
           organizationName: organization?.name || 'Orchestra',
           projectName: project.name,
-          files: (files || []).map((f: any) => ({
+          files: musicianFiles.map((f: any) => ({
             name: f.file_name,
             size: f.file_size,
           })),

@@ -30,8 +30,8 @@ export async function POST(
       return NextResponse.json({ error: 'No musician records found' }, { status: 404 })
     }
 
-    // Get file record
-    const { data: fileRecord, error: fetchError } = await supabase
+    // Get file record (use serviceClient to bypass RLS - musicians aren't org members)
+    const { data: fileRecord, error: fetchError } = await serviceClient
       .from('project_files')
       .select('id, storage_path, file_name, project_id, scope, project_file_instruments(instrument_id)')
       .eq('id', fileId)
@@ -42,7 +42,7 @@ export async function POST(
     }
 
     // Verify musician has access (confirmed position on this project + correct instrument scope)
-    const { data: position } = await supabase
+    const { data: position } = await serviceClient
       .from('project_positions')
       .select('id, instrument_id, musician_id')
       .eq('project_id', fileRecord.project_id)
