@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Calendar, Mail, User } from 'lucide-react'
+import { Home, Calendar, Mail, User, FileMusic } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -15,6 +15,11 @@ const navItems = [
     label: 'Schedule',
     href: '/musician/schedule',
     icon: Calendar,
+  },
+  {
+    label: 'Music',
+    href: '/musician/music',
+    icon: FileMusic,
   },
   {
     label: 'Offers',

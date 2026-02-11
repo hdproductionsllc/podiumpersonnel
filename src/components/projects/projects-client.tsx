@@ -16,6 +16,7 @@ import { SubRequests } from './sub-requests'
 import { ConflictsSummary } from './conflicts-summary'
 import { SendGigDetailsDialog } from './send-gig-details-dialog'
 import { GroupTextDialog } from './group-text-dialog'
+import { ProjectFilesSection } from './project-files-section'
 import { detectConflicts } from './project-positions'
 import type { PositionJoined, BookForImport } from './project-positions'
 import type { MusicianForOffer } from './send-offer-dialog'
@@ -779,6 +780,17 @@ export function ProjectsClient({
                           <ConflictsSummary
                             conflicts={detectConflicts(project.project_positions, musicians, project.services)}
                           />
+                          {/* Music / Parts Section */}
+                          {canManage && project.project_positions.length > 0 && (
+                            <ProjectFilesSection
+                              projectId={project.id}
+                              projectName={project.name}
+                              organizationId={organizationId}
+                              positions={project.project_positions}
+                              canManage={canManage}
+                              timezone={timezone}
+                            />
+                          )}
                           {/* Send Gig Details + Group Text + Inline Status */}
                           {canManage && project.project_positions.length > 0 && project.project_positions.every((p) => p.status === 'confirmed') && (() => {
                             const sends = (project as any).gig_detail_sends as any[] | undefined

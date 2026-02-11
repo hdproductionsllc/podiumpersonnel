@@ -19,6 +19,8 @@ import { OfferExpiredEmail } from './templates/offer-expired'
 import { OfferExpiringSoonEmail } from './templates/offer-expiring-soon'
 import { GigDetailsEmail } from './templates/gig-details'
 import { GigDetailsReminderEmail } from './templates/gig-details-reminder'
+import { MusicUploadedEmail } from './templates/music-uploaded'
+import { MusicReminderEmail } from './templates/music-reminder'
 import { render } from '@react-email/render'
 import { type EmailBranding } from './templates/email-layout'
 
@@ -945,6 +947,84 @@ export async function sendGigDetailsReminderEmail(params: SendGigDetailsReminder
 
   if (error) {
     console.error('Failed to send gig details reminder email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// Music Uploaded Email
+interface SendMusicUploadedEmailParams {
+  to: string
+  musicianName: string
+  organizationName: string
+  projectName: string
+  files: { name: string; size: number }[]
+  portalUrl: string
+  notes?: string
+  branding?: EmailBranding
+}
+
+export async function sendMusicUploadedEmail(params: SendMusicUploadedEmailParams) {
+  const emailHtml = await render(
+    MusicUploadedEmail({
+      musicianName: params.musicianName,
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      files: params.files,
+      portalUrl: params.portalUrl,
+      notes: params.notes,
+      branding: params.branding,
+    })
+  )
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: `Music Uploaded — ${params.projectName}`,
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send music uploaded email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// Music Reminder Email
+interface SendMusicReminderEmailParams {
+  to: string
+  musicianName: string
+  organizationName: string
+  projectName: string
+  files: { name: string; size: number }[]
+  portalUrl: string
+  branding?: EmailBranding
+}
+
+export async function sendMusicReminderEmail(params: SendMusicReminderEmailParams) {
+  const emailHtml = await render(
+    MusicReminderEmail({
+      musicianName: params.musicianName,
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      files: params.files,
+      portalUrl: params.portalUrl,
+      branding: params.branding,
+    })
+  )
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: `Reminder: Download your music — ${params.projectName}`,
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send music reminder email:', error)
     throw new Error(`Failed to send email: ${error.message}`)
   }
 

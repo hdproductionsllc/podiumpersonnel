@@ -843,3 +843,50 @@ export interface GigDetailConfirmation {
 }
 
 export type ImpersonationLog = Database['public']['Tables']['impersonation_log']['Row']
+
+// Project Files (manual types — tables added in migration 041)
+export interface ProjectFile {
+  id: string
+  project_id: string
+  organization_id: string
+  file_name: string
+  storage_path: string
+  file_size: number
+  mime_type: string
+  scope: string
+  uploaded_by: string
+  uploaded_at: string
+  notes: string | null
+}
+
+export interface ProjectFileInstrument {
+  id: string
+  file_id: string
+  instrument_id: string
+}
+
+export interface MusicSend {
+  id: string
+  project_id: string
+  organization_id: string
+  sent_at: string
+  sent_by: string
+  musician_count: number
+  notes: string | null
+}
+
+export interface MusicConfirmation {
+  id: string
+  send_id: string
+  musician_id: string
+  token: string
+  email_sent_at: string
+  confirmed_at: string | null
+}
+
+export interface ProjectFileDownload {
+  id: string
+  file_id: string
+  musician_id: string
+  downloaded_at: string
+}
