@@ -103,9 +103,9 @@ export async function POST(
       return NextResponse.json({ error: 'Only PDF files are allowed' }, { status: 400 })
     }
 
-    // Validate size (20MB)
-    if (file.size > 20 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File must be under 20MB' }, { status: 400 })
+    // Validate size (40MB)
+    if (file.size > 40 * 1024 * 1024) {
+      return NextResponse.json({ error: 'File must be under 40MB' }, { status: 400 })
     }
 
     // Upload to Supabase Storage

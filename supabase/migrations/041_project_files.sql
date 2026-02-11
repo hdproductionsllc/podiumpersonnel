@@ -160,7 +160,7 @@ VALUES (
   'project-files',
   'project-files',
   false,
-  20971520,  -- 20MB
+  41943040,  -- 40MB
   ARRAY['application/pdf']
 )
 ON CONFLICT (id) DO NOTHING;

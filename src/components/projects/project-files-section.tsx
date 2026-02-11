@@ -176,8 +176,8 @@ export function ProjectFilesSection({
       return
     }
 
-    if (file.size > 20 * 1024 * 1024) {
-      toast.error('File must be under 20MB')
+    if (file.size > 40 * 1024 * 1024) {
+      toast.error('File must be under 40MB')
       e.target.value = ''
       return
     }
@@ -326,7 +326,7 @@ export function ProjectFilesSection({
 
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium mb-1 block">File (PDF only, max 20MB)</label>
+              <label className="text-sm font-medium mb-1 block">File (PDF only, max 40MB)</label>
               <input
                 ref={fileInputRef}
                 type="file"
