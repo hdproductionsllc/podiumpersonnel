@@ -41,14 +41,68 @@ export async function GET(
       `)
       .eq('send_id', latestSend.id)
 
-    // Get download counts per musician for this project's files
+    // Get files with their instrument scoping
     const { data: files } = await supabase
       .from('project_files')
-      .select('id')
+      .select('id, scope, project_file_instruments(instrument_id)')
       .eq('project_id', projectId)
 
-    const fileIds = (files || []).map((f) => f.id)
-    let downloadsByMusician: Record<string, number> = {}
+    // Get each musician's instrument from their confirmed position
+    const musicianIds = (confirmations || []).map((c: any) => c.musician_id)
+    let positionsByMusician: Record<string, string> = {} // musician_id -> instrument_id
+
+    if (musicianIds.length > 0) {
+      const { data: positions } = await supabase
+        .from('project_positions')
+        .select('musician_id, instrument_id')
+        .eq('project_id', projectId)
+        .in('musician_id', musicianIds)
+        .eq('status', 'confirmed')
+
+      if (positions) {
+        for (const pos of positions) {
+          if (pos.musician_id) {
+            positionsByMusician[pos.musician_id] = pos.instrument_id
+          }
+        }
+      }
+    }
+
+    // Calculate per-musician file count (how many files they should have)
+    function getFileCountForMusician(musicianId: string): number {
+      const instrumentId = positionsByMusician[musicianId]
+      if (!files) return 0
+      return files.filter((f: any) => {
+        if (f.scope === 'all') return true
+        if (f.scope === 'assigned' && instrumentId) {
+          return (f.project_file_instruments || []).some(
+            (fi: any) => fi.instrument_id === instrumentId
+          )
+        }
+        return false
+      }).length
+    }
+
+    // Get which files each musician should have access to (for unique download counting)
+    function getFileIdsForMusician(musicianId: string): string[] {
+      const instrumentId = positionsByMusician[musicianId]
+      if (!files) return []
+      return files
+        .filter((f: any) => {
+          if (f.scope === 'all') return true
+          if (f.scope === 'assigned' && instrumentId) {
+            return (f.project_file_instruments || []).some(
+              (fi: any) => fi.instrument_id === instrumentId
+            )
+          }
+          return false
+        })
+        .map((f: any) => f.id)
+    }
+
+    // Get download records
+    const fileIds = (files || []).map((f: any) => f.id)
+    let downloadsByMusician: Record<string, Set<string>> = {} // musician_id -> set of downloaded file_ids
 
     if (fileIds.length > 0) {
       const { data: downloads } = await supabase
@@ -58,12 +112,10 @@ export async function GET(
 
       if (downloads) {
         for (const dl of downloads) {
-          // Count unique file downloads per musician
-          const key = `${dl.musician_id}-${dl.file_id}`
           if (!downloadsByMusician[dl.musician_id]) {
-            downloadsByMusician[dl.musician_id] = 0
+            downloadsByMusician[dl.musician_id] = new Set()
           }
-          downloadsByMusician[dl.musician_id]++
+          downloadsByMusician[dl.musician_id].add(dl.file_id)
         }
       }
     }
@@ -72,11 +124,18 @@ export async function GET(
       sendId: latestSend.id,
       sentAt: latestSend.sent_at,
       musicianCount: latestSend.musician_count,
-      totalFiles: fileIds.length,
-      confirmations: (confirmations || []).map((c: any) => ({
-        ...c,
-        downloadCount: downloadsByMusician[c.musician_id] || 0,
-      })),
+      confirmations: (confirmations || []).map((c: any) => {
+        const musicianFileIds = getFileIdsForMusician(c.musician_id)
+        const downloadedSet = downloadsByMusician[c.musician_id] || new Set()
+        // Only count downloads of files this musician actually has access to
+        const downloadCount = musicianFileIds.filter((id) => downloadedSet.has(id)).length
+
+        return {
+          ...c,
+          totalFiles: getFileCountForMusician(c.musician_id),
+          downloadCount,
+        }
+      }),
     })
   } catch (error) {
     console.error('Failed to fetch music status:', error)

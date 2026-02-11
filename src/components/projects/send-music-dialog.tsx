@@ -19,6 +19,7 @@ interface MusicConfirmationStatus {
   musician_id: string
   confirmed_at: string | null
   downloadCount: number
+  totalFiles: number
   musician: {
     id: string
     first_name: string
@@ -66,7 +67,6 @@ export function SendMusicDialog({
   const [loadingStatus, setLoadingStatus] = useState(false)
   const [notes, setNotes] = useState('')
   const [showConfirmSend, setShowConfirmSend] = useState(false)
-  const [totalFiles, setTotalFiles] = useState(0)
 
   // Confirmed musicians
   const filledPositions = positions.filter(
@@ -91,7 +91,6 @@ export function SendMusicDialog({
           setSendId(data.sendId)
           setSent(true)
           setConfirmations(data.confirmations || [])
-          setTotalFiles(data.totalFiles || 0)
         }
       }
     } catch {
@@ -216,7 +215,7 @@ export function SendMusicDialog({
                       {conf.musician.first_name} {conf.musician.last_name}
                     </span>
                     <span className="text-xs text-muted-foreground ml-2">
-                      {conf.downloadCount} / {totalFiles} files downloaded
+                      {conf.downloadCount} / {conf.totalFiles} files downloaded
                     </span>
                   </div>
                   {conf.confirmed_at ? (
