@@ -135,11 +135,18 @@ export async function POST(
       footerText: organization?.email_footer_text,
     }
 
-    // Send email to each musician with their specific files
+    // Build a map of musician_id → confirmation token
+    const tokenByMusician: Record<string, string> = {}
+    for (const conf of confirmations) {
+      tokenByMusician[conf.musician_id] = conf.token
+    }
+
+    // Send email to each musician with their specific files + direct download links
     let sentCount = 0
     for (const pos of filledPositions) {
       const musician = pos.musician as any
       const instrumentId = pos.instrument_id
+      const token = tokenByMusician[pos.musician_id]
 
       // Determine which files this musician gets
       const musicianFiles = files.filter((f: any) => {
@@ -155,7 +162,7 @@ export async function POST(
 
       if (musicianFiles.length === 0) continue
 
-      const portalUrl = `${baseUrl}/musician/music?project=${projectId}`
+      const confirmUrl = `${baseUrl}/confirm-music/${token}`
 
       try {
         const result = await sendMusicUploadedEmail({
@@ -166,8 +173,9 @@ export async function POST(
           files: musicianFiles.map((f: any) => ({
             name: f.file_name,
             size: f.file_size,
+            downloadUrl: `${baseUrl}/api/music-download/${f.id}?token=${token}`,
           })),
-          portalUrl,
+          confirmUrl,
           notes,
           branding,
         })

@@ -132,7 +132,8 @@ export async function POST(
       const musicianFiles = getFilesForMusician(conf.musician_id)
       if (musicianFiles.length === 0) continue
 
-      const portalUrl = `${baseUrl}/musician/music?project=${projectId}`
+      const token = conf.token
+      const confirmUrl = `${baseUrl}/confirm-music/${token}`
 
       try {
         const result = await sendMusicReminderEmail({
@@ -143,8 +144,9 @@ export async function POST(
           files: musicianFiles.map((f: any) => ({
             name: f.file_name,
             size: f.file_size,
+            downloadUrl: `${baseUrl}/api/music-download/${f.id}?token=${token}`,
           })),
-          portalUrl,
+          confirmUrl,
           branding,
         })
 

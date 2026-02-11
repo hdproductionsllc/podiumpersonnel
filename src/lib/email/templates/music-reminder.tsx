@@ -6,6 +6,7 @@ import {
   Section,
   Text,
   Button,
+  Link,
   Hr,
   Preview,
   Img,
@@ -19,8 +20,9 @@ interface MusicReminderEmailProps {
   files: {
     name: string
     size: number
+    downloadUrl: string
   }[]
-  portalUrl: string
+  confirmUrl: string
   branding?: EmailBranding
 }
 
@@ -35,7 +37,7 @@ export function MusicReminderEmail({
   organizationName,
   projectName,
   files,
-  portalUrl,
+  confirmUrl,
   branding,
 }: MusicReminderEmailProps) {
   const brandColor = branding?.brandColor || '#1E293B'
@@ -67,24 +69,35 @@ export function MusicReminderEmail({
             <Text style={greeting}>Hi {musicianName},</Text>
 
             <Text style={paragraph}>
-              This is a reminder to download and confirm your music for <strong>{projectName}</strong>.
+              This is a reminder to download your music for <strong>{projectName}</strong>.
+              Click each file below to download directly.
             </Text>
 
             <Text style={subheading}>Files:</Text>
             {files.map((file, index) => (
-              <Text key={index} style={fileItem}>
-                {file.name} ({formatFileSize(file.size)})
-              </Text>
+              <Section key={index} style={fileRow}>
+                <Link href={file.downloadUrl} style={fileLink}>
+                  {file.name}
+                </Link>
+                <Text style={fileSizeText}>
+                  {formatFileSize(file.size)}
+                </Text>
+              </Section>
             ))}
 
+            <Hr style={divider} />
+
+            <Text style={paragraph}>
+              After downloading, please confirm receipt:
+            </Text>
+
             <Section style={buttonContainer}>
-              <Button style={{ ...button, backgroundColor: brandColor }} href={portalUrl}>
-                Download Music
+              <Button style={{ ...button, backgroundColor: brandColor }} href={confirmUrl}>
+                Confirm Music Received
               </Button>
             </Section>
 
             <Text style={smallText}>
-              Please download all files and confirm receipt in your portal.
               Questions? Just reply to this email.
             </Text>
           </Section>
@@ -152,19 +165,35 @@ const subheading = {
   fontSize: '14px',
   fontWeight: 'bold' as const,
   color: '#1E293B',
-  marginBottom: '8px',
+  marginBottom: '12px',
 }
 
-const fileItem = {
-  fontSize: '14px',
-  color: '#525f7f',
-  marginBottom: '4px',
+const fileRow = {
+  marginBottom: '8px',
   paddingLeft: '8px',
+}
+
+const fileLink = {
+  fontSize: '14px',
+  color: '#2563EB',
+  textDecoration: 'underline',
+  fontWeight: '500' as const,
+}
+
+const fileSizeText = {
+  fontSize: '12px',
+  color: '#8898aa',
+  margin: '2px 0 0 0',
+}
+
+const divider = {
+  borderColor: '#e6ebf1',
+  margin: '24px 0',
 }
 
 const buttonContainer = {
   textAlign: 'center' as const,
-  marginTop: '24px',
+  marginTop: '16px',
   marginBottom: '16px',
 }
 

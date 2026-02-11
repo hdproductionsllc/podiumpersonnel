@@ -959,8 +959,8 @@ interface SendMusicUploadedEmailParams {
   musicianName: string
   organizationName: string
   projectName: string
-  files: { name: string; size: number }[]
-  portalUrl: string
+  files: { name: string; size: number; downloadUrl: string }[]
+  confirmUrl: string
   notes?: string
   branding?: EmailBranding
 }
@@ -972,7 +972,7 @@ export async function sendMusicUploadedEmail(params: SendMusicUploadedEmailParam
       organizationName: params.organizationName,
       projectName: params.projectName,
       files: params.files,
-      portalUrl: params.portalUrl,
+      confirmUrl: params.confirmUrl,
       notes: params.notes,
       branding: params.branding,
     })
@@ -999,8 +999,8 @@ interface SendMusicReminderEmailParams {
   musicianName: string
   organizationName: string
   projectName: string
-  files: { name: string; size: number }[]
-  portalUrl: string
+  files: { name: string; size: number; downloadUrl: string }[]
+  confirmUrl: string
   branding?: EmailBranding
 }
 
@@ -1011,7 +1011,7 @@ export async function sendMusicReminderEmail(params: SendMusicReminderEmailParam
       organizationName: params.organizationName,
       projectName: params.projectName,
       files: params.files,
-      portalUrl: params.portalUrl,
+      confirmUrl: params.confirmUrl,
       branding: params.branding,
     })
   )
