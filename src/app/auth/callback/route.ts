@@ -22,6 +22,37 @@ export async function GET(request: Request) {
           .maybeSingle()
 
         if (!membership) {
+          // Check if they have musician records — they may have landed on the wrong login
+          const { data: musicianRecords } = await supabase
+            .from('musicians')
+            .select('id')
+            .eq('user_id', user.id)
+            .limit(1)
+            .maybeSingle()
+
+          if (musicianRecords) {
+            return NextResponse.redirect(`${origin}/musician`)
+          }
+
+          // Try linking by email in case they're a musician who hasn't been linked yet
+          if (user.email) {
+            await supabase.rpc('link_musician_records_to_user', {
+              p_user_id: user.id,
+              p_email: user.email.toLowerCase(),
+            })
+
+            const { data: linkedMusician } = await supabase
+              .from('musicians')
+              .select('id')
+              .eq('user_id', user.id)
+              .limit(1)
+              .maybeSingle()
+
+            if (linkedMusician) {
+              return NextResponse.redirect(`${origin}/musician`)
+            }
+          }
+
           return NextResponse.redirect(`${origin}/onboarding`)
         }
       }

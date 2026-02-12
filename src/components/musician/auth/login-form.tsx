@@ -131,6 +131,19 @@ export function MusicianLoginForm() {
           .limit(1)
 
         if (!linkedMusicians || linkedMusicians.length === 0) {
+          // Check if they're an org admin who landed on the wrong login page
+          const { data: orgMember } = await supabase
+            .from('organization_members')
+            .select('id')
+            .eq('user_id', authData.user.id)
+            .limit(1)
+            .maybeSingle()
+
+          if (orgMember) {
+            router.push('/dashboard')
+            return
+          }
+
           await supabase.auth.signOut()
           setError('No musician records found for this email. Please contact your organization to get added to their roster.')
           setIsLoading(false)

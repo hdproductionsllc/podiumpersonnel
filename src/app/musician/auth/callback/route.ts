@@ -28,11 +28,29 @@ export async function GET(request: Request) {
         p_email: (data.user.email || '').toLowerCase(),
       })
 
-      // Check if this is a first-time login (no portal_last_login yet)
+      // Check if this user has any linked musician records
       const { data: musicians } = await supabase
         .from('musicians')
         .select('id, first_name, last_name, portal_last_login, organization:organizations(name)')
         .eq('user_id', data.user.id)
+
+      // No musician records found — check if they're an org admin, otherwise reject
+      if (!musicians || musicians.length === 0) {
+        const { data: orgMember } = await supabase
+          .from('organization_members')
+          .select('id')
+          .eq('user_id', data.user.id)
+          .limit(1)
+          .maybeSingle()
+
+        if (orgMember) {
+          // This is an org admin who landed on the musician login — send them to the admin dashboard
+          return NextResponse.redirect(`${origin}/dashboard`)
+        }
+
+        await supabase.auth.signOut()
+        return NextResponse.redirect(`${origin}/musician/login?error=no_musician_records`)
+      }
 
       const isFirstLogin = musicians && musicians.length > 0 &&
         musicians.every((m: any) => !m.portal_last_login)
