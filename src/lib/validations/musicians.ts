@@ -38,6 +38,21 @@ export const musicianSchema = z.object({
     .or(z.literal('')),
   is_active: z.boolean(),
   instrument_ids: z.array(z.string()).optional(),
+  street_address: z
+    .string()
+    .max(255, 'Street address must be less than 255 characters')
+    .optional()
+    .or(z.literal('')),
+  city: z
+    .string()
+    .max(100, 'City must be less than 100 characters')
+    .optional()
+    .or(z.literal('')),
+  state: z
+    .string()
+    .length(2, 'State must be a 2-letter code')
+    .optional()
+    .or(z.literal('')),
   zip_code: z
     .string()
     .max(10, 'Zip code must be less than 10 characters')

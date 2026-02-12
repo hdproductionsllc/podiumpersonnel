@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createClient } from '@/lib/supabase/client'
 import { musicianSchema, type MusicianInput, HOME_REGIONS } from '@/lib/validations/musicians'
+import { getRegionFromZip, US_STATES } from '@/lib/zip-region-map'
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,17 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import type { MusicianWithInstruments, InstrumentOption } from './musicians-client'
+
+function formatPhoneNumber(phone: string): string {
+  const digits = phone.replace(/\D/g, '')
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+  }
+  if (digits.length === 11 && digits[0] === '1') {
+    return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`
+  }
+  return phone
+}
 
 interface MusicianFormDialogProps {
   open: boolean
@@ -59,6 +71,9 @@ export function MusicianFormDialog({
       notes: '',
       is_active: true,
       instrument_ids: [],
+      street_address: '',
+      city: '',
+      state: '',
       zip_code: '',
       home_region: '',
       service_radius_miles: 50,
@@ -79,6 +94,9 @@ export function MusicianFormDialog({
       m.is_leader ||
       m.home_region ||
       m.zip_code ||
+      (m as any).street_address ||
+      (m as any).city ||
+      (m as any).state ||
       (m.service_radius_miles !== undefined && m.service_radius_miles !== null && m.service_radius_miles !== 50) ||
       !m.is_active
     )
@@ -99,6 +117,9 @@ export function MusicianFormDialog({
           notes: musician.notes || '',
           is_active: musician.is_active,
           instrument_ids: musician.musician_instruments.map((mi) => mi.instrument_id),
+          street_address: (musician as any).street_address || '',
+          city: (musician as any).city || '',
+          state: (musician as any).state || '',
           zip_code: (musician as any).zip_code || '',
           home_region: (musician as any).home_region || '',
           service_radius_miles: (musician as any).service_radius_miles ?? 50,
@@ -120,6 +141,9 @@ export function MusicianFormDialog({
           notes: '',
           is_active: true,
           instrument_ids: [],
+          street_address: '',
+          city: '',
+          state: '',
           zip_code: '',
           home_region: '',
           service_radius_miles: 50,
@@ -152,6 +176,9 @@ export function MusicianFormDialog({
           phone: data.phone || null,
           notes: data.notes || null,
           is_active: data.is_active,
+          street_address: data.street_address || null,
+          city: data.city || null,
+          state: data.state || null,
           zip_code: data.zip_code || null,
           home_region: data.home_region || null,
           service_radius_miles: data.service_radius_miles ?? 50,
@@ -210,6 +237,9 @@ export function MusicianFormDialog({
           phone: data.phone || null,
           notes: data.notes || null,
           is_active: data.is_active,
+          street_address: data.street_address || null,
+          city: data.city || null,
+          state: data.state || null,
           zip_code: data.zip_code || null,
           home_region: data.home_region || null,
           service_radius_miles: data.service_radius_miles ?? 50,
@@ -397,7 +427,16 @@ export function MusicianFormDialog({
                         <FormItem>
                           <FormLabel>Phone</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. (555) 123-4567" {...field} />
+                            <Input
+                              placeholder="e.g. (555) 123-4567"
+                              {...field}
+                              onBlur={(e) => {
+                                if (e.target.value) {
+                                  field.onChange(formatPhoneNumber(e.target.value))
+                                }
+                                field.onBlur()
+                              }}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -444,30 +483,59 @@ export function MusicianFormDialog({
                     />
                   </div>
 
+                  {/* Address & Service Area */}
                   <FormField
                     control={form.control}
-                    name="home_region"
+                    name="street_address"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Home Region</FormLabel>
+                        <FormLabel>Street Address</FormLabel>
                         <FormControl>
-                          <select
-                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                            value={field.value ?? ''}
-                            onChange={(e) => field.onChange(e.target.value)}
-                          >
-                            <option value="">Select a region...</option>
-                            {HOME_REGIONS.map((region) => (
-                              <option key={region} value={region}>{region}</option>
-                            ))}
-                          </select>
+                          <Input placeholder="e.g. 123 Main St" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="city"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>City</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g. Los Angeles" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="state"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>State</FormLabel>
+                          <FormControl>
+                            <select
+                              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              value={field.value ?? ''}
+                              onChange={(e) => field.onChange(e.target.value)}
+                            >
+                              <option value="">Select...</option>
+                              {US_STATES.map((s) => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
                     <FormField
                       control={form.control}
                       name="zip_code"
@@ -475,7 +543,45 @@ export function MusicianFormDialog({
                         <FormItem>
                           <FormLabel>Zip Code</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. 90210" {...field} />
+                            <Input
+                              placeholder="e.g. 90210"
+                              {...field}
+                              onBlur={(e) => {
+                                field.onBlur()
+                                const zip = e.target.value
+                                if (zip) {
+                                  const region = getRegionFromZip(zip)
+                                  if (region) {
+                                    form.setValue('home_region', region)
+                                  }
+                                }
+                              }}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="home_region"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Home Region</FormLabel>
+                          <FormControl>
+                            <select
+                              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              value={field.value ?? ''}
+                              onChange={(e) => field.onChange(e.target.value)}
+                            >
+                              <option value="">Select a region...</option>
+                              {HOME_REGIONS.map((region) => (
+                                <option key={region} value={region}>{region}</option>
+                              ))}
+                            </select>
                           </FormControl>
                           <FormMessage />
                         </FormItem>

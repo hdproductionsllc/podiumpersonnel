@@ -46,6 +46,9 @@ export type MusicianInstrumentJoin = {
 export type MusicianWithInstruments = Musician & {
   musician_instruments: MusicianInstrumentJoin[]
   tags?: string[]
+  street_address?: string | null
+  city?: string | null
+  state?: string | null
   zip_code?: string | null
   home_region?: string | null
   service_radius_miles?: number | null
@@ -134,7 +137,7 @@ export function MusiciansClient({
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
 
   // Sort state
-  type SortColumn = 'name' | 'email' | 'phone' | 'tags' | 'status' | 'call_order' | 'home_region'
+  type SortColumn = 'name' | 'email' | 'phone' | 'location' | 'tags' | 'status' | 'call_order' | 'home_region'
   const [sortColumn, setSortColumn] = useState<SortColumn>('call_order')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
@@ -259,6 +262,14 @@ export function MusiciansClient({
           if (!bPhone) return -1
           return aPhone.localeCompare(bPhone) * dir
         }
+        case 'location': {
+          const aLoc = [a.city, a.state].filter(Boolean).join(', ').toLowerCase()
+          const bLoc = [b.city, b.state].filter(Boolean).join(', ').toLowerCase()
+          if (!aLoc && !bLoc) return 0
+          if (!aLoc) return 1
+          if (!bLoc) return -1
+          return aLoc.localeCompare(bLoc) * dir
+        }
         case 'tags': {
           const aTags = (a.tags || []).sort().join(', ').toLowerCase()
           const bTags = (b.tags || []).sort().join(', ').toLowerCase()
@@ -350,6 +361,14 @@ export function MusiciansClient({
           if (!aPhone) return 1
           if (!bPhone) return -1
           return aPhone.localeCompare(bPhone) * dir
+        }
+        case 'location': {
+          const aLoc = [a.city, a.state].filter(Boolean).join(', ').toLowerCase()
+          const bLoc = [b.city, b.state].filter(Boolean).join(', ').toLowerCase()
+          if (!aLoc && !bLoc) return 0
+          if (!aLoc) return 1
+          if (!bLoc) return -1
+          return aLoc.localeCompare(bLoc) * dir
         }
         case 'tags': {
           const aTags = (a.tags || []).sort().join(', ').toLowerCase()
@@ -506,6 +525,11 @@ export function MusiciansClient({
               {formatPhoneNumber(musician.phone)}
             </a>
           ) : '\u2014'}
+        </td>
+        <td className="px-4 py-2 text-muted-foreground whitespace-nowrap">
+          {musician.city || musician.state
+            ? [musician.city, musician.state].filter(Boolean).join(', ')
+            : '\u2014'}
         </td>
         <td className="px-4 py-2 text-muted-foreground">
           {musician.home_region || '\u2014'}
@@ -1435,6 +1459,12 @@ export function MusiciansClient({
                               <th className="w-[220px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
                               <th className="w-[120px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
                               <th
+                                className="w-[130px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
+                                onClick={() => handleSort('location')}
+                              >
+                                Location <SortIcon column="location" />
+                              </th>
+                              <th
                                 className="w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('home_region')}
                               >
@@ -1537,6 +1567,12 @@ export function MusiciansClient({
                               </th>
                               <th className="w-[220px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
                               <th className="w-[120px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
+                              <th
+                                className="w-[130px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
+                                onClick={() => handleSort('location')}
+                              >
+                                Location <SortIcon column="location" />
+                              </th>
                               <th
                                 className="w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('home_region')}

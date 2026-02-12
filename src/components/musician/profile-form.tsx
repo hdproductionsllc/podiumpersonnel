@@ -29,7 +29,9 @@ import {
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
-import { Building, Check, Loader2, Upload, FileText, X, DollarSign } from 'lucide-react'
+import { Building, Check, Loader2, Upload, FileText, X, DollarSign, MapPin } from 'lucide-react'
+import { getRegionFromZip, US_STATES } from '@/lib/zip-region-map'
+import { HOME_REGIONS } from '@/lib/validations/musicians'
 
 function formatPhoneNumber(phone: string): string {
   const digits = phone.replace(/\D/g, '')
@@ -46,6 +48,11 @@ const profileSchema = z.object({
   first_name: z.string().min(1, 'First name is required'),
   last_name: z.string().min(1, 'Last name is required'),
   phone: z.string().optional(),
+  street_address: z.string().max(255).optional().or(z.literal('')),
+  city: z.string().max(100).optional().or(z.literal('')),
+  state: z.string().optional().or(z.literal('')),
+  zip_code: z.string().max(10).optional().or(z.literal('')),
+  home_region: z.string().optional().or(z.literal('')),
 })
 
 const passwordSchema = z.object({
@@ -79,6 +86,11 @@ interface ProfileFormProps {
     email: string | null
     phone: string | null
     profile_photo_url: string | null
+    street_address: string | null
+    city: string | null
+    state: string | null
+    zip_code: string | null
+    home_region: string | null
     w9_on_file: boolean
     w9_file_url: string | null
     zelle_method: 'email' | 'phone' | null
@@ -127,6 +139,11 @@ export function ProfileForm({
       first_name: musician.first_name,
       last_name: musician.last_name,
       phone: musician.phone || '',
+      street_address: musician.street_address || '',
+      city: musician.city || '',
+      state: musician.state || '',
+      zip_code: musician.zip_code || '',
+      home_region: musician.home_region || '',
     },
   })
 
@@ -213,6 +230,11 @@ export function ProfileForm({
           first_name: profileData.first_name,
           last_name: profileData.last_name,
           phone: profileData.phone ? formatPhoneNumber(profileData.phone) : '',
+          street_address: profileData.street_address,
+          city: profileData.city,
+          state: profileData.state,
+          zip_code: profileData.zip_code,
+          home_region: profileData.home_region,
           zelle_method: zelleMethod,
         }),
       })
@@ -487,6 +509,131 @@ export function ProfileForm({
                 )}
               />
 
+            </div>
+          </Form>
+        </CardContent>
+      </Card>
+
+      {/* Home Address */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5" />
+            Home Address
+          </CardTitle>
+          <CardDescription>
+            Your address helps match you with nearby gigs
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Form {...profileForm}>
+            <div className="space-y-4">
+              <FormField
+                control={profileForm.control}
+                name="street_address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Street Address</FormLabel>
+                    <FormControl>
+                      <Input placeholder="123 Main St" disabled={isReadOnly} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <FormField
+                  control={profileForm.control}
+                  name="city"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>City</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Los Angeles" disabled={isReadOnly} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={profileForm.control}
+                  name="state"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>State</FormLabel>
+                      <FormControl>
+                        <select
+                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                          value={field.value ?? ''}
+                          onChange={(e) => field.onChange(e.target.value)}
+                          disabled={isReadOnly}
+                        >
+                          <option value="">Select...</option>
+                          {US_STATES.map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={profileForm.control}
+                  name="zip_code"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Zip Code</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="90210"
+                          disabled={isReadOnly}
+                          {...field}
+                          onBlur={(e) => {
+                            field.onBlur()
+                            const zip = e.target.value
+                            if (zip) {
+                              const region = getRegionFromZip(zip)
+                              if (region) {
+                                profileForm.setValue('home_region', region, { shouldDirty: true })
+                              }
+                            }
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={profileForm.control}
+                name="home_region"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Service Region</FormLabel>
+                    <FormControl>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                        value={field.value ?? ''}
+                        onChange={(e) => field.onChange(e.target.value)}
+                        disabled={isReadOnly}
+                      >
+                        <option value="">Select a region...</option>
+                        {HOME_REGIONS.map((region) => (
+                          <option key={region} value={region}>{region}</option>
+                        ))}
+                      </select>
+                    </FormControl>
+                    <FormDescription>
+                      Auto-filled from zip code, but you can change it
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
           </Form>
         </CardContent>

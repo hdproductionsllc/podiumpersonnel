@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email/send'
 import { getAppUrl } from '@/lib/utils'
+import { getRegionFromZip } from '@/lib/zip-region-map'
 
 export async function GET() {
   const supabase = await createClient()
@@ -25,6 +26,11 @@ export async function GET() {
       email,
       phone,
       profile_photo_url,
+      street_address,
+      city,
+      state,
+      zip_code,
+      home_region,
       w9_on_file,
       w9_file_url,
       zelle_method,
@@ -83,7 +89,7 @@ export async function PATCH(request: Request) {
   }
 
   const body = await request.json()
-  const { first_name, last_name, phone, zelle_method, w9_on_file, w9_file_url } = body
+  const { first_name, last_name, phone, street_address, city, state, zip_code, home_region, zelle_method, w9_on_file, w9_file_url } = body
 
   // Build update payload — only include fields that were provided
   const updatePayload: Record<string, any> = {
@@ -93,6 +99,16 @@ export async function PATCH(request: Request) {
   if (first_name !== undefined) updatePayload.first_name = first_name
   if (last_name !== undefined) updatePayload.last_name = last_name
   if (phone !== undefined) updatePayload.phone = phone
+  if (street_address !== undefined) updatePayload.street_address = street_address || null
+  if (city !== undefined) updatePayload.city = city || null
+  if (state !== undefined) updatePayload.state = state || null
+  if (zip_code !== undefined) updatePayload.zip_code = zip_code || null
+  if (home_region !== undefined) updatePayload.home_region = home_region || null
+  // Auto-populate home_region from zip when zip changes but home_region wasn't explicitly set
+  if (zip_code !== undefined && home_region === undefined) {
+    const autoRegion = getRegionFromZip(zip_code || '')
+    if (autoRegion) updatePayload.home_region = autoRegion
+  }
   if (zelle_method !== undefined) updatePayload.zelle_method = zelle_method || null
   if (w9_on_file !== undefined) updatePayload.w9_on_file = w9_on_file
   if (w9_file_url !== undefined) updatePayload.w9_file_url = w9_file_url
