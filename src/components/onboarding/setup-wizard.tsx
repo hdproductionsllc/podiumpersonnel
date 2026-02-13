@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Logo } from '@/components/ui/logo'
 
 function SidebarTab({ label }: { label: string }) {
   return (
@@ -24,11 +25,7 @@ const STEPS = [
         Your orchestral instruments are already pre-loaded. Here&apos;s a quick overview of how Podium works to help you manage your personnel.
       </p>
     ),
-    icon: (
-      <svg className="h-12 w-12 text-primary" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 9 10.5-3m0 6.553v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 1 1-.99-3.467l2.31-.66a2.25 2.25 0 0 0 1.632-2.163Zm0 0V4.103A2.25 2.25 0 0 0 17.378 2h-.403a2.25 2.25 0 0 0-1.5.563L9 9m10.5-3H9m0 0v7.5" />
-      </svg>
-    ),
+    icon: <Logo variant="dark" size="md" />,
   },
   {
     title: 'Build Your Roster & Set Your Call Order',

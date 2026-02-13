@@ -146,12 +146,19 @@ export function BookFormDialog({
     }
   }, [open, book, form])
 
-  // Auto-fill name when preset changes
+  // Auto-fill name when preset changes (always update unless user typed a custom name)
   function handlePresetChange(presetId: string) {
+    const previousPreset = ENSEMBLE_PRESETS.find(p => p.id === selectedPreset)
     setSelectedPreset(presetId)
-    const preset = ENSEMBLE_PRESETS.find(p => p.id === presetId)
-    if (preset && presetId !== 'empty' && !form.getValues('name')) {
-      form.setValue('name', preset.name)
+    const newPreset = ENSEMBLE_PRESETS.find(p => p.id === presetId)
+    const currentName = form.getValues('name')
+
+    // Update name if: field is empty, or still matches a preset name (not manually edited)
+    const isDefaultName = !currentName || ENSEMBLE_PRESETS.some(p => p.name === currentName)
+    if (newPreset && presetId !== 'empty' && isDefaultName) {
+      form.setValue('name', newPreset.name)
+    } else if (presetId === 'empty' && isDefaultName) {
+      form.setValue('name', '')
     }
   }
 

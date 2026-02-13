@@ -108,7 +108,12 @@ export function GroupTextDialog({
       const phones = getAllPhones()
       if (phones.length > 0) {
         const body = encodeURIComponent(message.trim())
-        window.location.href = `sms:${phones.join(',')}?&body=${body}`
+        // iOS uses ; to separate recipients, Android uses ,
+        // Use /open?addresses= format for broadest multi-recipient support
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+        const separator = isIOS ? ';' : ','
+        const bodyParam = isIOS ? '&body=' : '?body='
+        window.location.href = `sms:${phones.join(separator)}${bodyParam}${body}`
       }
 
       onOpenChange(false)
