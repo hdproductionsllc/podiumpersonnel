@@ -592,10 +592,16 @@ export function ProjectPositions({
           if (applyPayToRemaining?.customPay) {
             setSuggestedCustomPay(applyPayToRemaining.customPay)
           }
-          // Check if all positions are now filled
-          const vacantAfter = positions.filter(p => p.status === 'vacant' && p.id !== offerPositionId).length
-          if (vacantAfter === 0 && positions.length > 0) {
-            toast.success('Fully staffed! All positions are filled.')
+          // Check staffing progress after this offer
+          if (positions.length > 0) {
+            const otherPositions = positions.filter(p => p.id !== offerPositionId)
+            const allConfirmed = otherPositions.every(p => p.status === 'confirmed')
+            const noneVacant = otherPositions.every(p => p.status !== 'vacant')
+            if (allConfirmed) {
+              toast.success('Fully staffed! All positions are confirmed.')
+            } else if (noneVacant) {
+              toast.success('All positions offered — waiting on responses.')
+            }
           }
           onPositionChange()
         }}
