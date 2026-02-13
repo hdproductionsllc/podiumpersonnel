@@ -174,7 +174,7 @@ export function MusiciansClient({
     )
     if (activeWithInstruments.length === 0) return false
     return activeWithInstruments.every(
-      (m) => m.call_order === null || m.call_order === undefined || m.call_order === 100
+      (m) => m.call_order === null || m.call_order === undefined
     )
   }, [musicians])
 

@@ -328,7 +328,7 @@ export function ProjectOffers({
                             <span className={candidate.has_conflict ? 'text-muted-foreground line-through' : ''}>
                               {candidate.first_name} {candidate.last_name}
                               {candidate.is_leader && ' ★'}
-                              {candidate.call_order < 100 && ` (#${candidate.call_order})`}
+                              {candidate.call_order != null && ` (#${candidate.call_order})`}
                             </span>
                             <Button
                               variant="outline"

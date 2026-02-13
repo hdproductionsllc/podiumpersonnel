@@ -156,7 +156,7 @@ export async function getNextCandidates(
     }
 
     // Then by call order
-    return (a.call_order ?? 100) - (b.call_order ?? 100)
+    return (a.call_order ?? 999999) - (b.call_order ?? 999999)
   })
 
   const totalAvailable = candidates.filter(c => !c.has_conflict).length

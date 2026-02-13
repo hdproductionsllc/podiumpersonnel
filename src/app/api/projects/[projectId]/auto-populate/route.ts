@@ -130,7 +130,7 @@ export async function POST(
       }
 
       // Then by call order
-      return (a.call_order ?? 100) - (b.call_order ?? 100)
+      return (a.call_order ?? 999999) - (b.call_order ?? 999999)
     })
 
     // Pick top musician (or the one from book entry if specified)

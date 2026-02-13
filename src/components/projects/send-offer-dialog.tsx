@@ -136,7 +136,7 @@ export function SendOfferDialog({
             if (a.is_leader && !b.is_leader) return -1
             if (!a.is_leader && b.is_leader) return 1
           }
-          return (a.call_order ?? 100) - (b.call_order ?? 100)
+          return (a.call_order ?? 999999) - (b.call_order ?? 999999)
         })
       if (available.length > 0) {
         setSelectedMusicianId(available[0].id)
@@ -187,7 +187,7 @@ export function SendOfferDialog({
       if (a.is_leader && !b.is_leader) return -1
       if (!a.is_leader && b.is_leader) return 1
     }
-    return (a.call_order ?? 100) - (b.call_order ?? 100)
+    return (a.call_order ?? 999999) - (b.call_order ?? 999999)
   }
 
   const instrumentMusicians = allAvailable.filter(playsInstrument).sort(sortByCallOrder)
@@ -556,7 +556,7 @@ export function SendOfferDialog({
                                       )}
                                     </div>
                                     <div className="flex items-center gap-1 flex-shrink-0">
-                                      {m.call_order != null && m.call_order < 100 && (
+                                      {m.call_order != null && (
                                         <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium">
                                           #{m.call_order}
                                         </span>
@@ -610,7 +610,7 @@ export function SendOfferDialog({
                                           )}
                                         </div>
                                         <div className="flex items-center gap-1 flex-shrink-0">
-                                          {m.call_order != null && m.call_order < 100 && (
+                                          {m.call_order != null && (
                                             <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium">
                                               #{m.call_order}
                                             </span>

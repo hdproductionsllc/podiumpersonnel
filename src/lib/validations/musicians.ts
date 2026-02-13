@@ -71,7 +71,9 @@ export const musicianSchema = z.object({
   call_order: z
     .number()
     .min(1, 'Call order must be at least 1')
-    .max(999, 'Call order must be less than 1000'),
+    .max(999, 'Call order must be less than 1000')
+    .optional()
+    .nullable(),
   is_leader: z.boolean(),
   w9_on_file: z.boolean(),
   zelle_method: z.enum(['email', 'phone', '']).optional().nullable(),
