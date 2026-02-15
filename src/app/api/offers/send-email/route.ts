@@ -75,12 +75,16 @@ export async function POST(request: NextRequest) {
 
     // Calculate pay
     const chairNumber = position?.chair_number || 1
-    // Use explicit leader fee flag from dialog if provided, otherwise fall back to chair number
-    const isLeader = explicitLeaderFee != null ? !!explicitLeaderFee : chairNumber === 1
     const firstService = services.length > 0 ? services[0] : null
     const basePay = firstService?.base_pay ?? null
+    const hasCustomPay = (offer as any).custom_pay != null
+
+    // Leader fee logic: only include if explicitly requested from the dialog.
+    // When custom_pay is set, the pay was already finalized at offer creation time —
+    // don't guess based on chair number, or the email will incorrectly show a leader fee breakdown.
+    const isLeader = explicitLeaderFee != null ? !!explicitLeaderFee : (!hasCustomPay && chairNumber === 1)
     const leaderFee = explicitLeaderFeeAmount != null ? Number(explicitLeaderFeeAmount) : (firstService?.leader_fee ?? 0)
-    const payAmount = (offer as any).custom_pay != null
+    const payAmount = hasCustomPay
       ? Number((offer as any).custom_pay)
       : basePay != null
         ? basePay + (isLeader ? leaderFee : 0)

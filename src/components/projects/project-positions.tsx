@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Fragment } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -8,10 +8,20 @@ import { ImportFromBookDialog } from './import-from-book-dialog'
 import { AddPositionDialog } from './add-position-dialog'
 import { SavePresetDialog } from './save-preset-dialog'
 import { SendOfferDialog, type MusicianForOffer, type MusicianScheduleEntry } from './send-offer-dialog'
+import { AssignMusicianDialog } from './assign-musician-dialog'
 import { RequestSubDialog } from './request-sub-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
 import { getPositionTitle } from '@/lib/orchestra-positions'
 import type { Service } from '@/types'
+import { usePlan } from '@/components/providers/plan-provider'
+import { canUseSavedEnsembles } from '@/lib/plan'
 
 export type PositionOfferJoined = {
   id: string
@@ -22,7 +32,8 @@ export type PositionOfferJoined = {
   responded_at: string | null
   token: string
   custom_pay: number | null
-  musician: { id: string; first_name: string; last_name: string }
+  personal_message: string | null
+  musician: { id: string; first_name: string; last_name: string; email?: string | null }
 }
 
 export type PositionSubRequestJoined = {
@@ -68,6 +79,12 @@ export type BookForImport = {
   }[]
 }
 
+export type WaterfallTrigger = {
+  positionId: string
+  musicianId: string
+  customPay: number | null
+}
+
 interface ProjectPositionsProps {
   positions: PositionJoined[]
   projectId: string
@@ -77,6 +94,8 @@ interface ProjectPositionsProps {
   services: Service[]
   canManage: boolean
   onPositionChange: () => void
+  waterfallTrigger?: WaterfallTrigger | null
+  onWaterfallHandled?: () => void
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -141,7 +160,10 @@ export function ProjectPositions({
   services,
   canManage,
   onPositionChange,
+  waterfallTrigger,
+  onWaterfallHandled,
 }: ProjectPositionsProps) {
+  const plan = usePlan()
   const [importOpen, setImportOpen] = useState(false)
   const [addPositionOpen, setAddPositionOpen] = useState(false)
   const [addPositionMode, setAddPositionMode] = useState<'presets' | 'single'>('presets')
@@ -152,9 +174,31 @@ export function ProjectPositions({
   const [offerChairNumber, setOfferChairNumber] = useState<number>(1)
   const [offerExistingIds, setOfferExistingIds] = useState<string[]>([])
   const [suggestedCustomPay, setSuggestedCustomPay] = useState<string>('')
+  const [assignPositionId, setAssignPositionId] = useState<string | null>(null)
+  const [assignInstrumentId, setAssignInstrumentId] = useState<string | null>(null)
+  const [assignChairNumber, setAssignChairNumber] = useState<number>(1)
   const [subRequestPosition, setSubRequestPosition] = useState<PositionJoined | null>(null)
   const [unassignPosition, setUnassignPosition] = useState<PositionJoined | null>(null)
   const [unassigning, setUnassigning] = useState(false)
+  const [preSelectedMusicianId, setPreSelectedMusicianId] = useState<string | null>(null)
+
+  // Handle waterfall trigger from ProjectOffers
+  useEffect(() => {
+    if (waterfallTrigger) {
+      const position = positions.find(p => p.id === waterfallTrigger.positionId)
+      if (position) {
+        setOfferPositionId(position.id)
+        setOfferInstrumentId(position.instrument_id)
+        setOfferChairNumber(position.chair_number)
+        setOfferExistingIds(uniqueProjectOfferIds)
+        setPreSelectedMusicianId(waterfallTrigger.musicianId)
+        if (waterfallTrigger.customPay != null) {
+          setSuggestedCustomPay(waterfallTrigger.customPay.toString())
+        }
+      }
+      onWaterfallHandled?.()
+    }
+  }, [waterfallTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Get pay info from the first service (services should have consistent pay)
   const firstService = services[0]
@@ -192,6 +236,12 @@ export function ProjectPositions({
     setOfferInstrumentId(position.instrument_id)
     setOfferChairNumber(position.chair_number)
     setOfferExistingIds(uniqueProjectOfferIds)
+  }
+
+  function handleAssign(position: PositionJoined) {
+    setAssignPositionId(position.id)
+    setAssignInstrumentId(position.instrument_id)
+    setAssignChairNumber(position.chair_number)
   }
 
   // Group positions by section
@@ -324,7 +374,7 @@ export function ProjectPositions({
           )}
         </div>
         {canManage && (
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             {totalPositions > 0 && (
               <Button
                 size="sm"
@@ -342,11 +392,11 @@ export function ProjectPositions({
             <Button size="sm" variant="outline" onClick={() => { setAddPositionMode('single'); setAddPositionOpen(true) }}>
               Add Position
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+            <Button size="sm" variant="outline" onClick={() => setImportOpen(true)} disabled={!canUseSavedEnsembles(plan)} title={!canUseSavedEnsembles(plan) ? 'Pro feature' : undefined}>
               Import from Saved Ensemble
             </Button>
             {totalPositions > 0 && (
-              <Button size="sm" variant="outline" onClick={() => setSavePresetOpen(true)}>
+              <Button size="sm" variant="outline" onClick={() => setSavePresetOpen(true)} disabled={!canUseSavedEnsembles(plan)} title={!canUseSavedEnsembles(plan) ? 'Pro feature' : undefined}>
                 Save as Preset
               </Button>
             )}
@@ -367,6 +417,7 @@ export function ProjectPositions({
                 <th className="px-3 py-2 text-left font-medium text-xs">Chair</th>
                 <th className="px-3 py-2 text-left font-medium text-xs">Musician</th>
                 <th className="px-3 py-2 text-left font-medium text-xs">Status</th>
+                <th className="px-3 py-2 text-left font-medium text-xs">Pay</th>
                 {canManage && (
                   <th className="px-3 py-2 text-right font-medium text-xs">Actions</th>
                 )}
@@ -380,7 +431,7 @@ export function ProjectPositions({
                   <Fragment key={section}>
                     <tr>
                       <td
-                        colSpan={canManage ? 5 : 4}
+                        colSpan={canManage ? 6 : 5}
                         className="px-3 py-1.5 bg-muted/20 text-xs font-semibold text-muted-foreground"
                       >
                         {SECTION_LABELS[section]}
@@ -495,9 +546,33 @@ export function ProjectPositions({
                             )
                           })()}
                         </td>
+                        <td className="px-3 py-2 text-muted-foreground tabular-nums">
+                          {(() => {
+                            // Show pay from the relevant offer based on position status
+                            if (position.status === 'confirmed') {
+                              const acceptedOffer = position.contract_offers.find(o => o.status === 'accepted')
+                              return acceptedOffer?.custom_pay != null ? `$${acceptedOffer.custom_pay}` : '—'
+                            }
+                            if (position.status === 'offered') {
+                              const pendingOffer = position.contract_offers.find(o => o.status === 'pending' || o.status === 'viewed')
+                              return pendingOffer?.custom_pay != null ? `$${pendingOffer.custom_pay}` : '—'
+                            }
+                            return '—'
+                          })()}
+                        </td>
                         {canManage && (
                           <td className="px-3 py-2 text-right">
-                            <div className="flex items-center justify-end gap-1">
+                            {/* Desktop: inline buttons */}
+                            <div className="hidden md:flex items-center justify-end gap-1">
+                              {position.status !== 'confirmed' && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleAssign(position)}
+                                >
+                                  Assign
+                                </Button>
+                              )}
                               {position.status !== 'confirmed' && (
                                 <Button
                                   variant="ghost"
@@ -534,6 +609,49 @@ export function ProjectPositions({
                                   Remove
                                 </Button>
                               )}
+                            </div>
+                            {/* Mobile: dropdown menu */}
+                            <div className="md:hidden flex justify-end">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM12.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM18.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
+                                    </svg>
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {position.status !== 'confirmed' && (
+                                    <DropdownMenuItem onClick={() => handleAssign(position)}>
+                                      Assign
+                                    </DropdownMenuItem>
+                                  )}
+                                  {position.status !== 'confirmed' && (
+                                    <DropdownMenuItem onClick={() => handleSendOffer(position)}>
+                                      Offer
+                                    </DropdownMenuItem>
+                                  )}
+                                  {position.musician_id && (
+                                    <DropdownMenuItem onClick={() => handleUnassign(position)}>
+                                      Unassign
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuItem onClick={() => handleDuplicatePosition(position)}>
+                                    Add Chair
+                                  </DropdownMenuItem>
+                                  {position.status !== 'confirmed' && !position.musician_id && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        variant="destructive"
+                                        onClick={() => handleRemovePosition(position)}
+                                      >
+                                        Remove
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </td>
                         )}
@@ -575,7 +693,7 @@ export function ProjectPositions({
 
       <SendOfferDialog
         open={offerPositionId !== null}
-        onOpenChange={(open) => { if (!open) { setOfferPositionId(null); setOfferInstrumentId(null); setOfferChairNumber(1); setOfferExistingIds([]) } }}
+        onOpenChange={(open) => { if (!open) { setOfferPositionId(null); setOfferInstrumentId(null); setOfferChairNumber(1); setOfferExistingIds([]); setPreSelectedMusicianId(null) } }}
         positionId={offerPositionId ?? ''}
         instrumentId={offerInstrumentId ?? ''}
         instrumentName={offerInstrumentId ? positions.find(p => p.instrument_id === offerInstrumentId)?.instrument?.name : undefined}
@@ -588,6 +706,7 @@ export function ProjectPositions({
         projectEndDate={projectEndDate}
         nextVacantCount={offerInstrumentId ? positions.filter(p => p.instrument_id === offerInstrumentId && p.status === 'vacant' && p.id !== offerPositionId).length : 0}
         nextInstrumentName={offerInstrumentId ? positions.find(p => p.instrument_id === offerInstrumentId)?.instrument?.name : undefined}
+        preSelectedMusicianId={preSelectedMusicianId}
         onSuccess={(applyPayToRemaining) => {
           if (applyPayToRemaining?.customPay) {
             setSuggestedCustomPay(applyPayToRemaining.customPay)
@@ -613,6 +732,28 @@ export function ProjectPositions({
           if (nextVacant) {
             handleSendOffer(nextVacant)
           }
+        }}
+      />
+
+      <AssignMusicianDialog
+        open={assignPositionId !== null}
+        onOpenChange={(open) => { if (!open) { setAssignPositionId(null); setAssignInstrumentId(null); setAssignChairNumber(1) } }}
+        positionId={assignPositionId ?? ''}
+        instrumentId={assignInstrumentId ?? ''}
+        instrumentName={assignInstrumentId ? positions.find(p => p.instrument_id === assignInstrumentId)?.instrument?.name : undefined}
+        chairNumber={assignChairNumber}
+        musicians={musicians}
+        existingOfferMusicianIds={uniqueProjectOfferIds}
+        onSuccess={() => {
+          // Check staffing progress after this assignment
+          if (positions.length > 0) {
+            const otherPositions = positions.filter(p => p.id !== assignPositionId)
+            const allConfirmed = otherPositions.every(p => p.status === 'confirmed')
+            if (allConfirmed) {
+              toast.success('Fully staffed! All positions are confirmed.')
+            }
+          }
+          onPositionChange()
         }}
       />
 

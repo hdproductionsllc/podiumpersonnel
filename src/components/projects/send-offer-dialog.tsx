@@ -40,6 +40,7 @@ interface SendOfferDialogProps {
   projectEndDate?: string | null
   nextVacantCount?: number
   nextInstrumentName?: string
+  preSelectedMusicianId?: string | null
   onSuccess: (applyPayToRemaining?: { customPay: string }) => void
   onSendNext?: () => void
 }
@@ -61,6 +62,7 @@ export function SendOfferDialog({
   projectEndDate,
   nextVacantCount,
   nextInstrumentName,
+  preSelectedMusicianId,
   onSuccess,
   onSendNext,
 }: SendOfferDialogProps) {
@@ -90,6 +92,10 @@ export function SendOfferDialog({
   const [leaderFeeAmount, setLeaderFeeAmount] = useState<string>('')
   const [showSuccess, setShowSuccess] = useState(false)
   const [sentMusicianName, setSentMusicianName] = useState('')
+
+  // Warning states
+  const [declinedWarning, setDeclinedWarning] = useState<string | null>(null)
+  const [conflictWarnings, setConflictWarnings] = useState<{ projectName: string; dates: string }[]>([])
 
   // Search state for musician picker
   const [searchQuery, setSearchQuery] = useState('')
@@ -125,9 +131,21 @@ export function SendOfferDialog({
     }
   }, [open, suggestedCustomPay, basePay, leaderFee, chairNumber])
 
-  // Auto-suggest the top call-order musician when the dialog opens
+  // Auto-suggest the top call-order musician when the dialog opens (or use pre-selected)
   useEffect(() => {
     if (open && !selectedMusicianId) {
+      // If a pre-selected musician is provided (e.g. waterfall), use that
+      if (preSelectedMusicianId) {
+        setSelectedMusicianId(preSelectedMusicianId)
+        const preSelected = allMusicians.find(m => m.id === preSelectedMusicianId)
+        if (chairNumber === 1 && !!leaderFee && preSelected?.is_leader) {
+          setIncludeLeaderFee(true)
+          setLeaderFeeAmount((leaderFee ?? 50).toString())
+          setPersonalMessage(DEFAULT_LEADER_MESSAGE)
+        }
+        return
+      }
+
       const available = allMusicians
         .filter((m) => !existingOfferMusicianIds.includes(m.id))
         .filter((m) => m.musician_instruments.some((mi) => mi.instrument_id === instrumentId))
@@ -148,7 +166,135 @@ export function SendOfferDialog({
         }
       }
     }
-  }, [open, instrumentId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, instrumentId, preSelectedMusicianId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Check for declined offers and cross-project conflicts when musician is selected
+  useEffect(() => {
+    if (!open || !selectedMusicianId || !positionId) {
+      setDeclinedWarning(null)
+      setConflictWarnings([])
+      return
+    }
+
+    let cancelled = false
+    async function checkWarnings() {
+      const supabase = createClient()
+
+      // 1. Check for declined offers on the same position
+      const { data: declinedOffers } = await supabase
+        .from('contract_offers')
+        .select('responded_at')
+        .eq('project_position_id', positionId)
+        .eq('musician_id', selectedMusicianId)
+        .eq('status', 'declined')
+        .order('responded_at', { ascending: false })
+        .limit(1)
+
+      if (cancelled) return
+
+      if (declinedOffers && declinedOffers.length > 0) {
+        const date = declinedOffers[0].responded_at
+          ? new Date(declinedOffers[0].responded_at).toLocaleDateString()
+          : 'previously'
+        setDeclinedWarning(`This musician declined this position on ${date}.`)
+      } else {
+        setDeclinedWarning(null)
+      }
+
+      // 2. Check for cross-project scheduling conflicts
+      // First get our project ID and its services
+      const { data: thisPosition } = await supabase
+        .from('project_positions')
+        .select('project_id')
+        .eq('id', positionId)
+        .single()
+
+      if (cancelled || !thisPosition) { setConflictWarnings([]); return }
+
+      const { data: ourServices } = await supabase
+        .from('services')
+        .select('start_time, end_time')
+        .eq('project_id', thisPosition.project_id)
+
+      if (cancelled || !ourServices || ourServices.length === 0) { setConflictWarnings([]); return }
+
+      // Find the musician's active offers in OTHER projects
+      const { data: otherOffers } = await supabase
+        .from('contract_offers')
+        .select(`
+          status,
+          project_position:project_positions!inner(
+            project_id,
+            project:projects!inner(name)
+          )
+        `)
+        .eq('musician_id', selectedMusicianId)
+        .in('status', ['pending', 'viewed', 'accepted'])
+
+      if (cancelled) return
+
+      if (!otherOffers || otherOffers.length === 0) { setConflictWarnings([]); return }
+
+      // Get unique other project IDs
+      const otherProjectIds = [...new Set(
+        otherOffers
+          .map((o: any) => o.project_position?.project_id)
+          .filter((id: string) => id && id !== thisPosition.project_id)
+      )]
+
+      if (otherProjectIds.length === 0) { setConflictWarnings([]); return }
+
+      // Fetch services for those projects
+      const { data: otherServices } = await supabase
+        .from('services')
+        .select('project_id, start_time, end_time')
+        .in('project_id', otherProjectIds)
+
+      if (cancelled || !otherServices) { setConflictWarnings([]); return }
+
+      // Check for time overlaps
+      const conflicts: { projectName: string; dates: string }[] = []
+      const projectNameMap = new Map<string, string>()
+      for (const o of otherOffers as any[]) {
+        if (o.project_position?.project_id && o.project_position?.project?.name) {
+          projectNameMap.set(o.project_position.project_id, o.project_position.project.name)
+        }
+      }
+
+      for (const otherProjectId of otherProjectIds) {
+        const projectServices = otherServices.filter((s: any) => s.project_id === otherProjectId)
+        const hasOverlap = projectServices.some((otherSvc: any) => {
+          const otherStart = new Date(otherSvc.start_time).getTime()
+          const otherEnd = otherSvc.end_time
+            ? new Date(otherSvc.end_time).getTime()
+            : otherStart + 3600000
+          return ourServices.some(ourSvc => {
+            const ourStart = new Date(ourSvc.start_time).getTime()
+            const ourEnd = ourSvc.end_time
+              ? new Date(ourSvc.end_time).getTime()
+              : ourStart + 3600000
+            return otherStart < ourEnd && otherEnd > ourStart
+          })
+        })
+
+        if (hasOverlap) {
+          const dates = projectServices
+            .map((s: any) => new Date(s.start_time).toLocaleDateString())
+            .filter((d: string, i: number, arr: string[]) => arr.indexOf(d) === i)
+            .join(', ')
+          conflicts.push({
+            projectName: projectNameMap.get(otherProjectId as string) || 'Unknown Project',
+            dates,
+          })
+        }
+      }
+
+      if (!cancelled) setConflictWarnings(conflicts)
+    }
+
+    checkWarnings()
+    return () => { cancelled = true }
+  }, [open, selectedMusicianId, positionId])
 
   // Click-outside for search dropdown
   useEffect(() => {
@@ -787,6 +933,33 @@ export function SendOfferDialog({
               </>
             )}
           </div>
+
+          {/* Declined warning */}
+          {declinedWarning && (
+            <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200 flex items-start gap-2">
+              <svg className="h-4 w-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              <span>{declinedWarning}</span>
+            </div>
+          )}
+
+          {/* Cross-project conflict warnings */}
+          {conflictWarnings.length > 0 && (
+            <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200">
+              <div className="flex items-start gap-2 mb-1">
+                <svg className="h-4 w-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                </svg>
+                <span className="font-medium">Schedule conflict with other projects:</span>
+              </div>
+              <ul className="ml-6 space-y-0.5">
+                {conflictWarnings.map((c, i) => (
+                  <li key={i} className="text-xs">{c.projectName} ({c.dates})</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Response deadline</label>

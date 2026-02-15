@@ -15,6 +15,7 @@ export type OfferJoined = {
   expires_at: string | null
   responded_at: string | null
   custom_pay: number | null
+  personal_message: string | null
   musician: { id: string; first_name: string; last_name: string; email?: string | null }
   position_instrument: string
   position_chair: number
@@ -35,6 +36,7 @@ interface ProjectOffersProps {
   organizationName: string
   canManage: boolean
   onOfferChange: () => void
+  onSendWaterfall?: (positionId: string, musicianId: string, customPay: number | null) => void
 }
 
 const OFFER_STATUS_COLORS: Record<string, string> = {
@@ -58,6 +60,7 @@ export function ProjectOffers({
   organizationName,
   canManage,
   onOfferChange,
+  onSendWaterfall,
 }: ProjectOffersProps) {
   const [sendingReminder, setSendingReminder] = useState<string | null>(null)
   const [waterfallCandidates, setWaterfallCandidates] = useState<Record<string, WaterfallCandidate[]>>({})
@@ -96,7 +99,13 @@ export function ProjectOffers({
   }, [declinedOffers.map(o => o.id).join(','), canManage])
 
   function handleWaterfallSend(positionId: string, candidate: WaterfallCandidate, offer: OfferJoined) {
-    setConfirmWaterfall({ positionId, candidate, offer })
+    if (onSendWaterfall) {
+      // Route through the full SendOfferDialog for review/editing
+      onSendWaterfall(positionId, candidate.id, offer.custom_pay)
+    } else {
+      // Fallback to inline confirmation
+      setConfirmWaterfall({ positionId, candidate, offer })
+    }
   }
 
   async function confirmWaterfallSend() {
@@ -165,7 +174,11 @@ export function ProjectOffers({
           await fetch('/api/offers/send-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ offerId: offerData.id }),
+            body: JSON.stringify({
+              offerId: offerData.id,
+              includeLeaderFee: false,
+              leaderFeeAmount: 0,
+            }),
           })
         } catch {
           // Don't fail if email fails
@@ -245,6 +258,7 @@ export function ProjectOffers({
               <th className="px-3 py-2 text-left font-medium text-xs">Musician</th>
               <th className="px-3 py-2 text-left font-medium text-xs">Position</th>
               <th className="px-3 py-2 text-left font-medium text-xs">Status</th>
+              <th className="px-3 py-2 text-left font-medium text-xs">Pay</th>
               <th className="px-3 py-2 text-left font-medium text-xs">Sent</th>
               <th className="px-3 py-2 text-left font-medium text-xs">Expires</th>
               {canManage && (
@@ -281,6 +295,9 @@ export function ProjectOffers({
                       {OFFER_STATUS_LABELS[displayStatus] || displayStatus}
                     </span>
                   </td>
+                  <td className="px-3 py-2 text-muted-foreground tabular-nums">
+                    {offer.custom_pay != null ? `$${offer.custom_pay}` : '—'}
+                  </td>
                   <td className="px-3 py-2 text-muted-foreground">
                     {formatDate(offer.sent_at)}
                   </td>
@@ -290,6 +307,14 @@ export function ProjectOffers({
                   {canManage && (
                     <td className="px-3 py-2 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => window.open(`/gig/${offer.token}`, '_blank')}
+                          title="View offer as musician sees it"
+                        >
+                          View
+                        </Button>
                         {(offer.status === 'pending' || offer.status === 'viewed') && !expired && (
                           <Button
                             variant="ghost"
@@ -317,7 +342,7 @@ export function ProjectOffers({
                 {/* Waterfall suggestion for declined offers */}
                 {canManage && offer.status === 'declined' && waterfallCandidates[offer.project_position_id]?.length > 0 && (
                   <tr className="bg-amber-50/50 dark:bg-amber-950/20">
-                    <td colSpan={canManage ? 6 : 5} className="px-3 py-2">
+                    <td colSpan={canManage ? 8 : 7} className="px-3 py-2">
                       <div className="flex items-center gap-3 text-sm">
                         <span className="text-amber-700 dark:text-amber-300 font-medium">
                           Next in line:

@@ -31,6 +31,9 @@ import {
   type ProjectStatus,
   type ServiceType,
 } from '@/lib/validations/projects'
+import { usePlan } from '@/components/providers/plan-provider'
+import { canCreateProject, canUseEmailFeatures, PLAN_LIMITS } from '@/lib/plan'
+import { UpgradePrompt } from '@/components/billing/upgrade-prompt'
 
 export type ProjectWithServices = Project & {
   services: Service[]
@@ -127,8 +130,8 @@ function ServicesList({
             <thead className="border-b bg-muted/30">
               <tr>
                 <th className="px-3 py-2 text-left font-medium text-xs">Name</th>
-                <th className="px-3 py-2 text-left font-medium text-xs">Type</th>
-                <th className="px-3 py-2 text-left font-medium text-xs">Call Time</th>
+                <th className="hidden md:table-cell px-3 py-2 text-left font-medium text-xs">Type</th>
+                <th className="hidden md:table-cell px-3 py-2 text-left font-medium text-xs">Call Time</th>
                 <th className="px-3 py-2 text-left font-medium text-xs">Date/Time</th>
                 <th className="px-3 py-2 text-left font-medium text-xs">Venue</th>
                 {canManage && (
@@ -140,10 +143,10 @@ function ServicesList({
               {sorted.map((service) => (
                 <tr key={service.id} className="hover:bg-muted/30">
                   <td className="px-3 py-2">{service.name}</td>
-                  <td className="px-3 py-2 text-muted-foreground">
+                  <td className="hidden md:table-cell px-3 py-2 text-muted-foreground">
                     {SERVICE_TYPE_LABELS[service.service_type as ServiceType] || service.service_type}
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">
+                  <td className="hidden md:table-cell px-3 py-2 text-muted-foreground">
                     {service.call_time
                       ? new Date(service.call_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
                       : '—'}
@@ -202,6 +205,7 @@ export function ProjectsClient({
   dismissedTooltips = [],
 }: ProjectsClientProps) {
   const router = useRouter()
+  const plan = usePlan()
 
   // Project dialog state
   const [projectFormOpen, setProjectFormOpen] = useState(false)
@@ -268,6 +272,13 @@ export function ProjectsClient({
   const [gigDetailsProject, setGigDetailsProject] = useState<ProjectWithServices | null>(null)
   const [groupTextOpen, setGroupTextOpen] = useState(false)
   const [groupTextProject, setGroupTextProject] = useState<ProjectWithServices | null>(null)
+
+  // Waterfall trigger state — allows ProjectOffers to open SendOfferDialog via ProjectPositions
+  const [waterfallTrigger, setWaterfallTrigger] = useState<{
+    positionId: string
+    musicianId: string
+    customPay: number | null
+  } | null>(null)
 
   // Filter state
   const [search, setSearch] = useState('')
@@ -596,11 +607,31 @@ export function ProjectsClient({
           <div className="mt-3 w-12 h-px bg-gold/50" />
         </div>
         {canManage && (
-          <Button onClick={handleAddProject}>Add Project</Button>
+          (() => {
+            const activeCount = projects.filter(p => p.status === 'active' || p.status === 'draft').length
+            return canCreateProject(plan, activeCount) ? (
+              <Button onClick={handleAddProject}>Add Project</Button>
+            ) : (
+              <Button variant="outline" disabled title={`Free plan is limited to ${PLAN_LIMITS.free.activeProjects} active projects`}>
+                Add Project (Limit Reached)
+              </Button>
+            )
+          })()
         )}
       </div>
 
       <Separator />
+
+      {(() => {
+        const activeCount = projects.filter(p => p.status === 'active' || p.status === 'draft').length
+        return !canCreateProject(plan, activeCount) ? (
+          <UpgradePrompt
+            feature="Project Limit Reached"
+            description={`Free plan is limited to ${PLAN_LIMITS.free.activeProjects} active projects. Upgrade to Pro for unlimited projects.`}
+            compact
+          />
+        ) : null
+      })()}
 
       <ContextualTooltip
         tooltipId="projects"
@@ -750,6 +781,8 @@ export function ProjectsClient({
                             services={project.services}
                             canManage={canManage}
                             onPositionChange={handleSuccess}
+                            waterfallTrigger={waterfallTrigger}
+                            onWaterfallHandled={() => setWaterfallTrigger(null)}
                           />
                           <ProjectOffers
                             offers={project.project_positions.flatMap((p) =>
@@ -763,6 +796,9 @@ export function ProjectsClient({
                             organizationName={organizationName}
                             canManage={canManage}
                             onOfferChange={handleSuccess}
+                            onSendWaterfall={(positionId, musicianId, customPay) => {
+                              setWaterfallTrigger({ positionId, musicianId, customPay })
+                            }}
                           />
                           <SubRequests
                             requests={project.project_positions.flatMap((p) =>
@@ -808,6 +844,8 @@ export function ProjectsClient({
                                   <Button
                                     variant="outline"
                                     size="sm"
+                                    disabled={!canUseEmailFeatures(plan) && !latestSend}
+                                    title={!canUseEmailFeatures(plan) ? 'Pro feature' : undefined}
                                     onClick={() => {
                                       setGigDetailsProject(project)
                                       setGigDetailsOpen(true)
@@ -821,6 +859,8 @@ export function ProjectsClient({
                                   <Button
                                     variant="outline"
                                     size="sm"
+                                    disabled={!canUseEmailFeatures(plan)}
+                                    title={!canUseEmailFeatures(plan) ? 'Pro feature' : undefined}
                                     onClick={() => {
                                       setGroupTextProject(project)
                                       setGroupTextOpen(true)
