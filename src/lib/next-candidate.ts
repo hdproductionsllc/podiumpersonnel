@@ -72,6 +72,16 @@ export async function getNextCandidates(
 
   const offeredMusicianIds = (existingOffers || []).map(o => o.musician_id)
 
+  // Also exclude musicians who already declined THIS specific position
+  const { data: declinedOffers } = await supabase
+    .from('contract_offers')
+    .select('musician_id')
+    .eq('project_position_id', positionId)
+    .eq('status', 'declined')
+
+  const declinedMusicianIds = (declinedOffers || []).map(o => o.musician_id)
+  const excludedMusicianIds = [...new Set([...offeredMusicianIds, ...declinedMusicianIds])]
+
   // Get musicians who play this instrument, sorted by call_order
   const { data: musicians, error: musError } = await supabase
     .from('musicians')
@@ -107,8 +117,8 @@ export async function getNextCandidates(
   const candidates: Candidate[] = []
 
   for (const musician of (musicians || [])) {
-    // Skip if already offered
-    if (offeredMusicianIds.includes(musician.id)) continue
+    // Skip if already offered or already declined this position
+    if (excludedMusicianIds.includes(musician.id)) continue
 
     // Check service area
     const inArea = await isWithinServiceArea(
