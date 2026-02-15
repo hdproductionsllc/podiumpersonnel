@@ -22,19 +22,10 @@ export default async function DashboardLayout({
     redirect('/login')
   }
 
-  // Fetch membership with billing columns
+  // Fetch membership — always query organization_id first (guaranteed to exist)
   const { data: membership } = await supabase
     .from('organization_members')
-    .select(`
-      organization_id,
-      organization:organizations(
-        plan_tier,
-        trial_ends_at,
-        stripe_customer_id,
-        stripe_subscription_id,
-        subscription_status
-      )
-    `)
+    .select('organization_id')
     .eq('user_id', user.id)
     .single()
 
@@ -42,7 +33,27 @@ export default async function DashboardLayout({
     redirect('/onboarding')
   }
 
-  const org = membership.organization as unknown as OrgBilling
+  // Try to fetch billing columns (may not exist if migration hasn't run yet)
+  let org: OrgBilling = {
+    plan_tier: 'trial',
+    trial_ends_at: null,
+    stripe_customer_id: null,
+    stripe_subscription_id: null,
+    subscription_status: null,
+  }
+  try {
+    const { data: orgData } = await supabase
+      .from('organizations')
+      .select('plan_tier, trial_ends_at, stripe_customer_id, stripe_subscription_id, subscription_status')
+      .eq('id', membership.organization_id)
+      .single()
+    if (orgData) {
+      org = orgData as unknown as OrgBilling
+    }
+  } catch {
+    // Billing columns don't exist yet — use defaults (treats as trial/pro)
+  }
+
   const plan = resolveOrgPlan(org)
 
   return (
