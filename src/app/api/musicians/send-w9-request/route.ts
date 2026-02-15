@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendW9RequestEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
+import { getOrgPlan } from '@/lib/api-helpers'
+import { canUseEmailFeatures } from '@/lib/plan'
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,6 +16,15 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Plan gate
+    const { data: mem } = await supabase.from('organization_members').select('organization_id').eq('user_id', user.id).single()
+    if (mem) {
+      const plan = await getOrgPlan(mem.organization_id)
+      if (plan && !canUseEmailFeatures(plan)) {
+        return NextResponse.json({ error: 'W-9 requests require a Pro subscription' }, { status: 403 })
+      }
     }
 
     const body = await request.json()

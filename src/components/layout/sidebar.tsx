@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Logo } from '@/components/ui/logo'
+import { usePlan } from '@/components/providers/plan-provider'
 
 function HomeIcon({ className }: { className?: string }) {
   return (
@@ -101,6 +102,35 @@ const navigation = [
   { name: 'Sent Emails', href: '/dashboard/emails', icon: EnvelopeIcon, emphasize: false },
 ]
 
+function SidebarPlanIndicator() {
+  const plan = usePlan()
+
+  if (plan.status === 'trial' && plan.trialDaysRemaining !== null) {
+    return (
+      <div className="mt-2 px-3">
+        <p className="text-xs text-sidebar-foreground/40 text-center">
+          Pro Trial &mdash; {plan.trialDaysRemaining}d left
+        </p>
+      </div>
+    )
+  }
+
+  if (plan.status === 'free') {
+    return (
+      <div className="mt-2 px-3">
+        <Link
+          href="/dashboard/settings?billing=upgrade"
+          className="flex items-center justify-center gap-1.5 rounded-md bg-sidebar-primary/10 px-3 py-1.5 text-xs font-medium text-sidebar-primary hover:bg-sidebar-primary/20 transition-colors"
+        >
+          Upgrade to Pro
+        </Link>
+      </div>
+    )
+  }
+
+  return null
+}
+
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
 
@@ -152,6 +182,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
             </Button>
           )
         })()}
+        <SidebarPlanIndicator />
       </div>
     </>
   )

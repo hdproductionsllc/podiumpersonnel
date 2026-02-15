@@ -4,6 +4,8 @@ import { sendGigDetailsReminderEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName } from '@/lib/venue-helpers'
+import { getOrgPlan } from '@/lib/api-helpers'
+import { canUseEmailFeatures } from '@/lib/plan'
 
 export async function POST(
   request: NextRequest,
@@ -21,6 +23,16 @@ export async function POST(
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Verify org membership + plan gate
+    const { data: mem } = await supabase.from('organization_members').select('organization_id').eq('user_id', user.id).single()
+    if (!mem) {
+      return NextResponse.json({ error: 'No organization found' }, { status: 403 })
+    }
+    const plan = await getOrgPlan(mem.organization_id)
+    if (plan && !canUseEmailFeatures(plan)) {
+      return NextResponse.json({ error: 'This feature requires a Pro subscription' }, { status: 403 })
     }
 
     const body = await request.json()

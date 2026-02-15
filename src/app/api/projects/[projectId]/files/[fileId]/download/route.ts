@@ -18,6 +18,26 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Verify user belongs to the org that owns this project
+    const { data: project } = await supabase
+      .from('projects')
+      .select('organization_id')
+      .eq('id', projectId)
+      .single()
+
+    if (project) {
+      const { data: membership } = await supabase
+        .from('organization_members')
+        .select('id')
+        .eq('organization_id', project.organization_id)
+        .eq('user_id', user.id)
+        .single()
+
+      if (!membership) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+
     // Get file record
     const { data: fileRecord, error: fetchError } = await supabase
       .from('project_files')

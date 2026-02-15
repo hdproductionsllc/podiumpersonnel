@@ -16,6 +16,11 @@ export async function POST(
 
   const supabase = await createClient()
 
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   // Fetch the book with its entries
   const { data: book, error: bookError } = await supabase
     .from('books')
@@ -190,6 +195,11 @@ export async function PUT(
   }
 
   const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   // Insert positions
   const positionRecords = positions.map((p: any) => ({

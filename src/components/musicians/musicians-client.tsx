@@ -14,6 +14,9 @@ import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import type { Musician } from '@/types'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS, type InstrumentSection } from '@/lib/validations/instruments'
+import { usePlan } from '@/components/providers/plan-provider'
+import { canAddMusician, canBulkImport, canUseEmailFeatures, PLAN_LIMITS } from '@/lib/plan'
+import { UpgradePrompt } from '@/components/billing/upgrade-prompt'
 
 function formatPhoneNumber(phone: string | null): string {
   if (!phone) return '\u2014'
@@ -97,6 +100,7 @@ export function MusiciansClient({
   userRole,
 }: MusiciansClientProps) {
   const router = useRouter()
+  const plan = usePlan()
   const [formOpen, setFormOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [editingMusician, setEditingMusician] = useState<MusicianWithInstruments | null>(null)
@@ -504,7 +508,7 @@ export function MusiciansClient({
             )}
           </div>
         </td>
-        <td className="px-4 py-2 text-muted-foreground">
+        <td className="hidden md:table-cell px-4 py-2 text-muted-foreground">
           {musician.email ? (
             <a
               href={`mailto:${musician.email}`}
@@ -515,7 +519,7 @@ export function MusiciansClient({
             </a>
           ) : '\u2014'}
         </td>
-        <td className="px-4 py-2 text-muted-foreground whitespace-nowrap">
+        <td className="hidden md:table-cell px-4 py-2 text-muted-foreground whitespace-nowrap">
           {musician.phone ? (
             <a
               href={`tel:${musician.phone.replace(/[^\d+]/g, '')}`}
@@ -526,12 +530,12 @@ export function MusiciansClient({
             </a>
           ) : '\u2014'}
         </td>
-        <td className="px-4 py-2 text-muted-foreground whitespace-nowrap">
+        <td className="hidden md:table-cell px-4 py-2 text-muted-foreground whitespace-nowrap">
           {musician.city || musician.state
             ? [musician.city, musician.state].filter(Boolean).join(', ')
             : '\u2014'}
         </td>
-        <td className="px-4 py-2 text-muted-foreground">
+        <td className="hidden md:table-cell px-4 py-2 text-muted-foreground">
           {musician.home_region || '\u2014'}
         </td>
         <td className="px-4 py-2">
@@ -630,7 +634,7 @@ export function MusiciansClient({
             </div>
           ) : '\u2014'}
         </td>
-        <td className="px-4 py-2 text-center">
+        <td className="hidden md:table-cell px-4 py-2 text-center">
           {musician.user_id ? (
             canManage ? (
               <Button
@@ -933,7 +937,7 @@ export function MusiciansClient({
               className="hidden"
             />
             <div className="relative">
-              <Button variant="outline" onClick={handleImportClick} disabled={isImporting}>
+              <Button variant="outline" onClick={handleImportClick} disabled={isImporting || !canBulkImport(plan)} title={!canBulkImport(plan) ? 'Bulk import requires Pro' : undefined}>
                 {isImporting ? 'Importing...' : 'Import'}
               </Button>
               {showImportDialog && (
@@ -1015,12 +1019,26 @@ export function MusiciansClient({
               </svg>
               Call Order
             </Button>
-            <Button onClick={handleAdd}>Add Musician</Button>
+            {canAddMusician(plan, musicians.length) ? (
+              <Button onClick={handleAdd}>Add Musician</Button>
+            ) : (
+              <Button variant="outline" disabled title={`Free plan is limited to ${PLAN_LIMITS.free.musicians} musicians`}>
+                Add Musician (Limit Reached)
+              </Button>
+            )}
           </div>
         )}
       </div>
 
       <Separator />
+
+      {!canAddMusician(plan, musicians.length) && (
+        <UpgradePrompt
+          feature="Musician Limit Reached"
+          description={`Free plan is limited to ${PLAN_LIMITS.free.musicians} musicians. Upgrade to Pro for unlimited musicians.`}
+          compact
+        />
+      )}
 
       {showCallOrderBanner && (
         <div className="relative rounded-lg border border-gold/30 bg-gradient-to-r from-gold/10 via-gold/5 to-transparent p-4">
@@ -1366,7 +1384,7 @@ export function MusiciansClient({
               <Button size="sm" onClick={() => setBulkEditOpen(true)}>
                 Bulk Edit
               </Button>
-              {selectedNeedW9.length > 0 && (
+              {selectedNeedW9.length > 0 && canUseEmailFeatures(plan) && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -1419,7 +1437,7 @@ export function MusiciansClient({
                     </button>
                     {!isCollapsed && (
                       <div className="border-t overflow-x-auto">
-                        <table className="w-full text-sm table-fixed">
+                        <table className="w-full text-sm md:table-fixed">
                           <thead className="bg-muted/30">
                             <tr>
                               {selectMode && (
@@ -1456,16 +1474,16 @@ export function MusiciansClient({
                               >
                                 Name <SortIcon column="name" />
                               </th>
-                              <th className="w-[220px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
-                              <th className="w-[120px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
+                              <th className="hidden md:table-cell w-[220px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
+                              <th className="hidden md:table-cell w-[120px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
                               <th
-                                className="w-[130px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
+                                className="hidden md:table-cell w-[130px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('location')}
                               >
                                 Location <SortIcon column="location" />
                               </th>
                               <th
-                                className="w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
+                                className="hidden md:table-cell w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('home_region')}
                               >
                                 Region <SortIcon column="home_region" />
@@ -1482,7 +1500,7 @@ export function MusiciansClient({
                               >
                                 Tags <SortIcon column="tags" />
                               </th>
-                              <th className="w-[100px] px-4 py-2 text-center text-xs font-medium text-muted-foreground">Portal</th>
+                              <th className="hidden md:table-cell w-[100px] px-4 py-2 text-center text-xs font-medium text-muted-foreground">Portal</th>
                               {canManage && (
                                 <th className="w-[120px] px-4 py-2 text-right text-xs font-medium text-muted-foreground">Actions</th>
                               )}
@@ -1528,7 +1546,7 @@ export function MusiciansClient({
                     </button>
                     {!isCollapsed && (
                       <div className="border-t overflow-x-auto">
-                        <table className="w-full text-sm table-fixed">
+                        <table className="w-full text-sm md:table-fixed">
                           <thead className="bg-muted/30">
                             <tr>
                               {selectMode && (
@@ -1565,16 +1583,16 @@ export function MusiciansClient({
                               >
                                 Name <SortIcon column="name" />
                               </th>
-                              <th className="w-[220px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
-                              <th className="w-[120px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
+                              <th className="hidden md:table-cell w-[220px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
+                              <th className="hidden md:table-cell w-[120px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
                               <th
-                                className="w-[130px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
+                                className="hidden md:table-cell w-[130px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('location')}
                               >
                                 Location <SortIcon column="location" />
                               </th>
                               <th
-                                className="w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
+                                className="hidden md:table-cell w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('home_region')}
                               >
                                 Region <SortIcon column="home_region" />
@@ -1591,7 +1609,7 @@ export function MusiciansClient({
                               >
                                 Tags <SortIcon column="tags" />
                               </th>
-                              <th className="w-[100px] px-4 py-2 text-center text-xs font-medium text-muted-foreground">Portal</th>
+                              <th className="hidden md:table-cell w-[100px] px-4 py-2 text-center text-xs font-medium text-muted-foreground">Portal</th>
                               {canManage && (
                                 <th className="w-[120px] px-4 py-2 text-right text-xs font-medium text-muted-foreground">Actions</th>
                               )}

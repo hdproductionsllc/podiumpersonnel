@@ -5,9 +5,9 @@ import { SettingsClient } from '@/components/settings/settings-client'
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ setup?: string }>
+  searchParams: Promise<{ setup?: string; billing?: string }>
 }) {
-  const { setup } = await searchParams
+  const { setup, billing } = await searchParams
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -45,6 +45,7 @@ export default async function SettingsPage({
       role={membership.role}
       currentUserId={user.id}
       showSetupPrompt={setup === 'musician_policy'}
+      openBillingTab={billing === 'success' || billing === 'cancel'}
     />
   )
 }

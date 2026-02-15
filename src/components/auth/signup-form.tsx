@@ -29,7 +29,6 @@ export function SignupForm() {
   const form = useForm<SignupInput>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
-      accessCode: '',
       email: '',
       password: '',
       confirmPassword: '',
@@ -37,11 +36,6 @@ export function SignupForm() {
   })
 
   async function signInWithGoogle() {
-    const code = form.getValues('accessCode')
-    if (code !== process.env.NEXT_PUBLIC_SIGNUP_ACCESS_CODE) {
-      setError('Please enter a valid access code before continuing with Google')
-      return
-    }
     setIsGoogleLoading(true)
     const supabase = createClient()
     await supabase.auth.signInWithOAuth({
@@ -125,23 +119,6 @@ export function SignupForm() {
                 {error}
               </div>
             )}
-            <FormField
-              control={form.control}
-              name="accessCode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Access Code</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="text"
-                      placeholder="Enter your access code"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             <FormField
               control={form.control}
               name="email"

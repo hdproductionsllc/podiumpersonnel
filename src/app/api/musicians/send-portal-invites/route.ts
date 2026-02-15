@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { sendPortalInvitationEmail } from '@/lib/email/send'
 import crypto from 'crypto'
 import { getAppUrl } from '@/lib/utils'
+import { getOrgPlan } from '@/lib/api-helpers'
+import { canUseEmailFeatures } from '@/lib/plan'
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -13,6 +15,15 @@ export async function POST(request: Request) {
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Plan gate
+  const { data: mem } = await supabase.from('organization_members').select('organization_id').eq('user_id', user.id).single()
+  if (mem) {
+    const plan = await getOrgPlan(mem.organization_id)
+    if (plan && !canUseEmailFeatures(plan)) {
+      return NextResponse.json({ error: 'Portal invites require a Pro subscription' }, { status: 403 })
+    }
   }
 
   const body = await request.json()

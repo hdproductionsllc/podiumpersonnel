@@ -6,6 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { AddMemberDialog } from './add-member-dialog'
 import { ChangeRoleDialog } from './change-role-dialog'
 import { RemoveMemberDialog } from './remove-member-dialog'
+import { usePlan } from '@/components/providers/plan-provider'
+import { canAddMember } from '@/lib/plan'
 
 interface Member {
   id: string
@@ -27,6 +29,7 @@ const roleBadgeClasses: Record<string, string> = {
 }
 
 export function MembersSection({ role, currentUserId }: MembersSectionProps) {
+  const plan = usePlan()
   const [members, setMembers] = useState<Member[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -83,7 +86,13 @@ export function MembersSection({ role, currentUserId }: MembersSectionProps) {
               <CardDescription>Manage organization members and their roles</CardDescription>
             </div>
             {isOwner && (
-              <Button onClick={() => setAddDialogOpen(true)}>Add Member</Button>
+              canAddMember(plan, members.length) ? (
+                <Button onClick={() => setAddDialogOpen(true)}>Add Member</Button>
+              ) : (
+                <Button variant="outline" disabled title="Free plan is limited to 1 admin seat">
+                  Add Member (Pro)
+                </Button>
+              )
             )}
           </div>
         </CardHeader>

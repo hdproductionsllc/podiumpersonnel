@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { addMemberSchema } from '@/lib/validations/settings'
+import { resolveOrgPlan, canAddMember, type OrgBilling } from '@/lib/plan'
 
 export async function GET() {
   const supabase = await createClient()
@@ -68,6 +69,29 @@ export async function POST(request: Request) {
 
   if (membership.role !== 'owner') {
     return NextResponse.json({ error: 'Only the owner can add members' }, { status: 403 })
+  }
+
+  // Plan gate: check member seat limit
+  const adminClientForPlan = createAdminClient()
+  const { data: org } = await adminClientForPlan
+    .from('organizations')
+    .select('plan_tier, trial_ends_at, stripe_customer_id, stripe_subscription_id, subscription_status')
+    .eq('id', membership.organization_id)
+    .single()
+
+  if (org) {
+    const plan = resolveOrgPlan(org as OrgBilling)
+    const { count } = await adminClientForPlan
+      .from('organization_members')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', membership.organization_id)
+
+    if (!canAddMember(plan, count ?? 0)) {
+      return NextResponse.json(
+        { error: 'Free plan is limited to 1 admin seat. Upgrade to Pro to add team members.' },
+        { status: 403 }
+      )
+    }
   }
 
   const body = await request.json()

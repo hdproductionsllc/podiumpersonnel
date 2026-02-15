@@ -8,11 +8,16 @@ import {
   parseVCard,
   type ExtractedMusician,
 } from '@/lib/import/parse-musicians'
-import { requireOrgAdmin, apiSuccess, apiError } from '@/lib/api-helpers'
+import { requireOrgPlan, apiSuccess, apiError } from '@/lib/api-helpers'
+import { canBulkImport } from '@/lib/plan'
 
 export async function POST(request: Request) {
-  const { supabase, membership, error } = await requireOrgAdmin()
-  if (error) return error
+  const { supabase, membership, plan, error } = await requireOrgPlan()
+  if (error || !plan) return error!
+
+  if (!canBulkImport(plan)) {
+    return apiError('Bulk import requires a Pro subscription', 403)
+  }
 
   const formData = await request.formData()
   const file = formData.get('file') as File | null

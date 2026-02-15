@@ -8,6 +8,7 @@ import { OrganizationSection } from './organization-section'
 import { MembersSection } from './members-section'
 import { ProfileSection } from './profile-section'
 import { EmailBrandingSection } from './email-branding-section'
+import { BillingSection } from './billing-section'
 import { Card, CardContent } from '@/components/ui/card'
 import { X, PartyPopper } from 'lucide-react'
 
@@ -15,6 +16,7 @@ const tabs = [
   { id: 'organization', label: 'Organization' },
   { id: 'email-branding', label: 'Email Branding' },
   { id: 'members', label: 'Members' },
+  { id: 'billing', label: 'Billing' },
   { id: 'profile', label: 'Profile' },
 ] as const
 
@@ -34,11 +36,12 @@ interface SettingsClientProps {
   role: 'owner' | 'admin' | 'member'
   currentUserId: string
   showSetupPrompt?: boolean
+  openBillingTab?: boolean
 }
 
-export function SettingsClient({ organization, role, currentUserId, showSetupPrompt }: SettingsClientProps) {
+export function SettingsClient({ organization, role, currentUserId, showSetupPrompt, openBillingTab }: SettingsClientProps) {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<TabId>('organization')
+  const [activeTab, setActiveTab] = useState<TabId>(openBillingTab ? 'billing' : 'organization')
   const [showWelcome, setShowWelcome] = useState(showSetupPrompt || false)
 
   // Remove the query param from URL without refresh
@@ -106,6 +109,9 @@ export function SettingsClient({ organization, role, currentUserId, showSetupPro
         )}
         {activeTab === 'members' && (
           <MembersSection role={role} currentUserId={currentUserId} />
+        )}
+        {activeTab === 'billing' && (
+          <BillingSection />
         )}
         {activeTab === 'profile' && (
           <ProfileSection />

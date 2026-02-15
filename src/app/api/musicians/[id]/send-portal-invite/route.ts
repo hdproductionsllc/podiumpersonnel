@@ -4,6 +4,8 @@ import { sendPortalInvitationEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import crypto from 'crypto'
 import { getAppUrl } from '@/lib/utils'
+import { getOrgPlan } from '@/lib/api-helpers'
+import { canUseEmailFeatures } from '@/lib/plan'
 
 export async function POST(
   _request: Request,
@@ -19,6 +21,15 @@ export async function POST(
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Plan gate
+  const { data: mem } = await supabase.from('organization_members').select('organization_id').eq('user_id', user.id).single()
+  if (mem) {
+    const plan = await getOrgPlan(mem.organization_id)
+    if (plan && !canUseEmailFeatures(plan)) {
+      return NextResponse.json({ error: 'Portal invites require a Pro subscription' }, { status: 403 })
+    }
   }
 
   // Get musician with organization
