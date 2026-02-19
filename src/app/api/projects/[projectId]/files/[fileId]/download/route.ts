@@ -70,7 +70,9 @@ export async function POST(
     // Generate signed URL (1 hour)
     const { data: signedUrl, error: signError } = await supabase.storage
       .from('project-files')
-      .createSignedUrl(fileRecord.storage_path, 3600)
+      .createSignedUrl(fileRecord.storage_path, 3600, {
+        download: fileRecord.file_name,
+      })
 
     if (signError || !signedUrl) {
       console.error('Failed to create signed URL:', signError)
