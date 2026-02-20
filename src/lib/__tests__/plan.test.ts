@@ -81,79 +81,50 @@ describe('resolveOrgPlan', () => {
     })
   })
 
-  describe('in-app trial (no Stripe subscription)', () => {
-    it('returns pro during active trial', () => {
+  describe('trial tier defaults to pro (billing not launched)', () => {
+    it('returns pro for trial tier with future trial_ends_at', () => {
       const plan = resolveOrgPlan(makeOrg({
         plan_tier: 'trial',
         trial_ends_at: daysFromNow(10),
       }))
       expect(plan.tier).toBe('pro')
-      expect(plan.status).toBe('trial')
-      expect(plan.canUpgrade).toBe(true)
-      expect(plan.trialDaysRemaining).toBeGreaterThan(0)
-      expect(plan.trialDaysRemaining).toBeLessThanOrEqual(11) // ceil can add 1
+      expect(plan.status).toBe('pro')
+      expect(plan.canUpgrade).toBe(false)
+      expect(plan.trialDaysRemaining).toBeNull()
     })
 
-    it('returns correct days remaining', () => {
-      const plan = resolveOrgPlan(makeOrg({
-        plan_tier: 'trial',
-        trial_ends_at: daysFromNow(3),
-      }))
-      expect(plan.trialDaysRemaining).toBeGreaterThanOrEqual(3)
-      expect(plan.trialDaysRemaining).toBeLessThanOrEqual(4)
-    })
-
-    it('returns 1 day remaining on the last day', () => {
-      // Trial ending 12 hours from now should show 1 day
-      const almostExpired = new Date()
-      almostExpired.setHours(almostExpired.getHours() + 12)
-      const plan = resolveOrgPlan(makeOrg({
-        plan_tier: 'trial',
-        trial_ends_at: almostExpired.toISOString(),
-      }))
-      expect(plan.tier).toBe('pro')
-      expect(plan.status).toBe('trial')
-      expect(plan.trialDaysRemaining).toBe(1)
-    })
-
-    it('falls to free when trial expired', () => {
+    it('defaults to pro when trial expired (billing not launched)', () => {
       const plan = resolveOrgPlan(makeOrg({
         plan_tier: 'trial',
         trial_ends_at: daysFromNow(-1),
       }))
-      expect(plan.tier).toBe('free')
-      expect(plan.status).toBe('free')
-      expect(plan.canUpgrade).toBe(true)
+      expect(plan.tier).toBe('pro')
+      expect(plan.status).toBe('pro')
+      expect(plan.canUpgrade).toBe(false)
       expect(plan.trialDaysRemaining).toBeNull()
     })
 
-    it('falls to free when trial_ends_at is exactly now (0 remaining)', () => {
+    it('defaults to pro when trial_ends_at is exactly now (0 remaining)', () => {
       // Edge: trial_ends_at in the past by milliseconds
       const justExpired = new Date(Date.now() - 1000).toISOString()
       const plan = resolveOrgPlan(makeOrg({
         plan_tier: 'trial',
         trial_ends_at: justExpired,
       }))
-      expect(plan.tier).toBe('free')
+      expect(plan.tier).toBe('pro')
     })
   })
 
-  describe('free tier (default)', () => {
-    it('returns free with no billing info at all', () => {
-      const plan = resolveOrgPlan(makeOrg())
+  describe('explicit free tier', () => {
+    it('returns free when plan_tier is explicitly free', () => {
+      const plan = resolveOrgPlan(makeOrg({ plan_tier: 'free' }))
       expect(plan.tier).toBe('free')
       expect(plan.status).toBe('free')
       expect(plan.canUpgrade).toBe(true)
       expect(plan.trialDaysRemaining).toBeNull()
     })
 
-    it('returns free when plan_tier is free', () => {
-      const plan = resolveOrgPlan(makeOrg({ plan_tier: 'free' }))
-      expect(plan.tier).toBe('free')
-      expect(plan.status).toBe('free')
-    })
-
-    it('returns free when subscription is canceled', () => {
+    it('returns free when subscription is canceled and plan set to free', () => {
       const plan = resolveOrgPlan(makeOrg({
         plan_tier: 'free',
         subscription_status: 'canceled',
@@ -163,27 +134,31 @@ describe('resolveOrgPlan', () => {
       expect(plan.status).toBe('free')
       expect(plan.canUpgrade).toBe(true)
     })
+  })
 
-    it('returns free for incomplete subscription', () => {
+  describe('default to pro (billing not launched)', () => {
+    it('returns pro for incomplete subscription without explicit free', () => {
       const plan = resolveOrgPlan(makeOrg({
+        plan_tier: 'trial',
         subscription_status: 'incomplete',
       }))
-      expect(plan.tier).toBe('free')
+      expect(plan.tier).toBe('pro')
     })
 
-    it('returns free for unpaid subscription', () => {
+    it('returns pro for unpaid subscription without explicit free', () => {
       const plan = resolveOrgPlan(makeOrg({
+        plan_tier: 'trial',
         subscription_status: 'unpaid',
       }))
-      expect(plan.tier).toBe('free')
+      expect(plan.tier).toBe('pro')
     })
 
-    it('returns free when trial tier set but no trial_ends_at', () => {
+    it('returns pro when trial tier set but no trial_ends_at', () => {
       const plan = resolveOrgPlan(makeOrg({
         plan_tier: 'trial',
         trial_ends_at: null,
       }))
-      expect(plan.tier).toBe('free')
+      expect(plan.tier).toBe('pro')
     })
   })
 

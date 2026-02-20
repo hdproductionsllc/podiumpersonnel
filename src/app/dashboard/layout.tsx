@@ -35,7 +35,7 @@ export default async function DashboardLayout({
 
   // Try to fetch billing columns (may not exist if migration hasn't run yet)
   let org: OrgBilling = {
-    plan_tier: 'trial',
+    plan_tier: 'pro',
     trial_ends_at: null,
     stripe_customer_id: null,
     stripe_subscription_id: null,

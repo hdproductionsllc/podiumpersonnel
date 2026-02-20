@@ -37,8 +37,8 @@ export const PLAN_LIMITS = {
  * Resolution order:
  * 1. subscription_status is 'active' or 'trialing' → Pro
  * 2. subscription_status is 'past_due' → Pro (grace period)
- * 3. plan_tier is 'trial' and trial_ends_at in future → Pro (trial)
- * 4. Everything else → Free
+ * 3. plan_tier explicitly set to 'free' → Free
+ * 4. Everything else → Pro (billing not yet launched, all orgs get full access)
  */
 export function resolveOrgPlan(org: OrgBilling): ResolvedPlan {
   const subStatus = org.subscription_status
@@ -53,18 +53,13 @@ export function resolveOrgPlan(org: OrgBilling): ResolvedPlan {
     return { tier: 'pro', status: 'past_due', trialDaysRemaining: null, canUpgrade: false }
   }
 
-  // In-app trial (no Stripe subscription yet)
-  if (org.plan_tier === 'trial' && org.trial_ends_at) {
-    const remaining = Math.ceil(
-      (new Date(org.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-    )
-    if (remaining > 0) {
-      return { tier: 'pro', status: 'trial', trialDaysRemaining: remaining, canUpgrade: true }
-    }
+  // Explicitly downgraded to free (e.g. canceled subscription)
+  if (org.plan_tier === 'free') {
+    return { tier: 'free', status: 'free', trialDaysRemaining: null, canUpgrade: true }
   }
 
-  // Everything else → Free
-  return { tier: 'free', status: 'free', trialDaysRemaining: null, canUpgrade: true }
+  // Default: all orgs get pro access until billing is fully launched
+  return { tier: 'pro', status: 'pro', trialDaysRemaining: null, canUpgrade: false }
 }
 
 // --- Feature gate helpers ---
