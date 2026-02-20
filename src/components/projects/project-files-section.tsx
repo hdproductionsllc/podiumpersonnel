@@ -28,6 +28,17 @@ export interface ProjectFile {
   project_file_instruments: ProjectFileInstrument[]
 }
 
+interface MusicSend {
+  id: string
+  sent_at: string
+  musician_count: number
+  music_confirmations: {
+    id: string
+    musician_id: string
+    confirmed_at: string | null
+  }[]
+}
+
 interface ProjectFilesSectionProps {
   projectId: string
   projectName: string
@@ -42,6 +53,7 @@ interface ProjectFilesSectionProps {
   }[]
   canManage: boolean
   timezone: string
+  musicSends?: MusicSend[]
 }
 
 function formatFileSize(bytes: number): string {
@@ -57,6 +69,7 @@ export function ProjectFilesSection({
   positions,
   canManage,
   timezone,
+  musicSends,
 }: ProjectFilesSectionProps) {
   const [files, setFiles] = useState<ProjectFile[]>([])
   const [loading, setLoading] = useState(true)
@@ -360,6 +373,45 @@ export function ProjectFilesSection({
           </table>
         </div>
       )}
+
+      {/* Music Confirmation Status */}
+      {(() => {
+        if (!musicSends || musicSends.length === 0) return null
+        const latestSend = [...musicSends].sort((a, b) =>
+          new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
+        )[0]
+        const confirmations = latestSend.music_confirmations || []
+        const totalCount = confirmations.length
+        if (totalCount === 0) return null
+        const confirmedCount = confirmations.filter((c) => c.confirmed_at).length
+        const allConfirmed = confirmedCount === totalCount
+        return (
+          <div
+            className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium cursor-pointer hover:opacity-80 ${
+              allConfirmed
+                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+            }`}
+            onClick={() => setSendMusicOpen(true)}
+          >
+            {allConfirmed ? (
+              <>
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+                All {totalCount} confirmed music receipt
+              </>
+            ) : (
+              <>
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+                Music: {confirmedCount} of {totalCount} confirmed
+              </>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Upload Dialog */}
       <Dialog open={uploadOpen} onOpenChange={(open) => {

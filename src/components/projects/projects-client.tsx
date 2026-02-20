@@ -825,22 +825,18 @@ export function ProjectsClient({
                               positions={project.project_positions}
                               canManage={canManage}
                               timezone={timezone}
+                              musicSends={(project as any).music_sends as any[] | undefined}
                             />
                           )}
-                          {/* Send Gig Details + Group Text + Inline Status */}
-                          {canManage && project.project_positions.length > 0 && project.project_positions.every((p) => p.status === 'confirmed') && (() => {
-                            const sends = (project as any).gig_detail_sends as any[] | undefined
-                            const latestSend = sends?.sort((a: any, b: any) =>
-                              new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
-                            )[0]
-                            const confirmations = latestSend?.gig_detail_confirmations as any[] | undefined
-                            const confirmedCount = confirmations?.filter((c: any) => c.confirmed_at).length ?? 0
-                            const totalCount = confirmations?.length ?? 0
-                            const allConfirmed = totalCount > 0 && confirmedCount === totalCount
-
-                            return (
-                              <div className="space-y-2 pt-2">
-                                <div className="flex items-center gap-3">
+                          {/* Send Gig Details + Group Text (gated behind all positions confirmed) */}
+                          {canManage && project.project_positions.length > 0 && project.project_positions.every((p) => p.status === 'confirmed') && (
+                            <div className="flex items-center gap-3 pt-2">
+                              {(() => {
+                                const sends = (project as any).gig_detail_sends as any[] | undefined
+                                const latestSend = sends?.sort((a: any, b: any) =>
+                                  new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
+                                )[0]
+                                return (
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -856,50 +852,63 @@ export function ProjectsClient({
                                     </svg>
                                     {latestSend ? 'Gig Details Status' : 'Send Gig Details'}
                                   </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={!canUseEmailFeatures(plan)}
-                                    title={!canUseEmailFeatures(plan) ? 'Pro feature' : undefined}
-                                    onClick={() => {
-                                      setGroupTextProject(project)
-                                      setGroupTextOpen(true)
-                                    }}
-                                  >
-                                    <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
+                                )
+                              })()}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={!canUseEmailFeatures(plan)}
+                                title={!canUseEmailFeatures(plan) ? 'Pro feature' : undefined}
+                                onClick={() => {
+                                  setGroupTextProject(project)
+                                  setGroupTextOpen(true)
+                                }}
+                              >
+                                <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
+                                </svg>
+                                Group Text
+                              </Button>
+                            </div>
+                          )}
+                          {/* Gig Details Confirmation Status (always visible if sends exist) */}
+                          {canManage && (() => {
+                            const sends = (project as any).gig_detail_sends as any[] | undefined
+                            const latestSend = sends?.sort((a: any, b: any) =>
+                              new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
+                            )[0]
+                            if (!latestSend) return null
+                            const confirmations = latestSend?.gig_detail_confirmations as any[] | undefined
+                            const confirmedCount = confirmations?.filter((c: any) => c.confirmed_at).length ?? 0
+                            const totalCount = confirmations?.length ?? 0
+                            if (totalCount === 0) return null
+                            const allConfirmed = confirmedCount === totalCount
+                            return (
+                              <div
+                                className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium cursor-pointer hover:opacity-80 mt-2 ${
+                                  allConfirmed
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                    : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                                }`}
+                                onClick={() => {
+                                  setGigDetailsProject(project)
+                                  setGigDetailsOpen(true)
+                                }}
+                              >
+                                {allConfirmed ? (
+                                  <>
+                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                                     </svg>
-                                    Group Text
-                                  </Button>
-                                </div>
-                                {latestSend && totalCount > 0 && (
-                                  <div
-                                    className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium cursor-pointer hover:opacity-80 ${
-                                      allConfirmed
-                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                        : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
-                                    }`}
-                                    onClick={() => {
-                                      setGigDetailsProject(project)
-                                      setGigDetailsOpen(true)
-                                    }}
-                                  >
-                                    {allConfirmed ? (
-                                      <>
-                                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                        </svg>
-                                        All {totalCount} confirmed gig details
-                                      </>
-                                    ) : (
-                                      <>
-                                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                                        </svg>
-                                        Gig details: {confirmedCount} of {totalCount} confirmed
-                                      </>
-                                    )}
-                                  </div>
+                                    All {totalCount} confirmed gig details
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                    </svg>
+                                    Gig details: {confirmedCount} of {totalCount} confirmed
+                                  </>
                                 )}
                               </div>
                             )
