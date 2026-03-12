@@ -124,6 +124,7 @@ export async function GET(
       sendId: latestSend.id,
       sentAt: latestSend.sent_at,
       musicianCount: latestSend.musician_count,
+      notes: latestSend.notes || null,
       confirmations: (confirmations || []).map((c: any) => {
         const musicianFileIds = getFileIdsForMusician(c.musician_id)
         const downloadedSet = downloadsByMusician[c.musician_id] || new Set()

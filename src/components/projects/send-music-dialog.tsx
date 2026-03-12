@@ -27,11 +27,19 @@ interface MusicConfirmationStatus {
   }
 }
 
+type DialogView =
+  | 'preview'        // File list + notes for new/resend
+  | 'confirm-send'   // Confirm recipients + email preview
+  | 'status'         // Distribution tracking
+  | 'preview-action' // Email preview before reminder/resend
+  | 'sent-result'    // Confirmation of what was sent
+
 interface SendMusicDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   projectId: string
   projectName: string
+  organizationName: string
   files: ProjectFile[]
   positions: {
     id: string
@@ -50,34 +58,122 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+/* ─── Inline email preview ─── */
+function EmailPreview({
+  type,
+  musicianName,
+  organizationName,
+  projectName,
+  files,
+  notes,
+}: {
+  type: 'music' | 'reminder'
+  musicianName: string
+  organizationName: string
+  projectName: string
+  files: { name: string; size: number }[]
+  notes?: string
+}) {
+  return (
+    <div className="border rounded-lg overflow-hidden text-sm bg-[#f6f9fc]">
+      {/* Header */}
+      <div className="bg-slate-800 text-white text-center py-4 px-4 font-semibold text-base">
+        {organizationName}
+      </div>
+
+      {/* Body */}
+      <div className="bg-white mx-auto p-5 space-y-3" style={{ maxWidth: 520 }}>
+        <p className="font-medium text-base">
+          Hi {musicianName}{type === 'reminder' ? ',' : '!'}
+        </p>
+
+        <p className="text-muted-foreground text-sm leading-relaxed">
+          {type === 'reminder'
+            ? <>This is a reminder to download your music for <strong className="text-foreground">{projectName}</strong>. Click each file below to download directly.</>
+            : <>Your music for <strong className="text-foreground">{projectName}</strong> is ready for download. Click each file below to download directly.</>}
+        </p>
+
+        {notes && type === 'music' && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+            <p className="text-yellow-800 text-sm whitespace-pre-wrap">{notes}</p>
+          </div>
+        )}
+
+        <div>
+          <p className="font-semibold text-sm mb-2">
+            {type === 'reminder' ? 'Files:' : 'Your Files:'}
+          </p>
+          {files.map((f, i) => (
+            <div key={i} className="pl-2 mb-1.5">
+              <span className="text-blue-600 underline font-medium">{f.name}</span>
+              <span className="text-xs text-muted-foreground ml-1.5">
+                ({formatFileSize(f.size)})
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <Separator />
+
+        <p className="text-muted-foreground text-sm">
+          After downloading, please confirm you've received and loaded all files on your iPad/tablet successfully:
+        </p>
+
+        <div className="text-center py-1">
+          <span className="inline-block bg-slate-800 text-white rounded-md px-5 py-2.5 text-sm font-semibold">
+            Confirm Music Received
+          </span>
+        </div>
+
+        <p className="text-xs text-muted-foreground text-center">
+          Questions? Contact {organizationName}.
+        </p>
+      </div>
+
+      {/* Footer */}
+      <div className="border-t px-4 py-2 text-center bg-white">
+        <p className="text-xs text-muted-foreground">
+          This email was sent by {organizationName} via Podium.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export function SendMusicDialog({
   open,
   onOpenChange,
   projectId,
   projectName,
+  organizationName,
   files,
   positions,
   timezone,
 }: SendMusicDialogProps) {
+  const [view, setView] = useState<DialogView>('preview')
   const [sending, setSending] = useState(false)
-  const [sendingReminder, setSendingReminder] = useState(false)
-  const [sent, setSent] = useState(false)
   const [sendId, setSendId] = useState<string | null>(null)
   const [confirmations, setConfirmations] = useState<MusicConfirmationStatus[]>([])
   const [loadingStatus, setLoadingStatus] = useState(false)
   const [notes, setNotes] = useState('')
-  const [showConfirmSend, setShowConfirmSend] = useState(false)
+  const [lastSendNotes, setLastSendNotes] = useState<string | null>(null)
 
-  // Confirmed musicians
+  // What was just sent — for the sent-result view
+  const [sentResult, setSentResult] = useState<{
+    type: 'music' | 'reminder'
+    count: number
+    notes?: string
+  } | null>(null)
+
+  // Confirmed musicians (for new sends)
   const filledPositions = positions.filter(
     (p) => p.status === 'confirmed' && p.musician_id && p.musician
   )
 
-  // Check for existing sends when dialog opens
+  // When dialog opens, check for existing sends
   useEffect(() => {
     if (open) {
       checkExistingSends()
-      setShowConfirmSend(false)
     }
   }, [open])
 
@@ -89,12 +185,15 @@ export function SendMusicDialog({
         const data = await res.json()
         if (data.sendId) {
           setSendId(data.sendId)
-          setSent(true)
           setConfirmations(data.confirmations || [])
+          setLastSendNotes(data.notes || null)
+          setView('status')
+        } else {
+          setView('preview')
         }
       }
     } catch {
-      // No existing sends
+      setView('preview')
     } finally {
       setLoadingStatus(false)
     }
@@ -115,11 +214,17 @@ export function SendMusicDialog({
         throw new Error(data.error || 'Failed to send')
       }
 
-      setSent(true)
       setSendId(data.sendId)
-      toast.success(`Music notification sent to ${data.sent} musician${data.sent !== 1 ? 's' : ''}`)
+      setSentResult({ type: 'music', count: data.sent, notes: notes.trim() || undefined })
+      setView('sent-result')
 
-      await checkExistingSends()
+      // Refresh status in background
+      const statusRes = await fetch(`/api/projects/${projectId}/music-status`)
+      if (statusRes.ok) {
+        const statusData = await statusRes.json()
+        setConfirmations(statusData.confirmations || [])
+        setLastSendNotes(statusData.notes || null)
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send music notifications')
     } finally {
@@ -129,7 +234,7 @@ export function SendMusicDialog({
 
   async function handleSendReminder() {
     if (!sendId) return
-    setSendingReminder(true)
+    setSending(true)
     try {
       const res = await fetch(`/api/projects/${projectId}/send-music-reminder`, {
         method: 'POST',
@@ -143,22 +248,27 @@ export function SendMusicDialog({
         throw new Error(data.error || 'Failed to send reminders')
       }
 
-      if (data.skipped > 0) {
-        const reasons = data.skippedReasons?.join(', ') || 'missing email or no matching files'
-        toast.warning(`Reminder sent to ${data.reminded} of ${data.total} — skipped: ${reasons}`)
-      } else {
-        toast.success(`Reminder sent to ${data.reminded} musician${data.reminded !== 1 ? 's' : ''}`)
+      if (data.skipped > 0 && data.skippedReasons?.length) {
+        toast.warning(`Skipped: ${data.skippedReasons.join(', ')}`)
       }
 
-      await checkExistingSends()
+      setSentResult({ type: 'reminder', count: data.reminded })
+      setView('sent-result')
+
+      // Refresh status in background
+      const statusRes = await fetch(`/api/projects/${projectId}/music-status`)
+      if (statusRes.ok) {
+        const statusData = await statusRes.json()
+        setConfirmations(statusData.confirmations || [])
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send reminders')
     } finally {
-      setSendingReminder(false)
+      setSending(false)
     }
   }
 
-  // Get which files each musician will receive
+  // Get which files a musician receives based on their instrument
   function getFilesForMusician(instrumentId: string): ProjectFile[] {
     return files.filter((f) => {
       if (f.scope === 'all') return true
@@ -176,19 +286,45 @@ export function SendMusicDialog({
   const unconfirmedCount = totalCount - confirmedCount
   const allConfirmed = totalCount > 0 && confirmedCount === totalCount
 
+  // Pick a sample musician for the email preview
+  const sampleMusician = filledPositions[0]?.musician
+  const sampleFiles = sampleMusician
+    ? getFilesForMusician(filledPositions[0].instrument_id)
+    : files
+
+  // For reminder preview, pick first unconfirmed musician and their files
+  const unconfirmedMusicians = confirmations.filter((c) => !c.confirmed_at)
+  const reminderSampleMusician = unconfirmedMusicians[0]?.musician
+  const reminderSamplePosition = reminderSampleMusician
+    ? filledPositions.find((p) => p.musician_id === reminderSampleMusician.id)
+    : null
+  const reminderSampleFiles = reminderSamplePosition
+    ? getFilesForMusician(reminderSamplePosition.instrument_id)
+    : sampleFiles
+
+  function viewTitle(): string {
+    switch (view) {
+      case 'preview': return 'Send Music to Musicians'
+      case 'confirm-send': return 'Confirm & Send'
+      case 'status': return 'Music Distribution Status'
+      case 'preview-action': return 'Email Preview'
+      case 'sent-result': return sentResult?.type === 'reminder' ? 'Reminder Sent' : 'Music Sent'
+      default: return 'Send Music'
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {sent ? 'Music Distribution Status' : showConfirmSend ? 'Confirm & Send' : 'Send Music to Musicians'}
-          </DialogTitle>
+          <DialogTitle>{viewTitle()}</DialogTitle>
         </DialogHeader>
 
         {loadingStatus ? (
           <div className="py-8 text-center text-sm text-muted-foreground">Loading...</div>
-        ) : sent ? (
-          /* Status View */
+
+        ) : view === 'status' ? (
+          /* ─── Status View ─── */
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">
@@ -236,30 +372,113 @@ export function SendMusicDialog({
               ))}
             </div>
 
-            {unconfirmedCount > 0 && (
-              <DialogFooter>
-                <Button variant="outline" onClick={() => onOpenChange(false)}>
-                  Close
-                </Button>
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Close
+              </Button>
+              <div className="flex gap-2">
                 <Button
-                  onClick={handleSendReminder}
-                  disabled={sendingReminder}
+                  variant="secondary"
+                  onClick={() => {
+                    setNotes('')
+                    setView('preview')
+                  }}
                 >
-                  {sendingReminder
-                    ? 'Sending...'
-                    : `Send Reminder to ${unconfirmedCount} Musician${unconfirmedCount !== 1 ? 's' : ''}`}
+                  Send Music Again
                 </Button>
-              </DialogFooter>
-            )}
-
-            {allConfirmed && (
-              <DialogFooter>
-                <Button onClick={() => onOpenChange(false)}>Done</Button>
-              </DialogFooter>
-            )}
+                {unconfirmedCount > 0 && (
+                  <Button
+                    onClick={() => setView('preview-action')}
+                  >
+                    Send Reminder to {unconfirmedCount} Musician{unconfirmedCount !== 1 ? 's' : ''}
+                  </Button>
+                )}
+              </div>
+            </DialogFooter>
           </div>
-        ) : showConfirmSend ? (
-          /* Confirm Send Step */
+
+        ) : view === 'preview-action' ? (
+          /* ─── Preview before sending reminder ─── */
+          <div className="space-y-4">
+            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                This reminder will be sent to <strong>{unconfirmedCount} musician{unconfirmedCount !== 1 ? 's' : ''}</strong> who
+                have not yet confirmed receipt. Below is a preview of the email they will receive.
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+                Email preview — shown for {reminderSampleMusician?.first_name} {reminderSampleMusician?.last_name}
+              </p>
+              <EmailPreview
+                type="reminder"
+                musicianName={reminderSampleMusician?.first_name || 'Musician'}
+                organizationName={organizationName}
+                projectName={projectName}
+                files={reminderSampleFiles.map((f) => ({ name: f.file_name, size: f.file_size }))}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setView('status')}>
+                Back
+              </Button>
+              <Button onClick={handleSendReminder} disabled={sending}>
+                {sending ? 'Sending...' : `Send Reminder Now`}
+              </Button>
+            </DialogFooter>
+          </div>
+
+        ) : view === 'sent-result' ? (
+          /* ─── Sent confirmation ─── */
+          <div className="space-y-4">
+            <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-4 text-center">
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+                <p className="text-sm font-semibold text-green-800 dark:text-green-200">
+                  {sentResult?.type === 'reminder'
+                    ? `Reminder sent to ${sentResult.count} musician${sentResult.count !== 1 ? 's' : ''}`
+                    : `Music notification sent to ${sentResult?.count} musician${sentResult?.count !== 1 ? 's' : ''}`}
+                </p>
+              </div>
+              <p className="text-xs text-green-700 dark:text-green-300">
+                Each musician received the email shown below.
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+                What was sent
+              </p>
+              <EmailPreview
+                type={sentResult?.type || 'music'}
+                musicianName={
+                  sentResult?.type === 'reminder'
+                    ? (reminderSampleMusician?.first_name || sampleMusician?.first_name || 'Musician')
+                    : (sampleMusician?.first_name || 'Musician')
+                }
+                organizationName={organizationName}
+                projectName={projectName}
+                files={(sentResult?.type === 'reminder' ? reminderSampleFiles : sampleFiles).map((f) => ({ name: f.file_name, size: f.file_size }))}
+                notes={sentResult?.notes}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Close
+              </Button>
+              <Button onClick={() => setView('status')}>
+                View Status
+              </Button>
+            </DialogFooter>
+          </div>
+
+        ) : view === 'confirm-send' ? (
+          /* ─── Confirm Send Step ─── */
           <div className="space-y-4">
             <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
               <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
@@ -299,8 +518,24 @@ export function SendMusicDialog({
                 })}
             </div>
 
+            <Separator />
+
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+                Email preview — shown for {sampleMusician?.first_name} {sampleMusician?.last_name}
+              </p>
+              <EmailPreview
+                type="music"
+                musicianName={sampleMusician?.first_name || 'Musician'}
+                organizationName={organizationName}
+                projectName={projectName}
+                files={sampleFiles.map((f) => ({ name: f.file_name, size: f.file_size }))}
+                notes={notes.trim() || undefined}
+              />
+            </div>
+
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowConfirmSend(false)}>
+              <Button variant="outline" onClick={() => setView('preview')}>
                 Back
               </Button>
               <Button
@@ -311,8 +546,9 @@ export function SendMusicDialog({
               </Button>
             </DialogFooter>
           </div>
+
         ) : (
-          /* Preview View */
+          /* ─── Preview View (initial / resend) ─── */
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
               Review the files that will be sent to each musician. Musicians will receive an email notification and can download files from their portal.
@@ -375,11 +611,17 @@ export function SendMusicDialog({
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+              <Button variant="outline" onClick={() => {
+                if (sendId) {
+                  setView('status')
+                } else {
+                  onOpenChange(false)
+                }
+              }}>
+                {sendId ? 'Back' : 'Cancel'}
               </Button>
               <Button
-                onClick={() => setShowConfirmSend(true)}
+                onClick={() => setView('confirm-send')}
                 disabled={filledPositions.length === 0}
               >
                 Review & Send to {filledPositions.length} Musician{filledPositions.length !== 1 ? 's' : ''}

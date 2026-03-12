@@ -822,6 +822,7 @@ export function ProjectsClient({
                               projectId={project.id}
                               projectName={project.name}
                               organizationId={organizationId}
+                              organizationName={organizationName}
                               positions={project.project_positions}
                               canManage={canManage}
                               timezone={timezone}

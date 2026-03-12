@@ -43,6 +43,7 @@ interface ProjectFilesSectionProps {
   projectId: string
   projectName: string
   organizationId: string
+  organizationName: string
   positions: {
     id: string
     status: string
@@ -66,6 +67,7 @@ export function ProjectFilesSection({
   projectId,
   projectName,
   organizationId,
+  organizationName,
   positions,
   canManage,
   timezone,
@@ -524,6 +526,7 @@ export function ProjectFilesSection({
         onOpenChange={setSendMusicOpen}
         projectId={projectId}
         projectName={projectName}
+        organizationName={organizationName}
         files={files}
         positions={positions}
         timezone={timezone}
