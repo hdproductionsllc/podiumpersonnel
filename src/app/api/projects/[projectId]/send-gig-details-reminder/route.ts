@@ -132,11 +132,15 @@ export async function POST(
     }
 
     let sentCount = 0
+    const failedNames: string[] = []
     for (let i = 0; i < unconfirmed.length; i++) {
       if (i > 0) await new Promise((r) => setTimeout(r, 600))
       const conf = unconfirmed[i]
       const musician = conf.musician as any
-      if (!musician?.email) continue
+      if (!musician?.email) {
+        failedNames.push(`${musician?.first_name || 'Unknown'} ${musician?.last_name || ''}`)
+        continue
+      }
 
       const confirmUrl = `${baseUrl}/confirm-details/${conf.token}`
 
@@ -165,12 +169,18 @@ export async function POST(
 
         sentCount++
       } catch (emailError) {
+        failedNames.push(`${musician.first_name} ${musician.last_name}`)
         console.error(`Failed to send reminder to ${musician.email}:`, emailError)
       }
     }
 
-    const skipped = unconfirmed.length - sentCount
-    return NextResponse.json({ success: true, reminded: sentCount, total: unconfirmed.length, skipped })
+    return NextResponse.json({
+      success: true,
+      reminded: sentCount,
+      total: unconfirmed.length,
+      failed: failedNames.length,
+      failedNames: failedNames.length > 0 ? failedNames : undefined,
+    })
   } catch (error) {
     console.error('Failed to send gig details reminders:', error)
     return NextResponse.json(

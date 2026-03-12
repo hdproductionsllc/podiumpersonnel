@@ -159,6 +159,7 @@ export async function POST(
 
     // Send email to each musician with their specific files + direct download links
     let sentCount = 0
+    const failedNames: string[] = []
     for (let i = 0; i < filledPositions.length; i++) {
       const pos = filledPositions[i]
       // Delay between sends to avoid Resend rate limit (2 req/sec)
@@ -221,6 +222,7 @@ export async function POST(
           console.error(`Email sent but failed to log for ${musician.email}:`, logError)
         }
       } catch (emailError) {
+        failedNames.push(`${musician.first_name} ${musician.last_name}`)
         console.error(`Failed to send music email to ${musician.email}:`, emailError)
       }
     }
@@ -228,6 +230,8 @@ export async function POST(
     return NextResponse.json({
       success: true,
       sent: sentCount,
+      failed: failedNames.length,
+      failedNames: failedNames.length > 0 ? failedNames : undefined,
       total: filledPositions.length,
       sendId: sendRecord.id,
     })

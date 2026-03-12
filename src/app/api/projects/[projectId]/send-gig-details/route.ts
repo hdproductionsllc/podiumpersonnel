@@ -94,6 +94,13 @@ export async function POST(
     const positions = (project.project_positions as any[]) || []
     const timezone = organization?.timezone || DEFAULT_TIMEZONE
 
+    if (services.length === 0) {
+      return NextResponse.json(
+        { error: 'Add at least one service before sending gig details' },
+        { status: 400 }
+      )
+    }
+
     // Only include filled positions (musician assigned and offer accepted)
     const filledPositions = positions.filter(
       (p: any) => p.status === 'confirmed' && p.musician_id && p.musician?.email
@@ -206,6 +213,7 @@ export async function POST(
 
     // Send email to each musician
     let sentCount = 0
+    const failedNames: string[] = []
     for (let i = 0; i < roster.length; i++) {
       if (i > 0) await new Promise((r) => setTimeout(r, 600))
       const member = roster[i]
@@ -254,6 +262,7 @@ export async function POST(
 
         sentCount++
       } catch (emailError) {
+        failedNames.push(member.name)
         console.error(`Failed to send gig details to ${member.email}:`, emailError)
       }
     }
@@ -261,6 +270,8 @@ export async function POST(
     return NextResponse.json({
       success: true,
       sent: sentCount,
+      failed: failedNames.length,
+      failedNames: failedNames.length > 0 ? failedNames : undefined,
       total: roster.length,
       sendId: sendRecord.id,
     })

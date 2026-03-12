@@ -42,7 +42,19 @@ export async function PATCH(
   }
 
   if (targetMember.role === 'owner') {
-    return NextResponse.json({ error: 'Cannot change the owner role' }, { status: 400 })
+    // Ensure at least one owner remains before allowing role change
+    const { count } = await supabase
+      .from('organization_members')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', membership.organization_id)
+      .eq('role', 'owner')
+
+    if ((count ?? 0) <= 1) {
+      return NextResponse.json(
+        { error: 'Cannot change the last owner\'s role. Transfer ownership first.' },
+        { status: 400 }
+      )
+    }
   }
 
   const body = await request.json()
@@ -103,7 +115,19 @@ export async function DELETE(
   }
 
   if (targetMember.role === 'owner') {
-    return NextResponse.json({ error: 'Cannot remove the owner' }, { status: 400 })
+    // Ensure at least one owner remains
+    const { count } = await supabase
+      .from('organization_members')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', membership.organization_id)
+      .eq('role', 'owner')
+
+    if ((count ?? 0) <= 1) {
+      return NextResponse.json(
+        { error: 'Cannot remove the last owner. Transfer ownership first.' },
+        { status: 400 }
+      )
+    }
   }
 
   const adminClient = createAdminClient()

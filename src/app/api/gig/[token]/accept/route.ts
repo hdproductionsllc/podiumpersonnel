@@ -77,23 +77,41 @@ export async function POST(
     .eq('status', 'approved')
     .maybeSingle()
 
-  // Update offer to accepted
-  await supabase
+  // Update offer to accepted (optimistic lock: only update if still pending/viewed)
+  const { data: updatedOffer } = await supabase
     .from('contract_offers')
     .update({
       status: 'accepted',
       responded_at: new Date().toISOString(),
     })
     .eq('id', offer.id)
+    .in('status', ['pending', 'viewed'])
+    .select('id')
+
+  if (!updatedOffer || updatedOffer.length === 0) {
+    return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
+  }
 
   // Update position: assign musician and set status to confirmed
-  await supabase
+  // Only update if no musician is already assigned (prevents race condition)
+  const { data: updatedPosition } = await supabase
     .from('project_positions')
     .update({
       musician_id: offer.musician_id,
       status: 'confirmed',
     })
     .eq('id', offer.project_position_id)
+    .is('musician_id', null)
+    .select('id')
+
+  if (!updatedPosition || updatedPosition.length === 0) {
+    // Position was already filled — revert the offer status
+    await supabase
+      .from('contract_offers')
+      .update({ status: 'pending', responded_at: null })
+      .eq('id', offer.id)
+    return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
+  }
 
   // If this is a substitution, update the substitution request and notify original musician
   if (subRequest) {

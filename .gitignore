@@ -33,10 +33,14 @@ yarn-error.log*
 # env files - NEVER commit secrets!
 .env
 .env.local
+.env.production
 .env.development.local
 .env.test.local
 .env.production.local
 # .env.example is tracked and safe to commit (contains no secrets)
+
+# supabase local temp
+supabase/.temp/
 
 # vercel
 .vercel

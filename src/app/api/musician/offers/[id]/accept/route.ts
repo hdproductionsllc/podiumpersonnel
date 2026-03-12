@@ -99,32 +99,50 @@ export async function POST(
     .eq('status', 'approved')
     .maybeSingle()
 
-  // Update offer to accepted
-  const { error: offerUpdateError } = await supabase
+  // Update offer to accepted (optimistic lock: only update if still pending/viewed)
+  const { data: updatedOffer, error: offerUpdateError } = await supabase
     .from('contract_offers')
     .update({
       status: 'accepted',
       responded_at: new Date().toISOString(),
     })
     .eq('id', offer.id)
+    .in('status', ['pending', 'viewed'])
+    .select('id')
 
   if (offerUpdateError) {
     console.error('Failed to update offer status:', offerUpdateError)
     return NextResponse.json({ error: 'Failed to accept offer' }, { status: 500 })
   }
 
+  if (!updatedOffer || updatedOffer.length === 0) {
+    return NextResponse.json({ error: 'This offer has already been responded to' }, { status: 409 })
+  }
+
   // Update position: assign musician and set status to confirmed
-  const { error: positionUpdateError } = await supabase
+  // Only update if no musician is already assigned (prevents race condition)
+  const { data: updatedPosition, error: positionUpdateError } = await supabase
     .from('project_positions')
     .update({
       musician_id: offer.musician_id,
       status: 'confirmed',
     })
     .eq('id', offer.project_position_id)
+    .is('musician_id', null)
+    .select('id')
 
   if (positionUpdateError) {
     console.error('Failed to update position:', positionUpdateError)
     return NextResponse.json({ error: 'Failed to confirm position' }, { status: 500 })
+  }
+
+  if (!updatedPosition || updatedPosition.length === 0) {
+    // Position was already filled — revert the offer status
+    await supabase
+      .from('contract_offers')
+      .update({ status: 'pending', responded_at: null })
+      .eq('id', offer.id)
+    return NextResponse.json({ error: 'This position has already been filled' }, { status: 409 })
   }
 
   // If this is a substitution, update the substitution request and notify original musician

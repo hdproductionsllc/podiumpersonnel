@@ -117,7 +117,11 @@ export function SendGigDetailsDialog({
 
       setSent(true)
       setSendId(data.sendId)
-      toast.success(`Gig details sent to ${data.sent} musician${data.sent !== 1 ? 's' : ''}`)
+      if (data.failedNames?.length > 0) {
+        toast.warning(`Sent to ${data.sent} of ${data.total}. Failed: ${data.failedNames.join(', ')}`)
+      } else {
+        toast.success(`Gig details sent to ${data.sent} musician${data.sent !== 1 ? 's' : ''}`)
+      }
 
       // Refresh status
       await checkExistingSends()
@@ -144,8 +148,10 @@ export function SendGigDetailsDialog({
         throw new Error(data.error || 'Failed to send reminders')
       }
 
-      if (data.skipped > 0) {
-        toast.success(`Reminder sent to ${data.reminded} of ${data.total} musicians (${data.skipped} failed — may be missing email)`)
+      if (data.failedNames?.length > 0) {
+        toast.warning(`Reminder sent to ${data.reminded} of ${data.total}. Failed: ${data.failedNames.join(', ')}`)
+      } else if (data.failed > 0) {
+        toast.warning(`Reminder sent to ${data.reminded} of ${data.total} (${data.failed} failed — may be missing email)`)
       } else {
         toast.success(`Reminder sent to ${data.reminded} musician${data.reminded !== 1 ? 's' : ''}`)
       }

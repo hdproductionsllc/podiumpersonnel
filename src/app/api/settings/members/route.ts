@@ -32,19 +32,26 @@ export async function GET() {
     return NextResponse.json({ members: [] })
   }
 
+  // Batch-fetch all users at once instead of N+1 sequential queries
   const adminClient = createAdminClient()
-  const membersWithEmails = await Promise.all(
-    members.map(async (member) => {
-      const { data: { user: memberUser } } = await adminClient.auth.admin.getUserById(member.user_id)
-      return {
-        id: member.id,
-        user_id: member.user_id,
-        role: member.role,
-        email: memberUser?.email || 'Unknown',
-        created_at: member.created_at,
-      }
-    })
-  )
+  const userIds = members.map((m) => m.user_id)
+  const emailMap = new Map<string, string>()
+
+  // Supabase listUsers paginates at 1000 — more than enough for org members
+  const { data: { users: allUsers } } = await adminClient.auth.admin.listUsers({ perPage: 1000 })
+  for (const u of allUsers) {
+    if (userIds.includes(u.id)) {
+      emailMap.set(u.id, u.email || 'Unknown')
+    }
+  }
+
+  const membersWithEmails = members.map((member) => ({
+    id: member.id,
+    user_id: member.user_id,
+    role: member.role,
+    email: emailMap.get(member.user_id) || 'Unknown',
+    created_at: member.created_at,
+  }))
 
   return NextResponse.json({ members: membersWithEmails })
 }

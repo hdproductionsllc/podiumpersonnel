@@ -123,17 +123,27 @@ export async function POST(
     }
 
     // Assign the musician directly — no contract_offer, no email
-    const { error: updateError } = await supabase
+    // Only update if no musician is already assigned (prevents race condition)
+    const { data: updatedPosition, error: updateError } = await supabase
       .from('project_positions')
       .update({
         musician_id: musicianId,
         status: 'confirmed',
       })
       .eq('id', positionId)
+      .is('musician_id', null)
+      .select('id')
 
     if (updateError) {
       console.error('Failed to assign position:', updateError)
       return NextResponse.json({ error: 'Failed to assign position' }, { status: 500 })
+    }
+
+    if (!updatedPosition || updatedPosition.length === 0) {
+      return NextResponse.json(
+        { error: 'This position has already been assigned' },
+        { status: 409 }
+      )
     }
 
     return NextResponse.json({ success: true })

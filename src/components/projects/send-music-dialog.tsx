@@ -217,6 +217,9 @@ export function SendMusicDialog({
       setSendId(data.sendId)
       setSentResult({ type: 'music', count: data.sent, notes: notes.trim() || undefined })
       setView('sent-result')
+      if (data.failedNames?.length > 0) {
+        toast.warning(`Failed to send to: ${data.failedNames.join(', ')}`)
+      }
 
       // Refresh status in background
       const statusRes = await fetch(`/api/projects/${projectId}/music-status`)
