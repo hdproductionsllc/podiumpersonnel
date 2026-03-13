@@ -13,6 +13,26 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   cancelled: 'Cancelled',
 }
 
+export const EVENT_TYPES = [
+  'Ceremony',
+  'Cocktail Hour',
+  'Ceremony & Cocktail Hour',
+  'Reception',
+  'Special Event',
+  'Concert',
+  'Corporate Event',
+  'Other',
+] as const
+
+export const PAYMENT_STATUSES = ['pending', 'deposit_paid', 'fully_paid'] as const
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number]
+
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  pending: 'Pending',
+  deposit_paid: 'Deposit Paid',
+  fully_paid: 'Fully Paid',
+}
+
 export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   rehearsal: 'Rehearsal',
   performance: 'Performance',
@@ -43,6 +63,42 @@ export const projectSchema = z.object({
     .optional()
     .or(z.literal('')),
   status: z.enum(PROJECT_STATUSES),
+  client_name: z
+    .string()
+    .optional()
+    .or(z.literal('')),
+  client_email: z
+    .string()
+    .email('Invalid email')
+    .optional()
+    .or(z.literal('')),
+  client_phone: z
+    .string()
+    .optional()
+    .or(z.literal('')),
+  event_type: z
+    .string()
+    .optional()
+    .or(z.literal('')),
+  contract_amount: z
+    .number()
+    .min(0)
+    .optional()
+    .nullable(),
+  deposit_amount: z
+    .number()
+    .min(0)
+    .optional()
+    .nullable(),
+  deposit_paid_at: z
+    .string()
+    .optional()
+    .or(z.literal('')),
+  payment_status: z.enum(PAYMENT_STATUSES),
+  payment_notes: z
+    .string()
+    .optional()
+    .or(z.literal('')),
 })
 
 export const serviceSchema = z.object({

@@ -7,6 +7,9 @@ import { createClient } from '@/lib/supabase/client'
 import {
   projectSchema,
   type ProjectInput,
+  EVENT_TYPES,
+  PAYMENT_STATUS_LABELS,
+  PAYMENT_STATUSES,
 } from '@/lib/validations/projects'
 import {
   Dialog,
@@ -104,6 +107,7 @@ export function ProjectFormDialog({
   const [endTime, setEndTime] = useState('22:00')
   const [venueName, setVenueName] = useState('')
   const [venueId, setVenueId] = useState<string | null>(null)
+  const [bookingOpen, setBookingOpen] = useState(false)
   const isEditing = !!project
   const today = new Date().toISOString().split('T')[0]
 
@@ -116,6 +120,15 @@ export function ProjectFormDialog({
       start_date: '',
       end_date: '',
       status: 'active',
+      client_name: '',
+      client_email: '',
+      client_phone: '',
+      event_type: '',
+      contract_amount: null,
+      deposit_amount: null,
+      deposit_paid_at: '',
+      payment_status: 'pending',
+      payment_notes: '',
     },
   })
 
@@ -129,9 +142,20 @@ export function ProjectFormDialog({
           start_date: project.start_date || '',
           end_date: project.end_date || '',
           status: project.status,
+          client_name: project.client_name || '',
+          client_email: project.client_email || '',
+          client_phone: project.client_phone || '',
+          event_type: project.event_type || '',
+          contract_amount: project.contract_amount ? Number(project.contract_amount) : null,
+          deposit_amount: project.deposit_amount ? Number(project.deposit_amount) : null,
+          deposit_paid_at: project.deposit_paid_at || '',
+          payment_status: (project.payment_status as 'pending' | 'deposit_paid' | 'fully_paid') || 'pending',
+          payment_notes: project.payment_notes || '',
         })
         setShowTemplatePicker(false)
         setSelectedTemplate(null)
+        // Auto-expand booking section if any client/payment data exists
+        setBookingOpen(!!(project.client_name || project.client_email || project.contract_amount || project.event_type))
         // Auto-detect single-day event
         setIsSingleDay(
           !!project.start_date && !!project.end_date && project.start_date === project.end_date
@@ -144,11 +168,21 @@ export function ProjectFormDialog({
           start_date: '',
           end_date: '',
           status: 'active',
+          client_name: '',
+          client_email: '',
+          client_phone: '',
+          event_type: '',
+          contract_amount: null,
+          deposit_amount: null,
+          deposit_paid_at: '',
+          payment_status: 'pending',
+          payment_notes: '',
         })
         // Always show template picker for new projects
         setShowTemplatePicker(true)
         setSelectedTemplate(null)
         setIsSingleDay(false)
+        setBookingOpen(false)
         setCallTime('18:30')
         setStartTime('19:00')
         setEndTime('22:00')
@@ -236,6 +270,15 @@ export function ProjectFormDialog({
           start_date: data.start_date || null,
           end_date: data.end_date || null,
           status: data.status,
+          client_name: data.client_name || null,
+          client_email: data.client_email || null,
+          client_phone: data.client_phone || null,
+          event_type: data.event_type || null,
+          contract_amount: data.contract_amount ?? null,
+          deposit_amount: data.deposit_amount ?? null,
+          deposit_paid_at: data.deposit_paid_at || null,
+          payment_status: data.payment_status || 'pending',
+          payment_notes: data.payment_notes || null,
         })
         .eq('id', project.id)
 
@@ -256,6 +299,15 @@ export function ProjectFormDialog({
           end_date: data.end_date || null,
           status: data.status,
           ensemble_type: selectedTemplate ? ENSEMBLE_LABELS[selectedTemplate] || null : null,
+          client_name: data.client_name || null,
+          client_email: data.client_email || null,
+          client_phone: data.client_phone || null,
+          event_type: data.event_type || null,
+          contract_amount: data.contract_amount ?? null,
+          deposit_amount: data.deposit_amount ?? null,
+          deposit_paid_at: data.deposit_paid_at || null,
+          payment_status: data.payment_status || 'pending',
+          payment_notes: data.payment_notes || null,
         })
         .select('id')
         .single()
@@ -545,6 +597,210 @@ export function ProjectFormDialog({
                 />
               </div>
             )}
+
+            {/* Client & Booking — Collapsible */}
+            <div className="border rounded-md">
+              <button
+                type="button"
+                className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors"
+                onClick={() => setBookingOpen(!bookingOpen)}
+              >
+                <div className="flex items-center gap-2">
+                  <span>Client & Booking</span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-400">
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                    </svg>
+                    Team only
+                  </span>
+                </div>
+                <svg
+                  className={`h-4 w-4 transition-transform ${bookingOpen ? 'rotate-180' : ''}`}
+                  fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                </svg>
+              </button>
+
+              {bookingOpen && (
+                <div className="px-4 pb-4 space-y-4 border-t">
+                  {/* Client Info */}
+                  <div className="grid grid-cols-2 gap-3 pt-3">
+                    <FormField
+                      control={form.control}
+                      name="client_name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Client Name</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g. Jane Smith" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="event_type"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Event Type</FormLabel>
+                          <FormControl>
+                            <select
+                              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              value={field.value || ''}
+                              onChange={field.onChange}
+                            >
+                              <option value="">Select type...</option>
+                              {EVENT_TYPES.map((t) => (
+                                <option key={t} value={t}>{t}</option>
+                              ))}
+                            </select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                      control={form.control}
+                      name="client_email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Client Email</FormLabel>
+                          <FormControl>
+                            <Input type="email" placeholder="client@example.com" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="client_phone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Client Phone</FormLabel>
+                          <FormControl>
+                            <Input type="tel" placeholder="(555) 123-4567" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* Financial */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                      control={form.control}
+                      name="contract_amount"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Contract Amount</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                              <Input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                className="pl-7"
+                                placeholder="0.00"
+                                value={field.value ?? ''}
+                                onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="deposit_amount"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Deposit Amount</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                              <Input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                className="pl-7"
+                                placeholder="0.00"
+                                value={field.value ?? ''}
+                                onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                      control={form.control}
+                      name="payment_status"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Payment Status</FormLabel>
+                          <FormControl>
+                            <select
+                              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              value={field.value || 'pending'}
+                              onChange={field.onChange}
+                            >
+                              {PAYMENT_STATUSES.map((s) => (
+                                <option key={s} value={s}>{PAYMENT_STATUS_LABELS[s]}</option>
+                              ))}
+                            </select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="deposit_paid_at"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Deposit Paid Date</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="payment_notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Payment Notes</FormLabel>
+                        <FormControl>
+                          <textarea
+                            className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            placeholder="e.g. 50% deposit due 2 weeks before event..."
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+            </div>
 
             <DialogFooter>
               <Button

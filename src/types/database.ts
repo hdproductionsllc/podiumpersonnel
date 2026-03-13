@@ -300,6 +300,15 @@ export type Database = {
           status: 'draft' | 'active' | 'completed' | 'cancelled'
           book_id: string | null
           ensemble_type: string | null
+          client_name: string | null
+          client_email: string | null
+          client_phone: string | null
+          event_type: string | null
+          contract_amount: number | null
+          deposit_amount: number | null
+          deposit_paid_at: string | null
+          payment_status: 'pending' | 'deposit_paid' | 'fully_paid'
+          payment_notes: string | null
           created_at: string
           updated_at: string
         }
@@ -314,6 +323,15 @@ export type Database = {
           status?: 'draft' | 'active' | 'completed' | 'cancelled'
           book_id?: string | null
           ensemble_type?: string | null
+          client_name?: string | null
+          client_email?: string | null
+          client_phone?: string | null
+          event_type?: string | null
+          contract_amount?: number | null
+          deposit_amount?: number | null
+          deposit_paid_at?: string | null
+          payment_status?: 'pending' | 'deposit_paid' | 'fully_paid'
+          payment_notes?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -328,6 +346,15 @@ export type Database = {
           status?: 'draft' | 'active' | 'completed' | 'cancelled'
           book_id?: string | null
           ensemble_type?: string | null
+          client_name?: string | null
+          client_email?: string | null
+          client_phone?: string | null
+          event_type?: string | null
+          contract_amount?: number | null
+          deposit_amount?: number | null
+          deposit_paid_at?: string | null
+          payment_status?: 'pending' | 'deposit_paid' | 'fully_paid'
+          payment_notes?: string | null
           created_at?: string
           updated_at?: string
         }
