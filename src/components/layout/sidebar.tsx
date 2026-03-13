@@ -43,7 +43,9 @@ function BookIcon({ className }: { className?: string }) {
 function MusicIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m9 9 10.5-3m0 6.553v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 1 1-.99-3.467l2.31-.66a2.25 2.25 0 0 0 1.632-2.163Zm0 0V4.103A2.25 2.25 0 0 0 17.378 2h-.403a2.25 2.25 0 0 0-1.5.563L9 9m10.5-3H9m0 0v7.5m0 0-4.5 1.286v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 1 1-.99-3.467l2.31-.66A2.25 2.25 0 0 0 4.5 14.25v-7.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13" />
+      <circle cx="6" cy="19" r="3" fill="none" />
+      <circle cx="18" cy="16" r="3" fill="none" />
     </svg>
   )
 }

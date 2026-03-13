@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Fragment } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -962,6 +963,19 @@ export function ProjectsClient({
                           <ConflictsSummary
                             conflicts={detectConflicts(project.project_positions, musicians, project.services)}
                           />
+                          {/* Payments shortcut */}
+                          {canManage && project.project_positions.some((p) => p.status === 'confirmed') && (
+                            <div className="flex items-center gap-3">
+                              <Link href={`/dashboard/payments?project=${project.id}`}>
+                                <Button variant="outline" size="sm">
+                                  <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                  </svg>
+                                  Manage Payments
+                                </Button>
+                              </Link>
+                            </div>
+                          )}
                           {/* Music / Parts Section */}
                           {canManage && project.project_positions.length > 0 && (
                             <ProjectFilesSection
