@@ -301,8 +301,6 @@ export function ProjectsClient({
   // Filter state
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [viewMode, setViewMode] = useState<'list' | 'table'>('list')
-
   const canManage = userRole === 'owner' || userRole === 'admin'
 
   const hasFilters = search !== '' || statusFilter !== ''
@@ -613,7 +611,7 @@ export function ProjectsClient({
     }
   }
 
-  const colCount = canManage ? 7 : 6
+  const colCount = canManage ? 11 : 10
 
   return (
     <div className="space-y-6">
@@ -697,35 +695,9 @@ export function ProjectsClient({
               Clear
             </Button>
           )}
-          <div className="flex items-center gap-2 ml-auto">
-            <span className="text-xs text-muted-foreground">
-              {filteredProjects.length} of {projects.length}
-            </span>
-            {canManage && (
-              <div className="flex rounded-md border overflow-hidden">
-                <button
-                  type="button"
-                  className={`px-2 py-1.5 text-xs ${viewMode === 'list' ? 'bg-muted font-medium' : 'hover:bg-muted/50'}`}
-                  onClick={() => setViewMode('list')}
-                  title="List view"
-                >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  className={`px-2 py-1.5 text-xs border-l ${viewMode === 'table' ? 'bg-muted font-medium' : 'hover:bg-muted/50'}`}
-                  onClick={() => setViewMode('table')}
-                  title="Summary table"
-                >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0 1 12 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M12 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M21.375 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125M12 17.25v-5.25" />
-                  </svg>
-                </button>
-              </div>
-            )}
-          </div>
+          <span className="text-xs text-muted-foreground ml-auto">
+            {filteredProjects.length} of {projects.length} projects
+          </span>
         </div>
       )}
 
@@ -742,137 +714,23 @@ export function ProjectsClient({
         />
       ) : filteredProjects.length === 0 ? (
         <EmptyState title="No projects match your filters" />
-      ) : viewMode === 'table' ? (
-        /* ── Summary Table View ── */
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted/50">
-              <tr>
-                <th className="px-3 py-3 text-left font-medium">Date</th>
-                <th className="px-3 py-3 text-left font-medium">Name</th>
-                <th className="px-3 py-3 text-left font-medium">Event Type</th>
-                <th className="px-3 py-3 text-left font-medium">Client</th>
-                <th className="px-3 py-3 text-left font-medium">Venue</th>
-                <th className="px-3 py-3 text-left font-medium">Time</th>
-                <th className="px-3 py-3 text-left font-medium">Musicians</th>
-                <th className="px-3 py-3 text-right font-medium">Contract</th>
-                <th className="px-3 py-3 text-right font-medium">Deposit</th>
-                <th className="px-3 py-3 text-left font-medium">Payment</th>
-                <th className="px-3 py-3 text-left font-medium">Status</th>
-                <th className="px-3 py-3 text-left font-medium">Notes</th>
-                {canManage && <th className="px-3 py-3 text-right font-medium">Actions</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {filteredProjects.map((project) => {
-                const firstService = [...project.services].sort((a, b) =>
-                  new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-                )[0]
-                const venues = [...new Set(project.services.map((s) => s.venue).filter(Boolean))]
-                const confirmedMusicians = project.project_positions.filter((p) => p.status === 'confirmed')
-                const totalPositions = project.project_positions.length
-                const fmt = (n: number | null | undefined) => n != null ? `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}` : '—'
-
-                return (
-                  <tr
-                    key={project.id}
-                    className="hover:bg-muted/50 cursor-pointer"
-                    onClick={() => {
-                      setViewMode('list')
-                      setExpandedRows(new Set([project.id]))
-                      try { sessionStorage.setItem(EXPANDED_STORAGE_KEY, JSON.stringify([project.id])) } catch { /* ignore */ }
-                      setTimeout(() => {
-                        document.getElementById(`project-${project.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                      }, 50)
-                    }}
-                  >
-                    <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
-                      {formatDateRange(project.start_date, project.end_date)}
-                    </td>
-                    <td className="px-3 py-3 font-medium whitespace-nowrap">
-                      {project.name}
-                    </td>
-                    <td className="px-3 py-3">
-                      {project.event_type || '—'}
-                    </td>
-                    <td className="px-3 py-3">
-                      <div>
-                        <div className="font-medium">{project.client_name || '—'}</div>
-                        {project.client_phone && (
-                          <div className="text-xs text-muted-foreground">{project.client_phone}</div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3">
-                      {venues.length > 0 ? (
-                        <div className="max-w-[180px] truncate" title={venues.join(', ')}>
-                          {venues[0]}
-                        </div>
-                      ) : '—'}
-                    </td>
-                    <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
-                      {firstService ? (
-                        <>
-                          {new Date(firstService.start_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                          {firstService.end_time && ` – ${new Date(firstService.end_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}
-                        </>
-                      ) : '—'}
-                    </td>
-                    <td className="px-3 py-3 whitespace-nowrap">
-                      {totalPositions > 0 ? (
-                        <span className={confirmedMusicians.length === totalPositions ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}>
-                          {confirmedMusicians.length}/{totalPositions}
-                        </span>
-                      ) : '—'}
-                    </td>
-                    <td className="px-3 py-3 text-right whitespace-nowrap">
-                      {fmt(project.contract_amount)}
-                    </td>
-                    <td className="px-3 py-3 text-right whitespace-nowrap">
-                      <div>{fmt(project.deposit_amount)}</div>
-                      {project.deposit_paid_at && (
-                        <div className="text-xs text-green-600 dark:text-green-400">
-                          Paid {new Date(project.deposit_paid_at + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-3 py-3">
-                      <PaymentStatusBadge status={project.payment_status} />
-                    </td>
-                    <td className="px-3 py-3">
-                      <StatusBadge status={project.status} />
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="max-w-[200px] truncate text-muted-foreground" title={project.payment_notes || project.internal_notes || ''}>
-                        {project.payment_notes || project.internal_notes || '—'}
-                      </div>
-                    </td>
-                    {canManage && (
-                      <td className="px-3 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="sm" onClick={() => handleEditProject(project)}>Edit</Button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
       ) : (
-        /* ── Expandable List View (default) ── */
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/50">
               <tr>
                 <th className="w-10 px-2 py-3"></th>
-                <th className="px-4 py-3 text-left font-medium">Name</th>
-                <th className="px-4 py-3 text-left font-medium">Dates</th>
-                <th className="px-4 py-3 text-left font-medium">Status</th>
-                <th className="px-4 py-3 text-left font-medium">Services</th>
+                <th className="px-3 py-3 text-left font-medium">Name</th>
+                <th className="px-3 py-3 text-left font-medium">Dates</th>
+                <th className="px-3 py-3 text-left font-medium">Client</th>
+                <th className="px-3 py-3 text-left font-medium">Status</th>
+                <th className="px-3 py-3 text-right font-medium">Contract</th>
+                <th className="px-3 py-3 text-right font-medium">Deposit</th>
+                <th className="px-3 py-3 text-left font-medium">Payment</th>
+                <th className="px-3 py-3 text-left font-medium">Musicians</th>
+                <th className="px-3 py-3 text-left font-medium">Services</th>
                 {canManage && (
-                  <th className="px-4 py-3 text-right font-medium">Actions</th>
+                  <th className="px-3 py-3 text-right font-medium">Actions</th>
                 )}
               </tr>
             </thead>
@@ -889,18 +747,63 @@ export function ProjectsClient({
                       <td className="px-2 py-3 text-center">
                         <ChevronIcon expanded={isExpanded} />
                       </td>
-                      <td className="px-4 py-3 font-medium">{project.name}</td>
-                      <td className="px-4 py-3 text-muted-foreground">
+                      <td className="px-3 py-3 font-medium whitespace-nowrap">{project.name}</td>
+                      <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
                         {formatDateRange(project.start_date, project.end_date)}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3">
+                        {project.client_name ? (
+                          <div>
+                            <div className="font-medium">{project.client_name}</div>
+                            {project.event_type && (
+                              <div className="text-xs text-muted-foreground">{project.event_type}</div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3">
                         <StatusBadge status={project.status} />
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">
+                      <td className="px-3 py-3 text-right whitespace-nowrap tabular-nums">
+                        {project.contract_amount != null
+                          ? `$${Number(project.contract_amount).toLocaleString()}`
+                          : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-3 py-3 text-right whitespace-nowrap">
+                        {project.deposit_amount != null ? (
+                          <div>
+                            <div className="tabular-nums">${Number(project.deposit_amount).toLocaleString()}</div>
+                            {project.deposit_paid_at ? (
+                              <div className="text-xs text-green-600 dark:text-green-400">
+                                Paid {new Date(project.deposit_paid_at + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              </div>
+                            ) : (
+                              <div className="text-xs text-amber-600 dark:text-amber-400">Due</div>
+                            )}
+                          </div>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-3 py-3">
+                        <PaymentStatusBadge status={project.payment_status} />
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        {project.project_positions.length > 0 ? (
+                          <span className={
+                            project.project_positions.filter((p) => p.status === 'confirmed').length === project.project_positions.length
+                              ? 'text-green-700 dark:text-green-400'
+                              : 'text-amber-700 dark:text-amber-400'
+                          }>
+                            {project.project_positions.filter((p) => p.status === 'confirmed').length}/{project.project_positions.length}
+                          </span>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-3 py-3 text-muted-foreground">
                         {project.services.length}
                       </td>
                       {canManage && (
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-3 py-3 text-right">
                           <div
                             className="flex items-center justify-end gap-1"
                             onClick={(e) => e.stopPropagation()}
@@ -910,7 +813,7 @@ export function ProjectsClient({
                               size="sm"
                               onClick={() => handleEditProject(project)}
                             >
-                              Edit Details
+                              Edit
                             </Button>
                             <Button
                               variant="ghost"
