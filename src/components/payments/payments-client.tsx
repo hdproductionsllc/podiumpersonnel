@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator'
 import { EmptyState } from '@/components/ui/empty-state'
 import { PaymentStatusDialog } from './payment-status-dialog'
 import { ExportDialog } from './export-dialog'
+import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 
 const PAGE_SIZE = 50
@@ -197,6 +198,25 @@ export function PaymentsClient({
     } finally {
       setIsGenerating(false)
     }
+  }
+
+  // Delete unpaid payments
+  async function handleDeletePayments(ids: string[]) {
+    if (!confirm(`Delete ${ids.length} payment${ids.length > 1 ? 's' : ''}? This cannot be undone.`)) return
+    const supabase = createClient()
+    const { error: deleteError } = await supabase
+      .from('payments')
+      .delete()
+      .in('id', ids)
+      .eq('status', 'unpaid')
+
+    if (deleteError) {
+      toast.error(deleteError.message)
+      return
+    }
+    toast.success(`Deleted ${ids.length} payment${ids.length > 1 ? 's' : ''}`)
+    setSelectedIds(new Set())
+    router.refresh()
   }
 
   // Quick status update
@@ -415,6 +435,15 @@ export function PaymentsClient({
           >
             Export Selected
           </Button>
+          {selectedPayments.every((p) => p.status === 'unpaid') && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => handleDeletePayments(Array.from(selectedIds))}
+            >
+              Delete
+            </Button>
+          )}
           <Button
             size="sm"
             variant="ghost"
@@ -583,16 +612,28 @@ export function PaymentsClient({
                       <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           {payment.status !== 'paid' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedIds(new Set([payment.id]))
-                                setStatusDialogOpen(true)
-                              }}
-                            >
-                              Mark Paid
-                            </Button>
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedIds(new Set([payment.id]))
+                                  setStatusDialogOpen(true)
+                                }}
+                              >
+                                Mark Paid
+                              </Button>
+                              {payment.status === 'unpaid' && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => handleDeletePayments([payment.id])}
+                                >
+                                  Delete
+                                </Button>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
