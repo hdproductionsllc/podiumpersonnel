@@ -1,7 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { PaymentsClient, type PaymentWithRelations } from '@/components/payments/payments-client'
 
-export default async function PaymentsPage() {
+export default async function PaymentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ project?: string; status?: string }>
+}) {
+  const params = await searchParams
   const supabase = await createClient()
 
   const {
@@ -74,6 +79,8 @@ export default async function PaymentsPage() {
       projects={projects ?? []}
       organizationId={organization!.id}
       userRole={membership!.role}
+      initialProjectFilter={params.project || ''}
+      initialStatusFilter={params.status || ''}
     />
   )
 }

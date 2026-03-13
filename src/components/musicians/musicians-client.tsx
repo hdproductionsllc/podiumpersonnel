@@ -59,6 +59,8 @@ export type MusicianWithInstruments = Musician & {
   is_leader?: boolean
   w9_on_file?: boolean
   w9_file_url?: string | null
+  w9_verified_at?: string | null
+  w9_verified_by?: string | null
   zelle_method?: 'email' | 'phone' | null
   zelle_verified?: boolean
   user_id?: string | null
@@ -566,22 +568,26 @@ export function MusiciansClient({
               <button
                 onClick={(e) => { e.stopPropagation(); handleEdit(musician) }}
                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer transition-opacity hover:opacity-80 ${
-                  musician.w9_on_file
-                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                    : 'bg-amber-100 text-amber-800 dark:bg-orange-950 dark:text-orange-300'
+                  musician.w9_verified_at
+                    ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
+                    : musician.w9_on_file
+                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                      : 'bg-amber-100 text-amber-800 dark:bg-orange-950 dark:text-orange-300'
                 }`}
               >
-                {musician.w9_on_file ? 'W-9 \u2713' : 'No W-9'}
+                {musician.w9_verified_at ? 'W-9 Verified' : musician.w9_on_file ? 'W-9 On File' : 'No W-9'}
               </button>
             ) : (
               <span
                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                  musician.w9_on_file
-                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                    : 'bg-amber-100 text-amber-800 dark:bg-orange-950 dark:text-orange-300'
+                  musician.w9_verified_at
+                    ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
+                    : musician.w9_on_file
+                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                      : 'bg-amber-100 text-amber-800 dark:bg-orange-950 dark:text-orange-300'
                 }`}
               >
-                {musician.w9_on_file ? 'W-9 \u2713' : 'No W-9'}
+                {musician.w9_verified_at ? 'W-9 Verified' : musician.w9_on_file ? 'W-9 On File' : 'No W-9'}
               </span>
             )}
             {canManage && !selectMode ? (

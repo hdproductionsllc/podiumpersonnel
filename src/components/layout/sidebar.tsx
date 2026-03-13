@@ -95,7 +95,7 @@ const navigation = [
   { name: 'Projects', href: '/dashboard/projects', icon: FolderIcon, emphasize: true },
   { name: 'Musicians', href: '/dashboard/musicians', icon: UsersIcon, emphasize: false },
   { name: 'Saved Ensembles', href: '/dashboard/books', icon: BookIcon, emphasize: false },
-  // { name: 'Payments', href: '/dashboard/payments', icon: CurrencyIcon, emphasize: false },
+  { name: 'Payments', href: '/dashboard/payments', icon: CurrencyIcon, emphasize: false },
   { name: 'Venues', href: '/dashboard/venues', icon: MapPinIcon, emphasize: false },
   // { name: 'Schedules', href: '/dashboard/schedules', icon: CalendarIcon, emphasize: false },
   { name: 'Instruments', href: '/dashboard/instruments', icon: MusicIcon, emphasize: false },

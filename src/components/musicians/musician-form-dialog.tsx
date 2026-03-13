@@ -675,15 +675,47 @@ export function MusicianFormDialog({
                       )}
                     />
                     {musician && (musician as any).w9_file_url && (
-                      <a
-                        href={`/api/musicians/${musician.id}/w9`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
-                      >
-                        <FileText className="h-4 w-4" />
-                        View uploaded W-9
-                      </a>
+                      <div className="flex items-center gap-3">
+                        <a
+                          href={`/api/musicians/${musician.id}/w9`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+                        >
+                          <FileText className="h-4 w-4" />
+                          View uploaded W-9
+                        </a>
+                        {(musician as any).w9_verified_at ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-950 dark:text-green-300">
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                            </svg>
+                            Verified {new Date((musician as any).w9_verified_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 text-xs"
+                            onClick={async () => {
+                              const supabase = createClient()
+                              const { data: { user } } = await supabase.auth.getUser()
+                              await supabase
+                                .from('musicians')
+                                .update({
+                                  w9_verified_at: new Date().toISOString(),
+                                  w9_verified_by: user?.id,
+                                })
+                                .eq('id', musician.id)
+                              onOpenChange(false)
+                              onSuccess()
+                            }}
+                          >
+                            Mark as Reviewed
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
 

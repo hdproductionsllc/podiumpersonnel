@@ -45,6 +45,7 @@ export default async function DashboardPage() {
     { data: upcomingProjects },
     { data: recentActivity },
     { data: projectsNeedingAttention },
+    { data: unpaidPayments },
   ] = await Promise.all([
     // Stats
     supabase
@@ -146,6 +147,21 @@ export default async function DashboardPage() {
       .eq('organization_id', orgId)
       .eq('status', 'active')
       .order('start_date', { ascending: true }),
+
+    // Unpaid payments for past services (payment prompt)
+    supabase
+      .from('payments')
+      .select(`
+        id,
+        amount,
+        service:services!inner(
+          start_time,
+          project:projects!inner(id, name)
+        )
+      `)
+      .eq('organization_id', orgId)
+      .eq('status', 'unpaid')
+      .lt('service.start_time', new Date().toISOString()),
   ])
 
   // Fetch tutorial state
@@ -338,6 +354,34 @@ export default async function DashboardPage() {
       })
     }
   })
+
+  // Unpaid payments for past projects
+  if (unpaidPayments && unpaidPayments.length > 0) {
+    // Group unpaid payments by project
+    const unpaidByProject: Record<string, { name: string; count: number; total: number }> = {}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    unpaidPayments.forEach((p: any) => {
+      const projectId = p.service?.project?.id
+      const projectName = p.service?.project?.name
+      if (!projectId || !projectName) return
+      if (!unpaidByProject[projectId]) {
+        unpaidByProject[projectId] = { name: projectName, count: 0, total: 0 }
+      }
+      unpaidByProject[projectId].count += 1
+      unpaidByProject[projectId].total += Number(p.amount)
+    })
+
+    Object.entries(unpaidByProject).forEach(([projectId, { name, count, total }]) => {
+      const formatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(total)
+      actionItems.push({
+        id: `unpaid-${projectId}`,
+        text: `${count} unpaid payment${count !== 1 ? 's' : ''} for ${name} (${formatted})`,
+        subtext: 'This gig has passed \u2014 record payments now',
+        href: `/dashboard/payments?project=${projectId}&status=unpaid`,
+        urgency: 'amber',
+      })
+    })
+  }
 
   const hasActionItems = allStepsComplete && actionItems.length > 0
 

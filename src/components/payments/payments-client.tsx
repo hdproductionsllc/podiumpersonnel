@@ -2,12 +2,15 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { EmptyState } from '@/components/ui/empty-state'
 import { PaymentStatusDialog } from './payment-status-dialog'
 import { ExportDialog } from './export-dialog'
 import { toast } from 'sonner'
+
+const PAGE_SIZE = 50
 
 export type PaymentWithRelations = {
   id: string
@@ -62,6 +65,8 @@ interface PaymentsClientProps {
   projects: Array<{ id: string; name: string }>
   organizationId: string
   userRole: string
+  initialProjectFilter?: string
+  initialStatusFilter?: string
 }
 
 export function PaymentsClient({
@@ -69,17 +74,24 @@ export function PaymentsClient({
   projects,
   organizationId,
   userRole,
+  initialProjectFilter = '',
+  initialStatusFilter = '',
 }: PaymentsClientProps) {
   const router = useRouter()
   const canManage = userRole === 'owner' || userRole === 'admin'
 
   // Filter state
   const [search, setSearch] = useState('')
-  const [projectFilter, setProjectFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'' | 'unpaid' | 'pending' | 'paid'>('')
+  const [projectFilter, setProjectFilter] = useState(initialProjectFilter)
+  const [statusFilter, setStatusFilter] = useState<'' | 'unpaid' | 'pending' | 'paid'>(
+    initialStatusFilter as '' | 'unpaid' | 'pending' | 'paid'
+  )
   const [w9Filter, setW9Filter] = useState<'' | 'has_w9' | 'no_w9'>('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+
+  // Pagination
+  const [page, setPage] = useState(1)
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -125,12 +137,23 @@ export function PaymentsClient({
     })
   }, [payments, search, projectFilter, statusFilter, w9Filter, dateFrom, dateTo])
 
+  // Paginated payments
+  const totalPages = Math.max(1, Math.ceil(filteredPayments.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const paginatedPayments = filteredPayments.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  )
+
+  // Reset page when filters change
+  function resetPage() { setPage(1) }
+
   // Selection handlers
   function toggleSelectAll() {
-    if (selectedIds.size === filteredPayments.length) {
+    if (selectedIds.size === paginatedPayments.length) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(filteredPayments.map((p) => p.id)))
+      setSelectedIds(new Set(paginatedPayments.map((p) => p.id)))
     }
   }
 
@@ -230,11 +253,16 @@ export function PaymentsClient({
           </p>
           <div className="mt-3 w-12 h-px bg-gold/50" />
         </div>
-        {canManage && (
-          <Button onClick={handleGeneratePayments} disabled={isGenerating}>
-            {isGenerating ? 'Generating...' : 'Generate Payments'}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <Link href="/dashboard/payments/1099">
+            <Button variant="outline">1099 Report</Button>
+          </Link>
+          {canManage && (
+            <Button onClick={handleGeneratePayments} disabled={isGenerating}>
+              {isGenerating ? 'Generating...' : 'Generate Payments'}
+            </Button>
+          )}
+        </div>
       </div>
 
       <Separator />
@@ -289,12 +317,12 @@ export function PaymentsClient({
           placeholder="Search by name or project..."
           className="rounded-md border bg-background px-3 py-2 text-sm w-64"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); resetPage() }}
         />
         <select
           className="rounded-md border bg-background px-3 py-2 text-sm"
           value={projectFilter}
-          onChange={(e) => setProjectFilter(e.target.value)}
+          onChange={(e) => { setProjectFilter(e.target.value); resetPage() }}
         >
           <option value="">All projects</option>
           {projects.map((p) => (
@@ -304,7 +332,7 @@ export function PaymentsClient({
         <select
           className="rounded-md border bg-background px-3 py-2 text-sm"
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as '' | 'unpaid' | 'pending' | 'paid')}
+          onChange={(e) => { setStatusFilter(e.target.value as '' | 'unpaid' | 'pending' | 'paid'); resetPage() }}
         >
           <option value="">All statuses</option>
           <option value="unpaid">Unpaid</option>
@@ -314,7 +342,7 @@ export function PaymentsClient({
         <select
           className="rounded-md border bg-background px-3 py-2 text-sm"
           value={w9Filter}
-          onChange={(e) => setW9Filter(e.target.value as '' | 'has_w9' | 'no_w9')}
+          onChange={(e) => { setW9Filter(e.target.value as '' | 'has_w9' | 'no_w9'); resetPage() }}
         >
           <option value="">All W-9 status</option>
           <option value="has_w9">Has W-9</option>
@@ -326,14 +354,14 @@ export function PaymentsClient({
             type="date"
             className="rounded-md border bg-background px-3 py-2 text-sm"
             value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
+            onChange={(e) => { setDateFrom(e.target.value); resetPage() }}
           />
           <span className="text-sm text-muted-foreground">to</span>
           <input
             type="date"
             className="rounded-md border bg-background px-3 py-2 text-sm"
             value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
+            onChange={(e) => { setDateTo(e.target.value); resetPage() }}
           />
         </div>
         {hasFilters && (
@@ -347,6 +375,7 @@ export function PaymentsClient({
               setW9Filter('')
               setDateFrom('')
               setDateTo('')
+              resetPage()
             }}
           >
             Clear all
@@ -415,140 +444,208 @@ export function PaymentsClient({
       ) : filteredPayments.length === 0 ? (
         <EmptyState title="No payments match your filters" />
       ) : (
-        <div className="overflow-x-auto rounded-md border">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted/50">
-              <tr>
-                {canManage && (
-                  <th className="w-10 px-2 py-3">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-gray-300"
-                      checked={selectedIds.size === filteredPayments.length && filteredPayments.length > 0}
-                      onChange={toggleSelectAll}
-                    />
-                  </th>
-                )}
-                <th className="px-4 py-3 text-left font-medium">Musician</th>
-                <th className="px-4 py-3 text-left font-medium">Project</th>
-                <th className="px-4 py-3 text-left font-medium">Service</th>
-                <th className="px-4 py-3 text-left font-medium">Date</th>
-                <th className="px-4 py-3 text-right font-medium">Amount</th>
-                <th className="px-4 py-3 text-center font-medium">Type</th>
-                <th className="px-4 py-3 text-center font-medium">Status</th>
-                <th className="px-4 py-3 text-center font-medium">W-9</th>
-                <th className="px-4 py-3 text-center font-medium">Zelle</th>
-                {canManage && (
-                  <th className="px-4 py-3 text-right font-medium">Actions</th>
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {filteredPayments.map((payment) => (
-                <tr
-                  key={payment.id}
-                  className={`hover:bg-muted/50 ${selectedIds.has(payment.id) ? 'bg-blue-50 dark:bg-blue-950/30' : ''}`}
-                  onClick={canManage ? () => toggleSelect(payment.id) : undefined}
-                >
+        <>
+          <div className="overflow-x-auto rounded-md border">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-muted/50">
+                <tr>
                   {canManage && (
-                    <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                    <th className="w-10 px-2 py-3">
                       <input
                         type="checkbox"
                         className="h-4 w-4 rounded border-gray-300"
-                        checked={selectedIds.has(payment.id)}
-                        onChange={() => toggleSelect(payment.id)}
+                        checked={selectedIds.size === paginatedPayments.length && paginatedPayments.length > 0}
+                        onChange={toggleSelectAll}
                       />
-                    </td>
+                    </th>
                   )}
-                  <td className="px-4 py-3">
-                    <div className="font-medium">
-                      {payment.musician.last_name}, {payment.musician.first_name}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {payment.musician.musician_instruments
-                        .map((mi) => mi.instrument.abbreviation || mi.instrument.name)
-                        .join(', ') || '—'}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {payment.service.project.name}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {payment.service.name}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {formatDate(payment.service.start_time)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-medium">
-                    {formatCurrency(payment.amount)}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                      payment.is_leader_fee
-                        ? 'bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
-                        : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                    }`}>
-                      {payment.is_leader_fee ? 'Leader' : 'Base'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                      payment.status === 'paid'
-                        ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
-                        : payment.status === 'pending'
-                          ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300'
-                          : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
-                    }`}>
-                      {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                      payment.musician.w9_on_file
-                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                        : 'bg-amber-100 text-amber-800 dark:bg-orange-950 dark:text-orange-300'
-                    }`}>
-                      {payment.musician.w9_on_file ? 'Yes' : 'No'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                      payment.musician.zelle_verified
-                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                        : payment.musician.zelle_method
-                          ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300'
-                          : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
-                    }`}>
-                      {payment.musician.zelle_verified
-                        ? payment.musician.zelle_method === 'email' ? 'Email' : 'Phone'
-                        : payment.musician.zelle_method
-                          ? 'Unverified'
-                          : 'No'}
-                    </span>
-                  </td>
+                  <th className="px-4 py-3 text-left font-medium">Musician</th>
+                  <th className="px-4 py-3 text-left font-medium">Project</th>
+                  <th className="px-4 py-3 text-left font-medium">Service</th>
+                  <th className="px-4 py-3 text-left font-medium">Date</th>
+                  <th className="px-4 py-3 text-right font-medium">Amount</th>
+                  <th className="px-4 py-3 text-center font-medium">Type</th>
+                  <th className="px-4 py-3 text-center font-medium">Status</th>
+                  <th className="px-4 py-3 text-center font-medium">W-9</th>
+                  <th className="px-4 py-3 text-center font-medium">Zelle</th>
                   {canManage && (
-                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1">
-                        {payment.status !== 'paid' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedIds(new Set([payment.id]))
-                              setStatusDialogOpen(true)
-                            }}
-                          >
-                            Mark Paid
-                          </Button>
+                    <th className="px-4 py-3 text-right font-medium">Actions</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {paginatedPayments.map((payment) => (
+                  <tr
+                    key={payment.id}
+                    className={`hover:bg-muted/50 ${selectedIds.has(payment.id) ? 'bg-blue-50 dark:bg-blue-950/30' : ''}`}
+                    onClick={canManage ? () => toggleSelect(payment.id) : undefined}
+                  >
+                    {canManage && (
+                      <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-gray-300"
+                          checked={selectedIds.has(payment.id)}
+                          onChange={() => toggleSelect(payment.id)}
+                        />
+                      </td>
+                    )}
+                    <td className="px-4 py-3">
+                      <div className="font-medium">
+                        {payment.musician.last_name}, {payment.musician.first_name}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {payment.musician.musician_instruments
+                          .map((mi) => mi.instrument.abbreviation || mi.instrument.name)
+                          .join(', ') || '\u2014'}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      <Link
+                        href={`/dashboard/projects?expand=${payment.service.project.id}`}
+                        className="hover:text-foreground hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {payment.service.project.name}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {payment.service.name}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {formatDate(payment.service.start_time)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium">
+                      {formatCurrency(payment.amount)}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                        payment.is_leader_fee
+                          ? 'bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
+                          : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                      }`}>
+                        {payment.is_leader_fee ? 'Leader' : 'Base'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div>
+                        <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                          payment.status === 'paid'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
+                            : payment.status === 'pending'
+                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300'
+                              : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
+                        }`}>
+                          {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
+                        </span>
+                        {payment.status === 'paid' && (payment.payment_method || payment.payment_date) && (
+                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                            {[
+                              payment.payment_method,
+                              payment.payment_date && formatDate(payment.payment_date),
+                            ].filter(Boolean).join(' \u2022 ')}
+                            {payment.payment_reference && (
+                              <span className="block truncate max-w-[120px]" title={payment.payment_reference}>
+                                Ref: {payment.payment_reference}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                        payment.musician.w9_on_file
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                          : 'bg-amber-100 text-amber-800 dark:bg-orange-950 dark:text-orange-300'
+                      }`}>
+                        {payment.musician.w9_on_file ? 'Yes' : 'No'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                        payment.musician.zelle_verified
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                          : payment.musician.zelle_method
+                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300'
+                            : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
+                      }`}>
+                        {payment.musician.zelle_verified
+                          ? payment.musician.zelle_method === 'email' ? 'Email' : 'Phone'
+                          : payment.musician.zelle_method
+                            ? 'Unverified'
+                            : 'No'}
+                      </span>
+                    </td>
+                    {canManage && (
+                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          {payment.status !== 'paid' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedIds(new Set([payment.id]))
+                                setStatusDialogOpen(true)
+                              }}
+                            >
+                              Mark Paid
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-sm text-muted-foreground">
+                Showing {(currentPage - 1) * PAGE_SIZE + 1}\u2013{Math.min(currentPage * PAGE_SIZE, filteredPayments.length)} of {filteredPayments.length}
+              </p>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage <= 1}
+                  onClick={() => setPage(currentPage - 1)}
+                >
+                  Previous
+                </Button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                  .map((p, idx, arr) => {
+                    const showEllipsis = idx > 0 && p - arr[idx - 1] > 1
+                    return (
+                      <span key={p}>
+                        {showEllipsis && <span className="px-1 text-muted-foreground">&hellip;</span>}
+                        <Button
+                          variant={p === currentPage ? 'default' : 'outline'}
+                          size="sm"
+                          className="w-9"
+                          onClick={() => setPage(p)}
+                        >
+                          {p}
+                        </Button>
+                      </span>
+                    )
+                  })}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setPage(currentPage + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <PaymentStatusDialog
