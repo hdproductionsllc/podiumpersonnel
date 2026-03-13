@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       })
     }
 
-    // Generate payment records
+    // Generate one payment per musician per service (leader fee included in total)
     const paymentsToInsert: {
       organization_id: string
       service_id: string
@@ -84,31 +84,21 @@ export async function POST(request: Request) {
       if (!musician || !project.services) continue
 
       for (const service of project.services) {
-        // Base pay for all musicians
-        if (service.base_pay && service.base_pay > 0) {
-          paymentsToInsert.push({
-            organization_id: project.organization_id,
-            service_id: service.id,
-            musician_id: musician.id,
-            project_position_id: position.id,
-            amount: service.base_pay,
-            is_leader_fee: false,
-            status: 'unpaid',
-          })
-        }
+        const basePay = service.base_pay ?? 0
+        const leaderFee = (musician.is_leader && service.leader_fee) ? service.leader_fee : 0
+        const totalPay = basePay + leaderFee
 
-        // Leader fee for leaders only
-        if (musician.is_leader && service.leader_fee && service.leader_fee > 0) {
-          paymentsToInsert.push({
-            organization_id: project.organization_id,
-            service_id: service.id,
-            musician_id: musician.id,
-            project_position_id: position.id,
-            amount: service.leader_fee,
-            is_leader_fee: true,
-            status: 'unpaid',
-          })
-        }
+        if (totalPay <= 0) continue
+
+        paymentsToInsert.push({
+          organization_id: project.organization_id,
+          service_id: service.id,
+          musician_id: musician.id,
+          project_position_id: position.id,
+          amount: totalPay,
+          is_leader_fee: leaderFee > 0,
+          status: 'unpaid',
+        })
       }
     }
 
@@ -120,21 +110,21 @@ export async function POST(request: Request) {
       })
     }
 
-    // Fetch existing payments to avoid duplicates
+    // Fetch existing payments to avoid duplicates (one per musician per service)
     const orgId = paymentsToInsert[0].organization_id
     const { data: existingPayments } = await supabase
       .from('payments')
-      .select('service_id, musician_id, is_leader_fee')
+      .select('service_id, musician_id')
       .eq('organization_id', orgId)
 
     const existingKeys = new Set(
       (existingPayments || []).map(
-        (p) => `${p.service_id}|${p.musician_id}|${p.is_leader_fee}`
+        (p) => `${p.service_id}|${p.musician_id}`
       )
     )
 
     const newPayments = paymentsToInsert.filter(
-      (p) => !existingKeys.has(`${p.service_id}|${p.musician_id}|${p.is_leader_fee}`)
+      (p) => !existingKeys.has(`${p.service_id}|${p.musician_id}`)
     )
 
     if (newPayments.length === 0) {

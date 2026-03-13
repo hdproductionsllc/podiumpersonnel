@@ -519,13 +519,15 @@ export function PaymentsClient({
                       {formatCurrency(payment.amount)}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                        payment.is_leader_fee
-                          ? 'bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
-                          : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                      }`}>
-                        {payment.is_leader_fee ? 'Leader' : 'Base'}
-                      </span>
+                      {payment.is_leader_fee ? (
+                        <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300">
+                          + Leader
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                          Base
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div>
