@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { projectId } = body
 
-    // Build query for confirmed positions
+    // Build query for confirmed positions with their accepted contract offers
     let positionsQuery = supabase
       .from('project_positions')
       .select(`
@@ -29,6 +29,10 @@ export async function POST(request: Request) {
         musician:musicians(
           id,
           is_leader
+        ),
+        contract_offers(
+          custom_pay,
+          status
         )
       `)
       .eq('status', 'confirmed')
@@ -55,7 +59,7 @@ export async function POST(request: Request) {
       })
     }
 
-    // Generate one payment per musician per service (leader fee included in total)
+    // Generate one payment per musician per service
     const paymentsToInsert: {
       organization_id: string
       service_id: string
@@ -80,12 +84,22 @@ export async function POST(request: Request) {
       }
 
       const musician = position.musician as unknown as { id: string; is_leader: boolean } | null
+      const offers = position.contract_offers as unknown as Array<{ custom_pay: number | null; status: string }> | null
 
       if (!musician || !project.services) continue
 
+      // Get the accepted offer's custom_pay (the actual agreed amount)
+      const acceptedOffer = offers?.find((o) => o.status === 'accepted')
+      const offerPay = acceptedOffer?.custom_pay ?? null
+
       for (const service of project.services) {
-        const basePay = service.base_pay ?? 0
-        const leaderFee = (musician.is_leader && service.leader_fee) ? service.leader_fee : 0
+        // Priority: accepted offer pay > service base_pay > 0
+        const basePay = offerPay ?? service.base_pay ?? 0
+        const isLeader = musician.is_leader && !!service.leader_fee
+
+        // Only add leader fee on top if using service base_pay (not offer pay,
+        // since offer pay already includes leader fee in the offered amount)
+        const leaderFee = (isLeader && offerPay === null && service.leader_fee) ? service.leader_fee : 0
         const totalPay = basePay + leaderFee
 
         if (totalPay <= 0) continue
@@ -96,7 +110,7 @@ export async function POST(request: Request) {
           musician_id: musician.id,
           project_position_id: position.id,
           amount: totalPay,
-          is_leader_fee: leaderFee > 0,
+          is_leader_fee: isLeader,
           status: 'unpaid',
         })
       }
