@@ -120,13 +120,34 @@ export async function POST(request: Request) {
       })
     }
 
-    // Insert payments, ignoring duplicates (ON CONFLICT DO NOTHING)
+    // Fetch existing payments to avoid duplicates
+    const orgId = paymentsToInsert[0].organization_id
+    const { data: existingPayments } = await supabase
+      .from('payments')
+      .select('service_id, musician_id, is_leader_fee')
+      .eq('organization_id', orgId)
+
+    const existingKeys = new Set(
+      (existingPayments || []).map(
+        (p) => `${p.service_id}|${p.musician_id}|${p.is_leader_fee}`
+      )
+    )
+
+    const newPayments = paymentsToInsert.filter(
+      (p) => !existingKeys.has(`${p.service_id}|${p.musician_id}|${p.is_leader_fee}`)
+    )
+
+    if (newPayments.length === 0) {
+      return apiSuccess({
+        created: 0,
+        skipped: paymentsToInsert.length,
+        message: 'All payments already exist',
+      })
+    }
+
     const { data: inserted, error: insertError } = await supabase
       .from('payments')
-      .upsert(paymentsToInsert, {
-        onConflict: 'service_id,musician_id,is_leader_fee',
-        ignoreDuplicates: true,
-      })
+      .insert(newPayments)
       .select()
 
     if (insertError) {
