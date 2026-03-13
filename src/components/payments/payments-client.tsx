@@ -39,14 +39,14 @@ export type PaymentWithRelations = {
     w9_on_file: boolean
     zelle_method: 'email' | 'phone' | null
     zelle_verified: boolean
-    musician_instruments: Array<{
-      instrument: {
-        id: string
-        name: string
-        abbreviation: string | null
-      }
-    }>
   }
+  position: {
+    instrument: {
+      id: string
+      name: string
+      abbreviation: string | null
+    }
+  } | null
   service: {
     id: string
     name: string
@@ -521,9 +521,9 @@ export function PaymentsClient({
                         {payment.musician.last_name}, {payment.musician.first_name}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {payment.musician.musician_instruments
-                          .map((mi) => mi.instrument.abbreviation || mi.instrument.name)
-                          .join(', ') || '\u2014'}
+                        {payment.position?.instrument
+                          ? (payment.position.instrument.abbreviation || payment.position.instrument.name)
+                          : '\u2014'}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">

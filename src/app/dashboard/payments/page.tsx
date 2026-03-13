@@ -45,10 +45,10 @@ export default async function PaymentsPage({
         phone,
         w9_on_file,
         zelle_method,
-        zelle_verified,
-        musician_instruments(
-          instrument:instruments(id, name, abbreviation)
-        )
+        zelle_verified
+      ),
+      position:project_positions(
+        instrument:instruments(id, name, abbreviation)
       ),
       service:services(
         id,
