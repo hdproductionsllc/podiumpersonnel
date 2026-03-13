@@ -208,7 +208,6 @@ export function PaymentsClient({
       .from('payments')
       .delete()
       .in('id', ids)
-      .eq('status', 'unpaid')
 
     if (deleteError) {
       toast.error(deleteError.message)
@@ -435,15 +434,13 @@ export function PaymentsClient({
           >
             Export Selected
           </Button>
-          {selectedPayments.every((p) => p.status === 'unpaid') && (
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => handleDeletePayments(Array.from(selectedIds))}
-            >
-              Delete
-            </Button>
-          )}
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => handleDeletePayments(Array.from(selectedIds))}
+          >
+            Delete
+          </Button>
           <Button
             size="sm"
             variant="ghost"
@@ -611,7 +608,7 @@ export function PaymentsClient({
                     {canManage && (
                       <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
-                          {payment.status !== 'paid' && (
+                          {payment.status !== 'paid' ? (
                             <>
                               <Button
                                 variant="ghost"
@@ -633,6 +630,24 @@ export function PaymentsClient({
                                   Delete
                                 </Button>
                               )}
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleQuickStatusChange([payment.id], 'unpaid')}
+                              >
+                                Mark Unpaid
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => handleDeletePayments([payment.id])}
+                              >
+                                Delete
+                              </Button>
                             </>
                           )}
                         </div>
