@@ -749,26 +749,29 @@ export function ProjectsClient({
             <thead className="border-b bg-muted/50">
               <tr>
                 <th className="px-3 py-3 text-left font-medium">Date</th>
+                <th className="px-3 py-3 text-left font-medium">Name</th>
                 <th className="px-3 py-3 text-left font-medium">Event Type</th>
                 <th className="px-3 py-3 text-left font-medium">Client</th>
-                <th className="px-3 py-3 text-left font-medium">Ensemble</th>
                 <th className="px-3 py-3 text-left font-medium">Venue</th>
                 <th className="px-3 py-3 text-left font-medium">Time</th>
                 <th className="px-3 py-3 text-left font-medium">Musicians</th>
+                <th className="px-3 py-3 text-right font-medium">Contract</th>
+                <th className="px-3 py-3 text-right font-medium">Deposit</th>
                 <th className="px-3 py-3 text-left font-medium">Payment</th>
+                <th className="px-3 py-3 text-left font-medium">Status</th>
                 <th className="px-3 py-3 text-left font-medium">Notes</th>
                 {canManage && <th className="px-3 py-3 text-right font-medium">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y">
               {filteredProjects.map((project) => {
-                // Derive summary data from services
                 const firstService = [...project.services].sort((a, b) =>
                   new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
                 )[0]
                 const venues = [...new Set(project.services.map((s) => s.venue).filter(Boolean))]
                 const confirmedMusicians = project.project_positions.filter((p) => p.status === 'confirmed')
                 const totalPositions = project.project_positions.length
+                const fmt = (n: number | null | undefined) => n != null ? `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}` : '—'
 
                 return (
                   <tr
@@ -786,6 +789,9 @@ export function ProjectsClient({
                     <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
                       {formatDateRange(project.start_date, project.end_date)}
                     </td>
+                    <td className="px-3 py-3 font-medium whitespace-nowrap">
+                      {project.name}
+                    </td>
                     <td className="px-3 py-3">
                       {project.event_type || '—'}
                     </td>
@@ -796,9 +802,6 @@ export function ProjectsClient({
                           <div className="text-xs text-muted-foreground">{project.client_phone}</div>
                         )}
                       </div>
-                    </td>
-                    <td className="px-3 py-3 whitespace-nowrap">
-                      {project.ensemble_type || project.name}
                     </td>
                     <td className="px-3 py-3">
                       {venues.length > 0 ? (
@@ -822,8 +825,22 @@ export function ProjectsClient({
                         </span>
                       ) : '—'}
                     </td>
+                    <td className="px-3 py-3 text-right whitespace-nowrap">
+                      {fmt(project.contract_amount)}
+                    </td>
+                    <td className="px-3 py-3 text-right whitespace-nowrap">
+                      <div>{fmt(project.deposit_amount)}</div>
+                      {project.deposit_paid_at && (
+                        <div className="text-xs text-green-600 dark:text-green-400">
+                          Paid {new Date(project.deposit_paid_at + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-3 py-3">
                       <PaymentStatusBadge status={project.payment_status} />
+                    </td>
+                    <td className="px-3 py-3">
+                      <StatusBadge status={project.status} />
                     </td>
                     <td className="px-3 py-3">
                       <div className="max-w-[200px] truncate text-muted-foreground" title={project.payment_notes || project.internal_notes || ''}>
