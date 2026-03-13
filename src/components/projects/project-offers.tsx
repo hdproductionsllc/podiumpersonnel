@@ -1,9 +1,19 @@
 'use client'
 
 import { useState, useEffect, Fragment } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { PaymentStatusDialog } from '@/components/payments/payment-status-dialog'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+
+type PositionPayment = {
+  id: string
+  project_position_id: string
+  musician_id: string
+  amount: number
+  status: string
+}
 
 export type OfferJoined = {
   id: string
@@ -62,10 +72,91 @@ export function ProjectOffers({
   onOfferChange,
   onSendWaterfall,
 }: ProjectOffersProps) {
+  const router = useRouter()
   const [sendingReminder, setSendingReminder] = useState<string | null>(null)
   const [waterfallCandidates, setWaterfallCandidates] = useState<Record<string, WaterfallCandidate[]>>({})
   const [loadingWaterfall, setLoadingWaterfall] = useState<string | null>(null)
   const [sendingWaterfall, setSendingWaterfall] = useState<string | null>(null)
+
+  // Payment tracking state
+  const [payments, setPayments] = useState<PositionPayment[]>([])
+  const [payDialogOpen, setPayDialogOpen] = useState(false)
+  const [payDialogIds, setPayDialogIds] = useState<string[]>([])
+  const [payDialogAmount, setPayDialogAmount] = useState(0)
+
+  // Fetch payments for accepted offers' positions
+  const acceptedPositionIds = offers
+    .filter((o) => o.status === 'accepted')
+    .map((o) => o.project_position_id)
+
+  useEffect(() => {
+    if (acceptedPositionIds.length === 0) return
+    async function loadPayments() {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('payments')
+        .select('id, project_position_id, musician_id, amount, status')
+        .in('project_position_id', acceptedPositionIds)
+      setPayments(data || [])
+    }
+    loadPayments()
+  }, [acceptedPositionIds.join(',')])
+
+  function getPaymentForPosition(positionId: string): PositionPayment | undefined {
+    return payments.find((p) => p.project_position_id === positionId)
+  }
+
+  async function handleMarkPaid(offer: OfferJoined) {
+    const payment = getPaymentForPosition(offer.project_position_id)
+    if (payment) {
+      // Payment exists — open the dialog with this payment ID
+      setPayDialogIds([payment.id])
+      setPayDialogAmount(payment.amount)
+      setPayDialogOpen(true)
+    } else {
+      // No payment record yet — generate one first
+      try {
+        // Get project ID from any position
+        const supabase = createClient()
+        const { data: position } = await supabase
+          .from('project_positions')
+          .select('project_id')
+          .eq('id', offer.project_position_id)
+          .single()
+        if (!position) {
+          toast.error('Could not find position')
+          return
+        }
+        const response = await fetch('/api/payments/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId: position.project_id }),
+        })
+        if (!response.ok) {
+          toast.error('Failed to generate payment record')
+          return
+        }
+        // Re-fetch payments to get the new one
+        const { data: updatedPayments } = await supabase
+          .from('payments')
+          .select('id, project_position_id, musician_id, amount, status')
+          .in('project_position_id', acceptedPositionIds)
+        setPayments(updatedPayments || [])
+        const newPayment = (updatedPayments || []).find(
+          (p) => p.project_position_id === offer.project_position_id
+        )
+        if (newPayment) {
+          setPayDialogIds([newPayment.id])
+          setPayDialogAmount(newPayment.amount)
+          setPayDialogOpen(true)
+        } else {
+          toast.error('Payment record not found after generation')
+        }
+      } catch {
+        toast.error('Failed to generate payment')
+      }
+    }
+  }
 
   // Confirmation dialog state
   const [confirmReminder, setConfirmReminder] = useState<OfferJoined | null>(null)
@@ -262,6 +353,9 @@ export function ProjectOffers({
               <th className="px-3 py-2 text-left font-medium text-xs">Sent</th>
               <th className="px-3 py-2 text-left font-medium text-xs">Expires</th>
               {canManage && (
+                <th className="px-3 py-2 text-center font-medium text-xs">Paid</th>
+              )}
+              {canManage && (
                 <th className="px-3 py-2 text-right font-medium text-xs">Actions</th>
               )}
             </tr>
@@ -305,6 +399,32 @@ export function ProjectOffers({
                     {formatDate(offer.expires_at)}
                   </td>
                   {canManage && (
+                    <td className="px-3 py-2 text-center">
+                      {offer.status === 'accepted' ? (() => {
+                        const payment = getPaymentForPosition(offer.project_position_id)
+                        if (payment?.status === 'paid') {
+                          return (
+                            <svg className="h-5 w-5 text-green-600 dark:text-green-400 mx-auto" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                            </svg>
+                          )
+                        }
+                        return (
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center rounded-md border border-dashed border-gray-300 dark:border-gray-600 h-6 w-6 hover:bg-muted/50 hover:border-primary/50 transition-colors mx-auto"
+                            title="Mark as paid"
+                            onClick={() => handleMarkPaid(offer)}
+                          >
+                            <svg className="h-3.5 w-3.5 text-muted-foreground" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                            </svg>
+                          </button>
+                        )
+                      })() : '—'}
+                    </td>
+                  )}
+                  {canManage && (
                     <td className="px-3 py-2 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Button
@@ -342,7 +462,7 @@ export function ProjectOffers({
                 {/* Waterfall suggestion for declined offers */}
                 {canManage && offer.status === 'declined' && waterfallCandidates[offer.project_position_id]?.length > 0 && (
                   <tr className="bg-amber-50/50 dark:bg-amber-950/20">
-                    <td colSpan={canManage ? 8 : 7} className="px-3 py-2">
+                    <td colSpan={canManage ? 9 : 7} className="px-3 py-2">
                       <div className="flex items-center gap-3 text-sm">
                         <span className="text-amber-700 dark:text-amber-300 font-medium">
                           Next in line:
@@ -474,6 +594,24 @@ export function ProjectOffers({
           </div>
         </div>
       )}
+
+      {/* Payment Status Dialog */}
+      <PaymentStatusDialog
+        open={payDialogOpen}
+        onOpenChange={setPayDialogOpen}
+        paymentIds={payDialogIds}
+        totalAmount={payDialogAmount}
+        onSuccess={() => {
+          // Refresh payment data
+          const supabase = createClient()
+          supabase
+            .from('payments')
+            .select('id, project_position_id, musician_id, amount, status')
+            .in('project_position_id', acceptedPositionIds)
+            .then(({ data }) => setPayments(data || []))
+          router.refresh()
+        }}
+      />
     </div>
   )
 }
