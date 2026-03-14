@@ -38,7 +38,7 @@ export function GroupTextDialog({
 }: GroupTextDialogProps) {
   const [phoneEdits, setPhoneEdits] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
-  const defaultMessage = `Hi everyone — connecting you all for the ${projectName} gig. Please use this thread to coordinate. Looking forward to it!`
+  const defaultMessage = `Hi everyone - connecting you all for the ${projectName} gig. Please use this thread to coordinate. Looking forward to it!`
   const [message, setMessage] = useState(defaultMessage)
 
   const missingPhones = musicians.filter((m) => !m.phone)
@@ -48,7 +48,7 @@ export function GroupTextDialog({
   useEffect(() => {
     if (open) {
       setPhoneEdits({})
-      setMessage(`Hi everyone — connecting you all for the ${projectName} gig. Please use this thread to coordinate. Looking forward to it!`)
+      setMessage(`Hi everyone - connecting you all for the ${projectName} gig. Please use this thread to coordinate. Looking forward to it!`)
     }
   }, [open, projectName])
 
