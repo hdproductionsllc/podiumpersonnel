@@ -1,7 +1,6 @@
 # Exclude non-app files from Vercel deployment
 bravura-master/
 bravura-master.zip
-podium-marketing/
 podium-marketing.zip
 podium_marketing_copy.md
 podium_musician_portal_implementation.md
