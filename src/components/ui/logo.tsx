@@ -7,7 +7,7 @@ interface LogoProps {
 }
 
 /**
- * Podium logo using plain HTML + Tailwind font classes.
+ * Podium logo — single italic P monogram with gold accent bar.
  * Uses the actual Next.js-loaded Playfair Display font.
  *
  * - "light" = cream/gold for dark backgrounds (sidebar, auth panel)
@@ -17,9 +17,9 @@ export function Logo({ variant = 'light', className, size = 'md' }: LogoProps) {
   const isLight = variant === 'light'
 
   const sizes = {
-    sm: { monogram: 'text-4xl', wordmark: 'text-[9px] tracking-[0.18em]', bar: 'w-10 mt-2', gap: 'mt-1.5' },
-    md: { monogram: 'text-5xl', wordmark: 'text-[11px] tracking-[0.2em]', bar: 'w-14 mt-3', gap: 'mt-2' },
-    lg: { monogram: 'text-6xl', wordmark: 'text-xs tracking-[0.22em]', bar: 'w-16 mt-3.5', gap: 'mt-2.5' },
+    sm: { monogram: 'text-5xl', wordmark: 'text-[9px] tracking-[0.18em]', bar: 'w-8 mt-1', gap: 'mt-1' },
+    md: { monogram: 'text-6xl', wordmark: 'text-[11px] tracking-[0.2em]', bar: 'w-10 mt-1.5', gap: 'mt-1.5' },
+    lg: { monogram: 'text-7xl', wordmark: 'text-xs tracking-[0.22em]', bar: 'w-12 mt-2', gap: 'mt-2' },
   }
 
   const s = sizes[size]
@@ -28,16 +28,16 @@ export function Logo({ variant = 'light', className, size = 'md' }: LogoProps) {
     <div
       className={cn('flex flex-col items-center select-none', className)}
       role="img"
-      aria-label="Podium Personnel"
+      aria-label="Podium"
     >
       <span
         className={cn(
-          'font-heading italic leading-tight',
+          'font-heading italic leading-none',
           s.monogram,
           isLight ? 'text-[#F5F0E8]' : 'text-[#1E293B]'
         )}
       >
-        pp
+        P
       </span>
       <div
         className={cn(
@@ -53,7 +53,7 @@ export function Logo({ variant = 'light', className, size = 'md' }: LogoProps) {
           isLight ? 'text-[#F5F0E8]' : 'text-[#1E293B]'
         )}
       >
-        PODIUM PERSONNEL
+        PODIUM
       </span>
     </div>
   )
