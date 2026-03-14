@@ -613,9 +613,9 @@ export default function HomePage() {
                         </p>
                         <div className="space-y-3">
                           {[
-                            { date: "Jan 28", title: "Henderson Wedding", group: "Subito Strings" },
-                            { date: "Feb 3", title: "Corporate Event", group: "Project SQ" },
-                            { date: "Feb 14", title: "Valentine's Gala", group: "Subito Strings" },
+                            { date: "Jan 28", title: "Henderson Wedding", group: "Westlake Ensemble" },
+                            { date: "Feb 3", title: "Corporate Event", group: "Meridian Quartet" },
+                            { date: "Feb 14", title: "Valentine's Gala", group: "Westlake Ensemble" },
                           ].map((gig) => (
                             <div
                               key={gig.title}
@@ -752,7 +752,7 @@ export default function HomePage() {
               {
                 quote:
                   "I can staff an entire concert series from my phone while waiting for soundcheck. Game changer.",
-                author: "String quartet manager",
+                author: "Quartet manager",
                 location: "Chicago",
               },
               {

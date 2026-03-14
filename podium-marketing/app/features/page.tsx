@@ -296,7 +296,7 @@ const featureVisuals: Record<string, React.ReactNode> = {
         <div className="bg-ink-800 px-5 py-4">
           <div className="text-[10px] font-body text-cream-400 mb-1">PODIUM</div>
           <div className="text-sm font-display font-semibold text-cream-50">Henderson Wedding Quartet</div>
-          <div className="text-[11px] font-body text-cream-300 mt-1">Subito String Quartet</div>
+          <div className="text-[11px] font-body text-cream-300 mt-1">Westlake Ensemble</div>
         </div>
         {/* Offer details */}
         <div className="p-5 space-y-3">
@@ -436,9 +436,9 @@ const featureVisuals: Record<string, React.ReactNode> = {
               <p className="text-[9px] font-medium text-ink-500 mb-2 font-body uppercase tracking-wide">Upcoming</p>
               <div className="space-y-2">
                 {[
-                  { date: "Mar 15", title: "Henderson Wedding", group: "Subito Strings" },
-                  { date: "Mar 22", title: "Spring Gala", group: "Project SQ" },
-                  { date: "Apr 5", title: "Corporate Event", group: "Subito Strings" },
+                  { date: "Mar 15", title: "Henderson Wedding", group: "Westlake Ensemble" },
+                  { date: "Mar 22", title: "Spring Gala", group: "Meridian Quartet" },
+                  { date: "Apr 5", title: "Corporate Event", group: "Westlake Ensemble" },
                 ].map((gig) => (
                   <div key={gig.title} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-cream-200">
                     <div className="w-9 h-9 bg-brass-100 rounded-md flex flex-col items-center justify-center flex-shrink-0">
