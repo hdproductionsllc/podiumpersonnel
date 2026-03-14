@@ -390,53 +390,6 @@ export default function AboutPage() {
             </p>
           </motion.div>
 
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={staggerContainer}
-            className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto"
-          >
-            {[
-              {
-                initials: "HD",
-                name: "Founder",
-                role: "CEO & Product",
-                bg: "bg-brass-100",
-                text: "text-brass-700",
-              },
-              {
-                initials: "TK",
-                name: "Technical",
-                role: "Engineering",
-                bg: "bg-ink-100",
-                text: "text-ink-700",
-              },
-              {
-                initials: "AM",
-                name: "Operations",
-                role: "Customer Success",
-                bg: "bg-burgundy-100",
-                text: "text-burgundy-700",
-              },
-            ].map((person) => (
-              <motion.div
-                key={person.initials}
-                variants={fadeInUp}
-                className="text-center hover:-translate-y-1 transition-transform duration-300"
-              >
-                <div
-                  className={`w-24 h-24 ${person.bg} rounded-full flex items-center justify-center mx-auto mb-4 transition-all duration-300 hover:ring-2 hover:ring-brass-300 hover:ring-offset-2`}
-                >
-                  <span className={`font-display text-2xl ${person.text}`}>
-                    {person.initials}
-                  </span>
-                </div>
-                <h3 className="font-display text-lg text-ink-800">{person.name}</h3>
-                <p className="font-body text-sm text-ink-500">{person.role}</p>
-              </motion.div>
-            ))}
-          </motion.div>
         </div>
       </section>
 
