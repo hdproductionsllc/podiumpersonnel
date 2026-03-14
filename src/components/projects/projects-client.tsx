@@ -611,7 +611,7 @@ export function ProjectsClient({
     }
   }
 
-  const colCount = canManage ? 11 : 10
+  const colCount = canManage ? 12 : 11
 
   return (
     <div className="space-y-6">
@@ -722,6 +722,7 @@ export function ProjectsClient({
                 <th className="w-10 px-2 py-3"></th>
                 <th className="px-3 py-3 text-left font-medium">Name</th>
                 <th className="px-3 py-3 text-left font-medium">Dates</th>
+                <th className="px-3 py-3 text-left font-medium">Venue</th>
                 <th className="px-3 py-3 text-left font-medium">Client</th>
                 <th className="px-3 py-3 text-left font-medium">Status</th>
                 <th className="px-3 py-3 text-right font-medium">Contract</th>
@@ -750,6 +751,9 @@ export function ProjectsClient({
                       <td className="px-3 py-3 font-medium whitespace-nowrap">{project.name}</td>
                       <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
                         {formatDateRange(project.start_date, project.end_date)}
+                      </td>
+                      <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
+                        {project.description || <span className="text-muted-foreground">—</span>}
                       </td>
                       <td className="px-3 py-3">
                         {project.client_name ? (
