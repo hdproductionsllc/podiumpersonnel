@@ -99,6 +99,19 @@ export const projectSchema = z.object({
     .string()
     .optional()
     .or(z.literal('')),
+  coordinator_name: z
+    .string()
+    .optional()
+    .or(z.literal('')),
+  coordinator_email: z
+    .string()
+    .email('Invalid email')
+    .optional()
+    .or(z.literal('')),
+  coordinator_phone: z
+    .string()
+    .optional()
+    .or(z.literal('')),
 })
 
 export const serviceSchema = z.object({

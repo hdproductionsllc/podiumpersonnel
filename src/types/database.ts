@@ -309,6 +309,9 @@ export type Database = {
           deposit_paid_at: string | null
           payment_status: 'pending' | 'deposit_paid' | 'fully_paid'
           payment_notes: string | null
+          coordinator_name: string | null
+          coordinator_email: string | null
+          coordinator_phone: string | null
           created_at: string
           updated_at: string
         }
@@ -332,6 +335,9 @@ export type Database = {
           deposit_paid_at?: string | null
           payment_status?: 'pending' | 'deposit_paid' | 'fully_paid'
           payment_notes?: string | null
+          coordinator_name?: string | null
+          coordinator_email?: string | null
+          coordinator_phone?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -355,6 +361,9 @@ export type Database = {
           deposit_paid_at?: string | null
           payment_status?: 'pending' | 'deposit_paid' | 'fully_paid'
           payment_notes?: string | null
+          coordinator_name?: string | null
+          coordinator_email?: string | null
+          coordinator_phone?: string | null
           created_at?: string
           updated_at?: string
         }

@@ -129,6 +129,9 @@ export function ProjectFormDialog({
       deposit_paid_at: '',
       payment_status: 'pending',
       payment_notes: '',
+      coordinator_name: '',
+      coordinator_email: '',
+      coordinator_phone: '',
     },
   })
 
@@ -151,11 +154,14 @@ export function ProjectFormDialog({
           deposit_paid_at: project.deposit_paid_at || '',
           payment_status: (project.payment_status as 'pending' | 'deposit_paid' | 'fully_paid') || 'pending',
           payment_notes: project.payment_notes || '',
+          coordinator_name: project.coordinator_name || '',
+          coordinator_email: project.coordinator_email || '',
+          coordinator_phone: project.coordinator_phone || '',
         })
         setShowTemplatePicker(false)
         setSelectedTemplate(null)
         // Auto-expand booking section if any client/payment data exists
-        setBookingOpen(!!(project.client_name || project.client_email || project.contract_amount || project.event_type))
+        setBookingOpen(!!(project.client_name || project.client_email || project.contract_amount || project.event_type || project.coordinator_name))
         // Auto-detect single-day event
         setIsSingleDay(
           !!project.start_date && !!project.end_date && project.start_date === project.end_date
@@ -177,6 +183,9 @@ export function ProjectFormDialog({
           deposit_paid_at: '',
           payment_status: 'pending',
           payment_notes: '',
+          coordinator_name: '',
+          coordinator_email: '',
+          coordinator_phone: '',
         })
         // Always show template picker for new projects
         setShowTemplatePicker(true)
@@ -279,6 +288,9 @@ export function ProjectFormDialog({
           deposit_paid_at: data.deposit_paid_at || null,
           payment_status: data.payment_status || 'pending',
           payment_notes: data.payment_notes || null,
+          coordinator_name: data.coordinator_name || null,
+          coordinator_email: data.coordinator_email || null,
+          coordinator_phone: data.coordinator_phone || null,
         })
         .eq('id', project.id)
 
@@ -308,6 +320,9 @@ export function ProjectFormDialog({
           deposit_paid_at: data.deposit_paid_at || null,
           payment_status: data.payment_status || 'pending',
           payment_notes: data.payment_notes || null,
+          coordinator_name: data.coordinator_name || null,
+          coordinator_email: data.coordinator_email || null,
+          coordinator_phone: data.coordinator_phone || null,
         })
         .select('id')
         .single()
@@ -690,6 +705,52 @@ export function ProjectFormDialog({
                         </FormItem>
                       )}
                     />
+                  </div>
+
+                  {/* Coordinator / Venue Contact */}
+                  <div className="pt-2">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Coordinator / Venue Contact</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <FormField
+                        control={form.control}
+                        name="coordinator_name"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Name</FormLabel>
+                            <FormControl>
+                              <Input placeholder="e.g. Sarah Kim" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="coordinator_email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Email</FormLabel>
+                            <FormControl>
+                              <Input type="email" placeholder="coordinator@venue.com" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="coordinator_phone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Phone</FormLabel>
+                            <FormControl>
+                              <Input type="tel" placeholder="(555) 123-4567" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                   </div>
 
                   {/* Financial */}

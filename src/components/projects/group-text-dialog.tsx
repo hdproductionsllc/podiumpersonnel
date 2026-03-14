@@ -108,12 +108,14 @@ export function GroupTextDialog({
       const phones = getAllPhones()
       if (phones.length > 0) {
         const body = encodeURIComponent(message.trim())
-        // iOS uses ; to separate recipients, Android uses ,
-        // Use /open?addresses= format for broadest multi-recipient support
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
-        const separator = isIOS ? ';' : ','
-        const bodyParam = isIOS ? '&body=' : '?body='
-        window.location.href = `sms:${phones.join(separator)}${bodyParam}${body}`
+        if (isIOS) {
+          // iOS requires /open?addresses= format for multiple recipients
+          window.location.href = `sms:/open?addresses=${phones.join(',')}&body=${body}`
+        } else {
+          // Android and others: sms:num1,num2?body=
+          window.location.href = `sms:${phones.join(',')}?body=${body}`
+        }
       }
 
       onOpenChange(false)
@@ -133,14 +135,19 @@ export function GroupTextDialog({
       const phones = getFormattedPhones()
       if (phones.length === 0) return
 
-      const text = `${message.trim()}\n\nRecipients: ${phones.join(', ')}`
-      await navigator.clipboard.writeText(text)
-      toast.success(`Copied message and ${phones.length} number${phones.length !== 1 ? 's' : ''} to clipboard`)
+      // Copy just phone numbers (comma-separated) for pasting into recipient field
+      await navigator.clipboard.writeText(phones.join(', '))
+      toast.success(`Copied ${phones.length} number${phones.length !== 1 ? 's' : ''} to clipboard — paste into your messaging app's recipient field`)
     } catch {
       toast.error('Failed to copy to clipboard')
     } finally {
       setSaving(false)
     }
+  }
+
+  async function handleCopyMessage() {
+    await navigator.clipboard.writeText(message.trim())
+    toast.success('Message copied to clipboard')
   }
 
   const readyCount = getAllPhones().length
@@ -214,7 +221,16 @@ export function GroupTextDialog({
         </div>
 
         <div>
-          <label className="text-sm font-medium block mb-2">Message</label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm font-medium">Message</label>
+            <button
+              type="button"
+              onClick={handleCopyMessage}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Copy message
+            </button>
+          </div>
           <textarea
             className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[80px] resize-y"
             value={message}
