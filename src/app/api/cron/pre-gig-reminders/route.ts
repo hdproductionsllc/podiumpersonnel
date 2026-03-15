@@ -48,7 +48,6 @@ export async function GET(request: NextRequest) {
         id,
         name,
         start_time,
-        start_date,
         venue,
         venue_id,
         venue_details:venues(name)
