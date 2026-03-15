@@ -17,6 +17,7 @@ import { SubRequests } from './sub-requests'
 import { ConflictsSummary } from './conflicts-summary'
 import { SendGigDetailsDialog } from './send-gig-details-dialog'
 import { GroupTextDialog } from './group-text-dialog'
+import { ApproveReminderDialog } from './approve-reminder-dialog'
 import { ProjectFilesSection } from './project-files-section'
 import { detectConflicts } from './project-positions'
 import type { PositionJoined, BookForImport } from './project-positions'
@@ -290,6 +291,19 @@ export function ProjectsClient({
   const [gigDetailsProject, setGigDetailsProject] = useState<ProjectWithServices | null>(null)
   const [groupTextOpen, setGroupTextOpen] = useState(false)
   const [groupTextProject, setGroupTextProject] = useState<ProjectWithServices | null>(null)
+
+  // Pre-gig reminder approval dialog
+  const reminderParam = searchParams.get('reminder')
+  const [reminderDialogOpen, setReminderDialogOpen] = useState(!!reminderParam)
+  const [reminderDialogId, setReminderDialogId] = useState<string | null>(reminderParam)
+
+  // Open reminder dialog when URL param is present
+  useEffect(() => {
+    if (reminderParam) {
+      setReminderDialogId(reminderParam)
+      setReminderDialogOpen(true)
+    }
+  }, [reminderParam])
 
   // Waterfall trigger state — allows ProjectOffers to open SendOfferDialog via ProjectPositions
   const [waterfallTrigger, setWaterfallTrigger] = useState<{
@@ -1094,6 +1108,17 @@ export function ProjectsClient({
               phone: p.musician!.phone || null,
             }))}
           onPhonesSaved={() => router.refresh()}
+        />
+      )}
+
+      {reminderDialogId && (
+        <ApproveReminderDialog
+          open={reminderDialogOpen}
+          onOpenChange={(open) => {
+            setReminderDialogOpen(open)
+            if (!open) setReminderDialogId(null)
+          }}
+          reminderId={reminderDialogId}
         />
       )}
     </div>

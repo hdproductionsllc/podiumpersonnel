@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/keepalive",
       "schedule": "0 6 */3 * *"
+    },
+    {
+      "path": "/api/cron/pre-gig-reminders",
+      "schedule": "0 8,18 * * *"
     }
   ]
 }

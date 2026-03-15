@@ -935,3 +935,26 @@ export interface ProjectFileDownload {
   musician_id: string
   downloaded_at: string
 }
+
+export interface PreGigReminder {
+  id: string
+  project_id: string
+  organization_id: string
+  status: 'draft' | 'sent' | 'expired'
+  notes: string | null
+  trigger_date: string
+  created_at: string
+  approved_by: string | null
+  sent_at: string | null
+  musician_count: number | null
+}
+
+export interface ReminderTemplate {
+  id: string
+  organization_id: string
+  name: string
+  content: string
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}

@@ -21,6 +21,7 @@ import { GigDetailsEmail } from './templates/gig-details'
 import { GigDetailsReminderEmail } from './templates/gig-details-reminder'
 import { MusicUploadedEmail } from './templates/music-uploaded'
 import { MusicReminderEmail } from './templates/music-reminder'
+import { PreGigNotificationEmail } from './templates/pre-gig-notification'
 import { render } from '@react-email/render'
 import { type EmailBranding } from './templates/email-layout'
 
@@ -1029,6 +1030,50 @@ export async function sendMusicReminderEmail(params: SendMusicReminderEmailParam
 
   if (error) {
     console.error('Failed to send music reminder email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return data
+}
+
+// Pre-Gig Notification Email (to org owners)
+interface SendPreGigNotificationEmailParams {
+  to: string | string[]
+  organizationName: string
+  projectName: string
+  gigDate: string
+  venueName: string | null
+  musicianCount: number
+  gigDetailsSent: boolean
+  musicSent: boolean
+  reviewUrl: string
+  branding?: EmailBranding
+}
+
+export async function sendPreGigNotificationEmail(params: SendPreGigNotificationEmailParams) {
+  const emailHtml = await render(
+    PreGigNotificationEmail({
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      gigDate: params.gigDate,
+      venueName: params.venueName,
+      musicianCount: params.musicianCount,
+      gigDetailsSent: params.gigDetailsSent,
+      musicSent: params.musicSent,
+      reviewUrl: params.reviewUrl,
+      branding: params.branding,
+    })
+  )
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: `Upcoming: ${params.projectName} is in 2 days — review reminder`,
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send pre-gig notification email:', error)
     throw new Error(`Failed to send email: ${error.message}`)
   }
 

@@ -46,6 +46,7 @@ export default async function DashboardPage() {
     { data: recentActivity },
     { data: projectsNeedingAttention },
     { data: unpaidPayments },
+    { data: draftReminders },
   ] = await Promise.all([
     // Stats
     supabase
@@ -162,6 +163,20 @@ export default async function DashboardPage() {
       .eq('organization_id', orgId)
       .eq('status', 'unpaid')
       .lt('service.start_time', new Date().toISOString()),
+
+    // Draft pre-gig reminders
+    supabase
+      .from('pre_gig_reminders')
+      .select(`
+        id,
+        project_id,
+        musician_count,
+        trigger_date,
+        project:projects(id, name)
+      `)
+      .eq('organization_id', orgId)
+      .eq('status', 'draft')
+      .gt('trigger_date', new Date().toISOString()),
   ])
 
   // Fetch tutorial state
@@ -382,6 +397,19 @@ export default async function DashboardPage() {
       })
     })
   }
+
+  // Draft pre-gig reminders needing approval
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  draftReminders?.forEach((reminder: any) => {
+    const projectName = reminder.project?.name || 'Project'
+    actionItems.push({
+      id: `reminder-${reminder.id}`,
+      text: `${projectName} — pre-gig reminder ready`,
+      subtext: 'Review and send to musicians',
+      href: `/dashboard/projects?expand=${reminder.project_id}&reminder=${reminder.id}`,
+      urgency: 'amber',
+    })
+  })
 
   const hasActionItems = allStepsComplete && actionItems.length > 0
 
