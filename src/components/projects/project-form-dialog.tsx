@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createClient } from '@/lib/supabase/client'
+import { formatInTimeZone } from 'date-fns-tz/formatInTimeZone'
+import { fromZonedTime } from 'date-fns-tz/fromZonedTime'
 import {
   projectSchema,
   type ProjectInput,
@@ -85,6 +87,7 @@ interface ProjectFormDialogProps {
   onOpenChange: (open: boolean) => void
   project: ProjectWithServices | null
   organizationId: string
+  timezone: string
   isFirstProject?: boolean
   onSuccess: (newProject?: { id: string; start_date: string | null; end_date: string | null; template?: TemplateType; callTime?: string; startTime?: string; endTime?: string; venueName?: string; venueId?: string | null }) => void
 }
@@ -94,6 +97,7 @@ export function ProjectFormDialog({
   onOpenChange,
   project,
   organizationId,
+  timezone,
   isFirstProject,
   onSuccess,
 }: ProjectFormDialogProps) {
@@ -110,6 +114,11 @@ export function ProjectFormDialog({
   const [bookingOpen, setBookingOpen] = useState(false)
   const isEditing = !!project
   const today = new Date().toISOString().split('T')[0]
+
+  /** Extract "HH:mm" from a UTC ISO string, converted to the org's timezone */
+  function isoToLocalTime(iso: string): string {
+    return formatInTimeZone(new Date(iso), timezone, 'HH:mm')
+  }
 
   const form = useForm<ProjectInput>({
     resolver: zodResolver(projectSchema),
@@ -163,9 +172,15 @@ export function ProjectFormDialog({
         // Auto-expand booking section if any client/payment data exists
         setBookingOpen(!!(project.client_name || project.client_email || project.contract_amount || project.event_type || project.coordinator_name))
         // Auto-detect single-day event
-        setIsSingleDay(
-          !!project.start_date && !!project.end_date && project.start_date === project.end_date
-        )
+        const singleDay = !!project.start_date && !!project.end_date && project.start_date === project.end_date
+        setIsSingleDay(singleDay)
+        // Pre-populate times from the first performance service (or first service)
+        if (singleDay && project.services?.length) {
+          const perf = project.services.find(s => s.service_type === 'performance') || project.services[0]
+          if (perf.call_time) setCallTime(isoToLocalTime(perf.call_time))
+          if (perf.start_time) setStartTime(isoToLocalTime(perf.start_time))
+          if (perf.end_time) setEndTime(isoToLocalTime(perf.end_time))
+        }
       } else {
         form.reset({
           name: '',
@@ -252,8 +267,8 @@ export function ProjectFormDialog({
       return
     }
 
-    // Validate time ordering for single-day templates with time pickers
-    const showTimePicker = isSingleDay && selectedTemplate !== null && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra'
+    // Validate time ordering for single-day events with time pickers
+    const showTimePicker = isSingleDay && (isEditing || (selectedTemplate !== null && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra'))
     if (showTimePicker) {
       if (endTime <= startTime) {
         setError('End time must be after start time.')
@@ -298,6 +313,25 @@ export function ProjectFormDialog({
         setError(updateError.message)
         setIsLoading(false)
         return
+      }
+
+      // Sync times to the performance service for single-day events
+      if (isSingleDay && project.services?.length) {
+        const perf = project.services.find(s => s.service_type === 'performance') || project.services[0]
+        const dateStr = data.start_date
+        if (dateStr && perf) {
+          const stISO = fromZonedTime(`${dateStr}T${startTime}`, timezone).toISOString()
+          const ctISO = fromZonedTime(`${dateStr}T${callTime}`, timezone).toISOString()
+          const etISO = fromZonedTime(`${dateStr}T${endTime}`, timezone).toISOString()
+          await supabase
+            .from('services')
+            .update({
+              start_time: stISO,
+              call_time: ctISO,
+              end_time: etISO,
+            })
+            .eq('id', perf.id)
+        }
       }
     } else {
       const { data: newProject, error: insertError } = await supabase
@@ -519,7 +553,7 @@ export function ProjectFormDialog({
                     )}
                   />
 
-                  {selectedTemplate !== null && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' && (
+                  {(isEditing || (selectedTemplate !== null && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra')) && (
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1.5">
                         <label className="text-sm font-medium leading-none">Call Time</label>

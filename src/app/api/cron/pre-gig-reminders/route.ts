@@ -175,6 +175,7 @@ export async function GET(request: NextRequest) {
         projectId: project.id,
         resendEmailId: result?.id || null,
         metadata: { reminderId: reminder.id, allRecipients: adminEmails },
+        body: result?.emailHtml,
       })
 
       emailsSent++

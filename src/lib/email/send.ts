@@ -89,7 +89,7 @@ export async function sendContractOfferEmail(params: SendContractOfferParams) {
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Offer Reminder Email
@@ -137,7 +137,7 @@ export async function sendOfferReminderEmail(params: SendOfferReminderParams) {
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Offer Accepted Confirmation Email (to musician)
@@ -188,7 +188,7 @@ export async function sendOfferAcceptedEmail(params: SendOfferAcceptedParams) {
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Offer Declined Confirmation Email (to musician)
@@ -228,7 +228,7 @@ export async function sendOfferDeclinedEmail(params: SendOfferDeclinedParams) {
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Admin Notification Email (when musician responds)
@@ -278,7 +278,7 @@ export async function sendAdminOfferResponseEmail(params: SendAdminOfferResponse
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Admin Notification Email (when offer is sent)
@@ -329,7 +329,7 @@ export async function sendAdminOfferSentEmail(params: SendAdminOfferSentParams) 
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // W-9 Request Email
@@ -363,7 +363,7 @@ export async function sendW9RequestEmail(params: SendW9RequestParams) {
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Position Unassigned Email (to musician)
@@ -401,7 +401,7 @@ export async function sendPositionUnassignedEmail(params: SendPositionUnassigned
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Admin Sub Request Email (to admins when musician requests a sub)
@@ -457,7 +457,7 @@ export async function sendAdminSubRequestEmail(params: SendAdminSubRequestParams
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Sub Request Approved Email (to musician when admin approves)
@@ -499,7 +499,7 @@ export async function sendSubRequestApprovedEmail(params: SendSubRequestApproved
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Sub Request Declined Email (to musician when admin declines)
@@ -545,7 +545,7 @@ export async function sendSubRequestDeclinedEmail(params: SendSubRequestDeclined
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Musician Released Email (to original musician when sub accepts)
@@ -587,7 +587,7 @@ export async function sendMusicianReleasedEmail(params: SendMusicianReleasedPara
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Sub Declined Find Another Email (to original musician when sub declines)
@@ -631,7 +631,7 @@ export async function sendSubDeclinedFindAnotherEmail(params: SendSubDeclinedFin
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Portal Invitation Email
@@ -667,7 +667,7 @@ export async function sendPortalInvitationEmail(params: SendPortalInvitationPara
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Musician Welcome Email
@@ -700,7 +700,7 @@ export async function sendMusicianWelcomeEmail(params: SendMusicianWelcomeParams
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Offer Expired Notification Email (to admins)
@@ -746,7 +746,7 @@ export async function sendOfferExpiredEmail(params: SendOfferExpiredParams) {
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Offer Expiring Soon Notification Email (to admins — 24hr warning)
@@ -788,7 +788,7 @@ export async function sendOfferExpiringSoonEmail(params: SendOfferExpiringSoonPa
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Generic email sending function
@@ -815,7 +815,7 @@ export async function sendEmail(params: SendEmailParams) {
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml: html }
 }
 
 // Admin Welcome Email (sent after org creation)
@@ -847,7 +847,7 @@ export async function sendAdminWelcomeEmail(params: SendAdminWelcomeParams) {
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Gig Details Email
@@ -907,7 +907,7 @@ export async function sendGigDetailsEmail(params: SendGigDetailsEmailParams) {
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Gig Details Reminder Email
@@ -951,7 +951,7 @@ export async function sendGigDetailsReminderEmail(params: SendGigDetailsReminder
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Music Uploaded Email
@@ -993,7 +993,7 @@ export async function sendMusicUploadedEmail(params: SendMusicUploadedEmailParam
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Music Reminder Email
@@ -1033,7 +1033,7 @@ export async function sendMusicReminderEmail(params: SendMusicReminderEmailParam
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }
 
 // Pre-Gig Notification Email (to org owners)
@@ -1077,5 +1077,5 @@ export async function sendPreGigNotificationEmail(params: SendPreGigNotification
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return data
+  return { ...data, emailHtml }
 }

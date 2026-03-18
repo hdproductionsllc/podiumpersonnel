@@ -126,6 +126,7 @@ export async function POST(request: NextRequest) {
       projectId: project?.id,
       offerId,
       resendEmailId: result?.id || null,
+      body: result?.emailHtml,
     })
 
     return NextResponse.json({ success: true })

@@ -382,6 +382,20 @@ export function ProjectsClient({
     setDeleteServiceOpen(true)
   }
 
+  async function handleMarkComplete(project: ProjectWithServices) {
+    const supabase = (await import('@/lib/supabase/client')).createClient()
+    const { error } = await supabase
+      .from('projects')
+      .update({ status: 'completed' })
+      .eq('id', project.id)
+    if (error) {
+      toast.error('Failed to mark project as completed')
+      return
+    }
+    toast.success(`"${project.name}" marked as completed`)
+    router.refresh()
+  }
+
   function handleSuccess() {
     setProjectFormOpen(false)
     setDeleteProjectOpen(false)
@@ -833,6 +847,15 @@ export function ProjectsClient({
                             >
                               Edit
                             </Button>
+                            {project.status === 'active' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleMarkComplete(project)}
+                              >
+                                Complete
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1028,6 +1051,7 @@ export function ProjectsClient({
         onOpenChange={setProjectFormOpen}
         project={editingProject}
         organizationId={organizationId}
+        timezone={timezone}
         isFirstProject={projects.length === 0 && !editingProject}
         onSuccess={handleProjectSuccess}
       />

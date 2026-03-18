@@ -183,6 +183,7 @@ export async function POST(
           projectId: project.id,
           offerId: offer.id,
           resendEmailId: declinedResult.id || null,
+          body: declinedResult?.emailHtml,
         })
       }
     }

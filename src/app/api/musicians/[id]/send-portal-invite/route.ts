@@ -119,6 +119,7 @@ export async function POST(
       emailType: 'portal_invitation',
       musicianId: musician.id,
       resendEmailId: emailResult?.id || null,
+      body: emailResult?.emailHtml,
     })
   } catch (emailError) {
     console.error('Failed to send portal invitation email:', emailError)

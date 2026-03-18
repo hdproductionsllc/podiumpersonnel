@@ -225,6 +225,7 @@ export async function POST(
           projectId: project.id,
           offerId: offer.id,
           resendEmailId: acceptedResult.id || null,
+          body: acceptedResult?.emailHtml,
         })
       }
     }

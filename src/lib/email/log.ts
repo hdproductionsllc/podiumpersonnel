@@ -11,6 +11,30 @@ interface LogEmailParams {
   offerId?: string | null
   resendEmailId?: string | null
   metadata?: Record<string, unknown>
+  body?: string | null
+}
+
+/** Convert HTML email to readable plain text for storage */
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')  // Remove style blocks
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '') // Remove script blocks
+    .replace(/<br\s*\/?>/gi, '\n')                     // BR → newline
+    .replace(/<\/p>/gi, '\n\n')                        // Close P → double newline
+    .replace(/<\/div>/gi, '\n')                        // Close DIV → newline
+    .replace(/<\/tr>/gi, '\n')                         // Close TR → newline
+    .replace(/<\/li>/gi, '\n')                         // Close LI → newline
+    .replace(/<hr[^>]*>/gi, '\n---\n')                 // HR → separator
+    .replace(/<a[^>]*href="([^"]*)"[^>]*>[^<]*<\/a>/gi, '$1') // Links → URL
+    .replace(/<[^>]+>/g, '')                           // Strip remaining tags
+    .replace(/&nbsp;/gi, ' ')                          // Decode entities
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\n{3,}/g, '\n\n')                        // Collapse excess newlines
+    .trim()
 }
 
 /**
@@ -21,6 +45,7 @@ interface LogEmailParams {
 export async function logEmail(params: LogEmailParams): Promise<void> {
   try {
     const supabase = createServiceClient()
+    const plainBody = params.body ? htmlToPlainText(params.body) : null
     await supabase.from('email_logs').insert({
       organization_id: params.organizationId,
       recipient_email: params.recipientEmail,
@@ -33,6 +58,7 @@ export async function logEmail(params: LogEmailParams): Promise<void> {
       resend_email_id: params.resendEmailId || null,
       status: 'sent',
       metadata: params.metadata || {},
+      body: plainBody,
     })
   } catch (err) {
     console.warn('Failed to log email:', err)

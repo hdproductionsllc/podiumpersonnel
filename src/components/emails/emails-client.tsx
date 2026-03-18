@@ -37,6 +37,7 @@ interface EmailsClientProps {
 export function EmailsClient({ emailLogs, timezone }: EmailsClientProps) {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('all')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   // Get unique email types for filter
   const emailTypes = useMemo(() => {
@@ -150,28 +151,58 @@ export function EmailsClient({ emailLogs, timezone }: EmailsClientProps) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((log) => (
-                  <tr key={log.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
-                      {formatDate(log.sent_at)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{log.recipient_name || '—'}</div>
-                      <div className="text-muted-foreground text-xs">{log.recipient_email}</div>
-                    </td>
-                    <td className="px-4 py-3 max-w-xs truncate">{log.subject}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant={EMAIL_TYPE_VARIANTS[log.email_type] || 'outline'}>
-                        {EMAIL_TYPE_LABELS[log.email_type] || log.email_type}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant="success" className="capitalize">
-                        {log.status}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map((log) => {
+                  const isExpanded = expandedId === log.id
+                  return (
+                    <tr
+                      key={log.id}
+                      className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
+                      onClick={() => setExpandedId(isExpanded ? null : log.id)}
+                    >
+                      <td className="px-4 py-3 whitespace-nowrap text-muted-foreground align-top">
+                        {formatDate(log.sent_at)}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <div className="font-medium">{log.recipient_name || '—'}</div>
+                        <div className="text-muted-foreground text-xs">{log.recipient_email}</div>
+                      </td>
+                      <td className="px-4 py-3 align-top" colSpan={isExpanded ? 1 : 1}>
+                        <div className="flex items-center gap-2">
+                          <svg
+                            className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                            fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                          </svg>
+                          <span className={isExpanded ? '' : 'max-w-xs truncate'}>{log.subject}</span>
+                        </div>
+                        {isExpanded && (
+                          <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+                            {log.body ? (
+                              <pre className="rounded-md border bg-muted/30 p-4 text-sm whitespace-pre-wrap font-sans max-h-[400px] overflow-auto leading-relaxed">
+                                {log.body}
+                              </pre>
+                            ) : (
+                              <p className="text-sm text-muted-foreground italic py-2">
+                                Email content not available (sent before content logging was enabled).
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <Badge variant={EMAIL_TYPE_VARIANTS[log.email_type] || 'outline'}>
+                          {EMAIL_TYPE_LABELS[log.email_type] || log.email_type}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <Badge variant="success" className="capitalize">
+                          {log.status}
+                        </Badge>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

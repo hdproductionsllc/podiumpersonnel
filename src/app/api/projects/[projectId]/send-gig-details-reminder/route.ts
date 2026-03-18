@@ -165,6 +165,7 @@ export async function POST(
           musicianId: musician.id,
           projectId: projectId,
           resendEmailId: result?.id || null,
+          body: result?.emailHtml,
         })
 
         sentCount++

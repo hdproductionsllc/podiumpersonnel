@@ -83,6 +83,16 @@ export async function GET(request: NextRequest) {
 
     processed++
 
+    // 1b. Reset position — clear musician and set back to vacant
+    const { error: positionError } = await supabase
+      .from('project_positions')
+      .update({ musician_id: null, status: 'vacant' })
+      .eq('id', position.id)
+
+    if (positionError) {
+      console.error(`Failed to reset position ${position.id}:`, positionError)
+    }
+
     // 2. Find next candidate
     const { candidates } = await getNextCandidates(supabase, position.id, 1)
     const nextCandidate = candidates.length > 0 && !candidates[0].has_conflict
@@ -133,6 +143,7 @@ export async function GET(request: NextRequest) {
           offerId: offer.id,
           resendEmailId: expiredResult?.id || null,
           metadata: { allRecipients: adminEmails },
+          body: expiredResult?.emailHtml,
         })
       }
     } catch (emailError) {

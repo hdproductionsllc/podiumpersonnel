@@ -217,6 +217,7 @@ export async function POST(
               sendId: sendRecord.id,
               fileCount: musicianFiles.length,
             },
+            body: result?.emailHtml,
           })
         } catch (logError) {
           console.error(`Email sent but failed to log for ${musician.email}:`, logError)

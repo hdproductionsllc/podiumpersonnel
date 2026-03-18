@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
           emailType: 'w9_request',
           musicianId: musician.id,
           resendEmailId: w9Result?.id || null,
+          body: w9Result?.emailHtml,
         })
       } catch (err) {
         errorCount++

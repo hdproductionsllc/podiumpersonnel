@@ -188,6 +188,7 @@ export async function POST(
             musicianId: musician.id,
             projectId: projectId,
             resendEmailId: result?.id || null,
+            body: result?.emailHtml,
           })
         } catch (logError) {
           console.error(`Email sent but failed to log for ${musician.email}:`, logError)

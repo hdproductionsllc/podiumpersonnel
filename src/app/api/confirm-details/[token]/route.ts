@@ -95,6 +95,7 @@ export async function POST(
             projectId: project.id,
             resendEmailId: result?.id || null,
             metadata: { allRecipients: adminEmails, allConfirmed },
+            body: result?.emailHtml,
           })
         }
       } catch (emailError) {

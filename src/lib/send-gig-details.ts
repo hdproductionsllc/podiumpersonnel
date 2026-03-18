@@ -235,6 +235,7 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
           sendId: sendRecord.id,
           instrument: member.instrument,
         },
+        body: result?.emailHtml,
       })
 
       sentCount++

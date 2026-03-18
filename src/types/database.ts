@@ -867,6 +867,7 @@ export interface EmailLog {
   resend_email_id: string | null
   status: string
   metadata: Record<string, unknown>
+  body: string | null
   sent_at: string
 }
 export interface GigDetailSend {

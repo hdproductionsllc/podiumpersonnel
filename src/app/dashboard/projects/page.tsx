@@ -61,6 +61,26 @@ export default async function ProjectsPage() {
     .order('start_date', { ascending: true, nullsFirst: false })
     .order('name', { ascending: true })
 
+  // Auto-complete active projects whose end_date has passed
+  const today = new Date().toISOString().split('T')[0]
+  if (projects?.length) {
+    const pastActive = projects.filter(
+      (p) => p.status === 'active' && p.end_date && p.end_date < today
+    )
+    if (pastActive.length) {
+      await supabase
+        .from('projects')
+        .update({ status: 'completed' })
+        .eq('organization_id', organization!.id)
+        .eq('status', 'active')
+        .lt('end_date', today)
+      // Update local data so the UI reflects the change immediately
+      for (const p of pastActive) {
+        p.status = 'completed'
+      }
+    }
+  }
+
   // Fetch books with entries for import dialog
   const { data: books } = await supabase
     .from('books')

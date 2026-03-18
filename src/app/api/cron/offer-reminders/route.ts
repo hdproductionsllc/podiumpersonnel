@@ -133,6 +133,7 @@ export async function GET(request: NextRequest) {
           projectId: project.id,
           offerId: offer.id,
           resendEmailId: result?.id || null,
+          body: result?.emailHtml,
         })
 
         musicianEmails++
@@ -169,6 +170,7 @@ export async function GET(request: NextRequest) {
           offerId: offer.id,
           resendEmailId: adminResult?.id || null,
           metadata: { allRecipients: adminEmailList },
+          body: adminResult?.emailHtml,
         })
 
         adminEmails++

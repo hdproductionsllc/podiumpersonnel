@@ -199,6 +199,7 @@ export async function POST(request: NextRequest) {
         payAmount,
         ensembleType: project?.ensemble_type,
       },
+      body: result?.emailHtml,
     })
 
     // Send notification to organization admins
