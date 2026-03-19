@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { DEFAULT_TIMEZONE } from '@/lib/utils'
 import * as XLSX from 'xlsx'
 
 export async function POST(request: Request) {
@@ -23,6 +24,13 @@ export async function POST(request: Request) {
   if (membership.role !== 'owner' && membership.role !== 'admin') {
     return NextResponse.json({ error: 'Permission denied' }, { status: 403 })
   }
+
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('timezone')
+    .eq('id', membership.organization_id)
+    .single()
+  const timezone = org?.timezone || DEFAULT_TIMEZONE
 
   try {
     const body = await request.json()
@@ -105,7 +113,7 @@ export async function POST(request: Request) {
         .join(', ') || ''
 
       const payeeName = `${musician.last_name}, ${musician.first_name}`
-      const serviceDate = new Date(service.start_time).toLocaleDateString('en-US')
+      const serviceDate = new Date(service.start_time).toLocaleDateString('en-US', { timeZone: timezone })
       const memo = `${service.project.name} - ${service.name} - ${instruments || 'N/A'}`
       const paymentType = payment.is_leader_fee ? 'Leader Fee' : 'Service Pay'
 

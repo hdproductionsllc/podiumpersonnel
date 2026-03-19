@@ -33,6 +33,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
+import { formatTimezoneLabel } from '@/lib/utils'
 import type { Service } from '@/types'
 
 /** Convert a UTC ISO string to a datetime-local value in the org's timezone */
@@ -422,6 +423,7 @@ export function ServiceFormDialog({
             )}
 
             {/* Times row */}
+            <p className="text-xs text-muted-foreground">All times in {formatTimezoneLabel(timezone)}</p>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium leading-none">Call Time</label>

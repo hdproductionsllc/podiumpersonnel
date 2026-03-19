@@ -138,6 +138,7 @@ export function GigPageClient({
                 services={services}
                 instruments={instruments}
                 currentInstrumentId={instrumentId}
+                timezone={timezone}
                 onSuccess={handleSubRequestSuccess}
                 onCancel={() => setShowSubRequestForm(false)}
               />

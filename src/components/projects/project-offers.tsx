@@ -44,6 +44,7 @@ type WaterfallCandidate = {
 interface ProjectOffersProps {
   offers: OfferJoined[]
   organizationName: string
+  timezone: string
   canManage: boolean
   onOfferChange: () => void
   onSendWaterfall?: (positionId: string, musicianId: string, customPay: number | null) => void
@@ -68,6 +69,7 @@ const OFFER_STATUS_LABELS: Record<string, string> = {
 export function ProjectOffers({
   offers,
   organizationName,
+  timezone,
   canManage,
   onOfferChange,
   onSendWaterfall,
@@ -331,7 +333,7 @@ export function ProjectOffers({
 
   function formatDate(dateStr: string | null): string {
     if (!dateStr) return '—'
-    return new Date(dateStr).toLocaleDateString()
+    return new Date(dateStr).toLocaleDateString('en-US', { timeZone: timezone })
   }
 
   function isExpired(expiresAt: string | null): boolean {
@@ -525,7 +527,7 @@ export function ProjectOffers({
                 </p>
                 <p className="text-muted-foreground">
                   {confirmReminder.expires_at
-                    ? `This offer expires on ${new Date(confirmReminder.expires_at).toLocaleDateString()}.`
+                    ? `This offer expires on ${new Date(confirmReminder.expires_at).toLocaleDateString('en-US', { timeZone: timezone })}.`
                     : 'This offer has no expiration date.'}
                 </p>
                 <p className="text-xs text-muted-foreground italic">

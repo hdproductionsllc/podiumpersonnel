@@ -387,6 +387,7 @@ export function OfferDetail({ offer, services, totalPay, totalChairs, instrument
                   services={services.map(s => ({ id: s.id, name: s.name, start_time: s.start_time }))}
                   instruments={instruments}
                   currentInstrumentId={position?.instrument?.id || ''}
+                  timezone={timezone}
                   onSuccess={() => {
                     setShowSubForm(false)
                     router.refresh()

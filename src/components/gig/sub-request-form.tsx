@@ -22,6 +22,7 @@ interface SubRequestFormProps {
   services: Service[]
   instruments: Instrument[]
   currentInstrumentId: string
+  timezone?: string
   onSuccess: () => void
   onCancel: () => void
 }
@@ -31,6 +32,7 @@ export function SubRequestForm({
   services,
   instruments,
   currentInstrumentId,
+  timezone,
   onSuccess,
   onCancel,
 }: SubRequestFormProps) {
@@ -85,7 +87,7 @@ export function SubRequestForm({
           <option value="">All services</option>
           {services.map((service) => (
             <option key={service.id} value={service.id}>
-              {service.name} - {new Date(service.start_time).toLocaleDateString()}
+              {service.name} - {new Date(service.start_time).toLocaleDateString('en-US', { ...(timezone ? { timeZone: timezone } : {}) })}
             </option>
           ))}
         </select>

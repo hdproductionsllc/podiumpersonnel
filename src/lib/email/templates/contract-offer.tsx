@@ -29,6 +29,7 @@ interface ContractOfferEmailProps {
   }[]
   responseUrl: string
   expiresAt: string | null
+  timezone?: string
   notes?: string | null
   payAmount?: number | null
   leaderFee?: number | null
@@ -48,6 +49,7 @@ export function ContractOfferEmail({
   services,
   responseUrl,
   expiresAt,
+  timezone,
   notes,
   payAmount,
   leaderFee,
@@ -113,7 +115,7 @@ export function ContractOfferEmail({
               )}
               {expiresAt && (
                 <Text style={detailsItem}>
-                  <strong>Please respond by:</strong> {new Date(expiresAt).toLocaleDateString()}
+                  <strong>Please respond by:</strong> {new Date(expiresAt).toLocaleDateString('en-US', { ...(timezone ? { timeZone: timezone } : {}) })}
                 </Text>
               )}
             </Section>

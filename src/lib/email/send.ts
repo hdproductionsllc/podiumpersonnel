@@ -46,6 +46,7 @@ interface SendContractOfferParams {
   }[]
   responseUrl: string
   expiresAt: string | null
+  timezone?: string
   notes?: string | null
   payAmount?: number | null
   leaderFee?: number | null
@@ -67,6 +68,7 @@ export async function sendContractOfferEmail(params: SendContractOfferParams) {
       services: params.services,
       responseUrl: params.responseUrl,
       expiresAt: params.expiresAt,
+      timezone: params.timezone,
       notes: params.notes,
       payAmount: params.payAmount,
       leaderFee: params.leaderFee,

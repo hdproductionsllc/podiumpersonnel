@@ -93,6 +93,7 @@ interface ProjectPositionsProps {
   musicians: MusicianForOffer[]
   services: Service[]
   canManage: boolean
+  timezone: string
   onPositionChange: () => void
   waterfallTrigger?: WaterfallTrigger | null
   onWaterfallHandled?: () => void
@@ -159,6 +160,7 @@ export function ProjectPositions({
   musicians,
   services,
   canManage,
+  timezone,
   onPositionChange,
   waterfallTrigger,
   onWaterfallHandled,
@@ -704,6 +706,7 @@ export function ProjectPositions({
         leaderFee={leaderFee}
         suggestedCustomPay={suggestedCustomPay}
         projectEndDate={projectEndDate}
+        timezone={timezone}
         nextVacantCount={offerInstrumentId ? positions.filter(p => p.instrument_id === offerInstrumentId && p.status === 'vacant' && p.id !== offerPositionId).length : 0}
         nextInstrumentName={offerInstrumentId ? positions.find(p => p.instrument_id === offerInstrumentId)?.instrument?.name : undefined}
         preSelectedMusicianId={preSelectedMusicianId}
@@ -764,6 +767,7 @@ export function ProjectPositions({
         musicianId={subRequestPosition?.musician_id ?? ''}
         musicianName={subRequestPosition?.musician ? `${subRequestPosition.musician.first_name} ${subRequestPosition.musician.last_name}` : ''}
         services={services}
+        timezone={timezone}
         onSuccess={onPositionChange}
       />
 

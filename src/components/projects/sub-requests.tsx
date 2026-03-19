@@ -31,6 +31,7 @@ export type SubRequestJoined = {
 
 interface SubRequestsProps {
   requests: SubRequestJoined[]
+  timezone: string
   canManage: boolean
   onRequestChange: () => void
 }
@@ -55,6 +56,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 export function SubRequests({
   requests,
+  timezone,
   canManage,
   onRequestChange,
 }: SubRequestsProps) {
@@ -186,7 +188,7 @@ export function SubRequests({
                 </td>
                 <td className="px-3 py-2 text-muted-foreground">
                   {req.service
-                    ? `${req.service.name} (${new Date(req.service.start_time).toLocaleDateString()})`
+                    ? `${req.service.name} (${new Date(req.service.start_time).toLocaleDateString('en-US', { timeZone: timezone })})`
                     : 'All services'}
                 </td>
                 <td className="px-3 py-2 text-muted-foreground max-w-32 truncate" title={req.reason || undefined}>

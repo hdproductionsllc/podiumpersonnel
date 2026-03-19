@@ -133,6 +133,7 @@ export async function POST(request: NextRequest) {
         services: formattedServices,
         responseUrl,
         expiresAt: null,
+        timezone,
         payAmount: payAmount != null && !isNaN(payAmount) ? payAmount : undefined,
         leaderFee: isLeader && leaderFeeAmount ? leaderFeeAmount : undefined,
         isLeader,

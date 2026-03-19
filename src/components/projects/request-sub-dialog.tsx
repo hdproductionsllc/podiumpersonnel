@@ -12,6 +12,7 @@ interface RequestSubDialogProps {
   musicianId: string
   musicianName: string
   services: Service[]
+  timezone?: string
   onSuccess: () => void
 }
 
@@ -22,6 +23,7 @@ export function RequestSubDialog({
   musicianId,
   musicianName,
   services,
+  timezone,
   onSuccess,
 }: RequestSubDialogProps) {
   const [serviceId, setServiceId] = useState<string>('')
@@ -91,7 +93,7 @@ export function RequestSubDialog({
               <option value="">All services</option>
               {services.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} ({new Date(s.start_time).toLocaleDateString()})
+                  {s.name} ({new Date(s.start_time).toLocaleDateString('en-US', { ...(timezone ? { timeZone: timezone } : {}) })})
                 </option>
               ))}
             </select>

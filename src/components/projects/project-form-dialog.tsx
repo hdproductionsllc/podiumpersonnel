@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createClient } from '@/lib/supabase/client'
+import { formatTimezoneLabel } from '@/lib/utils'
 import { formatInTimeZone } from 'date-fns-tz/formatInTimeZone'
 import { fromZonedTime } from 'date-fns-tz/fromZonedTime'
 import {
@@ -89,7 +90,7 @@ interface ProjectFormDialogProps {
   organizationId: string
   timezone: string
   isFirstProject?: boolean
-  onSuccess: (newProject?: { id: string; start_date: string | null; end_date: string | null; template?: TemplateType; callTime?: string; startTime?: string; endTime?: string; venueName?: string; venueId?: string | null }) => void
+  onSuccess: (newProject?: { id: string; name: string; start_date: string | null; end_date: string | null; template?: TemplateType; callTime?: string; startTime?: string; endTime?: string; venueName?: string; venueId?: string | null }) => void
 }
 
 export function ProjectFormDialog({
@@ -339,7 +340,7 @@ export function ProjectFormDialog({
           // No services exist — create a performance service
           await supabase.from('services').insert({
             project_id: project.id,
-            name: 'Performance',
+            name: `${data.name} Performance`,
             service_type: 'performance',
             start_time: stISO,
             call_time: ctISO,
@@ -384,6 +385,7 @@ export function ProjectFormDialog({
       setIsLoading(false)
       onSuccess({
         id: newProject.id,
+        name: data.name,
         start_date: data.start_date || null,
         end_date: data.end_date || null,
         template: selectedTemplate || undefined,
@@ -568,6 +570,8 @@ export function ProjectFormDialog({
                   />
 
                   {(isEditing || (selectedTemplate !== null && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra')) && (
+                    <>
+                    <p className="text-xs text-muted-foreground">All times in {formatTimezoneLabel(timezone)}</p>
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1.5">
                         <label className="text-sm font-medium leading-none">Call Time</label>
@@ -594,6 +598,7 @@ export function ProjectFormDialog({
                         />
                       </div>
                     </div>
+                    </>
                   )}
                 </>
               ) : (

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { EmptyState } from '@/components/ui/empty-state'
+import { fromZonedTime } from 'date-fns-tz/fromZonedTime'
 import { ProjectFormDialog } from './project-form-dialog'
 import { DeleteProjectDialog } from './delete-project-dialog'
 import { ServiceTypeDialog } from './service-type-dialog'
@@ -115,6 +116,7 @@ function ServicesList({
   services,
   projectId,
   canManage,
+  timezone,
   onAddService,
   onEditService,
   onDeleteService,
@@ -122,6 +124,7 @@ function ServicesList({
   services: Service[]
   projectId: string
   canManage: boolean
+  timezone: string
   onAddService: (projectId: string) => void
   onEditService: (projectId: string, service: Service) => void
   onDeleteService: (service: Service) => void
@@ -167,12 +170,12 @@ function ServicesList({
                   </td>
                   <td className="hidden md:table-cell px-3 py-2 text-muted-foreground">
                     {service.call_time
-                      ? new Date(service.call_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                      ? new Date(service.call_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: timezone })
                       : '—'}
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">
-                    {new Date(service.start_time).toLocaleDateString()} {new Date(service.start_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                    {service.end_time && ` – ${new Date(service.end_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}
+                    {new Date(service.start_time).toLocaleDateString('en-US', { timeZone: timezone })} {new Date(service.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: timezone })}
+                    {service.end_time && ` – ${new Date(service.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: timezone })}`}
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">
                     {service.venue ? (
@@ -411,7 +414,7 @@ export function ProjectsClient({
     router.refresh()
   }
 
-  async function handleProjectSuccess(newProject?: { id: string; start_date: string | null; end_date: string | null; template?: string; callTime?: string; startTime?: string; endTime?: string; venueName?: string; venueId?: string | null }) {
+  async function handleProjectSuccess(newProject?: { id: string; name: string; start_date: string | null; end_date: string | null; template?: string; callTime?: string; startTime?: string; endTime?: string; venueName?: string; venueId?: string | null }) {
     setProjectFormOpen(false)
     setEditingProject(null)
 
@@ -423,6 +426,7 @@ export function ProjectsClient({
     // Auto-create services and positions based on template
     if (newProject?.template) {
       const supabase = (await import('@/lib/supabase/client')).createClient()
+      const toISO = (date: string, time: string) => fromZonedTime(`${date}T${time}`, timezone).toISOString()
 
       const venueFields = {
         ...(newProject.venueName ? { venue: newProject.venueName } : {}),
@@ -438,11 +442,11 @@ export function ProjectsClient({
           const et = newProject.endTime || '22:00'
           await supabase.from('services').insert({
             project_id: newProject.id,
-            name: 'Performance',
+            name: `${newProject.name} Performance`,
             service_type: 'performance',
-            start_time: new Date(`${dateStr}T${st}:00`).toISOString(),
-            end_time: new Date(`${dateStr}T${et}:00`).toISOString(),
-            call_time: new Date(`${dateStr}T${ct}:00`).toISOString(),
+            start_time: toISO(dateStr, st),
+            end_time: toISO(dateStr, et),
+            call_time: toISO(dateStr, ct),
             ...venueFields,
           })
         }
@@ -478,11 +482,11 @@ export function ProjectsClient({
           const et = newProject.endTime || '22:00'
           await supabase.from('services').insert({
             project_id: newProject.id,
-            name: 'Performance',
+            name: `${newProject.name} Performance`,
             service_type: 'performance',
-            start_time: new Date(`${dateStr}T${st}:00`).toISOString(),
-            end_time: new Date(`${dateStr}T${et}:00`).toISOString(),
-            call_time: new Date(`${dateStr}T${ct}:00`).toISOString(),
+            start_time: toISO(dateStr, st),
+            end_time: toISO(dateStr, et),
+            call_time: toISO(dateStr, ct),
             ...venueFields,
           })
         }
@@ -517,11 +521,11 @@ export function ProjectsClient({
           const et = newProject.endTime || '22:00'
           await supabase.from('services').insert({
             project_id: newProject.id,
-            name: 'Performance',
+            name: `${newProject.name} Performance`,
             service_type: 'performance',
-            start_time: new Date(`${dateStr}T${st}:00`).toISOString(),
-            end_time: new Date(`${dateStr}T${et}:00`).toISOString(),
-            call_time: new Date(`${dateStr}T${ct}:00`).toISOString(),
+            start_time: toISO(dateStr, st),
+            end_time: toISO(dateStr, et),
+            call_time: toISO(dateStr, ct),
             ...venueFields,
           })
         }
@@ -556,11 +560,11 @@ export function ProjectsClient({
           const et = newProject.endTime || '22:00'
           await supabase.from('services').insert({
             project_id: newProject.id,
-            name: 'Performance',
+            name: `${newProject.name} Performance`,
             service_type: 'performance',
-            start_time: new Date(`${dateStr}T${st}:00`).toISOString(),
-            end_time: new Date(`${dateStr}T${et}:00`).toISOString(),
-            call_time: new Date(`${dateStr}T${ct}:00`).toISOString(),
+            start_time: toISO(dateStr, st),
+            end_time: toISO(dateStr, et),
+            call_time: toISO(dateStr, ct),
             ...venueFields,
           })
         }
@@ -571,29 +575,29 @@ export function ProjectsClient({
           await supabase.from('services').insert([
             {
               project_id: newProject.id,
-              name: 'Rehearsal 1',
+              name: `${newProject.name} Rehearsal 1`,
               service_type: 'rehearsal',
-              start_time: new Date(dateStr + 'T10:00:00').toISOString(),
-              end_time: new Date(dateStr + 'T13:00:00').toISOString(),
-              call_time: new Date(dateStr + 'T09:30:00').toISOString(),
+              start_time: toISO(dateStr, '10:00'),
+              end_time: toISO(dateStr, '13:00'),
+              call_time: toISO(dateStr, '09:30'),
               ...venueFields,
             },
             {
               project_id: newProject.id,
-              name: 'Dress Rehearsal',
+              name: `${newProject.name} Dress Rehearsal`,
               service_type: 'rehearsal',
-              start_time: new Date(dateStr + 'T10:00:00').toISOString(),
-              end_time: new Date(dateStr + 'T13:00:00').toISOString(),
-              call_time: new Date(dateStr + 'T09:30:00').toISOString(),
+              start_time: toISO(dateStr, '10:00'),
+              end_time: toISO(dateStr, '13:00'),
+              call_time: toISO(dateStr, '09:30'),
               ...venueFields,
             },
             {
               project_id: newProject.id,
-              name: 'Performance',
+              name: `${newProject.name} Performance`,
               service_type: 'performance',
-              start_time: new Date(dateStr + 'T19:00:00').toISOString(),
-              end_time: new Date(dateStr + 'T22:00:00').toISOString(),
-              call_time: new Date(dateStr + 'T18:30:00').toISOString(),
+              start_time: toISO(dateStr, '19:00'),
+              end_time: toISO(dateStr, '22:00'),
+              call_time: toISO(dateStr, '18:30'),
               ...venueFields,
             },
           ])
@@ -604,11 +608,11 @@ export function ProjectsClient({
         if (dateStr) {
           await supabase.from('services').insert({
             project_id: newProject.id,
-            name: 'Performance',
+            name: `${newProject.name} Performance`,
             service_type: 'performance',
-            start_time: new Date(dateStr + 'T19:00:00').toISOString(),
-            end_time: new Date(dateStr + 'T22:00:00').toISOString(),
-            call_time: new Date(dateStr + 'T18:30:00').toISOString(),
+            start_time: toISO(dateStr, '19:00'),
+            end_time: toISO(dateStr, '22:00'),
+            call_time: toISO(dateStr, '18:30'),
             ...venueFields,
           })
         }
@@ -876,6 +880,7 @@ export function ProjectsClient({
                             services={project.services}
                             projectId={project.id}
                             canManage={canManage}
+                            timezone={timezone}
                             onAddService={handleAddService}
                             onEditService={handleEditService}
                             onDeleteService={handleDeleteService}
@@ -888,6 +893,7 @@ export function ProjectsClient({
                             musicians={musicians}
                             services={project.services}
                             canManage={canManage}
+                            timezone={timezone}
                             onPositionChange={handleSuccess}
                             waterfallTrigger={waterfallTrigger}
                             onWaterfallHandled={() => setWaterfallTrigger(null)}
@@ -902,6 +908,7 @@ export function ProjectsClient({
                               }))
                             )}
                             organizationName={organizationName}
+                            timezone={timezone}
                             canManage={canManage}
                             onOfferChange={handleSuccess}
                             onSendWaterfall={(positionId, musicianId, customPay) => {
@@ -918,10 +925,12 @@ export function ProjectsClient({
                                 position_instrument_id: p.instrument_id,
                               }))
                             )}
+                            timezone={timezone}
                             canManage={canManage}
                             onRequestChange={handleSuccess}
                           />
                           <ConflictsSummary
+                            timezone={timezone}
                             conflicts={detectConflicts(project.project_positions, musicians, project.services)}
                           />
                           {/* Payments shortcut */}

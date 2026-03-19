@@ -168,6 +168,7 @@ export async function POST(request: NextRequest) {
       services: formattedServices,
       responseUrl,
       expiresAt: offer.expires_at,
+      timezone,
       payAmount,
       leaderFee: isLeader ? leaderFee : null,
       isLeader,

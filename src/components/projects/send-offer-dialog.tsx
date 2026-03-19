@@ -38,6 +38,7 @@ interface SendOfferDialogProps {
   leaderFee?: number | null
   suggestedCustomPay?: string
   projectEndDate?: string | null
+  timezone?: string
   nextVacantCount?: number
   nextInstrumentName?: string
   preSelectedMusicianId?: string | null
@@ -60,6 +61,7 @@ export function SendOfferDialog({
   leaderFee,
   suggestedCustomPay,
   projectEndDate,
+  timezone,
   nextVacantCount,
   nextInstrumentName,
   preSelectedMusicianId,
@@ -194,7 +196,7 @@ export function SendOfferDialog({
 
       if (declinedOffers && declinedOffers.length > 0) {
         const date = declinedOffers[0].responded_at
-          ? new Date(declinedOffers[0].responded_at).toLocaleDateString()
+          ? new Date(declinedOffers[0].responded_at).toLocaleDateString('en-US', { timeZone: timezone })
           : 'previously'
         setDeclinedWarning(`This musician declined this position on ${date}.`)
       } else {
@@ -279,7 +281,7 @@ export function SendOfferDialog({
 
         if (hasOverlap) {
           const dates = projectServices
-            .map((s: any) => new Date(s.start_time).toLocaleDateString())
+            .map((s: any) => new Date(s.start_time).toLocaleDateString('en-US', { timeZone: timezone }))
             .filter((d: string, i: number, arr: string[]) => arr.indexOf(d) === i)
             .join(', ')
           conflicts.push({

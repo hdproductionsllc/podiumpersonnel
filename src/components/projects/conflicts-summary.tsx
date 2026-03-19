@@ -4,9 +4,10 @@ import type { ConflictInfo } from './project-positions'
 
 interface ConflictsSummaryProps {
   conflicts: ConflictInfo[]
+  timezone: string
 }
 
-export function ConflictsSummary({ conflicts }: ConflictsSummaryProps) {
+export function ConflictsSummary({ conflicts, timezone }: ConflictsSummaryProps) {
   if (conflicts.length === 0) return null
 
   return (
@@ -35,10 +36,10 @@ export function ConflictsSummary({ conflicts }: ConflictsSummaryProps) {
                 <td className="px-3 py-2 font-medium">{conflict.musicianName}</td>
                 <td className="px-3 py-2 text-muted-foreground">{conflict.positionLabel}</td>
                 <td className="px-3 py-2 text-muted-foreground">
-                  {conflict.service.name} ({new Date(conflict.service.start_time).toLocaleDateString()})
+                  {conflict.service.name} ({new Date(conflict.service.start_time).toLocaleDateString('en-US', { timeZone: timezone })})
                 </td>
                 <td className="px-3 py-2 text-muted-foreground">
-                  {conflict.schedule.title} ({new Date(conflict.schedule.start_time).toLocaleDateString()} – {new Date(conflict.schedule.end_time).toLocaleDateString()})
+                  {conflict.schedule.title} ({new Date(conflict.schedule.start_time).toLocaleDateString('en-US', { timeZone: timezone })} – {new Date(conflict.schedule.end_time).toLocaleDateString('en-US', { timeZone: timezone })})
                 </td>
               </tr>
             ))}
