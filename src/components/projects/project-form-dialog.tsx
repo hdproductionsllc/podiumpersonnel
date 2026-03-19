@@ -316,13 +316,17 @@ export function ProjectFormDialog({
       }
 
       // Sync times to the performance service for single-day events
-      if (isSingleDay && project.services?.length) {
-        const perf = project.services.find(s => s.service_type === 'performance') || project.services[0]
+      if (isSingleDay && data.start_date) {
         const dateStr = data.start_date
-        if (dateStr && perf) {
-          const stISO = fromZonedTime(`${dateStr}T${startTime}`, timezone).toISOString()
-          const ctISO = fromZonedTime(`${dateStr}T${callTime}`, timezone).toISOString()
-          const etISO = fromZonedTime(`${dateStr}T${endTime}`, timezone).toISOString()
+        const stISO = fromZonedTime(`${dateStr}T${startTime}`, timezone).toISOString()
+        const ctISO = fromZonedTime(`${dateStr}T${callTime}`, timezone).toISOString()
+        const etISO = fromZonedTime(`${dateStr}T${endTime}`, timezone).toISOString()
+
+        const perf = project.services?.find(s => s.service_type === 'performance')
+          || project.services?.[0]
+
+        if (perf) {
+          // Update existing service
           await supabase
             .from('services')
             .update({
@@ -331,6 +335,16 @@ export function ProjectFormDialog({
               end_time: etISO,
             })
             .eq('id', perf.id)
+        } else {
+          // No services exist — create a performance service
+          await supabase.from('services').insert({
+            project_id: project.id,
+            name: 'Performance',
+            service_type: 'performance',
+            start_time: stISO,
+            call_time: ctISO,
+            end_time: etISO,
+          })
         }
       }
     } else {
