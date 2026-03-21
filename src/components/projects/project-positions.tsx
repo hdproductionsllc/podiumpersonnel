@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -19,9 +19,19 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
 import { getPositionTitle } from '@/lib/orchestra-positions'
+import { checkEnsembleDrift } from '@/lib/ensemble-detection'
 import type { Service } from '@/types'
 import { usePlan } from '@/components/providers/plan-provider'
 import { canUseSavedEnsembles } from '@/lib/plan'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 
 export type PositionOfferJoined = {
   id: string
@@ -94,6 +104,7 @@ interface ProjectPositionsProps {
   services: Service[]
   canManage: boolean
   timezone: string
+  ensembleType: string | null
   onPositionChange: () => void
   waterfallTrigger?: WaterfallTrigger | null
   onWaterfallHandled?: () => void
@@ -161,6 +172,7 @@ export function ProjectPositions({
   services,
   canManage,
   timezone,
+  ensembleType,
   onPositionChange,
   waterfallTrigger,
   onWaterfallHandled,
@@ -183,6 +195,26 @@ export function ProjectPositions({
   const [unassignPosition, setUnassignPosition] = useState<PositionJoined | null>(null)
   const [unassigning, setUnassigning] = useState(false)
   const [preSelectedMusicianId, setPreSelectedMusicianId] = useState<string | null>(null)
+  const [ensembleDriftOpen, setEnsembleDriftOpen] = useState(false)
+  const [ensembleDriftSuggestion, setEnsembleDriftSuggestion] = useState<string | null>(null)
+  const [ensembleLabelInput, setEnsembleLabelInput] = useState('')
+  const [updatingEnsembleType, setUpdatingEnsembleType] = useState(false)
+  const prevPositionCountRef = useRef(positions.length)
+  const hasMountedRef = useRef(false)
+
+  // Detect ensemble drift when positions change (add/remove)
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true
+      prevPositionCountRef.current = positions.length
+      return
+    }
+    // Only check if position count actually changed (add or remove)
+    if (positions.length !== prevPositionCountRef.current) {
+      prevPositionCountRef.current = positions.length
+      checkForEnsembleDrift(positions)
+    }
+  }, [positions.length, ensembleType]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle waterfall trigger from ProjectOffers
   useEffect(() => {
@@ -351,6 +383,36 @@ export function ProjectPositions({
       toast.error('Failed to add chair')
       return
     }
+    onPositionChange()
+  }
+
+  function checkForEnsembleDrift(updatedPositions: PositionJoined[]) {
+    const positionsForDetection = updatedPositions.map(p => ({
+      instrument_name: p.instrument?.name || '',
+      chair_number: p.chair_number,
+    }))
+    const { drifted, suggestion } = checkEnsembleDrift(ensembleType, positionsForDetection)
+    if (drifted) {
+      setEnsembleDriftSuggestion(suggestion)
+      setEnsembleLabelInput(suggestion || '')
+      setEnsembleDriftOpen(true)
+    }
+  }
+
+  async function handleUpdateEnsembleType(newLabel: string | null) {
+    setUpdatingEnsembleType(true)
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('projects')
+      .update({ ensemble_type: newLabel })
+      .eq('id', projectId)
+    setUpdatingEnsembleType(false)
+    if (error) {
+      toast.error('Failed to update ensemble label')
+      return
+    }
+    toast.success(newLabel ? `Ensemble label updated to "${newLabel}"` : 'Ensemble label cleared')
+    setEnsembleDriftOpen(false)
     onPositionChange()
   }
 
@@ -770,6 +832,40 @@ export function ProjectPositions({
         timezone={timezone}
         onSuccess={onPositionChange}
       />
+
+      {/* Ensemble Label Drift Dialog */}
+      <Dialog open={ensembleDriftOpen} onOpenChange={setEnsembleDriftOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update ensemble label?</DialogTitle>
+            <DialogDescription>
+              {ensembleDriftSuggestion
+                ? <>The instrumentation has changed — this looks like a <strong>{ensembleDriftSuggestion}</strong> now, but the label still says &ldquo;{ensembleType}&rdquo;. Musicians see this label in their offers.</>
+                : <>The instrumentation no longer matches &ldquo;{ensembleType}&rdquo;. Would you like to update the label? Musicians see this in their offers.</>
+              }
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <label className="text-sm font-medium">Ensemble label</label>
+            <Input
+              value={ensembleLabelInput}
+              onChange={(e) => setEnsembleLabelInput(e.target.value)}
+              placeholder="e.g. String Trio, Chamber Ensemble"
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="ghost" onClick={() => setEnsembleDriftOpen(false)} disabled={updatingEnsembleType}>
+              Keep &ldquo;{ensembleType}&rdquo;
+            </Button>
+            <Button variant="outline" onClick={() => handleUpdateEnsembleType(null)} disabled={updatingEnsembleType}>
+              Clear label
+            </Button>
+            <Button onClick={() => handleUpdateEnsembleType(ensembleLabelInput.trim() || null)} disabled={updatingEnsembleType || !ensembleLabelInput.trim()}>
+              {updatingEnsembleType ? 'Updating...' : 'Update'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Unassign Confirmation Dialog */}
       {unassignPosition && (

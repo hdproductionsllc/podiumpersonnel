@@ -880,6 +880,7 @@ export function ProjectsClient({
                             services={project.services}
                             canManage={canManage}
                             timezone={timezone}
+                            ensembleType={project.ensemble_type}
                             onPositionChange={handleSuccess}
                             waterfallTrigger={waterfallTrigger}
                             onWaterfallHandled={() => setWaterfallTrigger(null)}
