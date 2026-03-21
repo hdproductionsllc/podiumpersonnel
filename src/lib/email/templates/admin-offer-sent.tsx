@@ -26,6 +26,7 @@ interface AdminOfferSentEmailProps {
     time: string
     endTime?: string | null
     venue: string | null
+    venueUrl?: string | null
   }[]
   dashboardUrl: string
   payAmount?: number | null
@@ -145,7 +146,7 @@ export function AdminOfferSentEmail({
                       </Text>
                       {service.venue && (
                         <Text style={serviceVenue}>
-                          <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue)}`} style={{ color: '#1E293B', textDecoration: 'underline' }}>
+                          <a href={service.venueUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue)}`} style={{ color: '#1E293B', textDecoration: 'underline' }}>
                             {service.venue}
                           </a>
                         </Text>

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendSubRequestApprovedEmail, sendContractOfferEmail, sendAdminOfferSentEmail } from '@/lib/email/send'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
-import { getVenueName } from '@/lib/venue-helpers'
+import { getVenueName, getVenueMapsUrl } from '@/lib/venue-helpers'
 import { randomBytes } from 'crypto'
 
 export async function POST(
@@ -34,7 +34,7 @@ export async function POST(
           name,
           organization_id,
           organization:organizations(id, name, timezone, email_logo_url, email_brand_color, email_footer_text),
-          services(id, name, service_type, start_time, end_time, venue, venue_id, venue_details:venues(name, address, city, state, zip))
+          services(id, name, service_type, start_time, end_time, venue, venue_id, venue_details:venues(name, address, city, state, zip, google_maps_url))
         )
       )
     `)
@@ -211,6 +211,7 @@ export async function POST(
         timeZone: timezone,
       }),
       venue: getVenueName(service),
+      venueUrl: getVenueMapsUrl(service),
     }))
 
   const baseUrl = getAppUrl()

@@ -43,6 +43,7 @@ export function VenueFormDialog({
   const [state, setState] = useState('')
   const [zip, setZip] = useState('')
   const [googleMapsUrl, setGoogleMapsUrl] = useState('')
+  const [googlePlaceId, setGooglePlaceId] = useState('')
   const [parkingInfo, setParkingInfo] = useState('')
   const [directions, setDirections] = useState('')
   const [notes, setNotes] = useState('')
@@ -64,6 +65,7 @@ export function VenueFormDialog({
         setState(venue.state || '')
         setZip(venue.zip || '')
         setGoogleMapsUrl(venue.google_maps_url || '')
+        setGooglePlaceId((venue as any).google_place_id || '')
         setParkingInfo(venue.parking_info || '')
         setDirections(venue.directions || '')
         setNotes(venue.notes || '')
@@ -74,6 +76,7 @@ export function VenueFormDialog({
         setState('')
         setZip('')
         setGoogleMapsUrl('')
+        setGooglePlaceId('')
         setParkingInfo('')
         setDirections('')
         setNotes('')
@@ -102,6 +105,7 @@ export function VenueFormDialog({
       setNotes(venueData.notes || '')
     } else if (placeId && mapsLoaded) {
       // Selected a Google prediction — geocode to get address components
+      setGooglePlaceId(placeId)
       const geocoder = new google.maps.Geocoder()
       geocoder.geocode({ placeId }, (results, status) => {
         if (status !== 'OK' || !results || results.length === 0) return
@@ -147,6 +151,7 @@ export function VenueFormDialog({
       city: city || null,
       state: state || null,
       zip: zip || null,
+      google_place_id: googlePlaceId || null,
       google_maps_url: mapsUrl,
       parking_info: parkingInfo || null,
       directions: directions || null,

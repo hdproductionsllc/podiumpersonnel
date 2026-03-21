@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferAcceptedEmail, sendAdminOfferResponseEmail, sendMusicianReleasedEmail } from '@/lib/email/send'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
-import { getVenueName } from '@/lib/venue-helpers'
+import { getVenueName, getVenueMapsUrl } from '@/lib/venue-helpers'
 
 export async function POST(
   _request: Request,
@@ -53,7 +53,7 @@ export async function POST(
           name,
           organization_id,
           organization:organizations(id, name, timezone),
-          services(id, name, service_type, start_time, end_time, venue, venue_id, venue_details:venues(name, address, city, state, zip))
+          services(id, name, service_type, start_time, end_time, venue, venue_id, venue_details:venues(name, address, city, state, zip, google_maps_url))
         )
       )
     `)
@@ -213,6 +213,7 @@ export async function POST(
           timeZone: timezone,
         }),
         venue: getVenueName(service),
+        venueUrl: getVenueMapsUrl(service),
       }))
 
     // Get admin emails for both musician confirmation and admin notification

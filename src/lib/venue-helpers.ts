@@ -22,3 +22,44 @@ export function getVenueName(service: {
 }): string {
   return service.venue_details?.name || service.venue || ''
 }
+
+/**
+ * Get a Google Maps URL for a venue, using the most precise method available:
+ * 1. Stored google_maps_url (usually place_id-based)
+ * 2. Full address search
+ * 3. Venue name search (least precise — fallback only)
+ */
+export function getVenueMapsUrl(service: {
+  venue?: string | null
+  venue_details?: {
+    name: string
+    address?: string | null
+    city?: string | null
+    state?: string | null
+    zip?: string | null
+    google_maps_url?: string | null
+  } | null
+}): string | null {
+  // Prefer stored maps URL (place_id-based)
+  if (service.venue_details?.google_maps_url) {
+    return service.venue_details.google_maps_url
+  }
+
+  // Build address-based URL
+  if (service.venue_details) {
+    const v = service.venue_details
+    const addressParts = [v.address, v.city, v.state, v.zip].filter(Boolean)
+    if (addressParts.length > 0) {
+      const query = [v.name, ...addressParts].filter(Boolean).join(', ')
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
+    }
+  }
+
+  // Fallback: search by venue text
+  const venueName = service.venue_details?.name || service.venue
+  if (venueName) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venueName)}`
+  }
+
+  return null
+}

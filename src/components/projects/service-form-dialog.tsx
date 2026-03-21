@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DateTimePicker } from '@/components/ui/datetime-picker'
 import { TimePicker } from '@/components/ui/time-picker'
-import { VenueSearch } from '@/components/ui/venue-search'
+import { VenueSearch, type GooglePlaceData } from '@/components/ui/venue-search'
 import {
   Form,
   FormControl,
@@ -466,9 +466,36 @@ export function ServiceFormDialog({
                       value={field.value || ''}
                       venueId={form.watch('venue_id') ?? null}
                       organizationId={organizationId}
-                      onChange={(venueName, venueId) => {
+                      onChange={async (venueName, venueId, _venueData, _placeId, googlePlaceData) => {
                         field.onChange(venueName)
                         form.setValue('venue_id', venueId)
+
+                        // Auto-create venue when a Google Place is selected
+                        if (googlePlaceData && !venueId) {
+                          try {
+                            const supabase = createClient()
+                            const { data: newVenue } = await supabase
+                              .from('venues')
+                              .insert({
+                                organization_id: organizationId,
+                                name: googlePlaceData.name,
+                                address: googlePlaceData.address || null,
+                                city: googlePlaceData.city || null,
+                                state: googlePlaceData.state || null,
+                                zip: googlePlaceData.zip || null,
+                                google_place_id: googlePlaceData.placeId,
+                                google_maps_url: googlePlaceData.googleMapsUrl,
+                              })
+                              .select('id')
+                              .single()
+
+                            if (newVenue) {
+                              form.setValue('venue_id', newVenue.id)
+                            }
+                          } catch {
+                            // Venue creation failed — service still saves with text venue
+                          }
+                        }
                       }}
                       placeholder="Search saved venues or enter address..."
                     />

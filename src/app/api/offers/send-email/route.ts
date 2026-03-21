@@ -4,7 +4,7 @@ import { sendContractOfferEmail, sendAdminOfferSentEmail } from '@/lib/email/sen
 import { logEmail } from '@/lib/email/log'
 import { logEmailConfig } from '@/lib/email/client'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
-import { getVenueName } from '@/lib/venue-helpers'
+import { getVenueName, getVenueMapsUrl } from '@/lib/venue-helpers'
 
 export async function POST(request: NextRequest) {
   console.log('📧 Send email API called')
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
             name,
             ensemble_type,
             organization:organizations(id, name, timezone, email_logo_url, email_brand_color, email_footer_text),
-            services(id, name, service_type, call_time, start_time, end_time, venue, venue_id, base_pay, leader_fee, venue_details:venues(name, address, city, state, zip))
+            services(id, name, service_type, call_time, start_time, end_time, venue, venue_id, base_pay, leader_fee, venue_details:venues(name, address, city, state, zip, google_maps_url))
           )
         )
       `)
@@ -145,6 +145,7 @@ export async function POST(request: NextRequest) {
             })
           : null,
         venue: getVenueName(service),
+        venueUrl: getVenueMapsUrl(service),
       }))
 
     // Send the email

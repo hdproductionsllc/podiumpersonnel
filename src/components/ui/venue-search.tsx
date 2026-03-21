@@ -8,11 +8,21 @@ import type { Venue } from '@/types'
 
 const libraries: ('places')[] = ['places']
 
+export interface GooglePlaceData {
+  placeId: string
+  name: string
+  address: string
+  city: string
+  state: string
+  zip: string
+  googleMapsUrl: string
+}
+
 interface VenueSearchProps {
   value: string
   venueId: string | null
   organizationId: string
-  onChange: (venue: string, venueId: string | null, venueData?: Venue | null, placeId?: string | null) => void
+  onChange: (venue: string, venueId: string | null, venueData?: Venue | null, placeId?: string | null, googlePlaceData?: GooglePlaceData | null) => void
   placeholder?: string
   className?: string
 }
@@ -166,11 +176,42 @@ export function VenueSearch({
   }
 
   function handlePredictionSelect(prediction: google.maps.places.AutocompletePrediction) {
-    setInputValue(prediction.structured_formatting.main_text)
+    const placeName = prediction.structured_formatting.main_text
+    setInputValue(placeName)
     setIsOpen(false)
     setPredictions([])
     setSelectedVenue(null)
-    onChange(prediction.structured_formatting.main_text, null, null, prediction.place_id)
+
+    // Geocode to extract full address data
+    if (isLoaded && prediction.place_id) {
+      const geocoder = new google.maps.Geocoder()
+      geocoder.geocode({ placeId: prediction.place_id }, (results, status) => {
+        if (status !== 'OK' || !results || results.length === 0) {
+          onChange(placeName, null, null, prediction.place_id, null)
+          return
+        }
+        const result = results[0]
+        const components = result.address_components || []
+        const get = (type: string) => components.find(c => c.types.includes(type))
+
+        const streetNumber = get('street_number')?.long_name || ''
+        const route = get('route')?.long_name || ''
+
+        const placeData: GooglePlaceData = {
+          placeId: prediction.place_id,
+          name: placeName,
+          address: [streetNumber, route].filter(Boolean).join(' '),
+          city: get('locality')?.long_name || get('sublocality')?.long_name || '',
+          state: get('administrative_area_level_1')?.short_name || '',
+          zip: get('postal_code')?.long_name || '',
+          googleMapsUrl: `https://www.google.com/maps/place/?q=place_id:${prediction.place_id}`,
+        }
+
+        onChange(placeName, null, null, prediction.place_id, placeData)
+      })
+    } else {
+      onChange(placeName, null, null, prediction.place_id, null)
+    }
   }
 
   function handleClearVenue() {

@@ -43,6 +43,7 @@ interface SendContractOfferParams {
     time: string
     endTime?: string | null
     venue: string | null
+    venueUrl?: string | null
   }[]
   responseUrl: string
   expiresAt: string | null
@@ -157,6 +158,7 @@ interface SendOfferAcceptedParams {
     date: string
     time: string
     venue: string | null
+    venueUrl?: string | null
   }[]
   calendarUrl?: string
   googleCalendarUrl?: string
@@ -301,6 +303,7 @@ interface SendAdminOfferSentParams {
     time: string
     endTime?: string | null
     venue: string | null
+    venueUrl?: string | null
   }[]
   dashboardUrl: string
   payAmount?: number | null
@@ -882,6 +885,7 @@ interface SendGigDetailsEmailParams {
     time: string
     endTime?: string | null
     venue: string | null
+    venueUrl?: string | null
     parkingInfo?: string | null
     directions?: string | null
   }[]
@@ -938,6 +942,7 @@ interface SendGigDetailsReminderEmailParams {
     name: string
     date: string
     venue: string | null
+    venueUrl?: string | null
   }[]
   confirmUrl: string
   originalSentDate: string

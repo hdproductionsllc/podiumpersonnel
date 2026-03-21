@@ -3,7 +3,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendGigDetailsReminderEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
-import { getVenueName } from '@/lib/venue-helpers'
+import { getVenueName, getVenueMapsUrl } from '@/lib/venue-helpers'
 import { getOrgPlan } from '@/lib/api-helpers'
 import { canUseEmailFeatures } from '@/lib/plan'
 
@@ -90,7 +90,7 @@ export async function POST(
           start_time,
           venue,
           venue_id,
-          venue_details:venues(name)
+          venue_details:venues(name, address, city, state, zip, google_maps_url)
         )
       `)
       .eq('id', projectId)
@@ -116,6 +116,7 @@ export async function POST(
           timeZone: timezone,
         }),
         venue: getVenueName(service),
+        venueUrl: getVenueMapsUrl(service),
       }))
 
     const originalSentDate = new Date(sendRecord.sent_at).toLocaleDateString('en-US', {

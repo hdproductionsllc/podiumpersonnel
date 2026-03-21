@@ -32,6 +32,7 @@ interface GigDetailsEmailProps {
     time: string
     endTime?: string | null
     venue: string | null
+    venueUrl?: string | null
     parkingInfo?: string | null
     directions?: string | null
   }[]
@@ -107,7 +108,7 @@ export function GigDetailsEmail({
                   {service.venue && (
                     <Text style={serviceVenue}>
                       <a
-                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue)}`}
+                        href={service.venueUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue)}`}
                         style={{ color: '#1E293B', textDecoration: 'underline' }}
                       >
                         {service.venue}
