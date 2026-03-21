@@ -42,6 +42,7 @@ export default async function DashboardPage() {
     { count: upcomingServiceCount },
     { count: instrumentCount },
     { count: bookCount },
+    { count: totalOfferCount },
     { data: upcomingServices },
     { data: upcomingProjects },
     { data: recentActivity },
@@ -76,6 +77,11 @@ export default async function DashboardPage() {
       .eq('organization_id', orgId),
     supabase
       .from('books')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', orgId),
+    // Total offers ever sent (for "Getting Started" completion check)
+    supabase
+      .from('contract_offers')
       .select('*', { count: 'exact', head: true })
       .eq('organization_id', orgId),
 
@@ -368,7 +374,7 @@ export default async function DashboardPage() {
   const steps = [
     { label: 'Add musicians & set call order', description: 'Build your roster and rank who gets called first', done: (musicianCount ?? 0) > 0, href: '/dashboard/musicians' },
     { label: 'Create a project', description: 'Set up concerts, events, or rehearsal series', done: (activeProjectCount ?? 0) > 0, href: '/dashboard/projects' },
-    { label: 'Send calls', description: 'Staff positions and send calls to musicians', done: (pendingOfferCount ?? 0) > 0, href: '/dashboard/projects' },
+    { label: 'Send calls', description: 'Staff positions and send calls to musicians', done: (totalOfferCount ?? 0) > 0, href: '/dashboard/projects' },
   ]
 
   const allStepsComplete = steps.every((s) => s.done)
@@ -698,6 +704,19 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
+      {/* Monthly Calendar */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{orgName}&apos;s Schedule</CardTitle>
+          <CardDescription>
+            Click any day to see details
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DashboardCalendar services={calendarServices} timezone={timezone} />
+        </CardContent>
+      </Card>
+
       {/* Staffing Alerts */}
       {staffingAlerts.length > 0 && (
         <Card className="border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20">
@@ -736,19 +755,6 @@ export default async function DashboardPage() {
 
       {/* Main Content Grid */}
       <div className="grid gap-4 md:grid-cols-2">
-        {/* Monthly Calendar */}
-        <Card>
-          <CardHeader>
-            <CardTitle>{orgName}&apos;s Schedule</CardTitle>
-            <CardDescription>
-              Click any day to see details
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DashboardCalendar services={calendarServices} timezone={timezone} />
-          </CardContent>
-        </Card>
-
         {/* Getting Started -> Action Items -> Recent Activity (three-way) */}
         {!allStepsComplete ? (
           <Card>
