@@ -248,24 +248,12 @@ export function ProjectsClient({
   // Expandable row state
   const searchParams = useSearchParams()
   const expandProjectId = searchParams.get('expand')
-  const EXPANDED_STORAGE_KEY = 'podium-expanded-projects'
   const [expandedRows, setExpandedRows] = useState<Set<string>>(() => {
     // URL query param takes priority
     if (expandProjectId) {
       return new Set([expandProjectId])
     }
-    // Check sessionStorage for previously saved state
-    try {
-      const saved = sessionStorage.getItem(EXPANDED_STORAGE_KEY)
-      if (saved) {
-        const ids = JSON.parse(saved) as string[]
-        if (Array.isArray(ids)) return new Set(ids)
-      }
-    } catch { /* ignore */ }
-    // First visit default: expand the first project (closest date)
-    if (projects.length > 0) {
-      return new Set([projects[0].id])
-    }
+    // Default: all collapsed
     return new Set()
   })
 
@@ -275,7 +263,7 @@ export function ProjectsClient({
       if (!expandedRows.has(expandProjectId)) {
         setExpandedRows((prev) => {
           const next = new Set([...prev, expandProjectId])
-          try { sessionStorage.setItem(EXPANDED_STORAGE_KEY, JSON.stringify([...next])) } catch { /* ignore */ }
+
           return next
         })
       }
@@ -317,17 +305,18 @@ export function ProjectsClient({
 
   // Filter state
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
   const canManage = userRole === 'owner' || userRole === 'admin'
 
-  const hasFilters = search !== '' || statusFilter !== ''
+  const archivedStatuses = ['completed', 'cancelled']
+  const archivedCount = projects.filter((p) => archivedStatuses.includes(p.status)).length
 
   const filteredProjects = projects.filter((p) => {
     if (search) {
       const q = search.toLowerCase()
       if (!p.name.toLowerCase().includes(q) && !(p.client_name || '').toLowerCase().includes(q)) return false
     }
-    if (statusFilter && p.status !== statusFilter) return false
+    if (!showArchived && archivedStatuses.includes(p.status)) return false
     return true
   })
 
@@ -339,7 +328,6 @@ export function ProjectsClient({
       } else {
         next.add(projectId)
       }
-      try { sessionStorage.setItem(EXPANDED_STORAGE_KEY, JSON.stringify([...next])) } catch { /* ignore */ }
       return next
     })
   }
@@ -624,11 +612,7 @@ export function ProjectsClient({
     // If a new project was created, auto-expand and prompt to add a service (unless template already created services)
     if (newProject) {
       // Auto-expand the new project
-      setExpandedRows((prev) => {
-        const next = new Set([...prev, newProject.id])
-        try { sessionStorage.setItem(EXPANDED_STORAGE_KEY, JSON.stringify([...next])) } catch { /* ignore */ }
-        return next
-      })
+      setExpandedRows((prev) => new Set([...prev, newProject.id]))
 
       // Only prompt service type dialog if no template was used
       if (!newProject.template) {
@@ -707,28 +691,30 @@ export function ProjectsClient({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <select
-            className="rounded-md border bg-background px-3 py-2 text-sm"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="">All statuses</option>
-            <option value="draft">Draft</option>
-            <option value="active">Active</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-          {hasFilters && (
+          {archivedCount > 0 && (
+            <Button
+              variant={showArchived ? 'secondary' : 'outline'}
+              size="sm"
+              onClick={() => setShowArchived(!showArchived)}
+              className="gap-1.5"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0-3-3m3 3 3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
+              </svg>
+              {showArchived ? 'Hide Archived' : `Show Archived (${archivedCount})`}
+            </Button>
+          )}
+          {search && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => { setSearch(''); setStatusFilter('') }}
+              onClick={() => setSearch('')}
             >
               Clear
             </Button>
           )}
           <span className="text-xs text-muted-foreground ml-auto">
-            {filteredProjects.length} of {projects.length} projects
+            {filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''}
           </span>
         </div>
       )}
