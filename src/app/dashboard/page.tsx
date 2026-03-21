@@ -63,8 +63,8 @@ export default async function DashboardPage() {
       .eq('is_active', true),
     supabase
       .from('contract_offers')
-      .select('*', { count: 'exact', head: true })
-      .eq('organization_id', orgId)
+      .select('*, project_position:project_positions!inner(project:projects!inner(organization_id))', { count: 'exact', head: true })
+      .eq('project_position.project.organization_id', orgId)
       .in('status', ['pending', 'viewed']),
     supabase
       .from('services')
@@ -82,8 +82,8 @@ export default async function DashboardPage() {
     // Total offers ever sent (for "Getting Started" completion check)
     supabase
       .from('contract_offers')
-      .select('*', { count: 'exact', head: true })
-      .eq('organization_id', orgId),
+      .select('*, project_position:project_positions!inner(project:projects!inner(organization_id))', { count: 'exact', head: true })
+      .eq('project_position.project.organization_id', orgId),
 
     // Upcoming services (next 30 days — for list view)
     supabase
@@ -558,165 +558,6 @@ export default async function DashboardPage() {
         <div className="mt-3 w-12 h-px bg-gold/50" />
       </div>
 
-      {/* Hero CTA — prioritize what the user needs to do next */}
-      {(musicianCount ?? 0) === 0 ? (
-        <Link href="/dashboard/musicians">
-          <Card className="border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer">
-            <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-              <svg className="h-12 w-12 text-primary mb-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
-              </svg>
-              <h3 className="text-xl font-bold mb-2">Build Your Roster, Set Your Call Order</h3>
-              <p className="text-muted-foreground max-w-md">
-                Add your musicians and rank them by preference — Podium handles the rest. When a chair opens, your top pick gets the call automatically.
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-      ) : (activeProjectCount ?? 0) === 0 ? (
-        <Link href="/dashboard/projects">
-          <Card className="border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer">
-            <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-              <svg className="h-12 w-12 text-primary mb-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              <h3 className="text-xl font-bold mb-2">Start Your First Project</h3>
-              <p className="text-muted-foreground max-w-md">
-                Staff musicians for your upcoming gig or concert! You only need a musician&apos;s name and instrument to send a call — other details can be added later.
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-      ) : totalVacancies > 0 ? (
-        <Link href="/dashboard/projects">
-          <Card className="border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors cursor-pointer">
-            <CardContent className="flex items-center gap-4 py-4">
-              <svg className="h-8 w-8 text-amber-600 dark:text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-              </svg>
-              <div className="flex-1">
-                <h3 className="font-bold text-amber-900 dark:text-amber-100">
-                  {totalVacancies} vacant position{totalVacancies !== 1 ? 's' : ''} to fill
-                </h3>
-                <p className="text-sm text-amber-700 dark:text-amber-300">
-                  Go to Projects to send calls to musicians
-                </p>
-              </div>
-              <svg className="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-              </svg>
-            </CardContent>
-          </Card>
-        </Link>
-      ) : totalPending > 0 ? (
-        <Link href="/dashboard/projects">
-          <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors cursor-pointer">
-            <CardContent className="flex items-center gap-4 py-4">
-              <svg className="h-8 w-8 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-              </svg>
-              <div className="flex-1">
-                <h3 className="font-bold text-blue-900 dark:text-blue-100">
-                  {totalPending} offer{totalPending !== 1 ? 's' : ''} awaiting response
-                </h3>
-                <p className="text-sm text-blue-700 dark:text-blue-300">
-                  All positions have been offered — waiting for musicians to respond
-                </p>
-              </div>
-              <svg className="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-              </svg>
-            </CardContent>
-          </Card>
-        </Link>
-      ) : fullyStaffedProjects.length > 0 ? (
-        <Card className="border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20">
-          <CardContent className="flex items-center gap-3 py-3">
-            <svg className="h-5 w-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-            </svg>
-            <span className="text-sm font-medium text-green-700 dark:text-green-300">
-              {fullyStaffedProjects.length === 1
-                ? `${fullyStaffedProjects[0]} is fully staffed!`
-                : `${fullyStaffedProjects.length} projects fully staffed!`}
-            </span>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mt-2">
-        <Link href="/dashboard/projects">
-          <Card className="card-gold-top transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground" style={{ fontFamily: 'var(--font-dm-sans)' }}>Active Projects</CardTitle>
-              <svg className="h-4 w-4 text-muted-foreground/40 group-hover:text-gold transition-colors" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" /></svg>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold tracking-tight text-primary">{activeProjectCount ?? 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {activeProjectCount ? `${activeProjectCount} in progress` : 'No active projects'}
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/dashboard/musicians">
-          <Card className="card-gold-top transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground" style={{ fontFamily: 'var(--font-dm-sans)' }}>Musicians</CardTitle>
-              <svg className="h-4 w-4 text-muted-foreground/40 group-hover:text-gold transition-colors" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold tracking-tight text-primary">{musicianCount ?? 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {musicianCount ? `${musicianCount} ready to call` : 'No musicians added'}
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/dashboard/projects">
-          <Card className="card-gold-top transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground" style={{ fontFamily: 'var(--font-dm-sans)' }}>Pending Offers</CardTitle>
-              <svg className="h-4 w-4 text-muted-foreground/40 group-hover:text-gold transition-colors" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" /></svg>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold tracking-tight text-primary">{pendingOfferCount ?? 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {pendingOfferCount ? `${pendingOfferCount} awaiting response` : 'No pending offers'}
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/dashboard/projects">
-          <Card className="card-gold-top transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground" style={{ fontFamily: 'var(--font-dm-sans)' }}>Upcoming Services</CardTitle>
-              <svg className="h-4 w-4 text-muted-foreground/40 group-hover:text-gold transition-colors" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold tracking-tight text-primary">{upcomingServiceCount ?? 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {upcomingServiceCount ? `${upcomingServiceCount} scheduled` : 'No upcoming services'}
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-      </div>
-
-      {/* Monthly Calendar */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{orgName}&apos;s Schedule</CardTitle>
-          <CardDescription>
-            Click any day to see details
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DashboardCalendar services={calendarServices} timezone={timezone} />
-        </CardContent>
-      </Card>
-
       {/* Staffing Alerts */}
       {staffingAlerts.length > 0 && (
         <Card className="border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20">
@@ -752,6 +593,82 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Calendar + Stats side by side */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Monthly Calendar */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{orgName}&apos;s Schedule</CardTitle>
+            <CardDescription>
+              Click any day to see details
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DashboardCalendar services={calendarServices} timezone={timezone} />
+          </CardContent>
+        </Card>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 gap-4 content-start">
+          <Link href="/dashboard/projects">
+            <Card className="card-gold-top transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground" style={{ fontFamily: 'var(--font-dm-sans)' }}>Active Projects</CardTitle>
+                <svg className="h-4 w-4 text-muted-foreground/40 group-hover:text-gold transition-colors" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" /></svg>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold tracking-tight text-primary">{activeProjectCount ?? 0}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {activeProjectCount ? `${activeProjectCount} in progress` : 'No active projects'}
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/dashboard/musicians">
+            <Card className="card-gold-top transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground" style={{ fontFamily: 'var(--font-dm-sans)' }}>Musicians</CardTitle>
+                <svg className="h-4 w-4 text-muted-foreground/40 group-hover:text-gold transition-colors" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold tracking-tight text-primary">{musicianCount ?? 0}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {musicianCount ? `${musicianCount} ready to call` : 'No musicians added'}
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/dashboard/projects">
+            <Card className="card-gold-top transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground" style={{ fontFamily: 'var(--font-dm-sans)' }}>Pending Offers</CardTitle>
+                <svg className="h-4 w-4 text-muted-foreground/40 group-hover:text-gold transition-colors" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" /></svg>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold tracking-tight text-primary">{pendingOfferCount ?? 0}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {pendingOfferCount ? `${pendingOfferCount} awaiting response` : 'No pending offers'}
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/dashboard/projects">
+            <Card className="card-gold-top transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground" style={{ fontFamily: 'var(--font-dm-sans)' }}>Upcoming Services</CardTitle>
+                <svg className="h-4 w-4 text-muted-foreground/40 group-hover:text-gold transition-colors" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold tracking-tight text-primary">{upcomingServiceCount ?? 0}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {upcomingServiceCount ? `${upcomingServiceCount} scheduled` : 'No upcoming services'}
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
+      </div>
 
       {/* Main Content Grid */}
       <div className="grid gap-4 md:grid-cols-2">
