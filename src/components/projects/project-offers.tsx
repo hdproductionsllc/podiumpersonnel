@@ -79,6 +79,9 @@ export function ProjectOffers({
   const [waterfallCandidates, setWaterfallCandidates] = useState<Record<string, WaterfallCandidate[]>>({})
   const [loadingWaterfall, setLoadingWaterfall] = useState<string | null>(null)
   const [sendingWaterfall, setSendingWaterfall] = useState<string | null>(null)
+  const [showExpiredSummary, setShowExpiredSummary] = useState(false)
+  const [selectedExpired, setSelectedExpired] = useState<Set<string>>(new Set())
+  const [sendingFollowUp, setSendingFollowUp] = useState(false)
 
   // Payment tracking state
   const [payments, setPayments] = useState<PositionPayment[]>([])
@@ -164,12 +167,12 @@ export function ProjectOffers({
   const [confirmReminder, setConfirmReminder] = useState<OfferJoined | null>(null)
   const [confirmWaterfall, setConfirmWaterfall] = useState<{ positionId: string; candidate: WaterfallCandidate; offer: OfferJoined } | null>(null)
 
-  // Find declined offers and load waterfall candidates
-  const declinedOffers = offers.filter(o => o.status === 'declined')
+  // Find declined/expired offers and load waterfall candidates
+  const waterfallOffers = offers.filter(o => o.status === 'declined' || o.status === 'expired')
 
   useEffect(() => {
     async function loadWaterfallCandidates() {
-      for (const offer of declinedOffers) {
+      for (const offer of waterfallOffers) {
         if (!waterfallCandidates[offer.project_position_id]) {
           try {
             const response = await fetch(`/api/positions/${offer.project_position_id}/next-candidates`)
@@ -186,10 +189,10 @@ export function ProjectOffers({
         }
       }
     }
-    if (canManage && declinedOffers.length > 0) {
+    if (canManage && waterfallOffers.length > 0) {
       loadWaterfallCandidates()
     }
-  }, [declinedOffers.map(o => o.id).join(','), canManage])
+  }, [waterfallOffers.map(o => o.id).join(','), canManage])
 
   function handleWaterfallSend(positionId: string, candidate: WaterfallCandidate, offer: OfferJoined) {
     if (onSendWaterfall) {
@@ -457,12 +460,22 @@ export function ProjectOffers({
                             Revoke
                           </Button>
                         )}
+                        {(offer.status === 'expired' || displayStatus === 'expired') && onSendWaterfall && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onSendWaterfall(offer.project_position_id, offer.musician_id, offer.custom_pay)}
+                            title="Send a fresh offer to this musician"
+                          >
+                            Re-offer
+                          </Button>
+                        )}
                       </div>
                     </td>
                   )}
                 </tr>
-                {/* Waterfall suggestion for declined offers */}
-                {canManage && offer.status === 'declined' && waterfallCandidates[offer.project_position_id]?.length > 0 && (
+                {/* Waterfall suggestion for declined/expired offers */}
+                {canManage && (offer.status === 'declined' || offer.status === 'expired' || displayStatus === 'expired') && waterfallCandidates[offer.project_position_id]?.length > 0 && (
                   <tr className="bg-amber-50/50 dark:bg-amber-950/20">
                     <td colSpan={canManage ? 9 : 7} className="px-3 py-2">
                       <div className="flex items-center gap-3 text-sm">
@@ -499,6 +512,167 @@ export function ProjectOffers({
           </tbody>
         </table>
       </div>
+
+      {/* Expired Offers Summary */}
+      {canManage && (() => {
+        const expiredOffers = offers.filter(o => o.status === 'expired' || (isExpired(o.expires_at) && (o.status === 'pending' || o.status === 'viewed')))
+        if (expiredOffers.length === 0) return null
+
+        // Group by musician (deduplicate — a musician may have expired on multiple positions)
+        const byMusician = new Map<string, { musician: OfferJoined['musician']; offers: OfferJoined[] }>()
+        for (const offer of expiredOffers) {
+          const existing = byMusician.get(offer.musician_id)
+          if (existing) {
+            existing.offers.push(offer)
+          } else {
+            byMusician.set(offer.musician_id, { musician: offer.musician, offers: [offer] })
+          }
+        }
+
+        const allSelected = selectedExpired.size === byMusician.size && byMusician.size > 0
+        const someSelected = selectedExpired.size > 0
+
+        function toggleAll() {
+          if (allSelected) {
+            setSelectedExpired(new Set())
+          } else {
+            setSelectedExpired(new Set(byMusician.keys()))
+          }
+        }
+
+        function toggleOne(musicianId: string) {
+          setSelectedExpired(prev => {
+            const next = new Set(prev)
+            if (next.has(musicianId)) {
+              next.delete(musicianId)
+            } else {
+              next.add(musicianId)
+            }
+            return next
+          })
+        }
+
+        async function handleBatchFollowUp() {
+          if (selectedExpired.size === 0) return
+          setSendingFollowUp(true)
+          let sent = 0
+          let failed = 0
+
+          for (const musicianId of selectedExpired) {
+            const entry = byMusician.get(musicianId)
+            if (!entry) continue
+
+            // Re-offer: create a new offer for each expired position
+            for (const expiredOffer of entry.offers) {
+              try {
+                if (onSendWaterfall) {
+                  onSendWaterfall(expiredOffer.project_position_id, musicianId, expiredOffer.custom_pay)
+                  sent++
+                  break // Open dialog for the first one — user can review
+                }
+              } catch {
+                failed++
+              }
+            }
+          }
+
+          setSendingFollowUp(false)
+          if (sent > 0) {
+            setSelectedExpired(new Set())
+          }
+        }
+
+        return (
+          <div className="mt-3">
+            <button
+              type="button"
+              className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setShowExpiredSummary(!showExpiredSummary)}
+            >
+              <svg
+                className={`h-4 w-4 transition-transform ${showExpiredSummary ? 'rotate-90' : ''}`}
+                fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+              </svg>
+              Expired Offers ({expiredOffers.length})
+              <span className="text-xs text-muted-foreground font-normal">
+                — {byMusician.size} musician{byMusician.size !== 1 ? 's' : ''} didn&apos;t respond
+              </span>
+            </button>
+
+            {showExpiredSummary && (
+              <div className="mt-2 rounded-md border bg-background">
+                {/* Header with batch actions */}
+                <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-2">
+                  <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleAll}
+                      className="rounded border-gray-300"
+                    />
+                    Select all
+                  </label>
+                  {someSelected && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled={sendingFollowUp}
+                      onClick={handleBatchFollowUp}
+                    >
+                      {sendingFollowUp ? 'Sending...' : `Re-offer to ${selectedExpired.size} selected`}
+                    </Button>
+                  )}
+                </div>
+
+                {/* Musician list */}
+                <div className="divide-y">
+                  {Array.from(byMusician.entries()).map(([musicianId, { musician, offers: mOffers }]) => (
+                    <div key={musicianId} className="flex items-center justify-between px-3 py-2 hover:bg-muted/30">
+                      <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedExpired.has(musicianId)}
+                          onChange={() => toggleOne(musicianId)}
+                          className="rounded border-gray-300 shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium">
+                            {musician.first_name} {musician.last_name}
+                          </span>
+                          <span className="text-xs text-muted-foreground ml-2">
+                            {mOffers.map(o => o.position_instrument).join(', ')}
+                          </span>
+                          <div className="text-xs text-muted-foreground">
+                            Expired {mOffers.map(o => formatDate(o.expires_at)).join(', ')}
+                            {musician.email && (
+                              <span className="ml-2">{musician.email}</span>
+                            )}
+                          </div>
+                        </div>
+                      </label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs shrink-0"
+                        onClick={() => {
+                          if (onSendWaterfall) {
+                            onSendWaterfall(mOffers[0].project_position_id, musicianId, mOffers[0].custom_pay)
+                          }
+                        }}
+                      >
+                        Re-offer
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Reminder Confirmation Dialog */}
       {confirmReminder && (

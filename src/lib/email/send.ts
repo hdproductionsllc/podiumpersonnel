@@ -297,10 +297,19 @@ interface SendAdminOfferSentParams {
   services: {
     name: string
     date: string
+    callTime?: string | null
     time: string
+    endTime?: string | null
     venue: string | null
   }[]
   dashboardUrl: string
+  payAmount?: number | null
+  leaderFee?: number | null
+  isLeader?: boolean
+  personalMessage?: string | null
+  expiresAt?: string | null
+  ensembleType?: string | null
+  timezone?: string
 }
 
 export async function sendAdminOfferSentEmail(params: SendAdminOfferSentParams) {
@@ -316,6 +325,13 @@ export async function sendAdminOfferSentEmail(params: SendAdminOfferSentParams) 
       totalChairs: params.totalChairs,
       services: params.services,
       dashboardUrl: params.dashboardUrl,
+      payAmount: params.payAmount,
+      leaderFee: params.leaderFee,
+      isLeader: params.isLeader,
+      personalMessage: params.personalMessage,
+      expiresAt: params.expiresAt,
+      ensembleType: params.ensembleType,
+      timezone: params.timezone,
     })
   )
 

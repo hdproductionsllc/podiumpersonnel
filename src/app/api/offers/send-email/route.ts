@@ -220,6 +220,13 @@ export async function POST(request: NextRequest) {
           totalChairs,
           services: formattedServices,
           dashboardUrl: `${baseUrl}/dashboard/projects`,
+          payAmount,
+          leaderFee: isLeader ? leaderFee : null,
+          isLeader,
+          personalMessage: (offer as any).personal_message || null,
+          expiresAt: offer.expires_at,
+          ensembleType: project?.ensemble_type || null,
+          timezone,
         }).catch((err) => console.warn('Failed to send admin notification:', err))
         console.log('📧 Admin notification sent to:', adminEmails)
       } else {

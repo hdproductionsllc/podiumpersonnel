@@ -66,11 +66,15 @@ export async function getNextCandidates(
 
   const { data: existingOffers } = await supabase
     .from('contract_offers')
-    .select('musician_id, status')
+    .select('musician_id, status, expires_at')
     .in('project_position_id', allPositionIds)
     .in('status', ['pending', 'viewed', 'accepted'])
 
-  const offeredMusicianIds = (existingOffers || []).map(o => o.musician_id)
+  // Only exclude musicians whose offers are truly active (not past expiry)
+  const now = new Date()
+  const offeredMusicianIds = (existingOffers || [])
+    .filter(o => o.status === 'accepted' || !o.expires_at || new Date(o.expires_at) > now)
+    .map(o => o.musician_id)
 
   // Also exclude musicians who already declined THIS specific position
   const { data: declinedOffers } = await supabase

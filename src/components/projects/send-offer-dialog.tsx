@@ -460,11 +460,16 @@ export function SendOfferDialog({
       return
     }
 
-    // Update position status to offered
-    await supabase
+    // Update position status to offered (only if not already confirmed)
+    const { error: posUpdateError } = await supabase
       .from('project_positions')
       .update({ status: 'offered' })
       .eq('id', positionId)
+      .neq('status', 'confirmed')
+
+    if (posUpdateError) {
+      console.error('Failed to update position status:', posUpdateError)
+    }
 
     // Send email notification if enabled and musician has email
     if (sendEmail && hasEmail && offerData?.id) {

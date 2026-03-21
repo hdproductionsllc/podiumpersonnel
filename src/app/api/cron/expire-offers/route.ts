@@ -83,14 +83,24 @@ export async function GET(request: NextRequest) {
 
     processed++
 
-    // 1b. Reset position — clear musician and set back to vacant
-    const { error: positionError } = await supabase
-      .from('project_positions')
-      .update({ musician_id: null, status: 'vacant' })
-      .eq('id', position.id)
+    // 1b. Reset position — but only if no other active offer exists for this position
+    const { data: otherActiveOffers } = await supabase
+      .from('contract_offers')
+      .select('id')
+      .eq('project_position_id', position.id)
+      .in('status', ['pending', 'viewed'])
+      .neq('id', offer.id)
+      .limit(1)
 
-    if (positionError) {
-      console.error(`Failed to reset position ${position.id}:`, positionError)
+    if (!otherActiveOffers || otherActiveOffers.length === 0) {
+      const { error: positionError } = await supabase
+        .from('project_positions')
+        .update({ musician_id: null, status: 'vacant' })
+        .eq('id', position.id)
+
+      if (positionError) {
+        console.error(`Failed to reset position ${position.id}:`, positionError)
+      }
     }
 
     // 2. Find next candidate

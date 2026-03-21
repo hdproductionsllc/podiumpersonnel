@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { SetupWizard } from '@/components/onboarding/setup-wizard'
+import { DashboardCalendar, type CalendarService } from '@/components/dashboard/dashboard-calendar'
 import { DEFAULT_TIMEZONE } from '@/lib/utils'
 
 export default async function DashboardPage() {
@@ -78,7 +79,7 @@ export default async function DashboardPage() {
       .select('*', { count: 'exact', head: true })
       .eq('organization_id', orgId),
 
-    // Upcoming services (next 30 days)
+    // Upcoming services (next 30 days — for list view)
     supabase
       .from('services')
       .select(`
@@ -179,15 +180,71 @@ export default async function DashboardPage() {
       .gt('trigger_date', new Date().toISOString()),
   ])
 
-  // Fetch tutorial state
-  const { data: tutorialState } = await supabase
-    .from('user_tutorial_state')
-    .select('wizard_completed, dismissed_tooltips')
-    .eq('user_id', user!.id)
-    .eq('organization_id', orgId)
-    .maybeSingle()
+  // Fetch tutorial state and calendar services in parallel
+  const calendarStart = new Date()
+  calendarStart.setMonth(calendarStart.getMonth() - 1, 1) // Start of previous month
+  const calendarEnd = new Date()
+  calendarEnd.setMonth(calendarEnd.getMonth() + 3, 0) // End of 2 months from now
+
+  const [{ data: tutorialState }, { data: calendarServicesRaw }] = await Promise.all([
+    supabase
+      .from('user_tutorial_state')
+      .select('wizard_completed, dismissed_tooltips')
+      .eq('user_id', user!.id)
+      .eq('organization_id', orgId)
+      .maybeSingle(),
+    supabase
+      .from('services')
+      .select(`
+        id,
+        name,
+        service_type,
+        call_time,
+        start_time,
+        end_time,
+        venue,
+        project:projects!inner(
+          id,
+          name,
+          organization_id,
+          project_positions(id, status)
+        )
+      `)
+      .eq('project.organization_id', orgId)
+      .gte('start_time', calendarStart.toISOString())
+      .lte('start_time', calendarEnd.toISOString())
+      .order('start_time', { ascending: true }),
+  ])
 
   const showWizard = !tutorialState?.wizard_completed
+
+  // Process calendar services with staffing status
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const calendarServices: CalendarService[] = (calendarServicesRaw || []).map((s: any) => {
+    const positions = s.project?.project_positions || []
+    const hasVacant = positions.some((p: any) => p.status === 'vacant')
+    const hasPending = positions.some((p: any) => p.status === 'offered')
+    const allConfirmed = positions.length > 0 && positions.every((p: any) => p.status === 'confirmed')
+
+    let staffingStatus: CalendarService['staffingStatus'] = 'unknown'
+    if (positions.length === 0) staffingStatus = 'unknown'
+    else if (allConfirmed) staffingStatus = 'fully_staffed'
+    else if (hasVacant) staffingStatus = 'has_vacancies'
+    else if (hasPending) staffingStatus = 'has_pending'
+
+    return {
+      id: s.id,
+      name: s.name,
+      service_type: s.service_type || 'other',
+      call_time: s.call_time,
+      start_time: s.start_time,
+      end_time: s.end_time,
+      venue: s.venue,
+      projectId: s.project?.id,
+      projectName: s.project?.name,
+      staffingStatus,
+    }
+  })
 
   // Process staffing alerts
   type StaffingAlert = {
@@ -679,74 +736,16 @@ export default async function DashboardPage() {
 
       {/* Main Content Grid */}
       <div className="grid gap-4 md:grid-cols-2">
-        {/* Upcoming Schedule Calendar */}
+        {/* Monthly Calendar */}
         <Card>
           <CardHeader>
-            <CardTitle>{orgName}&apos;s Upcoming Schedule</CardTitle>
+            <CardTitle>{orgName}&apos;s Schedule</CardTitle>
             <CardDescription>
-              Projects and services in the next 30 days
+              Click any day to see details
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {calendarItems.length > 0 ? (
-              <div className="space-y-3">
-                {calendarItems.slice(0, 10).map((item) => (
-                  <Link
-                    key={`${item.type}-${item.id}`}
-                    href={`/dashboard/projects?expand=${item.projectId}`}
-                    className={`flex items-start gap-3 rounded-lg p-2.5 -mx-2 transition-all hover:bg-muted/50 hover:shadow-sm group border-l-3 ${
-                      item.type === 'project'
-                        ? 'border-l-green-400'
-                        : item.serviceType === 'performance'
-                          ? 'border-l-purple-400'
-                          : 'border-l-blue-400'
-                    }`}
-                  >
-                    <div className="flex flex-col items-center justify-center min-w-[56px] rounded-md bg-primary/5 border border-primary/10 px-2 py-1.5 group-hover:border-gold/30 transition-colors">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-primary/70">
-                        {formatServiceDate(item.date)}
-                      </span>
-                      {item.callTime && (
-                        <span className="text-[10px] text-muted-foreground">
-                          Call {formatTime(item.callTime)}
-                        </span>
-                      )}
-                      {item.time && (
-                        <span className="text-sm font-bold text-primary">
-                          {formatTime(item.time)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{item.name}</p>
-                      {item.type === 'service' && (
-                        <p className="text-xs text-muted-foreground truncate">
-                          {item.projectName}
-                        </p>
-                      )}
-                      {item.venue && (
-                        <p className="text-xs text-muted-foreground truncate">
-                          {item.venue}
-                        </p>
-                      )}
-                    </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      item.type === 'project'
-                        ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
-                        : item.serviceType === 'performance'
-                          ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
-                          : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                    }`}>
-                      {item.type === 'project' ? 'project' : item.serviceType}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No upcoming events scheduled.
-              </p>
-            )}
+            <DashboardCalendar services={calendarServices} timezone={timezone} />
           </CardContent>
         </Card>
 
