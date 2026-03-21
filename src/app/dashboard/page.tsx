@@ -252,73 +252,6 @@ export default async function DashboardPage() {
     }
   })
 
-  // Process staffing alerts
-  type StaffingAlert = {
-    projectId: string
-    projectName: string
-    projectDate: string | null
-    alertType: 'vacant' | 'pending' | 'expiring'
-    message: string
-    count: number
-  }
-
-  const staffingAlerts: StaffingAlert[] = []
-
-  // Check for vacant positions in active projects
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  projectsNeedingAttention?.forEach((project: any) => {
-    const vacantPositions = project.project_positions?.filter(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (p: any) => p.status === 'vacant'
-    ) || []
-
-    if (vacantPositions.length > 0) {
-      staffingAlerts.push({
-        projectId: project.id,
-        projectName: project.name,
-        projectDate: project.start_date,
-        alertType: 'vacant',
-        message: `${vacantPositions.length} vacant position${vacantPositions.length !== 1 ? 's' : ''}`,
-        count: vacantPositions.length,
-      })
-    }
-
-    const pendingPositions = project.project_positions?.filter(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (p: any) => p.status === 'offered'
-    ) || []
-
-    if (pendingPositions.length > 0) {
-      staffingAlerts.push({
-        projectId: project.id,
-        projectName: project.name,
-        projectDate: project.start_date,
-        alertType: 'pending',
-        message: `${pendingPositions.length} pending offer${pendingPositions.length !== 1 ? 's' : ''}`,
-        count: pendingPositions.length,
-      })
-    }
-  })
-
-  // Sort alerts by count (most urgent first)
-  staffingAlerts.sort((a, b) => b.count - a.count)
-
-  // Calculate total vacancies and pending offers for hero CTA
-  const totalVacancies = staffingAlerts
-    .filter(a => a.alertType === 'vacant')
-    .reduce((sum, a) => sum + a.count, 0)
-  const totalPending = staffingAlerts
-    .filter(a => a.alertType === 'pending')
-    .reduce((sum, a) => sum + a.count, 0)
-
-  // Find projects that are fully confirmed (all positions filled)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fullyStaffedProjects = (projectsNeedingAttention || []).filter((project: any) => {
-    const positions = project.project_positions || []
-    return positions.length > 0 && positions.every((p: any) => p.status === 'confirmed')
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }).map((p: any) => p.name as string)
-
   // Combine services and projects into unified calendar items
   type CalendarItem = {
     id: string
@@ -474,8 +407,6 @@ export default async function DashboardPage() {
     })
   })
 
-  const hasActionItems = allStepsComplete && actionItems.length > 0
-
   // Format date helper
   function formatServiceDate(dateStr: string) {
     const date = new Date(dateStr)
@@ -558,33 +489,31 @@ export default async function DashboardPage() {
         <div className="mt-3 w-12 h-px bg-gold/50" />
       </div>
 
-      {/* Staffing Alerts */}
-      {staffingAlerts.length > 0 && (
-        <Card className="border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20">
+      {/* Action Items — top of dashboard when there are things needing attention */}
+      {actionItems.length > 0 && (
+        <Card>
           <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <svg className="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-              </svg>
-              <CardTitle className="text-base text-amber-900 dark:text-amber-100">Staffing Attention Needed</CardTitle>
-            </div>
+            <CardTitle className="text-base">Action Items</CardTitle>
+            <CardDescription>Things that need your attention</CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
             <div className="space-y-2">
-              {staffingAlerts.slice(0, 5).map((alert, i) => (
+              {actionItems.map((item) => (
                 <Link
-                  key={`${alert.projectId}-${alert.alertType}-${i}`}
-                  href={`/dashboard/projects?expand=${alert.projectId}`}
-                  className="flex items-center justify-between rounded-lg p-2 -mx-2 transition-colors hover:bg-amber-100/50 dark:hover:bg-amber-900/20"
+                  key={item.id}
+                  href={item.href}
+                  className="flex items-start gap-3 rounded-lg p-2 -mx-2 transition-colors hover:bg-muted/50"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`h-2 w-2 rounded-full ${alert.alertType === 'vacant' ? 'bg-red-500' : 'bg-yellow-500'}`} />
-                    <div>
-                      <p className="font-medium text-sm">{alert.projectName}</p>
-                      <p className="text-xs text-muted-foreground">{alert.message}</p>
-                    </div>
+                  <div className={`mt-1.5 h-2 w-2 rounded-full flex-shrink-0 ${
+                    item.urgency === 'red' ? 'bg-red-500' :
+                    item.urgency === 'amber' ? 'bg-amber-500' :
+                    'bg-blue-500'
+                  }`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{item.text}</p>
+                    <p className="text-xs text-muted-foreground">{item.subtext}</p>
                   </div>
-                  <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <svg className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
                   </svg>
                 </Link>
@@ -670,137 +599,95 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Getting Started -> Action Items -> Recent Activity (three-way) */}
-        {!allStepsComplete ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Getting Started</CardTitle>
-              <CardDescription>
-                Set up your organization in a few simple steps
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {steps.map((step, i) => (
-                <Link
-                  key={i}
-                  href={step.href}
-                  className="flex items-center gap-4 rounded-lg p-2 -m-2 transition-colors hover:bg-muted/50"
+      {/* Getting Started or Recent Activity */}
+      {!allStepsComplete ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Getting Started</CardTitle>
+            <CardDescription>
+              Set up your organization in a few simple steps
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {steps.map((step, i) => (
+              <Link
+                key={i}
+                href={step.href}
+                className="flex items-center gap-4 rounded-lg p-2 -m-2 transition-colors hover:bg-muted/50"
+              >
+                <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${
+                  step.done
+                    ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'
+                    : 'bg-muted text-muted-foreground'
+                }`}>
+                  {step.done ? '✓' : i + 1}
+                </div>
+                <div className="flex-1">
+                  <p className={`font-medium ${step.done ? 'line-through text-muted-foreground' : ''}`}>
+                    {step.label}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {step.description}
+                  </p>
+                </div>
+                <svg
+                  className="h-5 w-5 text-muted-foreground"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
                 >
-                  <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${
-                    step.done
-                      ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'
-                      : 'bg-muted text-muted-foreground'
-                  }`}>
-                    {step.done ? '✓' : i + 1}
-                  </div>
-                  <div className="flex-1">
-                    <p className={`font-medium ${step.done ? 'line-through text-muted-foreground' : ''}`}>
-                      {step.label}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {step.description}
-                    </p>
-                  </div>
-                  <svg
-                    className="h-5 w-5 text-muted-foreground"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1.5}
-                    stroke="currentColor"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                  </svg>
-                </Link>
-              ))}
-            </CardContent>
-          </Card>
-        ) : hasActionItems ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Action Items</CardTitle>
-              <CardDescription>
-                Things that need your attention
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {actionItems.slice(0, 5).map((item) => (
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                </svg>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      ) : recentActivity && recentActivity.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Activity</CardTitle>
+            <CardDescription>
+              Contract offer updates from the past 7 days
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              {recentActivity.map((offer: any) => {
+                const { action, detail, color } = getActivityMessage(offer)
+                const projectName = offer.project_position?.project?.name
+                return (
                   <Link
-                    key={item.id}
-                    href={item.href}
+                    key={offer.id}
+                    href="/dashboard/projects"
                     className="flex items-start gap-3 rounded-lg p-2 -mx-2 transition-colors hover:bg-muted/50"
                   >
-                    <div className={`mt-1.5 h-2 w-2 rounded-full flex-shrink-0 ${
-                      item.urgency === 'red' ? 'bg-red-500' :
-                      item.urgency === 'amber' ? 'bg-amber-500' :
+                    <div className={`mt-0.5 h-2 w-2 rounded-full ${
+                      offer.status === 'accepted' ? 'bg-green-500' :
+                      offer.status === 'declined' ? 'bg-red-500' :
+                      offer.status === 'viewed' ? 'bg-yellow-500' :
                       'bg-blue-500'
                     }`} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{item.text}</p>
-                      <p className="text-xs text-muted-foreground">{item.subtext}</p>
+                      <p className="text-sm">
+                        <span className={`font-medium ${color}`}>{action}</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">{detail}</p>
+                      {projectName && (
+                        <p className="text-xs text-muted-foreground truncate">{projectName}</p>
+                      )}
                     </div>
-                    <svg className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                    </svg>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {getActivityTime(offer)}
+                    </span>
                   </Link>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
-              <CardDescription>
-                Contract offer updates from the past 7 days
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {recentActivity && recentActivity.length > 0 ? (
-                <div className="space-y-3">
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  {recentActivity.map((offer: any) => {
-                    const { action, detail, color } = getActivityMessage(offer)
-                    const projectName = offer.project_position?.project?.name
-                    return (
-                      <Link
-                        key={offer.id}
-                        href="/dashboard/projects"
-                        className="flex items-start gap-3 rounded-lg p-2 -mx-2 transition-colors hover:bg-muted/50"
-                      >
-                        <div className={`mt-0.5 h-2 w-2 rounded-full ${
-                          offer.status === 'accepted' ? 'bg-green-500' :
-                          offer.status === 'declined' ? 'bg-red-500' :
-                          offer.status === 'viewed' ? 'bg-yellow-500' :
-                          'bg-blue-500'
-                        }`} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm">
-                            <span className={`font-medium ${color}`}>{action}</span>
-                          </p>
-                          <p className="text-xs text-muted-foreground truncate">{detail}</p>
-                          {projectName && (
-                            <p className="text-xs text-muted-foreground truncate">{projectName}</p>
-                          )}
-                        </div>
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">
-                          {getActivityTime(offer)}
-                        </span>
-                      </Link>
-                    )
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No recent activity to display.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        )}
-      </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   )
 }
