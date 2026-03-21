@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
-import { sendAdminSubRequestEmail } from '@/lib/email/send'
-import { getAppUrl } from '@/lib/utils'
+import { sendAdminSubRequestEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
+import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 
 export async function POST(
   request: Request,
@@ -53,7 +53,8 @@ export async function POST(
           id,
           name,
           organization_id,
-          organization:organizations(id, name, timezone)
+          organization:organizations(id, name, timezone),
+          services(start_time)
         )
       )
     `)
@@ -83,6 +84,9 @@ export async function POST(
   const organization = project?.organization as any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const instrument = position?.instrument as any
+
+  const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+  const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, organization?.timezone || DEFAULT_TIMEZONE) : ''
 
   // Check if there's already a pending sub request
   const { data: existingRequest } = await supabase
@@ -175,6 +179,7 @@ export async function POST(
         suggestedSubEmail: subEmail,
         suggestedSubPhone: subPhone || null,
         suggestedSubInstrument: subInstrument?.name || 'Instrument',
+        performanceDate,
         dashboardUrl: `${baseUrl}/dashboard/projects/${project.id}`,
       }).catch((err) => console.warn('Failed to send admin notification:', err))
     }

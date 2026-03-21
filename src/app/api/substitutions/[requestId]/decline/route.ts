@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { sendSubRequestDeclinedEmail } from '@/lib/email/send'
-import { getAppUrl } from '@/lib/utils'
+import { sendSubRequestDeclinedEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
+import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 
 export async function POST(
   request: Request,
@@ -40,7 +40,8 @@ export async function POST(
           id,
           name,
           organization_id,
-          organization:organizations(id, name)
+          organization:organizations(id, name, timezone),
+          services(start_time)
         )
       )
     `)
@@ -71,6 +72,9 @@ export async function POST(
   const instrument = position?.instrument as any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const requestingMusician = subRequest.requesting_musician as any
+
+  const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+  const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, organization?.timezone || DEFAULT_TIMEZONE) : ''
 
   const { data: membership } = await supabase
     .from('organization_members')
@@ -137,6 +141,7 @@ export async function POST(
         serviceName,
         suggestedSubName: subRequest.suggested_sub_name,
         adminNotes,
+        performanceDate,
         gigUrl,
       }).catch((err) => console.warn('Failed to send declined email:', err))
     }

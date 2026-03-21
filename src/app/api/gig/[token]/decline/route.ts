@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
-import { sendOfferDeclinedEmail, sendAdminOfferResponseEmail, sendSubDeclinedFindAnotherEmail } from '@/lib/email/send'
+import { sendOfferDeclinedEmail, sendAdminOfferResponseEmail, sendSubDeclinedFindAnotherEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
-import { getAppUrl } from '@/lib/utils'
+import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 
 export async function POST(
   _request: Request,
@@ -30,7 +30,8 @@ export async function POST(
           id,
           name,
           organization_id,
-          organization:organizations(id, name)
+          organization:organizations(id, name, timezone),
+          services(start_time)
         )
       )
     `)
@@ -57,6 +58,9 @@ export async function POST(
   const project = position?.project as any
   const organization = project?.organization as any
   const instrument = position?.instrument as any
+  const services = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+  const timezone = organization?.timezone || DEFAULT_TIMEZONE
+  const performanceDate = services[0] ? formatPerformanceDateForSubject(services[0].start_time, timezone) : ''
 
   // Check if this is a substitution offer by looking for a related substitution request
   const { data: subRequest } = await supabase
@@ -139,6 +143,7 @@ export async function POST(
           serviceName,
           suggestedSubName: subRequest.suggested_sub_name || `${musician?.first_name} ${musician?.last_name}`,
           gigUrl,
+          performanceDate,
         }).catch((err) => console.warn('Failed to send sub declined email:', err))
       } catch (emailError) {
         console.warn('Email sending failed:', emailError)
@@ -170,6 +175,7 @@ export async function POST(
         chairNumber: position?.chair_number || 1,
         totalChairs,
         declineReason: offer.response_notes,
+        performanceDate,
       }).catch((err) => console.warn('Failed to send musician confirmation:', err))
 
       if (declinedResult) {
@@ -206,6 +212,7 @@ export async function POST(
           status: 'declined',
           responseNotes: offer.response_notes,
           dashboardUrl: `${baseUrl}/dashboard/projects`,
+          performanceDate,
         }).catch((err) => console.warn('Failed to send admin notification:', err))
       }
     }

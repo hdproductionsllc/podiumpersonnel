@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { getNextCandidates } from '@/lib/next-candidate'
-import { sendOfferExpiredEmail } from '@/lib/email/send'
+import { sendOfferExpiredEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
 
@@ -36,7 +36,8 @@ export async function GET(request: NextRequest) {
           id,
           name,
           organization_id,
-          organization:organizations(id, name)
+          organization:organizations(id, name, timezone),
+          services(start_time)
         )
       )
     `)
@@ -69,6 +70,9 @@ export async function GET(request: NextRequest) {
       console.warn(`Skipping offer ${offer.id} — missing related data`)
       continue
     }
+
+    const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+    const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, organization?.timezone) : ''
 
     // 1. Mark offer as expired
     const { error: updateError } = await supabase
@@ -139,6 +143,7 @@ export async function GET(request: NextRequest) {
           totalChairs,
           nextCandidate,
           dashboardUrl: `${baseUrl}/dashboard/projects?expand=${project.id}`,
+          performanceDate,
         })
         emailsSent++
 

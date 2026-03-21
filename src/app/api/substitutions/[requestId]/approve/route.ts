@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
-import { sendSubRequestApprovedEmail, sendContractOfferEmail, sendAdminOfferSentEmail } from '@/lib/email/send'
+import { sendSubRequestApprovedEmail, sendContractOfferEmail, sendAdminOfferSentEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl } from '@/lib/venue-helpers'
 import { randomBytes } from 'crypto'
@@ -68,6 +68,9 @@ export async function POST(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const services = project?.services as any[] || []
   const timezone = organization?.timezone || DEFAULT_TIMEZONE
+
+  const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+  const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, timezone) : ''
 
   const { data: membership } = await supabase
     .from('organization_members')
@@ -229,6 +232,7 @@ export async function POST(
         chairNumber: position?.chair_number || 1,
         totalChairs,
         serviceName,
+        performanceDate,
         suggestedSubName: subRequest.suggested_sub_name,
       }).catch((err) => console.warn('Failed to send approved email:', err))
     }

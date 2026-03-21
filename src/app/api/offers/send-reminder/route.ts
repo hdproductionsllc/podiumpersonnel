@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { sendOfferReminderEmail } from '@/lib/email/send'
+import { sendOfferReminderEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
 
@@ -45,7 +45,8 @@ export async function POST(request: NextRequest) {
           project:projects(
             id,
             name,
-            organization:organizations(id, name)
+            organization:organizations(id, name, timezone),
+            services(start_time)
           )
         )
       `)
@@ -70,6 +71,8 @@ export async function POST(request: NextRequest) {
     const project = position?.project as any
     const organization = project?.organization as any
     const instrument = position?.instrument as any
+    const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+    const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, organization?.timezone) : ''
 
     // Count total chairs for this instrument in this project
     let totalChairs = 1
@@ -114,6 +117,7 @@ export async function POST(request: NextRequest) {
       responseUrl,
       expiresAt: offer.expires_at,
       daysRemaining,
+      performanceDate,
     })
 
     await logEmail({

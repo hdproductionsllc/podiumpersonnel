@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
-import { sendOfferReminderEmail, sendOfferExpiringSoonEmail } from '@/lib/email/send'
+import { sendOfferReminderEmail, sendOfferExpiringSoonEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
 
@@ -44,10 +44,12 @@ export async function GET(request: NextRequest) {
           organization:organizations(
             id,
             name,
+            timezone,
             email_logo_url,
             email_brand_color,
             email_footer_text
-          )
+          ),
+          services(start_time)
         )
       )
     `)
@@ -82,6 +84,9 @@ export async function GET(request: NextRequest) {
       console.warn(`Skipping offer ${offer.id} — missing related data`)
       continue
     }
+
+    const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+    const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, organization?.timezone) : ''
 
     const hoursRemaining = Math.round(
       (new Date(offer.expires_at!).getTime() - now.getTime()) / (1000 * 60 * 60)
@@ -120,6 +125,7 @@ export async function GET(request: NextRequest) {
           responseUrl,
           expiresAt: offer.expires_at,
           daysRemaining,
+          performanceDate,
           branding,
         })
 
@@ -157,6 +163,7 @@ export async function GET(request: NextRequest) {
           totalChairs,
           hoursRemaining,
           dashboardUrl: `${baseUrl}/dashboard/projects?expand=${project.id}`,
+          performanceDate,
         })
 
         await logEmail({

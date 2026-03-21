@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
-import { sendMusicUploadedEmail } from '@/lib/email/send'
+import { sendMusicUploadedEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
-import { getAppUrl } from '@/lib/utils'
+import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getOrgPlan } from '@/lib/api-helpers'
 import { canUseEmailFeatures } from '@/lib/plan'
 
@@ -52,10 +52,12 @@ export async function POST(
         organization:organizations(
           id,
           name,
+          timezone,
           email_logo_url,
           email_brand_color,
           email_footer_text
         ),
+        services(start_time),
         project_positions(
           id,
           status,
@@ -73,6 +75,8 @@ export async function POST(
     }
 
     const organization = project.organization as any
+    const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+    const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, organization?.timezone || DEFAULT_TIMEZONE) : ''
 
     // Get all files for this project
     const { data: files, error: filesError } = await supabase
@@ -197,6 +201,7 @@ export async function POST(
           })),
           confirmUrl,
           notes,
+          performanceDate,
           contactEmail,
           branding,
         })

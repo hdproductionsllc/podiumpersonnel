@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
-import { sendOfferAcceptedEmail, sendAdminOfferResponseEmail, sendMusicianReleasedEmail } from '@/lib/email/send'
+import { sendOfferAcceptedEmail, sendAdminOfferResponseEmail, sendMusicianReleasedEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl } from '@/lib/venue-helpers'
@@ -61,6 +61,8 @@ export async function POST(
   const instrument = position?.instrument as any
   const services = project?.services as any[] || []
   const timezone = organization?.timezone || DEFAULT_TIMEZONE
+  const sortedServices = [...services].sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+  const performanceDate = sortedServices[0] ? formatPerformanceDateForSubject(sortedServices[0].start_time, timezone) : ''
 
   // Check if this is a substitution offer by looking for a related substitution request
   const { data: subRequest } = await supabase
@@ -149,6 +151,7 @@ export async function POST(
           totalChairs,
           serviceName,
           substituteName: `${musician?.first_name} ${musician?.last_name}`,
+          performanceDate,
         }).catch((err) => console.warn('Failed to send musician released email:', err))
       } catch (emailError) {
         console.warn('Email sending failed:', emailError)
@@ -247,6 +250,7 @@ export async function POST(
           totalChairs,
           status: 'accepted',
           dashboardUrl: `${baseUrl}/dashboard/projects`,
+          performanceDate,
         }).catch((err) => console.warn('Failed to send admin notification:', err))
       }
     }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
-import { sendPositionUnassignedEmail, sendEmail } from '@/lib/email/send'
+import { sendPositionUnassignedEmail, sendEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 
 export async function POST(
   request: NextRequest,
@@ -33,7 +33,8 @@ export async function POST(
           id,
           name,
           organization_id,
-          organization:organizations(id, name, timezone)
+          organization:organizations(id, name, timezone),
+          services(start_time)
         )
       `)
       .eq('id', positionId)
@@ -48,6 +49,8 @@ export async function POST(
     const project = positionData.project
     const organization = project?.organization
     const instrument = positionData.instrument
+    const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+    const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, organization?.timezone) : ''
 
     // Verify user has permission (is admin/owner of this organization)
     const { data: membership } = await supabase
@@ -103,6 +106,7 @@ export async function POST(
           instrument: instrument?.name || 'Instrument',
           chairNumber: positionData.chair_number || 1,
           totalChairs,
+          performanceDate,
         }).catch((err) => console.warn('Failed to send musician notification:', err))
       )
     }

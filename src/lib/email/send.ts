@@ -27,6 +27,44 @@ import { type EmailBranding } from './templates/email-layout'
 
 export type { EmailBranding }
 
+/**
+ * Extract a short performance date (e.g. "Mar 21") from formatted services for email subject lines.
+ * Services have dates formatted like "Monday, March 21, 2026".
+ */
+function getSubjectDate(services?: { date?: string }[], performanceDate?: string): string {
+  if (performanceDate) return performanceDate
+  const dateStr = services?.[0]?.date
+  if (!dateStr) return ''
+  // Match "Month Day, Year" from "Weekday, Month Day, Year"
+  const match = dateStr.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})/)
+  if (!match) return ''
+  const SHORT: Record<string, string> = {
+    January: 'Jan', February: 'Feb', March: 'Mar', April: 'Apr',
+    May: 'May', June: 'Jun', July: 'Jul', August: 'Aug',
+    September: 'Sep', October: 'Oct', November: 'Nov', December: 'Dec',
+  }
+  return `${SHORT[match[1]]} ${match[2]}`
+}
+
+/** Append " | Mar 21" to a subject line when a date is available */
+function withDate(subject: string, date: string): string {
+  return date ? `${subject} | ${date}` : subject
+}
+
+/**
+ * Format a raw ISO date string (e.g. "2026-04-05T19:00:00Z") to a short "Apr 5" for subject lines.
+ * Exported so call sites without pre-formatted services can compute performanceDate.
+ */
+export function formatPerformanceDateForSubject(isoDate: string, timezone?: string): string {
+  try {
+    const d = new Date(isoDate)
+    if (isNaN(d.getTime())) return ''
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: timezone || 'UTC' })
+  } catch {
+    return ''
+  }
+}
+
 // Contract Offer Email
 interface SendContractOfferParams {
   to: string
@@ -80,10 +118,11 @@ export async function sendContractOfferEmail(params: SendContractOfferParams) {
     })
   )
 
+  const date = getSubjectDate(params.services)
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Call: ${params.projectName} - ${params.instrument}`,
+    subject: withDate(`Call: ${params.projectName} - ${params.instrument}`, date),
     html: emailHtml,
   })
 
@@ -107,6 +146,7 @@ interface SendOfferReminderParams {
   responseUrl: string
   expiresAt: string | null
   daysRemaining: number | null
+  performanceDate?: string
   branding?: EmailBranding
 }
 
@@ -131,7 +171,7 @@ export async function sendOfferReminderEmail(params: SendOfferReminderParams) {
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `${urgentPrefix}Reminder: Call for ${params.projectName}`,
+    subject: withDate(`${urgentPrefix}Reminder: Call for ${params.projectName}`, params.performanceDate || ''),
     html: emailHtml,
   })
 
@@ -180,10 +220,11 @@ export async function sendOfferAcceptedEmail(params: SendOfferAcceptedParams) {
     })
   )
 
+  const date = getSubjectDate(params.services)
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Confirmed: You're booked for ${params.projectName}`,
+    subject: withDate(`Confirmed: You're booked for ${params.projectName}`, date),
     html: emailHtml,
   })
 
@@ -205,6 +246,7 @@ interface SendOfferDeclinedParams {
   chairNumber: number
   totalChairs?: number
   declineReason?: string | null
+  performanceDate?: string
 }
 
 export async function sendOfferDeclinedEmail(params: SendOfferDeclinedParams) {
@@ -223,7 +265,7 @@ export async function sendOfferDeclinedEmail(params: SendOfferDeclinedParams) {
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Thank you for your response - ${params.projectName}`,
+    subject: withDate(`Thank you for your response - ${params.projectName}`, params.performanceDate || ''),
     html: emailHtml,
   })
 
@@ -249,6 +291,7 @@ interface SendAdminOfferResponseParams {
   status: 'accepted' | 'declined'
   responseNotes?: string | null
   dashboardUrl: string
+  performanceDate?: string
 }
 
 export async function sendAdminOfferResponseEmail(params: SendAdminOfferResponseParams) {
@@ -273,7 +316,7 @@ export async function sendAdminOfferResponseEmail(params: SendAdminOfferResponse
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Offer ${statusText}: ${params.musicianName} - ${params.projectName}`,
+    subject: withDate(`Offer ${statusText}: ${params.musicianName} - ${params.projectName}`, params.performanceDate || ''),
     html: emailHtml,
   })
 
@@ -338,10 +381,11 @@ export async function sendAdminOfferSentEmail(params: SendAdminOfferSentParams) 
     })
   )
 
+  const date = getSubjectDate(params.services)
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Offer Sent: ${params.musicianName} - ${params.projectName}`,
+    subject: withDate(`Offer Sent: ${params.musicianName} - ${params.projectName}`, date),
     html: emailHtml,
   })
 
@@ -396,6 +440,7 @@ interface SendPositionUnassignedParams {
   instrument: string
   chairNumber: number
   totalChairs?: number
+  performanceDate?: string
 }
 
 export async function sendPositionUnassignedEmail(params: SendPositionUnassignedParams) {
@@ -413,7 +458,7 @@ export async function sendPositionUnassignedEmail(params: SendPositionUnassigned
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Position Update: ${params.projectName}`,
+    subject: withDate(`Position Update: ${params.projectName}`, params.performanceDate || ''),
     html: emailHtml,
   })
 
@@ -443,6 +488,7 @@ interface SendAdminSubRequestParams {
   suggestedSubPhone: string | null
   suggestedSubInstrument: string
   dashboardUrl: string
+  performanceDate?: string
 }
 
 export async function sendAdminSubRequestEmail(params: SendAdminSubRequestParams) {
@@ -469,7 +515,7 @@ export async function sendAdminSubRequestEmail(params: SendAdminSubRequestParams
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Sub Request: ${params.musicianName} needs a sub for ${params.projectName}`,
+    subject: withDate(`Sub Request: ${params.musicianName} needs a sub for ${params.projectName}`, params.performanceDate || ''),
     html: emailHtml,
   })
 
@@ -492,6 +538,7 @@ interface SendSubRequestApprovedParams {
   totalChairs?: number
   serviceName: string | null
   suggestedSubName: string
+  performanceDate?: string
 }
 
 export async function sendSubRequestApprovedEmail(params: SendSubRequestApprovedParams) {
@@ -511,7 +558,7 @@ export async function sendSubRequestApprovedEmail(params: SendSubRequestApproved
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Sub Request Approved: ${params.projectName}`,
+    subject: withDate(`Sub Request Approved: ${params.projectName}`, params.performanceDate || ''),
     html: emailHtml,
   })
 
@@ -536,6 +583,7 @@ interface SendSubRequestDeclinedParams {
   suggestedSubName: string
   adminNotes: string | null
   gigUrl: string
+  performanceDate?: string
 }
 
 export async function sendSubRequestDeclinedEmail(params: SendSubRequestDeclinedParams) {
@@ -557,7 +605,7 @@ export async function sendSubRequestDeclinedEmail(params: SendSubRequestDeclined
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Sub Request Declined: ${params.projectName} - Please find another substitute`,
+    subject: withDate(`Sub Request Declined: ${params.projectName} - Please find another substitute`, params.performanceDate || ''),
     html: emailHtml,
   })
 
@@ -580,6 +628,7 @@ interface SendMusicianReleasedParams {
   totalChairs?: number
   serviceName: string | null
   substituteName: string
+  performanceDate?: string
 }
 
 export async function sendMusicianReleasedEmail(params: SendMusicianReleasedParams) {
@@ -599,7 +648,7 @@ export async function sendMusicianReleasedEmail(params: SendMusicianReleasedPara
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `You've Been Released: ${params.projectName}`,
+    subject: withDate(`You've Been Released: ${params.projectName}`, params.performanceDate || ''),
     html: emailHtml,
   })
 
@@ -623,6 +672,7 @@ interface SendSubDeclinedFindAnotherParams {
   serviceName: string | null
   suggestedSubName: string
   gigUrl: string
+  performanceDate?: string
 }
 
 export async function sendSubDeclinedFindAnotherEmail(params: SendSubDeclinedFindAnotherParams) {
@@ -643,7 +693,7 @@ export async function sendSubDeclinedFindAnotherEmail(params: SendSubDeclinedFin
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Action Required: Your sub declined - ${params.projectName}`,
+    subject: withDate(`Action Required: Your sub declined - ${params.projectName}`, params.performanceDate || ''),
     html: emailHtml,
   })
 
@@ -739,6 +789,7 @@ interface SendOfferExpiredParams {
     callOrder: number | null
   } | null
   dashboardUrl: string
+  performanceDate?: string
 }
 
 export async function sendOfferExpiredEmail(params: SendOfferExpiredParams) {
@@ -758,7 +809,7 @@ export async function sendOfferExpiredEmail(params: SendOfferExpiredParams) {
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Offer Expired: ${params.musicianName} - ${params.projectName}`,
+    subject: withDate(`Offer Expired: ${params.musicianName} - ${params.projectName}`, params.performanceDate || ''),
     html: emailHtml,
   })
 
@@ -781,6 +832,7 @@ interface SendOfferExpiringSoonParams {
   totalChairs?: number
   hoursRemaining: number
   dashboardUrl: string
+  performanceDate?: string
 }
 
 export async function sendOfferExpiringSoonEmail(params: SendOfferExpiringSoonParams) {
@@ -800,7 +852,7 @@ export async function sendOfferExpiringSoonEmail(params: SendOfferExpiringSoonPa
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `⚠️ Offer Expiring: ${params.musicianName} has not responded — ${params.projectName}`,
+    subject: withDate(`⚠️ Offer Expiring: ${params.musicianName} has not responded — ${params.projectName}`, params.performanceDate || ''),
     html: emailHtml,
   })
 
@@ -916,11 +968,11 @@ export async function sendGigDetailsEmail(params: SendGigDetailsEmailParams) {
     })
   )
 
-  const firstDate = params.services[0]?.date
+  const date = getSubjectDate(params.services)
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Gig Details — ${params.projectName}${firstDate ? ` | ${firstDate}` : ''}`,
+    subject: withDate(`Gig Details — ${params.projectName}`, date),
     html: emailHtml,
   })
 
@@ -965,7 +1017,7 @@ export async function sendGigDetailsReminderEmail(params: SendGigDetailsReminder
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Reminder: Please confirm — ${params.projectName}`,
+    subject: withDate(`Reminder: Please confirm — ${params.projectName}`, getSubjectDate(params.services)),
     html: emailHtml,
   })
 
@@ -987,6 +1039,7 @@ interface SendMusicUploadedEmailParams {
   confirmUrl: string
   notes?: string
   contactEmail?: string
+  performanceDate?: string
   branding?: EmailBranding
 }
 
@@ -1007,7 +1060,7 @@ export async function sendMusicUploadedEmail(params: SendMusicUploadedEmailParam
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Music Available — ${params.projectName}`,
+    subject: withDate(`Music Available — ${params.projectName}`, params.performanceDate || ''),
     html: emailHtml,
   })
 
@@ -1028,6 +1081,7 @@ interface SendMusicReminderEmailParams {
   files: { name: string; size: number; downloadUrl: string }[]
   confirmUrl: string
   contactEmail?: string
+  performanceDate?: string
   branding?: EmailBranding
 }
 
@@ -1047,7 +1101,7 @@ export async function sendMusicReminderEmail(params: SendMusicReminderEmailParam
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Reminder: Download your music — ${params.projectName}`,
+    subject: withDate(`Reminder: Download your music — ${params.projectName}`, params.performanceDate || ''),
     html: emailHtml,
   })
 
@@ -1091,7 +1145,7 @@ export async function sendPreGigNotificationEmail(params: SendPreGigNotification
   const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to: params.to,
-    subject: `Upcoming: ${params.projectName} is in 2 days — review reminder`,
+    subject: withDate(`Upcoming: ${params.projectName} is in 2 days — review reminder`, params.gigDate || ''),
     html: emailHtml,
   })
 

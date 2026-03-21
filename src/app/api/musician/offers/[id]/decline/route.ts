@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
-import { sendOfferDeclinedEmail, sendAdminOfferResponseEmail, sendSubDeclinedFindAnotherEmail } from '@/lib/email/send'
-import { getAppUrl } from '@/lib/utils'
+import { sendOfferDeclinedEmail, sendAdminOfferResponseEmail, sendSubDeclinedFindAnotherEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
+import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 
 export async function POST(
   request: Request,
@@ -60,7 +60,8 @@ export async function POST(
           id,
           name,
           organization_id,
-          organization:organizations(id, name)
+          organization:organizations(id, name, timezone),
+          services(start_time)
         )
       )
     `)
@@ -88,6 +89,9 @@ export async function POST(
   const project = position?.project as any
   const organization = project?.organization as any
   const instrument = position?.instrument as any
+  const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+  const timezone = organization?.timezone || DEFAULT_TIMEZONE
+  const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, timezone) : ''
 
   // Check if this is a substitution offer
   const { data: subRequest } = await supabase
@@ -176,6 +180,7 @@ export async function POST(
           serviceName,
           suggestedSubName: subRequest.suggested_sub_name || `${musician?.first_name} ${musician?.last_name}`,
           gigUrl,
+          performanceDate,
         }).catch((err) => console.warn('Failed to send sub declined email:', err))
       } catch (emailError) {
         console.warn('Email sending failed:', emailError)
@@ -205,6 +210,7 @@ export async function POST(
         chairNumber: position?.chair_number || 1,
         totalChairs,
         declineReason,
+        performanceDate,
       }).catch((err) => console.warn('Failed to send musician confirmation:', err))
     }
 
@@ -225,6 +231,7 @@ export async function POST(
           status: 'declined',
           responseNotes: declineReason,
           dashboardUrl: `${baseUrl}/dashboard/projects`,
+          performanceDate,
         }).catch((err) => console.warn('Failed to send admin notification:', err))
       }
     }
