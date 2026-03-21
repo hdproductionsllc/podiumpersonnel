@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -29,7 +30,28 @@ export function VenuesClient({
   // Filter state
   const [search, setSearch] = useState('')
 
+  const [fixingVenues, setFixingVenues] = useState(false)
+
   const canManage = userRole === 'owner' || userRole === 'admin'
+  const venuesMissingPlaceId = venues.filter(v => !v.google_place_id).length
+
+  async function handleFixVenues() {
+    setFixingVenues(true)
+    try {
+      const res = await fetch('/api/admin/fix-venues', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(`Fixed ${data.fixed} of ${data.total} venues`)
+        router.refresh()
+      } else {
+        toast.error(data.error || 'Failed to fix venues')
+      }
+    } catch {
+      toast.error('Failed to fix venues')
+    } finally {
+      setFixingVenues(false)
+    }
+  }
 
   const hasFilters = search !== ''
 
@@ -78,7 +100,18 @@ export function VenuesClient({
           <div className="mt-3 w-12 h-px bg-gold/50" />
         </div>
         {canManage && (
-          <Button onClick={handleAdd}>Add Venue</Button>
+          <div className="flex items-center gap-2">
+            {venuesMissingPlaceId > 0 && (
+              <Button
+                variant="outline"
+                onClick={handleFixVenues}
+                disabled={fixingVenues}
+              >
+                {fixingVenues ? 'Fixing...' : `Fix ${venuesMissingPlaceId} Venue Location${venuesMissingPlaceId !== 1 ? 's' : ''}`}
+              </Button>
+            )}
+            <Button onClick={handleAdd}>Add Venue</Button>
+          </div>
         )}
       </div>
 
