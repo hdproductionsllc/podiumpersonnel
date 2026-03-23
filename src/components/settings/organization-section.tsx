@@ -18,6 +18,8 @@ import {
   FormDescription,
 } from '@/components/ui/form'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 
 const TIMEZONE_OPTIONS = [
   { value: 'America/New_York', label: 'Eastern Time (ET)' },
@@ -30,7 +32,7 @@ const TIMEZONE_OPTIONS = [
 ]
 
 interface OrganizationSectionProps {
-  organization: { id: string; name: string; slug: string; timezone: string; musician_policy?: string | null }
+  organization: { id: string; name: string; slug: string; timezone: string; musician_policy?: string | null; disable_staffing_alerts?: boolean }
   role: 'owner' | 'admin' | 'member'
 }
 
@@ -49,6 +51,7 @@ export function OrganizationSection({ organization, role }: OrganizationSectionP
       slug: organization.slug,
       timezone: organization.timezone,
       musician_policy: organization.musician_policy || '',
+      disable_staffing_alerts: organization.disable_staffing_alerts || false,
     },
   })
 
@@ -180,6 +183,30 @@ export function OrganizationSection({ organization, role }: OrganizationSectionP
                     Customize the policy that musicians agree to when accepting offers. Leave blank to use the default policy.
                   </FormDescription>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="disable_staffing_alerts"
+              render={({ field }) => (
+                <FormItem>
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="disable_staffing_alerts">Staffing Alert Emails</Label>
+                      <FormDescription>
+                        Receive email alerts when upcoming gigs have unfilled positions (14, 7, and 3 days out).
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        id="disable_staffing_alerts"
+                        checked={!field.value}
+                        onCheckedChange={(checked) => field.onChange(!checked)}
+                        disabled={!canEdit}
+                      />
+                    </FormControl>
+                  </div>
                 </FormItem>
               )}
             />

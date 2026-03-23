@@ -32,6 +32,9 @@ export async function PATCH(request: Request) {
       slug: parsed.data.slug,
       timezone: parsed.data.timezone,
       musician_policy: parsed.data.musician_policy || null,
+      ...(parsed.data.disable_staffing_alerts !== undefined && {
+        disable_staffing_alerts: parsed.data.disable_staffing_alerts,
+      }),
     })
     .eq('id', membership!.organization_id)
 

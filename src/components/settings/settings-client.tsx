@@ -29,6 +29,7 @@ interface SettingsClientProps {
     slug: string
     timezone: string
     musician_policy?: string | null
+    disable_staffing_alerts?: boolean
     email_logo_url?: string | null
     email_brand_color?: string | null
     email_footer_text?: string | null

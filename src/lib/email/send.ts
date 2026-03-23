@@ -22,6 +22,7 @@ import { GigDetailsReminderEmail } from './templates/gig-details-reminder'
 import { MusicUploadedEmail } from './templates/music-uploaded'
 import { MusicReminderEmail } from './templates/music-reminder'
 import { PreGigNotificationEmail } from './templates/pre-gig-notification'
+import { StaffingAlertEmail } from './templates/staffing-alert'
 import { render } from '@react-email/render'
 import { type EmailBranding } from './templates/email-layout'
 
@@ -1151,6 +1152,59 @@ export async function sendPreGigNotificationEmail(params: SendPreGigNotification
 
   if (error) {
     console.error('Failed to send pre-gig notification email:', error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return { ...data, emailHtml }
+}
+
+// Staffing Alert Email (to org admins when gig is understaffed)
+interface SendStaffingAlertParams {
+  to: string | string[]
+  organizationName: string
+  projectName: string
+  gigDate: string
+  venueName: string | null
+  daysAway: number
+  totalPositions: number
+  confirmedCount: number
+  unfilledPositions: {
+    instrument: string
+    chairNumber: number
+    status: 'vacant' | 'offered' | 'declined'
+  }[]
+  dashboardUrl: string
+  branding?: EmailBranding
+}
+
+export async function sendStaffingAlertEmail(params: SendStaffingAlertParams) {
+  const emailHtml = await render(
+    StaffingAlertEmail({
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      gigDate: params.gigDate,
+      venueName: params.venueName,
+      daysAway: params.daysAway,
+      totalPositions: params.totalPositions,
+      confirmedCount: params.confirmedCount,
+      unfilledPositions: params.unfilledPositions,
+      dashboardUrl: params.dashboardUrl,
+      branding: params.branding,
+    })
+  )
+
+  const urgencyLabel =
+    params.daysAway <= 3 ? 'Urgent' : params.daysAway <= 7 ? 'Action Needed' : 'Heads Up'
+
+  const { data, error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: params.to,
+    subject: withDate(`${urgencyLabel}: ${params.projectName} has ${params.unfilledPositions.length} unfilled positions`, params.gigDate || ''),
+    html: emailHtml,
+  })
+
+  if (error) {
+    console.error('Failed to send staffing alert email:', error)
     throw new Error(`Failed to send email: ${error.message}`)
   }
 

@@ -5,6 +5,7 @@ export const updateOrganizationSchema = z.object({
   slug: z.string().min(1, 'Slug is required').max(100).regex(/^[a-z0-9-]+$/, 'Slug can only contain lowercase letters, numbers, and hyphens'),
   timezone: z.string().min(1, 'Timezone is required'),
   musician_policy: z.string().max(10000).optional().nullable(),
+  disable_staffing_alerts: z.boolean().optional(),
 })
 
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>

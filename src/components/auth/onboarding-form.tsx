@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -40,17 +40,29 @@ function generateSlug(name: string): string {
     .substring(0, 50)
 }
 
+function detectTimezone(): string {
+  try {
+    const detected = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const supported = TIMEZONE_OPTIONS.map((tz) => tz.value)
+    if (supported.includes(detected)) return detected
+  } catch {
+    // Intl not available
+  }
+  return DEFAULT_TIMEZONE
+}
+
 export function OnboardingForm() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const detectedTimezone = useMemo(detectTimezone, [])
 
   const form = useForm<OnboardingInput>({
     resolver: zodResolver(onboardingSchema),
     defaultValues: {
       fullName: '',
       organizationName: '',
-      timezone: DEFAULT_TIMEZONE,
+      timezone: detectedTimezone,
     },
   })
 
