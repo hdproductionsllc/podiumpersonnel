@@ -195,6 +195,8 @@ export function ProjectPositions({
   const [subRequestPosition, setSubRequestPosition] = useState<PositionJoined | null>(null)
   const [unassignPosition, setUnassignPosition] = useState<PositionJoined | null>(null)
   const [unassigning, setUnassigning] = useState(false)
+  const [declinePosition, setDeclinePosition] = useState<PositionJoined | null>(null)
+  const [declining, setDeclining] = useState(false)
   const [preSelectedMusicianId, setPreSelectedMusicianId] = useState<string | null>(null)
   const [isFollowUp, setIsFollowUp] = useState(false)
   const [ensembleDriftOpen, setEnsembleDriftOpen] = useState(false)
@@ -328,16 +330,6 @@ export function ProjectPositions({
     setClearing(false)
   }
 
-  async function handleStatusChange(positionId: string, newStatus: string) {
-    const supabase = createClient()
-    const { error } = await supabase.from('project_positions').update({ status: newStatus }).eq('id', positionId)
-    if (error) {
-      toast.error('Failed to update status')
-      return
-    }
-    onPositionChange()
-  }
-
   function handleUnassign(position: PositionJoined) {
     setUnassignPosition(position)
   }
@@ -365,6 +357,32 @@ export function ProjectPositions({
     } finally {
       setUnassigning(false)
       setUnassignPosition(null)
+    }
+  }
+
+  async function confirmDeclineOnBehalf() {
+    if (!declinePosition) return
+    setDeclining(true)
+
+    try {
+      const response = await fetch(`/api/positions/${declinePosition.id}/decline-offer`, {
+        method: 'POST',
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        toast.error(result.error || 'Failed to decline offer')
+        return
+      }
+
+      toast.success('Offer declined on behalf of musician')
+      onPositionChange()
+    } catch {
+      toast.error('Failed to decline offer')
+    } finally {
+      setDeclining(false)
+      setDeclinePosition(null)
     }
   }
 
@@ -562,48 +580,35 @@ export function ProjectPositions({
                               ? `${pendingOffer.musician.first_name} ${pendingOffer.musician.last_name}`
                               : null
 
-                            return canManage ? (
+                            return (
                               <div className="flex flex-col gap-1">
-                                {position.status === 'confirmed' ? (
-                                  <div className="flex items-center gap-2">
-                                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[position.status]}`}>
-                                      {STATUS_LABELS[position.status]}
-                                    </span>
-                                    {canManage && (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 text-xs text-muted-foreground"
-                                        onClick={() => handleUnassign(position)}
-                                        title="Release this musician from the position"
-                                      >
-                                        Unassign
-                                      </Button>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <select
-                                    className="rounded border bg-background px-2 py-0.5 text-xs"
-                                    value={position.status}
-                                    onChange={(e) => handleStatusChange(position.id, e.target.value)}
-                                  >
-                                    <option value="vacant">Vacant</option>
-                                    <option value="offered">Offered</option>
-                                    <option value="confirmed">Confirmed</option>
-                                    <option value="declined">Declined</option>
-                                  </select>
-                                )}
-                                {position.status === 'offered' && offeredToName && (
-                                  <span className="text-xs text-muted-foreground">
-                                    to {offeredToName}
+                                <div className="flex items-center gap-2">
+                                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[position.status] || ''}`}>
+                                    {STATUS_LABELS[position.status] || position.status}
                                   </span>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="flex flex-col gap-1">
-                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[position.status] || ''}`}>
-                                  {STATUS_LABELS[position.status] || position.status}
-                                </span>
+                                  {position.status === 'confirmed' && canManage && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 text-xs text-muted-foreground"
+                                      onClick={() => handleUnassign(position)}
+                                      title="Release this musician from the position"
+                                    >
+                                      Unassign
+                                    </Button>
+                                  )}
+                                  {position.status === 'offered' && canManage && pendingOffer && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 text-xs text-destructive"
+                                      onClick={() => setDeclinePosition(position)}
+                                      title="Decline this offer on behalf of the musician"
+                                    >
+                                      Decline
+                                    </Button>
+                                  )}
+                                </div>
                                 {position.status === 'offered' && offeredToName && (
                                   <span className="text-xs text-muted-foreground">
                                     to {offeredToName}
@@ -914,6 +919,58 @@ export function ProjectPositions({
           </div>
         </div>
       )}
+
+      {declinePosition && (() => {
+        const pendingOffer = declinePosition.contract_offers.find(
+          o => o.status === 'pending' || o.status === 'viewed'
+        )
+        const musicianName = pendingOffer
+          ? `${pendingOffer.musician.first_name} ${pendingOffer.musician.last_name}`
+          : null
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="w-full max-w-md rounded-lg border bg-background p-6 shadow-lg">
+              <h3 className="text-lg font-semibold">Decline Offer on Behalf</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Are you sure you want to decline this offer on behalf of the musician?
+              </p>
+
+              <div className="mt-4 rounded-lg border bg-muted/30 p-4 space-y-2">
+                {musicianName && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Musician:</span>
+                    <span className="font-medium">{musicianName}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Position:</span>
+                  <span>
+                    {declinePosition.instrument?.name}
+                    {(chairCountByInstrument.get(declinePosition.instrument_id) || 0) > 1
+                      ? `, ${getPositionTitle(declinePosition.instrument?.name || '', declinePosition.chair_number, declinePosition.instrument?.section).title}`
+                      : ''
+                    }
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded bg-amber-50 dark:bg-amber-950/50 p-3 text-sm text-amber-700 dark:text-amber-300">
+                The musician will receive a decline confirmation email.
+              </div>
+
+              <div className="mt-4 flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setDeclinePosition(null)} disabled={declining}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={confirmDeclineOnBehalf} disabled={declining}>
+                  {declining ? 'Declining...' : 'Confirm Decline'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
