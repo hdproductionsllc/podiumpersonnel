@@ -93,6 +93,7 @@ export type WaterfallTrigger = {
   positionId: string
   musicianId: string
   customPay: number | null
+  isFollowUp?: boolean
 }
 
 interface ProjectPositionsProps {
@@ -195,6 +196,7 @@ export function ProjectPositions({
   const [unassignPosition, setUnassignPosition] = useState<PositionJoined | null>(null)
   const [unassigning, setUnassigning] = useState(false)
   const [preSelectedMusicianId, setPreSelectedMusicianId] = useState<string | null>(null)
+  const [isFollowUp, setIsFollowUp] = useState(false)
   const [ensembleDriftOpen, setEnsembleDriftOpen] = useState(false)
   const [ensembleDriftSuggestion, setEnsembleDriftSuggestion] = useState<string | null>(null)
   const [ensembleLabelInput, setEnsembleLabelInput] = useState('')
@@ -226,6 +228,7 @@ export function ProjectPositions({
         setOfferChairNumber(position.chair_number)
         setOfferExistingIds(uniqueProjectOfferIds)
         setPreSelectedMusicianId(waterfallTrigger.musicianId)
+        setIsFollowUp(!!waterfallTrigger.isFollowUp)
         if (waterfallTrigger.customPay != null) {
           setSuggestedCustomPay(waterfallTrigger.customPay.toString())
         }
@@ -757,7 +760,7 @@ export function ProjectPositions({
 
       <SendOfferDialog
         open={offerPositionId !== null}
-        onOpenChange={(open) => { if (!open) { setOfferPositionId(null); setOfferInstrumentId(null); setOfferChairNumber(1); setOfferExistingIds([]); setPreSelectedMusicianId(null) } }}
+        onOpenChange={(open) => { if (!open) { setOfferPositionId(null); setOfferInstrumentId(null); setOfferChairNumber(1); setOfferExistingIds([]); setPreSelectedMusicianId(null); setIsFollowUp(false) } }}
         positionId={offerPositionId ?? ''}
         instrumentId={offerInstrumentId ?? ''}
         instrumentName={offerInstrumentId ? positions.find(p => p.instrument_id === offerInstrumentId)?.instrument?.name : undefined}
@@ -772,6 +775,7 @@ export function ProjectPositions({
         nextVacantCount={offerInstrumentId ? positions.filter(p => p.instrument_id === offerInstrumentId && p.status === 'vacant' && p.id !== offerPositionId).length : 0}
         nextInstrumentName={offerInstrumentId ? positions.find(p => p.instrument_id === offerInstrumentId)?.instrument?.name : undefined}
         preSelectedMusicianId={preSelectedMusicianId}
+        isFollowUp={isFollowUp}
         onSuccess={(applyPayToRemaining) => {
           if (applyPayToRemaining?.customPay) {
             setSuggestedCustomPay(applyPayToRemaining.customPay)

@@ -47,7 +47,7 @@ interface ProjectOffersProps {
   timezone: string
   canManage: boolean
   onOfferChange: () => void
-  onSendWaterfall?: (positionId: string, musicianId: string, customPay: number | null) => void
+  onSendWaterfall?: (positionId: string, musicianId: string, customPay: number | null, isFollowUp?: boolean) => void
 }
 
 const OFFER_STATUS_COLORS: Record<string, string> = {
@@ -464,10 +464,10 @@ export function ProjectOffers({
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => onSendWaterfall(offer.project_position_id, offer.musician_id, offer.custom_pay)}
-                            title="Send a fresh offer to this musician"
+                            onClick={() => onSendWaterfall(offer.project_position_id, offer.musician_id, offer.custom_pay, true)}
+                            title="Send a follow-up message to this musician"
                           >
-                            Re-offer
+                            Follow Up
                           </Button>
                         )}
                       </div>
@@ -562,11 +562,11 @@ export function ProjectOffers({
             const entry = byMusician.get(musicianId)
             if (!entry) continue
 
-            // Re-offer: create a new offer for each expired position
+            // Follow up: create a new offer for each expired position
             for (const expiredOffer of entry.offers) {
               try {
                 if (onSendWaterfall) {
-                  onSendWaterfall(expiredOffer.project_position_id, musicianId, expiredOffer.custom_pay)
+                  onSendWaterfall(expiredOffer.project_position_id, musicianId, expiredOffer.custom_pay, true)
                   sent++
                   break // Open dialog for the first one — user can review
                 }
@@ -622,7 +622,7 @@ export function ProjectOffers({
                       disabled={sendingFollowUp}
                       onClick={handleBatchFollowUp}
                     >
-                      {sendingFollowUp ? 'Sending...' : `Re-offer to ${selectedExpired.size} selected`}
+                      {sendingFollowUp ? 'Sending...' : `Follow up with ${selectedExpired.size} selected`}
                     </Button>
                   )}
                 </div>
@@ -659,11 +659,11 @@ export function ProjectOffers({
                         className="h-7 text-xs shrink-0"
                         onClick={() => {
                           if (onSendWaterfall) {
-                            onSendWaterfall(mOffers[0].project_position_id, musicianId, mOffers[0].custom_pay)
+                            onSendWaterfall(mOffers[0].project_position_id, musicianId, mOffers[0].custom_pay, true)
                           }
                         }}
                       >
-                        Re-offer
+                        Follow Up
                       </Button>
                     </div>
                   ))}

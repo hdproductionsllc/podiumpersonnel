@@ -42,6 +42,7 @@ interface SendOfferDialogProps {
   nextVacantCount?: number
   nextInstrumentName?: string
   preSelectedMusicianId?: string | null
+  isFollowUp?: boolean
   onSuccess: (applyPayToRemaining?: { customPay: string }) => void
   onSendNext?: () => void
 }
@@ -65,6 +66,7 @@ export function SendOfferDialog({
   nextVacantCount,
   nextInstrumentName,
   preSelectedMusicianId,
+  isFollowUp,
   onSuccess,
   onSendNext,
 }: SendOfferDialogProps) {
@@ -123,7 +125,7 @@ export function SendOfferDialog({
       setUpdatedEmails({})
       setEditingEmail('')
       setSavingEmail(false)
-      setPersonalMessage('')
+      setPersonalMessage(isFollowUp ? 'Just checking in to see if you received this offer. Please let us know either way when you get a chance!' : '')
       setShowConfirmation(false)
       setShowSuccess(false)
       setSentMusicianName('')

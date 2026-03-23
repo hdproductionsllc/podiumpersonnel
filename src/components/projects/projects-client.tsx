@@ -301,6 +301,7 @@ export function ProjectsClient({
     positionId: string
     musicianId: string
     customPay: number | null
+    isFollowUp?: boolean
   } | null>(null)
 
   // Filter state
@@ -898,8 +899,8 @@ export function ProjectsClient({
                             timezone={timezone}
                             canManage={canManage}
                             onOfferChange={handleSuccess}
-                            onSendWaterfall={(positionId, musicianId, customPay) => {
-                              setWaterfallTrigger({ positionId, musicianId, customPay })
+                            onSendWaterfall={(positionId, musicianId, customPay, isFollowUp) => {
+                              setWaterfallTrigger({ positionId, musicianId, customPay, isFollowUp })
                             }}
                           />
                           <SubRequests
