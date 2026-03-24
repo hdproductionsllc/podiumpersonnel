@@ -498,13 +498,13 @@ export function ProjectPositions({
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/30">
               <tr>
-                <th className="px-3 py-2 text-left font-medium text-xs">Instrument</th>
-                <th className="px-3 py-2 text-left font-medium text-xs">Chair</th>
-                <th className="px-3 py-2 text-left font-medium text-xs">Musician</th>
-                <th className="px-3 py-2 text-left font-medium text-xs">Status</th>
-                <th className="px-3 py-2 text-left font-medium text-xs">Pay</th>
+                <th className="px-3 py-2 text-left font-medium text-xs whitespace-nowrap">Instrument</th>
+                <th className="px-3 py-2 text-left font-medium text-xs whitespace-nowrap">Chair</th>
+                <th className="px-3 py-2 text-left font-medium text-xs w-full">Musician</th>
+                <th className="px-3 py-2 text-left font-medium text-xs whitespace-nowrap">Status</th>
+                <th className="px-3 py-2 text-left font-medium text-xs whitespace-nowrap">Pay</th>
                 {canManage && (
-                  <th className="px-3 py-2 text-right font-medium text-xs">Actions</th>
+                  <th className="px-3 py-2 text-right font-medium text-xs whitespace-nowrap">Actions</th>
                 )}
               </tr>
             </thead>
@@ -524,8 +524,8 @@ export function ProjectPositions({
                     </tr>
                     {sectionPositions.map((position) => (
                       <tr key={position.id} className="hover:bg-muted/30">
-                        <td className="px-3 py-2">{position.instrument?.name}</td>
-                        <td className="px-3 py-2 text-muted-foreground">
+                        <td className="px-3 py-2 whitespace-nowrap">{position.instrument?.name}</td>
+                        <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
                           {(chairCountByInstrument.get(position.instrument_id) || 0) > 1
                             ? (() => {
                                 const info = getPositionTitle(position.instrument?.name || '', position.chair_number, position.instrument?.section)
@@ -618,7 +618,7 @@ export function ProjectPositions({
                             )
                           })()}
                         </td>
-                        <td className="px-3 py-2 text-muted-foreground tabular-nums">
+                        <td className="px-3 py-2 text-muted-foreground tabular-nums whitespace-nowrap">
                           {(() => {
                             // Show pay from the relevant offer based on position status
                             if (position.status === 'confirmed') {
@@ -633,9 +633,9 @@ export function ProjectPositions({
                           })()}
                         </td>
                         {canManage && (
-                          <td className="px-3 py-2 text-right">
+                          <td className="px-3 py-2 text-right whitespace-nowrap">
                             {/* Desktop: inline buttons */}
-                            <div className="hidden md:flex items-center justify-end gap-1">
+                            <div className="hidden lg:flex items-center justify-end gap-1">
                               {position.status !== 'confirmed' && (
                                 <Button
                                   variant="ghost"
@@ -682,8 +682,8 @@ export function ProjectPositions({
                                 </Button>
                               )}
                             </div>
-                            {/* Mobile: dropdown menu */}
-                            <div className="md:hidden flex justify-end">
+                            {/* Mobile/tablet: dropdown menu */}
+                            <div className="lg:hidden flex justify-end">
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
