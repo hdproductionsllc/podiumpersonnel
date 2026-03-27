@@ -55,11 +55,7 @@ export function getVenueMapsUrl(service: {
     }
   }
 
-  // Fallback: search by venue text
-  const venueName = service.venue_details?.name || service.venue
-  if (venueName) {
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venueName)}`
-  }
-
+  // No reliable location data — don't generate a link from just a name,
+  // as it can resolve to the wrong location (e.g. wrong city)
   return null
 }

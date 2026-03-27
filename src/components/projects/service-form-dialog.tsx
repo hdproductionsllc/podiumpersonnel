@@ -472,28 +472,42 @@ export function ServiceFormDialog({
 
                         // Auto-create venue when a Google Place is selected
                         if (googlePlaceData && !venueId) {
-                          try {
-                            const supabase = createClient()
-                            const { data: newVenue } = await supabase
-                              .from('venues')
-                              .insert({
-                                organization_id: organizationId,
-                                name: googlePlaceData.name,
-                                address: googlePlaceData.address || null,
-                                city: googlePlaceData.city || null,
-                                state: googlePlaceData.state || null,
-                                zip: googlePlaceData.zip || null,
-                                google_place_id: googlePlaceData.placeId,
-                                google_maps_url: googlePlaceData.googleMapsUrl,
-                              })
-                              .select('id')
-                              .single()
+                          const supabase = createClient()
 
-                            if (newVenue) {
-                              form.setValue('venue_id', newVenue.id)
+                          // Check if a venue with this google_place_id already exists
+                          if (googlePlaceData.placeId) {
+                            const { data: existing } = await supabase
+                              .from('venues')
+                              .select('id')
+                              .eq('organization_id', organizationId)
+                              .eq('google_place_id', googlePlaceData.placeId)
+                              .maybeSingle()
+
+                            if (existing) {
+                              form.setValue('venue_id', existing.id)
+                              return
                             }
-                          } catch {
-                            // Venue creation failed — service still saves with text venue
+                          }
+
+                          const { data: newVenue, error: venueError } = await supabase
+                            .from('venues')
+                            .insert({
+                              organization_id: organizationId,
+                              name: googlePlaceData.name,
+                              address: googlePlaceData.address || null,
+                              city: googlePlaceData.city || null,
+                              state: googlePlaceData.state || null,
+                              zip: googlePlaceData.zip || null,
+                              google_place_id: googlePlaceData.placeId,
+                              google_maps_url: googlePlaceData.googleMapsUrl,
+                            })
+                            .select('id')
+                            .single()
+
+                          if (newVenue) {
+                            form.setValue('venue_id', newVenue.id)
+                          } else if (venueError) {
+                            console.error('Failed to auto-create venue:', venueError.message)
                           }
                         }
                       }}
