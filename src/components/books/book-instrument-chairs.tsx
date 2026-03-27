@@ -9,6 +9,7 @@ import type { BookEntryJoined, InstrumentOption, MusicianForDropdown } from './b
 interface BookInstrumentChairsProps {
   instrument: InstrumentOption
   entries: BookEntryJoined[]
+  ensembleSize: number
   musicians: MusicianForDropdown[]
   bookId: string
   canManage: boolean
@@ -18,6 +19,7 @@ interface BookInstrumentChairsProps {
 export function BookInstrumentChairs({
   instrument,
   entries,
+  ensembleSize,
   musicians,
   bookId,
   canManage,
@@ -188,7 +190,7 @@ export function BookInstrumentChairs({
       <div className="space-y-1">
         {entries.map((entry) => {
           const dropdownMusicians = getDropdownMusicians(entry.musician_id ?? undefined)
-          const position = getPositionTitle(instrument.name, entry.chair_number ?? 1, instrument.section, entries.length)
+          const position = getPositionTitle(instrument.name, entry.chair_number ?? 1, instrument.section, entries.length, ensembleSize)
           return (
             <div key={entry.id} className="flex items-center gap-3">
               <span className={`text-xs w-28 ${position.isLeadership ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
@@ -234,8 +236,8 @@ export function BookInstrumentChairs({
 
         {pendingChair !== null && (
           <div className="flex items-center gap-3">
-            <span className={`text-xs w-28 ${getPositionTitle(instrument.name, pendingChair, instrument.section, entries.length + 1).isLeadership ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
-              {getPositionTitle(instrument.name, pendingChair, instrument.section, entries.length + 1).title}
+            <span className={`text-xs w-28 ${getPositionTitle(instrument.name, pendingChair, instrument.section, entries.length + 1, ensembleSize + 1).isLeadership ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+              {getPositionTitle(instrument.name, pendingChair, instrument.section, entries.length + 1, ensembleSize + 1).title}
             </span>
             <select
               className="flex h-8 w-full max-w-xs rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"

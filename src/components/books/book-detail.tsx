@@ -157,6 +157,7 @@ export function BookDetail({
                 title={SECTION_LABELS[section]}
                 instruments={grouped[section]}
                 entries={book.book_entries}
+                ensembleSize={book.book_entries.length}
                 musicians={musicians}
                 bookId={book.id}
                 canManage={canManage}

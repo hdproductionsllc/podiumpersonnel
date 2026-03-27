@@ -197,14 +197,20 @@ export function VenueSearch({
         const streetNumber = get('street_number')?.long_name || ''
         const route = get('route')?.long_name || ''
 
+        const placeAddress = [streetNumber, route].filter(Boolean).join(' ')
+        const placeCity = get('locality')?.long_name || get('sublocality')?.long_name || ''
+        const placeState = get('administrative_area_level_1')?.short_name || ''
+        const placeZip = get('postal_code')?.long_name || ''
+        const queryParts = [placeName, placeAddress, placeCity, placeState, placeZip].filter(Boolean).join(', ')
+
         const placeData: GooglePlaceData = {
           placeId: prediction.place_id,
           name: placeName,
-          address: [streetNumber, route].filter(Boolean).join(' '),
-          city: get('locality')?.long_name || get('sublocality')?.long_name || '',
-          state: get('administrative_area_level_1')?.short_name || '',
-          zip: get('postal_code')?.long_name || '',
-          googleMapsUrl: `https://www.google.com/maps/place/?q=place_id:${prediction.place_id}`,
+          address: placeAddress,
+          city: placeCity,
+          state: placeState,
+          zip: placeZip,
+          googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(queryParts)}&query_place_id=${prediction.place_id}`,
         }
 
         onChange(placeName, null, null, prediction.place_id, placeData)

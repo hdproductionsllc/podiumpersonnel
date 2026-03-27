@@ -35,21 +35,29 @@ const WIND_BRASS_PATTERNS = /flute|piccolo|oboe|english\s*horn|clarinet|bassoon|
 const TIMPANI_PATTERNS = /^timpani/i
 const PERCUSSION_PATTERNS = /percussion|drums|drum\s*set|snare|bass\s*drum|cymbal|vibraphone|marimba|xylophone|glockenspiel|chimes/i
 
+// Max ensemble size to use chamber-style titles (e.g. "1st Violin" instead of "Concertmaster")
+const CHAMBER_MAX_SIZE = 8
+
 export function getPositionTitle(
   instrumentName: string,
   chairNumber: number,
   section?: string | null,
-  totalChairs?: number
+  totalChairs?: number,
+  ensembleSize?: number
 ): PositionInfo {
-  // For chamber ensembles (1 chair per instrument), skip orchestral titles
-  if (totalChairs !== undefined && totalChairs <= 1) {
+  const isChamber = ensembleSize !== undefined && ensembleSize <= CHAMBER_MAX_SIZE
+  const singleChair = totalChairs !== undefined && totalChairs <= 1
+
+  // For non-chamber contexts with only 1 chair per instrument, skip orchestral titles
+  if (singleChair && !isChamber) {
     return { title: `Chair ${chairNumber}`, shortTitle: `Ch ${chairNumber}`, isLeadership: false }
   }
 
-  const name = instrumentName.toLowerCase()
-
-  // Violin 1 - Concertmaster
+  // Violin 1 - Concertmaster (orchestra) or numbered violin (chamber)
   if (VIOLIN_1_PATTERNS.test(instrumentName)) {
+    if (isChamber) {
+      return { title: `${ordinal(chairNumber)} Violin`, shortTitle: `Vln ${chairNumber}`, isLeadership: chairNumber === 1 }
+    }
     switch (chairNumber) {
       case 1:
         return { title: 'Concertmaster', shortTitle: 'CM', isLeadership: true }
@@ -60,8 +68,11 @@ export function getPositionTitle(
     }
   }
 
-  // Violin 2 - Principal Second
+  // Violin 2 - Principal Second (orchestra) or numbered violin (chamber)
   if (VIOLIN_2_PATTERNS.test(instrumentName)) {
+    if (isChamber) {
+      return { title: `${ordinal(chairNumber)} Violin`, shortTitle: `Vln ${chairNumber}`, isLeadership: chairNumber === 1 }
+    }
     switch (chairNumber) {
       case 1:
         return { title: 'Principal 2nd Violin', shortTitle: 'Prin', isLeadership: true }
@@ -74,6 +85,12 @@ export function getPositionTitle(
 
   // Viola
   if (VIOLA_PATTERNS.test(instrumentName)) {
+    if (isChamber) {
+      if (singleChair) {
+        return { title: 'Viola', shortTitle: 'Vla', isLeadership: false }
+      }
+      return { title: `${ordinal(chairNumber)} Viola`, shortTitle: `Vla ${chairNumber}`, isLeadership: chairNumber === 1 }
+    }
     switch (chairNumber) {
       case 1:
         return { title: 'Principal Viola', shortTitle: 'Prin', isLeadership: true }
@@ -86,6 +103,12 @@ export function getPositionTitle(
 
   // Cello
   if (CELLO_PATTERNS.test(instrumentName)) {
+    if (isChamber) {
+      if (singleChair) {
+        return { title: 'Cello', shortTitle: 'Vcl', isLeadership: false }
+      }
+      return { title: `${ordinal(chairNumber)} Cello`, shortTitle: `Vcl ${chairNumber}`, isLeadership: chairNumber === 1 }
+    }
     switch (chairNumber) {
       case 1:
         return { title: 'Principal Cello', shortTitle: 'Prin', isLeadership: true }
@@ -98,6 +121,12 @@ export function getPositionTitle(
 
   // Double Bass
   if (BASS_PATTERNS.test(instrumentName)) {
+    if (isChamber) {
+      if (singleChair) {
+        return { title: 'Bass', shortTitle: 'Bs', isLeadership: false }
+      }
+      return { title: `${ordinal(chairNumber)} Bass`, shortTitle: `Bs ${chairNumber}`, isLeadership: chairNumber === 1 }
+    }
     switch (chairNumber) {
       case 1:
         return { title: 'Principal Bass', shortTitle: 'Prin', isLeadership: true }
@@ -180,9 +209,10 @@ export function formatChairPosition(
   instrumentName: string,
   chairNumber: number,
   section?: string | null,
-  showChairNumber: boolean = true
+  showChairNumber: boolean = true,
+  ensembleSize?: number
 ): string {
-  const position = getPositionTitle(instrumentName, chairNumber, section)
+  const position = getPositionTitle(instrumentName, chairNumber, section, undefined, ensembleSize)
 
   if (showChairNumber && !position.title.includes('Chair')) {
     return `${position.title} (Chair ${chairNumber})`

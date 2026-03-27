@@ -122,7 +122,8 @@ export async function POST() {
       const state = extractAddressComponent(components, 'administrative_area_level_1', true)
       const zip = extractAddressComponent(components, 'postal_code')
 
-      const mapsUrl = `https://www.google.com/maps/place/?q=place_id:${place.place_id}`
+      const queryParts = [placeData.name || venue.name, streetAddress, city, state, zip].filter(Boolean).join(', ')
+      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(queryParts)}&query_place_id=${place.place_id}`
 
       const { error: updateError } = await supabase
         .from('venues')

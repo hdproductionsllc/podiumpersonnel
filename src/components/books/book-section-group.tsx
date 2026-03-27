@@ -7,6 +7,7 @@ interface BookSectionGroupProps {
   title: string
   instruments: InstrumentOption[]
   entries: BookEntryJoined[]
+  ensembleSize: number
   musicians: MusicianForDropdown[]
   bookId: string
   canManage: boolean
@@ -17,6 +18,7 @@ export function BookSectionGroup({
   title,
   instruments,
   entries,
+  ensembleSize,
   musicians,
   bookId,
   canManage,
@@ -35,6 +37,7 @@ export function BookSectionGroup({
               key={instrument.id}
               instrument={instrument}
               entries={instrumentEntries}
+              ensembleSize={ensembleSize}
               musicians={musicians}
               bookId={bookId}
               canManage={canManage}

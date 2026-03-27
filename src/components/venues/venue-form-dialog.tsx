@@ -122,7 +122,8 @@ export function VenueFormDialog({
         setCity(get('locality')?.long_name || get('sublocality')?.long_name || '')
         setState(get('administrative_area_level_1')?.short_name || '')
         setZip(get('postal_code')?.long_name || '')
-        setGoogleMapsUrl(`https://www.google.com/maps/place/?q=place_id:${placeId}`)
+        const queryParts = [venueName, streetAddress, get('locality')?.long_name || get('sublocality')?.long_name || '', get('administrative_area_level_1')?.short_name || '', get('postal_code')?.long_name || ''].filter(Boolean).join(', ')
+        setGoogleMapsUrl(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(queryParts)}&query_place_id=${placeId}`)
       })
     }
   }

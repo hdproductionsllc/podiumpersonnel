@@ -528,7 +528,7 @@ export function ProjectPositions({
                         <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
                           {(chairCountByInstrument.get(position.instrument_id) || 0) > 1
                             ? (() => {
-                                const info = getPositionTitle(position.instrument?.name || '', position.chair_number, position.instrument?.section)
+                                const info = getPositionTitle(position.instrument?.name || '', position.chair_number, position.instrument?.section, undefined, positions.length)
                                 return (
                                   <span className={info.isLeadership ? 'font-medium text-foreground' : ''}>
                                     {info.title}
@@ -897,7 +897,7 @@ export function ProjectPositions({
                 <span>
                   {unassignPosition.instrument?.name}
                   {(chairCountByInstrument.get(unassignPosition.instrument_id) || 0) > 1
-                    ? `, ${getPositionTitle(unassignPosition.instrument?.name || '', unassignPosition.chair_number, unassignPosition.instrument?.section).title}`
+                    ? `, ${getPositionTitle(unassignPosition.instrument?.name || '', unassignPosition.chair_number, unassignPosition.instrument?.section, undefined, positions.length).title}`
                     : ''
                   }
                 </span>
@@ -948,7 +948,7 @@ export function ProjectPositions({
                   <span>
                     {declinePosition.instrument?.name}
                     {(chairCountByInstrument.get(declinePosition.instrument_id) || 0) > 1
-                      ? `, ${getPositionTitle(declinePosition.instrument?.name || '', declinePosition.chair_number, declinePosition.instrument?.section).title}`
+                      ? `, ${getPositionTitle(declinePosition.instrument?.name || '', declinePosition.chair_number, declinePosition.instrument?.section, undefined, positions.length).title}`
                       : ''
                     }
                   </span>
