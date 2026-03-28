@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { ProjectsClient, type ProjectWithServices } from '@/components/projects/projects-client'
 import type { BookForImport } from '@/components/projects/project-positions'
 import type { MusicianForOffer } from '@/components/projects/send-offer-dialog'
@@ -73,10 +73,13 @@ export default async function ProjectsPage() {
       }
     }
     if (venueIds.size > 0) {
-      const { data: venues } = await supabase
+      // Use service role to bypass RLS — we've already verified the user is authenticated
+      const serviceDb = createServiceClient()
+      const { data: venues } = await serviceDb
         .from('venues')
         .select('id, name, address, city, state, zip, google_maps_url')
         .in('id', [...venueIds])
+      console.log('[VENUE MAP]', venueIds.size, 'venue IDs,', venues?.length ?? 0, 'found, URLs:', venues?.map(v => v.google_maps_url?.substring(0, 50)))
       const venueMap = new Map((venues || []).map(v => [v.id, v]))
       for (const p of projects as any[]) {
         for (const s of p.services || []) {
