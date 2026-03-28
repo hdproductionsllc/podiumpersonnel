@@ -46,6 +46,8 @@ export type ProjectWithServices = Project & {
   project_positions: PositionJoined[]
 }
 
+export type VenueUrlMap = Record<string, { display: string; mapsUrl: string | null }>
+
 interface ProjectsClientProps {
   projects: ProjectWithServices[]
   books: BookForImport[]
@@ -56,6 +58,7 @@ interface ProjectsClientProps {
   userRole: string
   userId?: string
   dismissedTooltips?: string[]
+  venueUrlMap?: VenueUrlMap
 }
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
@@ -118,6 +121,7 @@ function ServicesList({
   projectId,
   canManage,
   timezone,
+  venueUrlMap,
   onAddService,
   onEditService,
   onDeleteService,
@@ -126,6 +130,7 @@ function ServicesList({
   projectId: string
   canManage: boolean
   timezone: string
+  venueUrlMap?: VenueUrlMap
   onAddService: (projectId: string) => void
   onEditService: (projectId: string, service: Service) => void
   onDeleteService: (service: Service) => void
@@ -180,12 +185,9 @@ function ServicesList({
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">
                     {(() => {
-                      const svc = service as any
-                      const vd = svc.venue_details
-                      const mapsUrl = vd?.google_maps_url || null
-                      const display = vd
-                        ? [vd.name, vd.address, vd.city, vd.state, vd.zip].filter(Boolean).join(', ')
-                        : service.venue
+                      const venueInfo = venueUrlMap?.[service.id]
+                      const display = venueInfo?.display || service.venue
+                      const mapsUrl = venueInfo?.mapsUrl || null
                       return display ? (
                         <AddressLink
                           address={display}
@@ -236,6 +238,7 @@ export function ProjectsClient({
   userRole,
   userId,
   dismissedTooltips = [],
+  venueUrlMap,
 }: ProjectsClientProps) {
   const router = useRouter()
   const plan = usePlan()
@@ -879,6 +882,7 @@ export function ProjectsClient({
                             projectId={project.id}
                             canManage={canManage}
                             timezone={timezone}
+                            venueUrlMap={venueUrlMap}
                             onAddService={handleAddService}
                             onEditService={handleEditService}
                             onDeleteService={handleDeleteService}

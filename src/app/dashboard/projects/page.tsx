@@ -61,25 +61,33 @@ export default async function ProjectsPage() {
     .order('start_date', { ascending: true, nullsFirst: false })
     .order('name', { ascending: true })
 
-  // Ensure venue_details are attached to services (the nested join may return null
-  // due to RLS or PostgREST limitations — fetch venues separately as a fallback)
+  // Build a flat map of service_id -> venue display info for the client.
+  // The nested Supabase join (services -> venues) doesn't reliably pass through
+  // the Next.js server/client boundary, so we compute everything server-side.
+  const venueUrlMap: Record<string, { display: string; mapsUrl: string | null }> = {}
   if (projects?.length) {
     const venueIds = new Set<string>()
     for (const p of projects as any[]) {
       for (const s of p.services || []) {
-        if (s.venue_id && !s.venue_details) venueIds.add(s.venue_id)
+        if (s.venue_id) venueIds.add(s.venue_id)
       }
     }
     if (venueIds.size > 0) {
       const { data: venues } = await supabase
         .from('venues')
-        .select('id, name, address, city, state, zip, google_maps_url, parking_info, directions')
+        .select('id, name, address, city, state, zip, google_maps_url')
         .in('id', [...venueIds])
       const venueMap = new Map((venues || []).map(v => [v.id, v]))
       for (const p of projects as any[]) {
         for (const s of p.services || []) {
-          if (s.venue_id && !s.venue_details) {
-            s.venue_details = venueMap.get(s.venue_id) || null
+          if (s.venue_id) {
+            const v = venueMap.get(s.venue_id)
+            if (v) {
+              venueUrlMap[s.id] = {
+                display: [v.name, v.address, v.city, v.state, v.zip].filter(Boolean).join(', '),
+                mapsUrl: v.google_maps_url || null,
+              }
+            }
           }
         }
       }
@@ -149,6 +157,7 @@ export default async function ProjectsPage() {
       userRole={membership!.role}
       userId={user!.id}
       dismissedTooltips={tutorialState?.dismissed_tooltips ?? []}
+      venueUrlMap={venueUrlMap}
     />
   )
 }
