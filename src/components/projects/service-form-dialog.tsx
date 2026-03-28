@@ -466,26 +466,25 @@ export function ServiceFormDialog({
                       value={field.value || ''}
                       venueId={form.watch('venue_id') ?? null}
                       organizationId={organizationId}
-                      onChange={async (venueName, venueId, _venueData, _placeId, googlePlaceData) => {
-                        console.log('[VenueSearch onChange]', { venueName, venueId, _placeId, hasGooglePlaceData: !!googlePlaceData, googlePlaceData })
+                      onChange={async (venueName, venueId, _venueData, placeId, googlePlaceData) => {
                         field.onChange(venueName)
                         form.setValue('venue_id', venueId)
 
                         // Auto-create venue when a Google Place is selected
-                        if (googlePlaceData && !venueId) {
+                        if (!venueId && (googlePlaceData || placeId)) {
                           try {
                             const res = await fetch('/api/venues', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({
                                 organization_id: organizationId,
-                                name: googlePlaceData.name,
-                                address: googlePlaceData.address || null,
-                                city: googlePlaceData.city || null,
-                                state: googlePlaceData.state || null,
-                                zip: googlePlaceData.zip || null,
-                                google_place_id: googlePlaceData.placeId,
-                                google_maps_url: googlePlaceData.googleMapsUrl,
+                                name: googlePlaceData?.name || venueName,
+                                address: googlePlaceData?.address || null,
+                                city: googlePlaceData?.city || null,
+                                state: googlePlaceData?.state || null,
+                                zip: googlePlaceData?.zip || null,
+                                google_place_id: googlePlaceData?.placeId || placeId,
+                                google_maps_url: googlePlaceData?.googleMapsUrl || null,
                               }),
                             })
                             const data = await res.json()
