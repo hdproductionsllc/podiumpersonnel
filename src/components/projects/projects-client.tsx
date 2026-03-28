@@ -188,6 +188,9 @@ function ServicesList({
                     ) : (
                       '—'
                     )}
+                    {(service as any).venue_details?.google_maps_url && (
+                      <span className="text-[10px] text-green-600 block">✓ linked</span>
+                    )}
                   </td>
                   {canManage && (
                     <td className="px-3 py-2 text-right">
