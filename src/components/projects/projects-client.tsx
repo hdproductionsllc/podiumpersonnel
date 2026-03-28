@@ -179,15 +179,21 @@ function ServicesList({
                     {service.end_time && ` – ${new Date(service.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: timezone })}`}
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">
-                    {(service.venue || (service as any).venue_details) ? (
-                      <AddressLink
-                        address={getVenueDisplay(service as any) || service.venue || ''}
-                        googleMapsUrl={getVenueMapsUrl(service as any)}
-                        className="text-sm"
-                      />
-                    ) : (
-                      '—'
-                    )}
+                    {(() => {
+                      const svc = service as any
+                      const vd = svc.venue_details
+                      const mapsUrl = vd?.google_maps_url || null
+                      const display = vd
+                        ? [vd.name, vd.address, vd.city, vd.state, vd.zip].filter(Boolean).join(', ')
+                        : service.venue
+                      return display ? (
+                        <AddressLink
+                          address={display}
+                          googleMapsUrl={mapsUrl}
+                          className="text-sm"
+                        />
+                      ) : '—'
+                    })()}
                   </td>
                   {canManage && (
                     <td className="px-3 py-2 text-right">
