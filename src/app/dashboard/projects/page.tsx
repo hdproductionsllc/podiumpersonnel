@@ -61,6 +61,17 @@ export default async function ProjectsPage() {
     .order('start_date', { ascending: true, nullsFirst: false })
     .order('name', { ascending: true })
 
+  // Debug: check if venue_details is coming through
+  if (projects?.length) {
+    for (const p of projects) {
+      for (const s of (p as any).services || []) {
+        if (s.venue_id) {
+          console.log('[VENUE DEBUG]', s.name, '| venue_id:', s.venue_id, '| venue_details:', JSON.stringify(s.venue_details))
+        }
+      }
+    }
+  }
+
   // Auto-complete active projects whose end_date has passed
   const today = new Date().toISOString().split('T')[0]
   if (projects?.length) {
