@@ -8,19 +8,12 @@ interface AddressLinkProps {
 }
 
 export function AddressLink({ address, googleMapsUrl, className }: AddressLinkProps) {
-  // Only link if we have a reliable Maps URL — don't generate one from just a name
-  if (!googleMapsUrl) {
-    return (
-      <span className={cn('inline-flex items-center gap-1', className)}>
-        <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-        {address}
-      </span>
-    )
-  }
+  // Use stored Maps URL if available, otherwise generate an address-based search
+  const href = googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
 
   return (
     <a
-      href={googleMapsUrl}
+      href={href}
       target="_blank"
       rel="noopener noreferrer"
       className={cn(

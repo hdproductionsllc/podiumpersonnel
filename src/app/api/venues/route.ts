@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 export async function POST(request: NextRequest) {
+  // Verify user is authenticated
   const supabase = await createClient()
-
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -29,9 +29,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Not authorized for this organization' }, { status: 403 })
   }
 
+  // Use service role client to bypass RLS (we've already verified authorization above)
+  const serviceClient = createServiceClient()
+
   // Check for existing venue with same google_place_id
   if (google_place_id) {
-    const { data: existing } = await supabase
+    const { data: existing } = await serviceClient
       .from('venues')
       .select('id')
       .eq('organization_id', organization_id)
@@ -43,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const { data: venue, error } = await supabase
+  const { data: venue, error } = await serviceClient
     .from('venues')
     .insert({
       organization_id,
