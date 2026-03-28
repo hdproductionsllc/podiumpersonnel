@@ -177,6 +177,7 @@ export function VenueSearch({
 
   function handlePredictionSelect(prediction: google.maps.places.AutocompletePrediction) {
     const placeName = prediction.structured_formatting.main_text
+    console.log('[VenueSearch] Prediction selected:', { placeName, placeId: prediction.place_id, isLoaded })
     setInputValue(placeName)
     setIsOpen(false)
     setPredictions([])
@@ -186,6 +187,7 @@ export function VenueSearch({
     if (isLoaded && prediction.place_id) {
       const geocoder = new google.maps.Geocoder()
       geocoder.geocode({ placeId: prediction.place_id }, (results, status) => {
+        console.log('[VenueSearch] Geocode result:', { status, hasResults: !!results?.length })
         if (status !== 'OK' || !results || results.length === 0) {
           onChange(placeName, null, null, prediction.place_id, null)
           return

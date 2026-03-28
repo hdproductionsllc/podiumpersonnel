@@ -467,6 +467,7 @@ export function ServiceFormDialog({
                       venueId={form.watch('venue_id') ?? null}
                       organizationId={organizationId}
                       onChange={async (venueName, venueId, _venueData, _placeId, googlePlaceData) => {
+                        console.log('[VenueSearch onChange]', { venueName, venueId, _placeId, hasGooglePlaceData: !!googlePlaceData, googlePlaceData })
                         field.onChange(venueName)
                         form.setValue('venue_id', venueId)
 
