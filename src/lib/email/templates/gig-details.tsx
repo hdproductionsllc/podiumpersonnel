@@ -107,12 +107,14 @@ export function GigDetailsEmail({
                   </Text>
                   {service.venue && (
                     <Text style={serviceVenue}>
-                      <a
-                        href={service.venueUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue)}`}
-                        style={{ color: '#1E293B', textDecoration: 'underline' }}
-                      >
-                        {service.venue}
-                      </a>
+                      {service.venueUrl ? (
+                        <a
+                          href={service.venueUrl}
+                          style={{ color: '#1E293B', textDecoration: 'underline' }}
+                        >
+                          {service.venue}
+                        </a>
+                      ) : service.venue}
                     </Text>
                   )}
                   {service.parkingInfo && (

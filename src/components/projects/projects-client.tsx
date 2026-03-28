@@ -26,6 +26,7 @@ import type { MusicianForOffer } from './send-offer-dialog'
 import type { Project, Service } from '@/types'
 import { toast } from 'sonner'
 import { AddressLink } from '@/components/ui/address-link'
+import { getVenueMapsUrl, getVenueDisplay } from '@/lib/venue-helpers'
 import { ContextualTooltip } from '@/components/onboarding/contextual-tooltip'
 import { TOOLTIP_DEFINITIONS } from '@/lib/tooltips'
 import {
@@ -178,8 +179,12 @@ function ServicesList({
                     {service.end_time && ` – ${new Date(service.end_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: timezone })}`}
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">
-                    {service.venue ? (
-                      <AddressLink address={service.venue} className="text-sm" />
+                    {(service.venue || (service as any).venue_details) ? (
+                      <AddressLink
+                        address={getVenueDisplay(service as any) || service.venue || ''}
+                        googleMapsUrl={getVenueMapsUrl(service as any)}
+                        className="text-sm"
+                      />
                     ) : (
                       '—'
                     )}

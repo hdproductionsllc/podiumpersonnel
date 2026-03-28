@@ -231,21 +231,24 @@ export function GigPageClient({
                               <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
                             </svg>
-                            <a
-                              href={
-                                service.venue_details?.google_maps_url ||
-                                (service.venue_details
-                                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([service.venue_details.name, service.venue_details.address, service.venue_details.city, service.venue_details.state].filter(Boolean).join(', '))}`
-                                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue)}`)
-                              }
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-primary underline hover:text-primary/80"
-                            >
-                              {service.venue_details
+                            {(() => {
+                              const mapsUrl = service.venue_details?.google_maps_url || null
+                              const display = service.venue_details
                                 ? [service.venue_details.name, service.venue_details.address, service.venue_details.city, service.venue_details.state].filter(Boolean).join(', ')
-                                : service.venue}
-                            </a>
+                                : service.venue
+                              return mapsUrl ? (
+                                <a
+                                  href={mapsUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary underline hover:text-primary/80"
+                                >
+                                  {display}
+                                </a>
+                              ) : (
+                                <span>{display}</span>
+                              )
+                            })()}
                           </div>
                         )}
                       </div>

@@ -39,7 +39,7 @@ export default async function ProjectsPage() {
     .from('projects')
     .select(`
       *,
-      services(*, venue_details:venues(name, address, city, state, zip, parking_info, directions)),
+      services(*, venue_details:venues(name, address, city, state, zip, google_maps_url, parking_info, directions)),
       gig_detail_sends(id, sent_at, musician_count, gig_detail_confirmations(id, musician_id, confirmed_at)),
       project_files(id, file_name, file_size, scope, uploaded_at, project_file_instruments(instrument_id, instrument:instruments(id, name))),
       music_sends(id, sent_at, musician_count, music_confirmations(id, musician_id, confirmed_at)),
