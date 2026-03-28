@@ -61,12 +61,26 @@ export default async function ProjectsPage() {
     .order('start_date', { ascending: true, nullsFirst: false })
     .order('name', { ascending: true })
 
-  // Debug: check if venue_details is coming through
+  // Ensure venue_details are attached to services (the nested join may return null
+  // due to RLS or PostgREST limitations — fetch venues separately as a fallback)
   if (projects?.length) {
-    for (const p of projects) {
-      for (const s of (p as any).services || []) {
-        if (s.venue_id) {
-          console.log('[VENUE DEBUG]', s.name, '| venue_id:', s.venue_id, '| venue_details:', JSON.stringify(s.venue_details))
+    const venueIds = new Set<string>()
+    for (const p of projects as any[]) {
+      for (const s of p.services || []) {
+        if (s.venue_id && !s.venue_details) venueIds.add(s.venue_id)
+      }
+    }
+    if (venueIds.size > 0) {
+      const { data: venues } = await supabase
+        .from('venues')
+        .select('id, name, address, city, state, zip, google_maps_url, parking_info, directions')
+        .in('id', [...venueIds])
+      const venueMap = new Map((venues || []).map(v => [v.id, v]))
+      for (const p of projects as any[]) {
+        for (const s of p.services || []) {
+          if (s.venue_id && !s.venue_details) {
+            s.venue_details = venueMap.get(s.venue_id) || null
+          }
         }
       }
     }
