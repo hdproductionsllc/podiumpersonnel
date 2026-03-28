@@ -79,7 +79,6 @@ export default async function ProjectsPage() {
         .from('venues')
         .select('id, name, address, city, state, zip, google_maps_url')
         .in('id', [...venueIds])
-      console.log('[VENUE MAP]', venueIds.size, 'venue IDs,', venues?.length ?? 0, 'found, URLs:', venues?.map(v => v.google_maps_url?.substring(0, 50)))
       const venueMap = new Map((venues || []).map(v => [v.id, v]))
       for (const p of projects as any[]) {
         for (const s of p.services || []) {
