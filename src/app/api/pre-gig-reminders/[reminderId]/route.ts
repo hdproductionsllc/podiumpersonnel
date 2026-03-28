@@ -64,7 +64,10 @@ export async function GET(
           end_time,
           venue,
           venue_id,
-          venue_details:venues(name, address, city, state, zip, parking_info, directions)
+          venue_details:venues!services_venue_id_fkey(name, address, city, state, zip, parking_info, directions),
+          venue_2,
+          venue_id_2,
+          venue_2_details:venues!services_venue_id_2_fkey(name, address, city, state, zip, parking_info, directions)
         ),
         project_positions(
           id,
@@ -117,6 +120,7 @@ export async function GET(
             })
           : null,
         venue: getVenueDisplay(service),
+        venue2: service.venue_2_details || service.venue_2 ? getVenueDisplay({ venue: service.venue_2, venue_details: service.venue_2_details }) : null,
       }))
 
     // Build roster for preview

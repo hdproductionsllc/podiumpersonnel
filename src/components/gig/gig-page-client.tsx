@@ -13,9 +13,18 @@ interface Service {
   start_time: string
   end_time: string | null
   venue: string | null
+  venue_2: string | null
   base_pay: number | null
   leader_fee: number | null
   venue_details?: {
+    name: string
+    address?: string | null
+    city?: string | null
+    state?: string | null
+    zip?: string | null
+    google_maps_url?: string | null
+  } | null
+  venue_2_details?: {
     name: string
     address?: string | null
     city?: string | null
@@ -239,6 +248,33 @@ export function GigPageClient({
                                 || (service.venue_details
                                   ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(display)}`
                                   : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue)}`)
+                              return (
+                                <a
+                                  href={mapsUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary underline hover:text-primary/80"
+                                >
+                                  {display}
+                                </a>
+                              )
+                            })()}
+                          </div>
+                        )}
+                        {(service.venue_2 || service.venue_2_details) && (
+                          <div className="text-muted-foreground mt-1 flex items-start gap-1">
+                            <svg className="h-3 w-3 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                            </svg>
+                            {(() => {
+                              const display = service.venue_2_details
+                                ? [service.venue_2_details.name, service.venue_2_details.address, service.venue_2_details.city, service.venue_2_details.state].filter(Boolean).join(', ')
+                                : service.venue_2!
+                              const mapsUrl = service.venue_2_details?.google_maps_url
+                                || (service.venue_2_details
+                                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(display)}`
+                                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue_2!)}`)
                               return (
                                 <a
                                   href={mapsUrl}

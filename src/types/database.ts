@@ -426,6 +426,8 @@ export type Database = {
           service_type: string
           venue: string | null
           venue_id: string | null
+          venue_2: string | null
+          venue_id_2: string | null
           call_time: string | null
           start_time: string
           end_time: string | null
@@ -442,6 +444,8 @@ export type Database = {
           service_type: string
           venue?: string | null
           venue_id?: string | null
+          venue_2?: string | null
+          venue_id_2?: string | null
           call_time?: string | null
           start_time: string
           end_time?: string | null
@@ -458,6 +462,8 @@ export type Database = {
           service_type?: string
           venue?: string | null
           venue_id?: string | null
+          venue_2?: string | null
+          venue_id_2?: string | null
           call_time?: string | null
           start_time?: string
           end_time?: string | null

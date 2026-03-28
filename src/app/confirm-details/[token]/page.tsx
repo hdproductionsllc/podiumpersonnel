@@ -53,7 +53,7 @@ export default async function ConfirmDetailsPage({ params }: ConfirmDetailsPageP
       start_time,
       venue,
       venue_id,
-      venue_details:venues(name, address, city, state, zip)
+      venue_details:venues!services_venue_id_fkey(name, address, city, state, zip)
     `)
     .eq('project_id', project?.id)
     .order('start_time', { ascending: true })

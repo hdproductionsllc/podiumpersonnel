@@ -130,6 +130,16 @@ export const serviceSchema = z.object({
     .uuid()
     .optional()
     .nullable(),
+  venue_2: z
+    .string()
+    .max(255, 'Venue must be less than 255 characters')
+    .optional()
+    .or(z.literal('')),
+  venue_id_2: z
+    .string()
+    .uuid()
+    .optional()
+    .nullable(),
   call_time: z
     .string()
     .optional()

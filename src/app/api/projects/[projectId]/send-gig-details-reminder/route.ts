@@ -90,7 +90,10 @@ export async function POST(
           start_time,
           venue,
           venue_id,
-          venue_details:venues(name, address, city, state, zip, google_maps_url)
+          venue_details:venues!services_venue_id_fkey(name, address, city, state, zip, google_maps_url),
+          venue_2,
+          venue_id_2,
+          venue_2_details:venues!services_venue_id_2_fkey(name, address, city, state, zip, google_maps_url)
         )
       `)
       .eq('id', projectId)
@@ -117,6 +120,8 @@ export async function POST(
         }),
         venue: getVenueName(service),
         venueUrl: getVenueMapsUrl(service),
+        venue2: service.venue_2_details || service.venue_2 ? getVenueName({ venue: service.venue_2, venue_details: service.venue_2_details }) : null,
+        venue2Url: service.venue_2_details || service.venue_2 ? getVenueMapsUrl({ venue: service.venue_2, venue_details: service.venue_2_details }) : null,
       }))
 
     const originalSentDate = new Date(sendRecord.sent_at).toLocaleDateString('en-US', {

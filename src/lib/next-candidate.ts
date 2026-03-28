@@ -33,7 +33,7 @@ export async function getNextCandidates(
         services(
           id,
           venue_id,
-          venue:venues(zip)
+          venue:venues!services_venue_id_fkey(zip)
         )
       )
     `)

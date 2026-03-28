@@ -83,6 +83,8 @@ interface SendContractOfferParams {
     endTime?: string | null
     venue: string | null
     venueUrl?: string | null
+    venue2?: string | null
+    venue2Url?: string | null
   }[]
   responseUrl: string
   expiresAt: string | null
@@ -200,6 +202,8 @@ interface SendOfferAcceptedParams {
     time: string
     venue: string | null
     venueUrl?: string | null
+    venue2?: string | null
+    venue2Url?: string | null
   }[]
   calendarUrl?: string
   googleCalendarUrl?: string
@@ -348,6 +352,8 @@ interface SendAdminOfferSentParams {
     endTime?: string | null
     venue: string | null
     venueUrl?: string | null
+    venue2?: string | null
+    venue2Url?: string | null
   }[]
   dashboardUrl: string
   payAmount?: number | null
@@ -939,8 +945,12 @@ interface SendGigDetailsEmailParams {
     endTime?: string | null
     venue: string | null
     venueUrl?: string | null
+    venue2?: string | null
+    venue2Url?: string | null
     parkingInfo?: string | null
     directions?: string | null
+    parkingInfo2?: string | null
+    directions2?: string | null
   }[]
   roster: {
     name: string
@@ -996,6 +1006,8 @@ interface SendGigDetailsReminderEmailParams {
     date: string
     venue: string | null
     venueUrl?: string | null
+    venue2?: string | null
+    venue2Url?: string | null
   }[]
   confirmUrl: string
   originalSentDate: string

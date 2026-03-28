@@ -23,6 +23,7 @@ interface OfferAcceptedEmailProps {
     date: string
     time: string
     venue: string | null
+    venue2?: string | null
   }[]
   calendarUrl?: string
   googleCalendarUrl?: string
@@ -104,6 +105,9 @@ export function OfferAcceptedEmail({
                   </Text>
                   {service.venue && (
                     <Text style={serviceVenue}>📍 {service.venue}</Text>
+                  )}
+                  {service.venue2 && (
+                    <Text style={serviceVenue}>📍 {service.venue2}</Text>
                   )}
                 </Section>
               ))}

@@ -27,6 +27,8 @@ interface ContractOfferEmailProps {
     endTime?: string | null
     venue: string | null
     venueUrl?: string | null
+    venue2?: string | null
+    venue2Url?: string | null
   }[]
   responseUrl: string
   expiresAt: string | null
@@ -136,6 +138,13 @@ export function ContractOfferEmail({
                     <Text style={serviceVenue}>
                       <a href={service.venueUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue)}`} style={{ color: '#1E293B', textDecoration: 'underline' }}>
                         {service.venue}
+                      </a>
+                    </Text>
+                  )}
+                  {service.venue2 && (
+                    <Text style={serviceVenue}>
+                      <a href={service.venue2Url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue2)}`} style={{ color: '#1E293B', textDecoration: 'underline' }}>
+                        {service.venue2}
                       </a>
                     </Text>
                   )}

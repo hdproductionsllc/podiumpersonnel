@@ -76,7 +76,7 @@ export default async function GigPage({ params }: GigPageProps) {
   if (position?.project?.id) {
     const { data: serviceData } = await supabase
       .from('services')
-      .select('id, name, service_type, call_time, start_time, end_time, venue, base_pay, leader_fee, venue_details:venues(name, address, city, state, zip, google_maps_url)')
+      .select('id, name, service_type, call_time, start_time, end_time, venue, venue_2, venue_id_2, base_pay, leader_fee, venue_details:venues!venue_id(name, address, city, state, zip, google_maps_url), venue_2_details:venues!venue_id_2(name, address, city, state, zip, google_maps_url)')
       .eq('project_id', position.project.id)
       .order('start_time', { ascending: true })
 

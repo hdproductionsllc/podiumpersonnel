@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
         start_time,
         venue,
         venue_id,
-        venue_details:venues(name)
+        venue_details:venues!services_venue_id_fkey(name)
       ),
       project_positions(
         id,

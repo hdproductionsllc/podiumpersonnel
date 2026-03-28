@@ -90,7 +90,7 @@ export default async function MusicianOfferDetailPage({ params, searchParams }: 
         venue,
         base_pay,
         leader_fee,
-        venue_info:venues(id, name, address, city, state, google_maps_url)
+        venue_info:venues!services_venue_id_fkey(id, name, address, city, state, google_maps_url)
       `)
       .eq('project_id', project.id)
       .order('start_time', { ascending: true })

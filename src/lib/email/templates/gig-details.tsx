@@ -33,8 +33,12 @@ interface GigDetailsEmailProps {
     endTime?: string | null
     venue: string | null
     venueUrl?: string | null
+    venue2?: string | null
+    venue2Url?: string | null
     parkingInfo?: string | null
     directions?: string | null
+    parkingInfo2?: string | null
+    directions2?: string | null
   }[]
   roster: RosterMember[]
   confirmUrl: string
@@ -123,6 +127,26 @@ export function GigDetailsEmail({
                   {service.directions && (
                     <Text style={serviceDetail}>
                       <strong>Access:</strong> {service.directions}
+                    </Text>
+                  )}
+                  {service.venue2 && (
+                    <Text style={serviceVenue}>
+                      <a
+                        href={service.venue2Url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue2)}`}
+                        style={{ color: '#1E293B', textDecoration: 'underline' }}
+                      >
+                        {service.venue2}
+                      </a>
+                    </Text>
+                  )}
+                  {service.parkingInfo2 && (
+                    <Text style={serviceDetail}>
+                      <strong>Parking:</strong> {service.parkingInfo2}
+                    </Text>
+                  )}
+                  {service.directions2 && (
+                    <Text style={serviceDetail}>
+                      <strong>Access:</strong> {service.directions2}
                     </Text>
                   )}
                 </Section>

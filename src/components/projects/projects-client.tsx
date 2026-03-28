@@ -46,7 +46,7 @@ export type ProjectWithServices = Project & {
   project_positions: PositionJoined[]
 }
 
-export type VenueUrlMap = Record<string, { display: string; mapsUrl: string | null }>
+export type VenueUrlMap = Record<string, { display: string; mapsUrl: string | null; display2?: string; mapsUrl2?: string | null }>
 
 interface ProjectsClientProps {
   projects: ProjectWithServices[]
@@ -188,13 +188,23 @@ function ServicesList({
                       const venueInfo = venueUrlMap?.[service.id]
                       const display = venueInfo?.display || service.venue
                       const mapsUrl = venueInfo?.mapsUrl || null
-                      return display ? (
-                        <AddressLink
-                          address={display}
-                          googleMapsUrl={mapsUrl}
-                          className="text-sm"
-                        />
-                      ) : '—'
+                      if (!display) return '—'
+                      return (
+                        <div className="space-y-0.5">
+                          <AddressLink
+                            address={display}
+                            googleMapsUrl={mapsUrl}
+                            className="text-sm"
+                          />
+                          {venueInfo?.display2 && (
+                            <AddressLink
+                              address={venueInfo.display2}
+                              googleMapsUrl={venueInfo.mapsUrl2}
+                              className="text-sm"
+                            />
+                          )}
+                        </div>
+                      )
                     })()}
                   </td>
                   {canManage && (

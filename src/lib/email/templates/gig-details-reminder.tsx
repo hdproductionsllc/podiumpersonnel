@@ -20,6 +20,7 @@ interface GigDetailsReminderEmailProps {
     name: string
     date: string
     venue: string | null
+    venue2?: string | null
   }[]
   confirmUrl: string
   originalSentDate: string
@@ -69,7 +70,7 @@ export function GigDetailsReminderEmail({
 
             {services.map((service, index) => (
               <Text key={index} style={detailsItem}>
-                {service.name} — {service.date}{service.venue ? ` at ${service.venue}` : ''}
+                {service.name} — {service.date}{service.venue ? ` at ${service.venue}` : ''}{service.venue2 ? ` & ${service.venue2}` : ''}
               </Text>
             ))}
 

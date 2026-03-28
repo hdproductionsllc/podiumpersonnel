@@ -76,8 +76,16 @@ interface OfferDetailProps {
     start_time: string
     end_time: string | null
     venue: string | null
+    venue_2: string | null
     base_pay: number | null
     venue_info?: {
+      name: string
+      address: string | null
+      city: string | null
+      state: string | null
+      google_maps_url: string | null
+    } | null
+    venue_2_info?: {
       name: string
       address: string | null
       city: string | null
@@ -311,6 +319,38 @@ export function OfferDetail({ offer, services, totalPay, totalChairs, instrument
                         </div>
                       </div>
                     )}
+                    {(() => {
+                      const venue2Name = service.venue_2_info?.name || service.venue_2
+                      const venue2Address = service.venue_2_info
+                        ? [service.venue_2_info.address, service.venue_2_info.city, service.venue_2_info.state]
+                            .filter(Boolean)
+                            .join(', ')
+                        : null
+                      const maps2Url = service.venue_2_info?.google_maps_url
+                      if (!venue2Name) return null
+                      return (
+                        <div className="flex items-start gap-2">
+                          <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
+                          <div>
+                            {maps2Url ? (
+                              <a
+                                href={maps2Url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline"
+                              >
+                                {venue2Name}
+                              </a>
+                            ) : (
+                              <span>{venue2Name}</span>
+                            )}
+                            {venue2Address && (
+                              <p className="text-xs">{venue2Address}</p>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
               </div>

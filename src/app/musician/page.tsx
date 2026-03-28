@@ -103,8 +103,8 @@ async function DashboardContent({ impersonateId }: { impersonateId?: string }) {
       const { data } = await supabase
         .from('services')
         .select(`
-          id, name, service_type, start_time, end_time, venue, base_pay, leader_fee, project_id,
-          venue_info:venues(name)
+          id, name, service_type, start_time, end_time, venue, venue_2, base_pay, leader_fee, project_id,
+          venue_info:venues!services_venue_id_fkey(name)
         `)
         .in('project_id', offerProjectIds)
         .order('start_time', { ascending: true })
@@ -162,8 +162,8 @@ async function DashboardContent({ impersonateId }: { impersonateId?: string }) {
         supabase
           .from('services')
           .select(`
-            id, name, service_type, start_time, end_time, venue, project_id,
-            venue_info:venues(id, name, address, city, state, google_maps_url)
+            id, name, service_type, start_time, end_time, venue, venue_2, project_id,
+            venue_info:venues!services_venue_id_fkey(id, name, address, city, state, google_maps_url)
           `)
           .in('project_id', projectIds)
           .order('start_time', { ascending: true }),

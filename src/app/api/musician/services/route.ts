@@ -76,10 +76,11 @@ export async function GET(request: Request) {
       start_time,
       end_time,
       venue,
+      venue_2,
       venue_id,
       base_pay,
       project_id,
-      venue_info:venues(id, name, address, city, state, google_maps_url)
+      venue_info:venues!services_venue_id_fkey(id, name, address, city, state, google_maps_url)
     `)
     .in('project_id', projectIds)
     .order('start_time', { ascending: true })

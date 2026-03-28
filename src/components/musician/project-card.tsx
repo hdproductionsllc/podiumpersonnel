@@ -29,7 +29,15 @@ export interface ProjectService {
   start_time: string
   end_time: string | null
   venue: string | null
+  venue_2: string | null
   venue_info?: {
+    name: string
+    address: string | null
+    city: string | null
+    state: string | null
+    google_maps_url: string | null
+  } | null
+  venue_2_info?: {
     name: string
     address: string | null
     city: string | null
@@ -213,6 +221,32 @@ export function ProjectCard({ project, impersonateId }: ProjectCardProps) {
                       )}
                     </span>
                   )}
+                  {(() => {
+                    const venue2Name = service.venue_2_info?.name || service.venue_2
+                    const maps2Url = service.venue_2_info?.google_maps_url
+                    if (!venue2Name) return null
+                    return (
+                      <span className="text-xs text-muted-foreground truncate ml-auto">
+                        {maps2Url ? (
+                          <a
+                            href={maps2Url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-primary hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MapPin className="h-3 w-3" />
+                            {venue2Name}
+                          </a>
+                        ) : (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {venue2Name}
+                          </span>
+                        )}
+                      </span>
+                    )
+                  })()}
                 </div>
               )
             })}

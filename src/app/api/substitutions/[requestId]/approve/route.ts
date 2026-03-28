@@ -34,7 +34,7 @@ export async function POST(
           name,
           organization_id,
           organization:organizations(id, name, timezone, email_logo_url, email_brand_color, email_footer_text),
-          services(id, name, service_type, start_time, end_time, venue, venue_id, venue_details:venues(name, address, city, state, zip, google_maps_url))
+          services(id, name, service_type, start_time, end_time, venue, venue_id, venue_details:venues!services_venue_id_fkey(name, address, city, state, zip, google_maps_url), venue_2, venue_id_2, venue_2_details:venues!services_venue_id_2_fkey(name, address, city, state, zip, google_maps_url))
         )
       )
     `)
@@ -215,6 +215,8 @@ export async function POST(
       }),
       venue: getVenueName(service),
       venueUrl: getVenueMapsUrl(service),
+      venue2: service.venue_2_details || service.venue_2 ? getVenueName({ venue: service.venue_2, venue_details: service.venue_2_details }) : null,
+      venue2Url: service.venue_2_details || service.venue_2 ? getVenueMapsUrl({ venue: service.venue_2, venue_details: service.venue_2_details }) : null,
     }))
 
   const baseUrl = getAppUrl()

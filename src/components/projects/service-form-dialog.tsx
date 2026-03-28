@@ -112,6 +112,7 @@ export function ServiceFormDialog({
   const [callTime, setCallTime] = useState('')
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
+  const [showVenue2, setShowVenue2] = useState(false)
 
   const form = useForm<ServiceInput>({
     resolver: zodResolver(serviceSchema),
@@ -120,6 +121,8 @@ export function ServiceFormDialog({
       service_type: 'rehearsal',
       venue: '',
       venue_id: null,
+      venue_2: '',
+      venue_id_2: null,
       call_time: '',
       start_time: '',
       end_time: '',
@@ -146,6 +149,8 @@ export function ServiceFormDialog({
           service_type: service.service_type as ServiceInput['service_type'],
           venue: service.venue || '',
           venue_id: service.venue_id || null,
+          venue_2: service.venue_2 || '',
+          venue_id_2: service.venue_id_2 || null,
           call_time: ctLocal,
           start_time: stLocal,
           end_time: etLocal,
@@ -183,6 +188,8 @@ export function ServiceFormDialog({
           service_type: serviceType,
           venue: '',
           venue_id: null,
+          venue_2: '',
+          venue_id_2: null,
           call_time: ctFull,
           start_time: stFull,
           end_time: etFull,
@@ -191,6 +198,7 @@ export function ServiceFormDialog({
           leader_fee: 50,
         })
       }
+      setShowVenue2(!!(service?.venue_2 || service?.venue_id_2))
       setError(null)
       setDateWarning(null)
     }
@@ -294,6 +302,8 @@ export function ServiceFormDialog({
           service_type: data.service_type,
           venue: data.venue || null,
           venue_id: data.venue_id || null,
+          venue_2: data.venue_2 || null,
+          venue_id_2: data.venue_id_2 || null,
           call_time: finalCallTime ? datetimeLocalToISO(finalCallTime, timezone) : null,
           start_time: datetimeLocalToISO(finalStartTime, timezone),
           end_time: finalEndTime ? datetimeLocalToISO(finalEndTime, timezone) : null,
@@ -323,6 +333,8 @@ export function ServiceFormDialog({
           service_type: data.service_type,
           venue: data.venue || null,
           venue_id: data.venue_id || null,
+          venue_2: data.venue_2 || null,
+          venue_id_2: data.venue_id_2 || null,
           call_time: finalCallTime ? datetimeLocalToISO(finalCallTime, timezone) : null,
           start_time: datetimeLocalToISO(finalStartTime, timezone),
           end_time: finalEndTime ? datetimeLocalToISO(finalEndTime, timezone) : null,
@@ -503,6 +515,77 @@ export function ServiceFormDialog({
                 </FormItem>
               )}
             />
+
+            {!showVenue2 ? (
+              <button
+                type="button"
+                className="text-xs text-primary hover:underline -mt-1"
+                onClick={() => setShowVenue2(true)}
+              >
+                + Add second location
+              </button>
+            ) : (
+              <FormField
+                control={form.control}
+                name="venue_2"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center justify-between">
+                      <FormLabel>Second Location</FormLabel>
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-destructive"
+                        onClick={() => {
+                          field.onChange('')
+                          form.setValue('venue_id_2', null)
+                          setShowVenue2(false)
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <FormControl>
+                      <VenueSearch
+                        value={field.value || ''}
+                        venueId={form.watch('venue_id_2') ?? null}
+                        organizationId={organizationId}
+                        onChange={async (venueName, venueId, _venueData, placeId, googlePlaceData) => {
+                          field.onChange(venueName)
+                          form.setValue('venue_id_2', venueId)
+
+                          if (!venueId && (googlePlaceData || placeId)) {
+                            try {
+                              const res = await fetch('/api/venues', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  organization_id: organizationId,
+                                  name: googlePlaceData?.name || venueName,
+                                  address: googlePlaceData?.address || null,
+                                  city: googlePlaceData?.city || null,
+                                  state: googlePlaceData?.state || null,
+                                  zip: googlePlaceData?.zip || null,
+                                  google_place_id: googlePlaceData?.placeId || placeId,
+                                  google_maps_url: googlePlaceData?.googleMapsUrl || null,
+                                }),
+                              })
+                              const data = await res.json()
+                              if (data.id) {
+                                form.setValue('venue_id_2', data.id)
+                              }
+                            } catch (err) {
+                              console.error('Failed to auto-create venue:', err)
+                            }
+                          }
+                        }}
+                        placeholder="e.g. reception venue..."
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}
