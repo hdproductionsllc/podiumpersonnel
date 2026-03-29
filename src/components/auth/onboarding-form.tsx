@@ -210,6 +210,20 @@ export function OnboardingForm() {
             </div>
           </form>
         </Form>
+        <div className="mt-4 text-center text-sm text-muted-foreground">
+          Already have an account?{' '}
+          <button
+            type="button"
+            className="text-primary underline-offset-4 hover:underline"
+            onClick={async () => {
+              const supabase = createClient()
+              await supabase.auth.signOut()
+              router.push('/login')
+            }}
+          >
+            Sign in
+          </button>
+        </div>
       </CardContent>
     </Card>
   )
