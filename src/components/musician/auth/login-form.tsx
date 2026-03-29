@@ -75,6 +75,7 @@ export function MusicianLoginForm() {
       provider: 'google',
       options: {
         redirectTo: redirectUrl,
+        queryParams: { prompt: 'select_account' },
       },
     })
   }
