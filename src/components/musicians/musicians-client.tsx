@@ -143,7 +143,7 @@ export function MusiciansClient({
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
 
   // Sort state
-  type SortColumn = 'name' | 'email' | 'phone' | 'location' | 'tags' | 'status' | 'call_order' | 'home_region'
+  type SortColumn = 'name' | 'email' | 'phone' | 'tags' | 'status' | 'call_order' | 'home_region'
   const [sortColumn, setSortColumn] = useState<SortColumn>('call_order')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
@@ -268,14 +268,6 @@ export function MusiciansClient({
           if (!bPhone) return -1
           return aPhone.localeCompare(bPhone) * dir
         }
-        case 'location': {
-          const aLoc = [a.city, a.state].filter(Boolean).join(', ').toLowerCase()
-          const bLoc = [b.city, b.state].filter(Boolean).join(', ').toLowerCase()
-          if (!aLoc && !bLoc) return 0
-          if (!aLoc) return 1
-          if (!bLoc) return -1
-          return aLoc.localeCompare(bLoc) * dir
-        }
         case 'tags': {
           const aTags = (a.tags || []).sort().join(', ').toLowerCase()
           const bTags = (b.tags || []).sort().join(', ').toLowerCase()
@@ -367,14 +359,6 @@ export function MusiciansClient({
           if (!aPhone) return 1
           if (!bPhone) return -1
           return aPhone.localeCompare(bPhone) * dir
-        }
-        case 'location': {
-          const aLoc = [a.city, a.state].filter(Boolean).join(', ').toLowerCase()
-          const bLoc = [b.city, b.state].filter(Boolean).join(', ').toLowerCase()
-          if (!aLoc && !bLoc) return 0
-          if (!aLoc) return 1
-          if (!bLoc) return -1
-          return aLoc.localeCompare(bLoc) * dir
         }
         case 'tags': {
           const aTags = (a.tags || []).sort().join(', ').toLowerCase()
@@ -531,11 +515,6 @@ export function MusiciansClient({
               {formatPhoneNumber(musician.phone)}
             </a>
           ) : '\u2014'}
-        </td>
-        <td className="hidden md:table-cell px-4 py-2 text-muted-foreground whitespace-nowrap">
-          {musician.city || musician.state
-            ? [musician.city, musician.state].filter(Boolean).join(', ')
-            : '\u2014'}
         </td>
         <td className="hidden md:table-cell px-4 py-2 text-muted-foreground">
           {musician.home_region || '\u2014'}
@@ -1484,12 +1463,6 @@ export function MusiciansClient({
                               <th className="hidden md:table-cell w-[120px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
                               <th
                                 className="hidden md:table-cell w-[130px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
-                                onClick={() => handleSort('location')}
-                              >
-                                Location <SortIcon column="location" />
-                              </th>
-                              <th
-                                className="hidden md:table-cell w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('home_region')}
                               >
                                 Region <SortIcon column="home_region" />
@@ -1593,12 +1566,6 @@ export function MusiciansClient({
                               <th className="hidden md:table-cell w-[120px] px-4 py-2 text-left text-xs font-medium text-muted-foreground">Phone</th>
                               <th
                                 className="hidden md:table-cell w-[130px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
-                                onClick={() => handleSort('location')}
-                              >
-                                Location <SortIcon column="location" />
-                              </th>
-                              <th
-                                className="hidden md:table-cell w-[100px] px-4 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer select-none"
                                 onClick={() => handleSort('home_region')}
                               >
                                 Region <SortIcon column="home_region" />
