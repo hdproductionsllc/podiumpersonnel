@@ -1,13 +1,61 @@
 import { z } from 'zod'
 
 export const HOME_REGIONS = [
+  // California
   'SF Bay Area',
   'Los Angeles',
   'Orange County',
   'San Diego',
+  'Sacramento',
+  // Northeast
+  'New York City',
+  'Boston',
+  'Philadelphia',
+  'Pittsburgh',
+  'Washington DC',
+  'Baltimore',
+  'Hartford',
+  'Northern New Jersey',
+  // Southeast
+  'Atlanta',
+  'Miami',
+  'Orlando',
+  'Tampa',
+  'Jacksonville',
+  'Charlotte',
+  'Raleigh-Durham',
+  'Nashville',
+  'Memphis',
+  'Richmond',
+  'New Orleans',
+  'Charleston',
+  // Midwest
   'Chicago',
   'St. Louis',
   'Kansas City',
+  'Detroit',
+  'Minneapolis',
+  'Cleveland',
+  'Columbus',
+  'Cincinnati',
+  'Indianapolis',
+  'Milwaukee',
+  // South Central
+  'Dallas-Fort Worth',
+  'Houston',
+  'San Antonio',
+  'Austin',
+  // Mountain West
+  'Denver',
+  'Phoenix',
+  'Salt Lake City',
+  'Las Vegas',
+  'Albuquerque',
+  // Pacific Northwest
+  'Seattle',
+  'Portland',
+  // Hawaii
+  'Honolulu',
 ] as const
 
 export type HomeRegion = typeof HOME_REGIONS[number]
