@@ -657,9 +657,35 @@ export function ProjectFormDialog({
                   value={venueName}
                   venueId={venueId}
                   organizationId={organizationId}
-                  onChange={(name, id) => {
+                  onChange={async (name, id, _venueData, placeId, googlePlaceData) => {
                     setVenueName(name)
                     setVenueId(id)
+
+                    // Auto-create venue when a Google Place is selected (no saved id yet)
+                    if (!id && (googlePlaceData || placeId)) {
+                      try {
+                        const res = await fetch('/api/venues', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            organization_id: organizationId,
+                            name: googlePlaceData?.name || name,
+                            address: googlePlaceData?.address || null,
+                            city: googlePlaceData?.city || null,
+                            state: googlePlaceData?.state || null,
+                            zip: googlePlaceData?.zip || null,
+                            google_place_id: googlePlaceData?.placeId || placeId,
+                            google_maps_url: googlePlaceData?.googleMapsUrl || null,
+                          }),
+                        })
+                        const data = await res.json()
+                        if (data.id) {
+                          setVenueId(data.id)
+                        }
+                      } catch (err) {
+                        console.error('Failed to auto-create venue:', err)
+                      }
+                    }
                   }}
                   placeholder="Search saved venues or enter address..."
                 />
