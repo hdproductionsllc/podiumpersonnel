@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { ContractOfferEmail } from '@/lib/email/templates/contract-offer'
 import { render } from '@react-email/render'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
-import { getVenueName, getVenueMapsUrl } from '@/lib/venue-helpers'
+import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
 
 export async function POST(request: NextRequest) {
   try {
@@ -110,8 +110,10 @@ export async function POST(request: NextRequest) {
           : null,
         venue: getVenueName(service),
         venueUrl: getVenueMapsUrl(service),
+        venueAddress: getVenueAddress(service),
         venue2: service.venue_2_details || service.venue_2 ? getVenueName({ venue: service.venue_2, venue_details: service.venue_2_details }) : null,
         venue2Url: service.venue_2_details || service.venue_2 ? getVenueMapsUrl({ venue: service.venue_2, venue_details: service.venue_2_details }) : null,
+        venue2Address: service.venue_2_details ? getVenueAddress({ venue_details: service.venue_2_details }) : null,
       }))
 
     // Compute pay amount for preview

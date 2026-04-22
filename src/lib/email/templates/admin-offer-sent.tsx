@@ -27,8 +27,10 @@ interface AdminOfferSentEmailProps {
     endTime?: string | null
     venue: string | null
     venueUrl?: string | null
+    venueAddress?: string | null
     venue2?: string | null
     venue2Url?: string | null
+    venue2Address?: string | null
   }[]
   dashboardUrl: string
   payAmount?: number | null
@@ -147,18 +149,32 @@ export function AdminOfferSentEmail({
                         {service.callTime && `Call: ${service.callTime} | `}Start: {service.time}{service.endTime && ` | End: ${service.endTime}`}
                       </Text>
                       {service.venue && (
-                        <Text style={serviceVenue}>
-                          <a href={service.venueUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue)}`} style={{ color: '#1E293B', textDecoration: 'underline' }}>
-                            {service.venue}
-                          </a>
-                        </Text>
+                        <>
+                          <Text style={serviceVenue}>
+                            {service.venueUrl ? (
+                              <a href={service.venueUrl} style={{ color: '#1E293B', textDecoration: 'underline' }}>
+                                {service.venue}
+                              </a>
+                            ) : service.venue}
+                          </Text>
+                          {service.venueAddress && (
+                            <Text style={serviceAddress}>{service.venueAddress}</Text>
+                          )}
+                        </>
                       )}
                       {service.venue2 && (
-                        <Text style={serviceVenue}>
-                          <a href={service.venue2Url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue2)}`} style={{ color: '#1E293B', textDecoration: 'underline' }}>
-                            {service.venue2}
-                          </a>
-                        </Text>
+                        <>
+                          <Text style={serviceVenue}>
+                            {service.venue2Url ? (
+                              <a href={service.venue2Url} style={{ color: '#1E293B', textDecoration: 'underline' }}>
+                                {service.venue2}
+                              </a>
+                            ) : service.venue2}
+                          </Text>
+                          {service.venue2Address && (
+                            <Text style={serviceAddress}>{service.venue2Address}</Text>
+                          )}
+                        </>
                       )}
                     </Section>
                   ))}
@@ -389,6 +405,12 @@ const serviceDetail = {
 const serviceVenue = {
   fontSize: '13px',
   color: '#64748b',
+  margin: '0',
+}
+
+const serviceAddress = {
+  fontSize: '12px',
+  color: '#8898aa',
   margin: '0',
 }
 

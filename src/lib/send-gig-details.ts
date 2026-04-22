@@ -3,7 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { sendGigDetailsEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
-import { getVenueDisplay } from '@/lib/venue-helpers'
+import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 interface SendGigDetailsParams {
@@ -56,10 +56,10 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
         end_time,
         venue,
         venue_id,
-        venue_details:venues!services_venue_id_fkey(name, address, city, state, zip, parking_info, directions),
+        venue_details:venues!services_venue_id_fkey(name, address, city, state, zip, google_maps_url, parking_info, directions),
         venue_2,
         venue_id_2,
-        venue_2_details:venues!services_venue_id_2_fkey(name, address, city, state, zip, parking_info, directions)
+        venue_2_details:venues!services_venue_id_2_fkey(name, address, city, state, zip, google_maps_url, parking_info, directions)
       ),
       project_positions(
         id,
@@ -126,10 +126,14 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
             timeZone: timezone,
           })
         : null,
-      venue: getVenueDisplay(service),
+      venue: getVenueName(service),
+      venueUrl: getVenueMapsUrl(service),
+      venueAddress: getVenueAddress(service),
       parkingInfo: service.venue_details?.parking_info || null,
       directions: service.venue_details?.directions || null,
-      venue2: service.venue_2_details || service.venue_2 ? getVenueDisplay({ venue: service.venue_2, venue_details: service.venue_2_details }) : null,
+      venue2: service.venue_2_details || service.venue_2 ? getVenueName({ venue: service.venue_2, venue_details: service.venue_2_details }) : null,
+      venue2Url: service.venue_2_details || service.venue_2 ? getVenueMapsUrl({ venue: service.venue_2, venue_details: service.venue_2_details }) : null,
+      venue2Address: service.venue_2_details ? getVenueAddress({ venue_details: service.venue_2_details }) : null,
       parkingInfo2: service.venue_2_details?.parking_info || null,
       directions2: service.venue_2_details?.directions || null,
     }))

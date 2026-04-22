@@ -241,14 +241,15 @@ export function GigPageClient({
                               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
                             </svg>
                             {(() => {
-                              const display = service.venue_details
-                                ? [service.venue_details.name, service.venue_details.address, service.venue_details.city, service.venue_details.state].filter(Boolean).join(', ')
+                              const v = service.venue_details
+                              const display = v
+                                ? [v.name, v.address, v.city, v.state].filter(Boolean).join(', ')
                                 : service.venue
-                              const mapsUrl = service.venue_details?.google_maps_url
-                                || (service.venue_details
-                                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(display)}`
-                                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue)}`)
-                              return (
+                              const mapsUrl = v?.google_maps_url
+                                || (v
+                                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([v.name, v.address, v.city, v.state, v.zip].filter(Boolean).join(', '))}`
+                                  : null)
+                              return mapsUrl ? (
                                 <a
                                   href={mapsUrl}
                                   target="_blank"
@@ -257,7 +258,7 @@ export function GigPageClient({
                                 >
                                   {display}
                                 </a>
-                              )
+                              ) : <span>{display}</span>
                             })()}
                           </div>
                         )}
@@ -268,14 +269,15 @@ export function GigPageClient({
                               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
                             </svg>
                             {(() => {
-                              const display = service.venue_2_details
-                                ? [service.venue_2_details.name, service.venue_2_details.address, service.venue_2_details.city, service.venue_2_details.state].filter(Boolean).join(', ')
+                              const v = service.venue_2_details
+                              const display = v
+                                ? [v.name, v.address, v.city, v.state].filter(Boolean).join(', ')
                                 : service.venue_2!
-                              const mapsUrl = service.venue_2_details?.google_maps_url
-                                || (service.venue_2_details
-                                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(display)}`
-                                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.venue_2!)}`)
-                              return (
+                              const mapsUrl = v?.google_maps_url
+                                || (v
+                                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([v.name, v.address, v.city, v.state, v.zip].filter(Boolean).join(', '))}`
+                                  : null)
+                              return mapsUrl ? (
                                 <a
                                   href={mapsUrl}
                                   target="_blank"
@@ -284,7 +286,7 @@ export function GigPageClient({
                                 >
                                   {display}
                                 </a>
-                              )
+                              ) : <span>{display}</span>
                             })()}
                           </div>
                         )}
