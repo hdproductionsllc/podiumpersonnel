@@ -795,8 +795,23 @@ export function ProjectsClient({
                       <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
                         {formatDateRange(project.start_date, project.end_date)}
                       </td>
-                      <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
-                        {project.description || <span className="text-muted-foreground">—</span>}
+                      <td className="px-3 py-3 text-muted-foreground">
+                        {(() => {
+                          const primary = project.services?.find((s) => s.service_type === 'performance')
+                            || project.services?.[0]
+                          const info = primary ? venueUrlMap?.[primary.id] : undefined
+                          const display = info?.display || primary?.venue || ''
+                          if (!display) return <span className="text-muted-foreground">—</span>
+                          return (
+                            <div className="max-w-xs truncate">
+                              <AddressLink
+                                address={display}
+                                googleMapsUrl={info?.mapsUrl ?? null}
+                                className="text-xs"
+                              />
+                            </div>
+                          )
+                        })()}
                       </td>
                       <td className="px-3 py-3">
                         {project.client_name ? (

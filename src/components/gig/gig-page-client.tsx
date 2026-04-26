@@ -298,7 +298,7 @@ export function GigPageClient({
 
               {projectDescription && (
                 <div>
-                  <h4 className="font-medium mb-1">Details</h4>
+                  <h4 className="font-medium mb-1">Notes</h4>
                   <p className="text-sm text-muted-foreground">{projectDescription}</p>
                 </div>
               )}
