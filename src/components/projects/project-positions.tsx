@@ -32,6 +32,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { MusicianFormDialog } from '@/components/musicians/musician-form-dialog'
+import type { MusicianWithInstruments, InstrumentOption } from '@/components/musicians/musicians-client'
 
 export type PositionOfferJoined = {
   id: string
@@ -203,6 +205,10 @@ export function ProjectPositions({
   const [ensembleDriftSuggestion, setEnsembleDriftSuggestion] = useState<string | null>(null)
   const [ensembleLabelInput, setEnsembleLabelInput] = useState('')
   const [updatingEnsembleType, setUpdatingEnsembleType] = useState(false)
+  const [editingMusician, setEditingMusician] = useState<MusicianWithInstruments | null>(null)
+  const [instrumentOptions, setInstrumentOptions] = useState<InstrumentOption[]>([])
+  const [editFormOpen, setEditFormOpen] = useState(false)
+  const [loadingMusicianId, setLoadingMusicianId] = useState<string | null>(null)
   const prevPositionCountRef = useRef(positions.length)
   const hasMountedRef = useRef(false)
 
@@ -281,6 +287,36 @@ export function ProjectPositions({
     setAssignPositionId(position.id)
     setAssignInstrumentId(position.instrument_id)
     setAssignChairNumber(position.chair_number)
+  }
+
+  async function handleEditMusician(musicianId: string) {
+    if (loadingMusicianId) return
+    setLoadingMusicianId(musicianId)
+    const supabase = createClient()
+    const [musicianRes, instrumentsRes] = await Promise.all([
+      supabase
+        .from('musicians')
+        .select('*, musician_instruments(instrument_id)')
+        .eq('id', musicianId)
+        .single(),
+      supabase
+        .from('instruments')
+        .select('id, name, section, sort_order')
+        .eq('organization_id', organizationId)
+        .order('sort_order', { ascending: true }),
+    ])
+    setLoadingMusicianId(null)
+    if (musicianRes.error || !musicianRes.data) {
+      toast.error('Could not load musician: ' + (musicianRes.error?.message || 'not found'))
+      return
+    }
+    if (instrumentsRes.error) {
+      toast.error('Could not load instruments: ' + instrumentsRes.error.message)
+      return
+    }
+    setEditingMusician(musicianRes.data as MusicianWithInstruments)
+    setInstrumentOptions((instrumentsRes.data || []) as InstrumentOption[])
+    setEditFormOpen(true)
   }
 
   // Group positions by section
@@ -551,9 +587,24 @@ export function ProjectPositions({
                                     return schedStart < svcEnd && schedEnd > svcStart
                                   })
                                 })
+                                const isLoading = loadingMusicianId === position.musician_id
                                 return (
                                   <span className="flex items-center gap-1">
-                                    {position.musician.first_name} {position.musician.last_name}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditMusician(position.musician!.id)}
+                                      disabled={isLoading}
+                                      className="text-left text-primary hover:underline disabled:opacity-60 disabled:cursor-wait"
+                                      title="Edit musician details"
+                                    >
+                                      {position.musician.first_name} {position.musician.last_name}
+                                    </button>
+                                    {isLoading && (
+                                      <svg className="h-3 w-3 animate-spin text-muted-foreground" viewBox="0 0 24 24" fill="none">
+                                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                                        <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+                                      </svg>
+                                    )}
                                     {hasConflict && (
                                       <span
                                         className="inline-flex items-center text-amber-600 dark:text-amber-400"
@@ -971,6 +1022,18 @@ export function ProjectPositions({
           </div>
         )
       })()}
+
+      <MusicianFormDialog
+        open={editFormOpen}
+        onOpenChange={setEditFormOpen}
+        musician={editingMusician}
+        instruments={instrumentOptions}
+        organizationId={organizationId}
+        onSuccess={() => {
+          setEditFormOpen(false)
+          onPositionChange()
+        }}
+      />
     </div>
   )
 }
