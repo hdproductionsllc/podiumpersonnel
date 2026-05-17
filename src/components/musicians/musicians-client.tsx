@@ -706,15 +706,38 @@ export function MusiciansClient({
   async function confirmRemoveInstrument() {
     if (!removingMusician || !removingInstrument) return
     setIsRemoving(true)
+
+    // The group's instrument is a family representative (e.g. "Violin" covers
+    // "Violin 1", "Violin 2"). Resolve every instrument_id in this family that
+    // this musician is actually assigned to, then delete them all.
+    const family = removingInstrument.name.replace(/\s+\d+$/, '')
+    const familyInstrumentIds = removingMusician.musician_instruments
+      .map((mi) => {
+        const inst = instruments.find((i) => i.id === mi.instrument_id)
+        return inst && inst.name.replace(/\s+\d+$/, '') === family ? mi.instrument_id : null
+      })
+      .filter((id): id is string => id !== null)
+
+    if (familyInstrumentIds.length === 0) {
+      toast.error(`${removingMusician.first_name} has no ${family} assignment to remove`)
+      setIsRemoving(false)
+      setRemoveInstrumentOpen(false)
+      setRemovingMusician(null)
+      setRemovingInstrument(null)
+      return
+    }
+
     const supabase = (await import('@/lib/supabase/client')).createClient()
-    const { error } = await supabase
+    const { error, count } = await supabase
       .from('musician_instruments')
-      .delete()
+      .delete({ count: 'exact' })
       .eq('musician_id', removingMusician.id)
-      .eq('instrument_id', removingInstrument.id)
+      .in('instrument_id', familyInstrumentIds)
 
     if (error) {
       toast.error('Failed to remove instrument: ' + error.message)
+    } else if (!count) {
+      toast.error(`Couldn't remove ${removingMusician.first_name} from ${family} — no rows affected (possible permissions issue)`)
     } else {
       toast.success(`Removed ${removingMusician.first_name} from ${removingInstrument.name}`)
     }
@@ -723,6 +746,20 @@ export function MusiciansClient({
     setRemovingMusician(null)
     setRemovingInstrument(null)
     router.refresh()
+  }
+
+  function handleDeleteFromRemoveDialog() {
+    if (!removingMusician) return
+    const musician = removingMusician
+    setRemoveInstrumentOpen(false)
+    setRemovingMusician(null)
+    setRemovingInstrument(null)
+    // Defer opening the delete dialog until the remove dialog has unmounted
+    // so we don't end up with two overlapping modals.
+    setTimeout(() => {
+      setDeletingMusician(musician)
+      setDeleteOpen(true)
+    }, 0)
   }
 
   function handleSuccess() {
@@ -1631,13 +1668,23 @@ export function MusiciansClient({
               This will remove {removingMusician?.first_name} {removingMusician?.last_name} from the {removingInstrument?.name} section. They will remain in your roster and keep any other instrument assignments.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRemoveInstrumentOpen(false)} disabled={isRemoving}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={confirmRemoveInstrument} disabled={isRemoving}>
-              {isRemoving ? 'Removing...' : 'Remove'}
-            </Button>
+          <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-between sm:items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDeleteFromRemoveDialog}
+              disabled={isRemoving}
+              className="text-sm text-destructive underline-offset-2 hover:underline disabled:opacity-50 text-left sm:text-center"
+            >
+              Want to delete {removingMusician?.first_name ?? 'this musician'} entirely?
+            </button>
+            <div className="flex gap-2 sm:ml-auto">
+              <Button variant="outline" onClick={() => setRemoveInstrumentOpen(false)} disabled={isRemoving}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={confirmRemoveInstrument} disabled={isRemoving}>
+                {isRemoving ? 'Removing...' : 'Remove'}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
