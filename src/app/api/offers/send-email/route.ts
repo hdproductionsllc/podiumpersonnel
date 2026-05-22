@@ -5,6 +5,7 @@ import { logEmail } from '@/lib/email/log'
 import { logEmailConfig } from '@/lib/email/client'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
+import { attachVenueDetails } from '@/lib/venue-attach'
 
 export async function POST(request: NextRequest) {
   console.log('📧 Send email API called')
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
             name,
             ensemble_type,
             organization:organizations(id, name, timezone, email_logo_url, email_brand_color, email_footer_text),
-            services(id, name, service_type, call_time, start_time, end_time, venue, venue_id, base_pay, leader_fee, venue_details:venues!services_venue_id_fkey(name, address, city, state, zip, google_maps_url), venue_2, venue_id_2, venue_2_details:venues!services_venue_id_2_fkey(name, address, city, state, zip, google_maps_url))
+            services(id, name, service_type, call_time, start_time, end_time, venue, venue_id, base_pay, leader_fee, venue_2, venue_id_2)
           )
         )
       `)
@@ -72,6 +73,8 @@ export async function POST(request: NextRequest) {
     const instrument = position?.instrument as any
     const services = project?.services as any[] || []
     const timezone = organization?.timezone || DEFAULT_TIMEZONE
+
+    await attachVenueDetails(services)
 
     // Calculate pay
     const chairNumber = position?.chair_number || 1

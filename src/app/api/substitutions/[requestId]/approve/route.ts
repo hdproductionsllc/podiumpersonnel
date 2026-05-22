@@ -3,6 +3,7 @@ import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendSubRequestApprovedEmail, sendContractOfferEmail, sendAdminOfferSentEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
+import { attachVenueDetails } from '@/lib/venue-attach'
 import { randomBytes } from 'crypto'
 
 export async function POST(
@@ -34,7 +35,7 @@ export async function POST(
           name,
           organization_id,
           organization:organizations(id, name, timezone, email_logo_url, email_brand_color, email_footer_text),
-          services(id, name, service_type, start_time, end_time, venue, venue_id, venue_details:venues!services_venue_id_fkey(name, address, city, state, zip, google_maps_url), venue_2, venue_id_2, venue_2_details:venues!services_venue_id_2_fkey(name, address, city, state, zip, google_maps_url))
+          services(id, name, service_type, start_time, end_time, venue, venue_id, venue_2, venue_id_2)
         )
       )
     `)
@@ -68,6 +69,8 @@ export async function POST(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const services = project?.services as any[] || []
   const timezone = organization?.timezone || DEFAULT_TIMEZONE
+
+  await attachVenueDetails(services)
 
   const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
   const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, timezone) : ''
