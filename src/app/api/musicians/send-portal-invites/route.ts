@@ -106,6 +106,7 @@ export async function POST(request: Request) {
         to: musician.email!,
         musicianName: `${musician.first_name} ${musician.last_name}`,
         organizationName: organization.name,
+        organizationId: organization.id,
         activationUrl: `${baseUrl}/musician/activate/${token}`,
         expiresAt: expiresAt.toISOString(),
         branding: {

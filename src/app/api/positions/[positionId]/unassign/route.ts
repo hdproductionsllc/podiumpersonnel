@@ -106,6 +106,7 @@ export async function POST(
           to: musician.email,
           musicianName: `${musician.first_name} ${musician.last_name}`,
           organizationName: organization?.name || 'Orchestra',
+          organizationId: organization?.id,
           projectName: project?.name || 'Project',
           instrument: instrument?.name || 'Instrument',
           chairNumber: positionData.chair_number || 1,

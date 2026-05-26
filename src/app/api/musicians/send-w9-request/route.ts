@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
           to: musician.email!,
           musicianName: `${musician.first_name} ${musician.last_name}`,
           organizationName: organization.name,
+          organizationId: organization.id,
           adminEmail: user.email || undefined,
           branding: {
             logoUrl: organization.email_logo_url,

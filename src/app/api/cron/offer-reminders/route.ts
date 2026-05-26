@@ -118,6 +118,7 @@ export async function GET(request: NextRequest) {
           to: musician.email,
           musicianName: musician.first_name,
           organizationName: organization?.name || 'Orchestra',
+          organizationId: organization?.id,
           projectName: project.name,
           instrument: instrument?.name || 'Instrument',
           chairNumber: position.chair_number || 1,

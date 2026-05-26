@@ -48,41 +48,39 @@ export function GigDetailsReminderEmail({
       </Preview>
       <Body style={main}>
         <Container style={container}>
-          <Section style={{ ...header, backgroundColor: brandColor }}>
-            {logoUrl ? (
+          {logoUrl && (
+            <Section style={header}>
               <Img
                 src={logoUrl}
                 alt={organizationName}
-                height="48"
-                style={{ margin: '0 auto', maxWidth: '200px' }}
+                height="40"
+                style={{ margin: '0 auto', maxWidth: '160px' }}
               />
-            ) : (
-              <Text style={heading}>{organizationName}</Text>
-            )}
-          </Section>
+            </Section>
+          )}
 
           <Section style={content}>
             <Text style={greeting}>Hi {musicianName},</Text>
 
             <Text style={paragraph}>
-              Just a quick reminder — we still need your confirmation for <strong>{projectName}</strong>.
+              Just following up - we still need your confirmation for <strong>{projectName}</strong>.
             </Text>
 
             {services.map((service, index) => (
               <Text key={index} style={detailsItem}>
-                {service.name} — {service.date}{service.venue ? ` at ${service.venue}` : ''}{service.venue2 ? ` & ${service.venue2}` : ''}
+                {service.name} - {service.date}{service.venue ? ` at ${service.venue}` : ''}{service.venue2 ? ` & ${service.venue2}` : ''}
               </Text>
             ))}
 
-            <Section style={buttonContainer}>
-              <Button style={{ ...button, backgroundColor: brandColor }} href={confirmUrl}>
-                Confirm Now
-              </Button>
-            </Section>
+            <Text style={paragraph}>
+              Confirm here:{' '}
+              <a href={confirmUrl} style={{ color: brandColor, textDecoration: 'underline', wordBreak: 'break-all' }}>
+                {confirmUrl}
+              </a>
+            </Text>
 
-            <Text style={smallText}>
-              Full details were sent on {originalSentDate}.
-              Questions? Just reply to this email.
+            <Text style={paragraph}>
+              Full details were sent on {originalSentDate}. Questions? Just reply to this email.
             </Text>
           </Section>
 

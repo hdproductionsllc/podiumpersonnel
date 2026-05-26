@@ -1,8 +1,11 @@
-import { resend, EMAIL_FROM } from './client'
+import { resend, EMAIL_FROM_ADDRESS, EMAIL_REPLY_TO, buildFromAddress } from './client'
+import { getOrgOwnerEmail } from '../supabase/server'
+import type * as React from 'react'
 import { ContractOfferEmail } from './templates/contract-offer'
 import { OfferReminderEmail } from './templates/offer-reminder'
 import { OfferAcceptedEmail } from './templates/offer-accepted'
 import { OfferDeclinedEmail } from './templates/offer-declined'
+import { OfferRescindedEmail } from './templates/offer-rescinded'
 import { AdminOfferResponseEmail } from './templates/admin-offer-response'
 import { AdminOfferSentEmail } from './templates/admin-offer-sent'
 import { W9RequestEmail } from './templates/w9-request'
@@ -66,11 +69,69 @@ export function formatPerformanceDateForSubject(isoDate: string, timezone?: stri
   }
 }
 
+/**
+ * Centralized wrapper for transactional sends. Adds deliverability essentials
+ * that every send needs: plain-text alternative, replyTo, and List-Unsubscribe
+ * headers (Gmail/Outlook explicitly favor these). Preserves the original return
+ * shape so callers continue to receive `{ ...data, emailHtml }`.
+ *
+ * Reply-To resolution order: explicit `replyTo` > org-owner lookup via
+ * `replyToOrgId` > global default. For musician-facing emails, prefer
+ * `replyToOrgId` so replies route to a real human at the org instead of
+ * the unmonitored hello@ inbox.
+ */
+async function sendTransactional(args: {
+  to: string | string[]
+  subject: string
+  react: React.ReactElement
+  fromName?: string | null
+  replyTo?: string
+  replyToOrgId?: string | null
+  errorContext: string
+}) {
+  const [emailHtml, emailText] = await Promise.all([
+    render(args.react),
+    render(args.react, { plainText: true }),
+  ])
+
+  let replyTo = args.replyTo
+  if (!replyTo && args.replyToOrgId) {
+    try {
+      const ownerEmail = await getOrgOwnerEmail(args.replyToOrgId)
+      if (ownerEmail) replyTo = ownerEmail
+    } catch (lookupErr) {
+      // Reply-To lookup is best-effort; don't block the send if it fails.
+      console.warn(`Reply-To lookup failed for org ${args.replyToOrgId}:`, lookupErr)
+    }
+  }
+
+  const { data, error } = await resend.emails.send({
+    from: buildFromAddress(args.fromName),
+    to: args.to,
+    subject: args.subject,
+    html: emailHtml,
+    text: emailText,
+    replyTo: replyTo || EMAIL_REPLY_TO,
+    headers: {
+      'List-Unsubscribe': `<mailto:${EMAIL_FROM_ADDRESS}?subject=unsubscribe>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
+  })
+
+  if (error) {
+    console.error(`Failed to send ${args.errorContext} email:`, error)
+    throw new Error(`Failed to send email: ${error.message}`)
+  }
+
+  return { ...data, emailHtml }
+}
+
 // Contract Offer Email
 interface SendContractOfferParams {
   to: string
   musicianName: string
   organizationName: string
+  organizationId?: string
   projectName: string
   instrument: string
   chairNumber: number
@@ -101,8 +162,10 @@ interface SendContractOfferParams {
 }
 
 export async function sendContractOfferEmail(params: SendContractOfferParams) {
-  const emailHtml = await render(
-    ContractOfferEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Call: ${params.projectName} - ${params.instrument}`, getSubjectDate(params.services)),
+    react: ContractOfferEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       projectName: params.projectName,
@@ -120,23 +183,11 @@ export async function sendContractOfferEmail(params: SendContractOfferParams) {
       personalMessage: params.personalMessage,
       ensembleType: params.ensembleType,
       branding: params.branding,
-    })
-  )
-
-  const date = getSubjectDate(params.services)
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`Call: ${params.projectName} - ${params.instrument}`, date),
-    html: emailHtml,
+    }),
+    fromName: params.organizationName,
+    replyToOrgId: params.organizationId,
+    errorContext: 'contract offer',
   })
-
-  if (error) {
-    console.error('Failed to send contract offer email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Offer Reminder Email
@@ -144,6 +195,7 @@ interface SendOfferReminderParams {
   to: string
   musicianName: string
   organizationName: string
+  organizationId?: string
   projectName: string
   instrument: string
   chairNumber: number
@@ -156,8 +208,10 @@ interface SendOfferReminderParams {
 }
 
 export async function sendOfferReminderEmail(params: SendOfferReminderParams) {
-  const emailHtml = await render(
-    OfferReminderEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Reminder: ${params.projectName} - response needed`, params.performanceDate || ''),
+    react: OfferReminderEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       projectName: params.projectName,
@@ -168,24 +222,11 @@ export async function sendOfferReminderEmail(params: SendOfferReminderParams) {
       expiresAt: params.expiresAt,
       daysRemaining: params.daysRemaining,
       branding: params.branding,
-    })
-  )
-
-  const urgentPrefix = params.daysRemaining !== null && params.daysRemaining <= 2 ? '⚠️ URGENT: ' : ''
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`${urgentPrefix}Reminder: Call for ${params.projectName}`, params.performanceDate || ''),
-    html: emailHtml,
+    }),
+    fromName: params.organizationName,
+    replyToOrgId: params.organizationId,
+    errorContext: 'offer reminder',
   })
-
-  if (error) {
-    console.error('Failed to send offer reminder email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Offer Accepted Confirmation Email (to musician)
@@ -193,6 +234,7 @@ interface SendOfferAcceptedParams {
   to: string
   musicianName: string
   organizationName: string
+  organizationId?: string
   contactEmail?: string
   projectName: string
   instrument: string
@@ -214,8 +256,10 @@ interface SendOfferAcceptedParams {
 }
 
 export async function sendOfferAcceptedEmail(params: SendOfferAcceptedParams) {
-  const emailHtml = await render(
-    OfferAcceptedEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Confirmed: You're booked for ${params.projectName}`, getSubjectDate(params.services)),
+    react: OfferAcceptedEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       contactEmail: params.contactEmail,
@@ -226,23 +270,12 @@ export async function sendOfferAcceptedEmail(params: SendOfferAcceptedParams) {
       services: params.services,
       calendarUrl: params.calendarUrl,
       googleCalendarUrl: params.googleCalendarUrl,
-    })
-  )
-
-  const date = getSubjectDate(params.services)
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`Confirmed: You're booked for ${params.projectName}`, date),
-    html: emailHtml,
+    }),
+    fromName: params.organizationName,
+    replyTo: params.contactEmail || undefined,
+    replyToOrgId: params.organizationId,
+    errorContext: 'offer accepted',
   })
-
-  if (error) {
-    console.error('Failed to send offer accepted email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Offer Declined Confirmation Email (to musician)
@@ -250,6 +283,7 @@ interface SendOfferDeclinedParams {
   to: string
   musicianName: string
   organizationName: string
+  organizationId?: string
   projectName: string
   instrument: string
   chairNumber: number
@@ -259,8 +293,10 @@ interface SendOfferDeclinedParams {
 }
 
 export async function sendOfferDeclinedEmail(params: SendOfferDeclinedParams) {
-  const emailHtml = await render(
-    OfferDeclinedEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Thank you for your response - ${params.projectName}`, params.performanceDate || ''),
+    react: OfferDeclinedEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       projectName: params.projectName,
@@ -268,22 +304,42 @@ export async function sendOfferDeclinedEmail(params: SendOfferDeclinedParams) {
       chairNumber: params.chairNumber,
       totalChairs: params.totalChairs,
       declineReason: params.declineReason,
-    })
-  )
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`Thank you for your response - ${params.projectName}`, params.performanceDate || ''),
-    html: emailHtml,
+    }),
+    fromName: params.organizationName,
+    replyToOrgId: params.organizationId,
+    errorContext: 'offer declined',
   })
+}
 
-  if (error) {
-    console.error('Failed to send offer declined email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
+// Offer Rescinded Email (to musician — admin withdrew the offer)
+interface SendOfferRescindedParams {
+  to: string
+  musicianName: string
+  organizationName: string
+  organizationId?: string
+  projectName: string
+  instrument: string
+  chairNumber: number
+  totalChairs?: number
+  performanceDate?: string
+}
 
-  return { ...data, emailHtml }
+export async function sendOfferRescindedEmail(params: SendOfferRescindedParams) {
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Offer withdrawn - ${params.projectName}`, params.performanceDate || ''),
+    react: OfferRescindedEmail({
+      musicianName: params.musicianName,
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      instrument: params.instrument,
+      chairNumber: params.chairNumber,
+      totalChairs: params.totalChairs,
+    }),
+    fromName: params.organizationName,
+    replyToOrgId: params.organizationId,
+    errorContext: 'offer rescinded',
+  })
 }
 
 // Admin Notification Email (when musician responds)
@@ -297,15 +353,22 @@ interface SendAdminOfferResponseParams {
   instrument: string
   chairNumber: number
   totalChairs?: number
-  status: 'accepted' | 'declined'
+  status: 'accepted' | 'declined' | 'rescinded'
   responseNotes?: string | null
   dashboardUrl: string
   performanceDate?: string
 }
 
 export async function sendAdminOfferResponseEmail(params: SendAdminOfferResponseParams) {
-  const emailHtml = await render(
-    AdminOfferResponseEmail({
+  const statusText =
+    params.status === 'accepted' ? 'Accepted'
+    : params.status === 'rescinded' ? 'Rescinded'
+    : 'Declined'
+
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Offer ${statusText}: ${params.musicianName} - ${params.projectName}`, params.performanceDate || ''),
+    react: AdminOfferResponseEmail({
       adminName: params.adminName,
       organizationName: params.organizationName,
       projectName: params.projectName,
@@ -317,24 +380,9 @@ export async function sendAdminOfferResponseEmail(params: SendAdminOfferResponse
       status: params.status,
       responseNotes: params.responseNotes,
       dashboardUrl: params.dashboardUrl,
-    })
-  )
-
-  const statusText = params.status === 'accepted' ? 'Accepted' : 'Declined'
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`Offer ${statusText}: ${params.musicianName} - ${params.projectName}`, params.performanceDate || ''),
-    html: emailHtml,
+    }),
+    errorContext: 'admin offer response',
   })
-
-  if (error) {
-    console.error('Failed to send admin notification email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Admin Notification Email (when offer is sent)
@@ -372,8 +420,10 @@ interface SendAdminOfferSentParams {
 }
 
 export async function sendAdminOfferSentEmail(params: SendAdminOfferSentParams) {
-  const emailHtml = await render(
-    AdminOfferSentEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Offer Sent: ${params.musicianName} - ${params.projectName}`, getSubjectDate(params.services)),
+    react: AdminOfferSentEmail({
       adminName: params.adminName,
       organizationName: params.organizationName,
       projectName: params.projectName,
@@ -391,23 +441,9 @@ export async function sendAdminOfferSentEmail(params: SendAdminOfferSentParams) 
       expiresAt: params.expiresAt,
       ensembleType: params.ensembleType,
       timezone: params.timezone,
-    })
-  )
-
-  const date = getSubjectDate(params.services)
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`Offer Sent: ${params.musicianName} - ${params.projectName}`, date),
-    html: emailHtml,
+    }),
+    errorContext: 'admin offer sent',
   })
-
-  if (error) {
-    console.error('Failed to send admin offer sent email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // W-9 Request Email
@@ -415,33 +451,26 @@ interface SendW9RequestParams {
   to: string
   musicianName: string
   organizationName: string
+  organizationId?: string
   adminEmail?: string
   branding?: EmailBranding
 }
 
 export async function sendW9RequestEmail(params: SendW9RequestParams) {
-  const emailHtml = await render(
-    W9RequestEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: `W-9 Form Request - ${params.organizationName}`,
+    react: W9RequestEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       adminEmail: params.adminEmail,
       branding: params.branding,
-    })
-  )
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: `W-9 Form Request - ${params.organizationName}`,
-    html: emailHtml,
+    }),
+    fromName: params.organizationName,
+    replyTo: params.adminEmail || undefined,
+    replyToOrgId: params.organizationId,
+    errorContext: 'W-9 request',
   })
-
-  if (error) {
-    console.error('Failed to send W-9 request email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Position Unassigned Email (to musician)
@@ -449,6 +478,7 @@ interface SendPositionUnassignedParams {
   to: string
   musicianName: string
   organizationName: string
+  organizationId?: string
   projectName: string
   instrument: string
   chairNumber: number
@@ -457,30 +487,21 @@ interface SendPositionUnassignedParams {
 }
 
 export async function sendPositionUnassignedEmail(params: SendPositionUnassignedParams) {
-  const emailHtml = await render(
-    PositionUnassignedEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Position Update: ${params.projectName}`, params.performanceDate || ''),
+    react: PositionUnassignedEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       projectName: params.projectName,
       instrument: params.instrument,
       chairNumber: params.chairNumber,
       totalChairs: params.totalChairs,
-    })
-  )
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`Position Update: ${params.projectName}`, params.performanceDate || ''),
-    html: emailHtml,
+    }),
+    fromName: params.organizationName,
+    replyToOrgId: params.organizationId,
+    errorContext: 'position unassigned',
   })
-
-  if (error) {
-    console.error('Failed to send position unassigned email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Admin Sub Request Email (to admins when musician requests a sub)
@@ -505,8 +526,10 @@ interface SendAdminSubRequestParams {
 }
 
 export async function sendAdminSubRequestEmail(params: SendAdminSubRequestParams) {
-  const emailHtml = await render(
-    AdminSubRequestEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Sub Request: ${params.musicianName} needs a sub for ${params.projectName}`, params.performanceDate || ''),
+    react: AdminSubRequestEmail({
       adminName: params.adminName,
       organizationName: params.organizationName,
       projectName: params.projectName,
@@ -522,22 +545,10 @@ export async function sendAdminSubRequestEmail(params: SendAdminSubRequestParams
       suggestedSubPhone: params.suggestedSubPhone,
       suggestedSubInstrument: params.suggestedSubInstrument,
       dashboardUrl: params.dashboardUrl,
-    })
-  )
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`Sub Request: ${params.musicianName} needs a sub for ${params.projectName}`, params.performanceDate || ''),
-    html: emailHtml,
+    }),
+    replyTo: params.musicianEmail || undefined,
+    errorContext: 'admin sub request',
   })
-
-  if (error) {
-    console.error('Failed to send admin sub request email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Sub Request Approved Email (to musician when admin approves)
@@ -545,6 +556,7 @@ interface SendSubRequestApprovedParams {
   to: string
   musicianName: string
   organizationName: string
+  organizationId?: string
   projectName: string
   instrument: string
   chairNumber: number
@@ -555,8 +567,10 @@ interface SendSubRequestApprovedParams {
 }
 
 export async function sendSubRequestApprovedEmail(params: SendSubRequestApprovedParams) {
-  const emailHtml = await render(
-    SubRequestApprovedEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Sub Request Approved: ${params.projectName}`, params.performanceDate || ''),
+    react: SubRequestApprovedEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       projectName: params.projectName,
@@ -565,22 +579,11 @@ export async function sendSubRequestApprovedEmail(params: SendSubRequestApproved
       totalChairs: params.totalChairs,
       serviceName: params.serviceName,
       suggestedSubName: params.suggestedSubName,
-    })
-  )
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`Sub Request Approved: ${params.projectName}`, params.performanceDate || ''),
-    html: emailHtml,
+    }),
+    fromName: params.organizationName,
+    replyToOrgId: params.organizationId,
+    errorContext: 'sub request approved',
   })
-
-  if (error) {
-    console.error('Failed to send sub request approved email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Sub Request Declined Email (to musician when admin declines)
@@ -588,6 +591,7 @@ interface SendSubRequestDeclinedParams {
   to: string
   musicianName: string
   organizationName: string
+  organizationId?: string
   projectName: string
   instrument: string
   chairNumber: number
@@ -600,8 +604,10 @@ interface SendSubRequestDeclinedParams {
 }
 
 export async function sendSubRequestDeclinedEmail(params: SendSubRequestDeclinedParams) {
-  const emailHtml = await render(
-    SubRequestDeclinedEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Sub Request Declined: ${params.projectName} - please find another substitute`, params.performanceDate || ''),
+    react: SubRequestDeclinedEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       projectName: params.projectName,
@@ -612,22 +618,11 @@ export async function sendSubRequestDeclinedEmail(params: SendSubRequestDeclined
       suggestedSubName: params.suggestedSubName,
       adminNotes: params.adminNotes,
       gigUrl: params.gigUrl,
-    })
-  )
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`Sub Request Declined: ${params.projectName} - Please find another substitute`, params.performanceDate || ''),
-    html: emailHtml,
+    }),
+    fromName: params.organizationName,
+    replyToOrgId: params.organizationId,
+    errorContext: 'sub request declined',
   })
-
-  if (error) {
-    console.error('Failed to send sub request declined email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Musician Released Email (to original musician when sub accepts)
@@ -635,6 +630,7 @@ interface SendMusicianReleasedParams {
   to: string
   musicianName: string
   organizationName: string
+  organizationId?: string
   projectName: string
   instrument: string
   chairNumber: number
@@ -645,8 +641,10 @@ interface SendMusicianReleasedParams {
 }
 
 export async function sendMusicianReleasedEmail(params: SendMusicianReleasedParams) {
-  const emailHtml = await render(
-    MusicianReleasedEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`You've been released: ${params.projectName}`, params.performanceDate || ''),
+    react: MusicianReleasedEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       projectName: params.projectName,
@@ -655,22 +653,11 @@ export async function sendMusicianReleasedEmail(params: SendMusicianReleasedPara
       totalChairs: params.totalChairs,
       serviceName: params.serviceName,
       substituteName: params.substituteName,
-    })
-  )
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`You've Been Released: ${params.projectName}`, params.performanceDate || ''),
-    html: emailHtml,
+    }),
+    fromName: params.organizationName,
+    replyToOrgId: params.organizationId,
+    errorContext: 'musician released',
   })
-
-  if (error) {
-    console.error('Failed to send musician released email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Sub Declined Find Another Email (to original musician when sub declines)
@@ -678,6 +665,7 @@ interface SendSubDeclinedFindAnotherParams {
   to: string
   musicianName: string
   organizationName: string
+  organizationId?: string
   projectName: string
   instrument: string
   chairNumber: number
@@ -689,8 +677,10 @@ interface SendSubDeclinedFindAnotherParams {
 }
 
 export async function sendSubDeclinedFindAnotherEmail(params: SendSubDeclinedFindAnotherParams) {
-  const emailHtml = await render(
-    SubDeclinedFindAnotherEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Your sub declined - ${params.projectName}`, params.performanceDate || ''),
+    react: SubDeclinedFindAnotherEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       projectName: params.projectName,
@@ -700,22 +690,11 @@ export async function sendSubDeclinedFindAnotherEmail(params: SendSubDeclinedFin
       serviceName: params.serviceName,
       suggestedSubName: params.suggestedSubName,
       gigUrl: params.gigUrl,
-    })
-  )
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`Action Required: Your sub declined - ${params.projectName}`, params.performanceDate || ''),
-    html: emailHtml,
+    }),
+    fromName: params.organizationName,
+    replyToOrgId: params.organizationId,
+    errorContext: 'sub declined find another',
   })
-
-  if (error) {
-    console.error('Failed to send sub declined find another email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Portal Invitation Email
@@ -723,35 +702,27 @@ interface SendPortalInvitationParams {
   to: string
   musicianName: string
   organizationName: string
+  organizationId?: string
   activationUrl: string
   expiresAt: string
   branding?: EmailBranding
 }
 
 export async function sendPortalInvitationEmail(params: SendPortalInvitationParams) {
-  const emailHtml = await render(
-    PortalInvitationEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: `${params.organizationName} has invited you to Podium`,
+    react: PortalInvitationEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       activationUrl: params.activationUrl,
       expiresAt: params.expiresAt,
       branding: params.branding,
-    })
-  )
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: `${params.organizationName} has invited you to Podium`,
-    html: emailHtml,
+    }),
+    fromName: params.organizationName,
+    replyToOrgId: params.organizationId,
+    errorContext: 'portal invitation',
   })
-
-  if (error) {
-    console.error('Failed to send portal invitation email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Musician Welcome Email
@@ -763,28 +734,17 @@ interface SendMusicianWelcomeParams {
 }
 
 export async function sendMusicianWelcomeEmail(params: SendMusicianWelcomeParams) {
-  const emailHtml = await render(
-    MusicianWelcomeEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: 'Welcome to Podium - your musician portal is ready',
+    react: MusicianWelcomeEmail({
       musicianName: params.musicianName,
       email: params.to,
       loginUrl: params.loginUrl,
       organizations: params.organizations,
-    })
-  )
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: 'Welcome to Podium - Your musician portal is ready',
-    html: emailHtml,
+    }),
+    errorContext: 'musician welcome',
   })
-
-  if (error) {
-    console.error('Failed to send musician welcome email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Offer Expired Notification Email (to admins)
@@ -806,8 +766,10 @@ interface SendOfferExpiredParams {
 }
 
 export async function sendOfferExpiredEmail(params: SendOfferExpiredParams) {
-  const emailHtml = await render(
-    OfferExpiredEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Offer Expired: ${params.musicianName} - ${params.projectName}`, params.performanceDate || ''),
+    react: OfferExpiredEmail({
       organizationName: params.organizationName,
       projectName: params.projectName,
       musicianName: params.musicianName,
@@ -816,22 +778,9 @@ export async function sendOfferExpiredEmail(params: SendOfferExpiredParams) {
       totalChairs: params.totalChairs,
       nextCandidate: params.nextCandidate,
       dashboardUrl: params.dashboardUrl,
-    })
-  )
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`Offer Expired: ${params.musicianName} - ${params.projectName}`, params.performanceDate || ''),
-    html: emailHtml,
+    }),
+    errorContext: 'offer expired',
   })
-
-  if (error) {
-    console.error('Failed to send offer expired email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Offer Expiring Soon Notification Email (to admins — 24hr warning)
@@ -849,8 +798,10 @@ interface SendOfferExpiringSoonParams {
 }
 
 export async function sendOfferExpiringSoonEmail(params: SendOfferExpiringSoonParams) {
-  const emailHtml = await render(
-    OfferExpiringSoonEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Offer expiring soon: ${params.musicianName} hasn't responded - ${params.projectName}`, params.performanceDate || ''),
+    react: OfferExpiringSoonEmail({
       organizationName: params.organizationName,
       projectName: params.projectName,
       musicianName: params.musicianName,
@@ -859,22 +810,9 @@ export async function sendOfferExpiringSoonEmail(params: SendOfferExpiringSoonPa
       totalChairs: params.totalChairs,
       hoursRemaining: params.hoursRemaining,
       dashboardUrl: params.dashboardUrl,
-    })
-  )
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`⚠️ Offer Expiring: ${params.musicianName} has not responded — ${params.projectName}`, params.performanceDate || ''),
-    html: emailHtml,
+    }),
+    errorContext: 'offer expiring soon',
   })
-
-  if (error) {
-    console.error('Failed to send offer expiring soon email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Generic email sending function
@@ -889,11 +827,16 @@ export async function sendEmail(params: SendEmailParams) {
   const { to, subject, html, text } = params
 
   const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
+    from: buildFromAddress(),
     to,
     subject,
     html,
-    text,
+    text: text || html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+    replyTo: EMAIL_REPLY_TO,
+    headers: {
+      'List-Unsubscribe': `<mailto:${EMAIL_FROM_ADDRESS}?subject=unsubscribe>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
   })
 
   if (error) {
@@ -913,27 +856,16 @@ interface SendAdminWelcomeParams {
 }
 
 export async function sendAdminWelcomeEmail(params: SendAdminWelcomeParams) {
-  const emailHtml = await render(
-    AdminWelcomeEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: `Welcome to Podium - ${params.organizationName} is ready`,
+    react: AdminWelcomeEmail({
       userName: params.userName,
       organizationName: params.organizationName,
       dashboardUrl: params.dashboardUrl,
-    })
-  )
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: `Welcome to Podium — ${params.organizationName} is ready`,
-    html: emailHtml,
+    }),
+    errorContext: 'admin welcome',
   })
-
-  if (error) {
-    console.error('Failed to send admin welcome email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Gig Details Email
@@ -941,6 +873,7 @@ interface SendGigDetailsEmailParams {
   to: string
   musicianName: string
   organizationName: string
+  organizationId?: string
   projectName: string
   ensembleType: string | null
   services: {
@@ -971,8 +904,10 @@ interface SendGigDetailsEmailParams {
 }
 
 export async function sendGigDetailsEmail(params: SendGigDetailsEmailParams) {
-  const emailHtml = await render(
-    GigDetailsEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Gig details: ${params.projectName}`, getSubjectDate(params.services)),
+    react: GigDetailsEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       projectName: params.projectName,
@@ -982,23 +917,11 @@ export async function sendGigDetailsEmail(params: SendGigDetailsEmailParams) {
       confirmUrl: params.confirmUrl,
       notes: params.notes,
       branding: params.branding,
-    })
-  )
-
-  const date = getSubjectDate(params.services)
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`Gig Details — ${params.projectName}`, date),
-    html: emailHtml,
+    }),
+    fromName: params.organizationName,
+    replyToOrgId: params.organizationId,
+    errorContext: 'gig details',
   })
-
-  if (error) {
-    console.error('Failed to send gig details email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Gig Details Reminder Email
@@ -1006,6 +929,7 @@ interface SendGigDetailsReminderEmailParams {
   to: string
   musicianName: string
   organizationName: string
+  organizationId?: string
   projectName: string
   services: {
     name: string
@@ -1023,8 +947,10 @@ interface SendGigDetailsReminderEmailParams {
 }
 
 export async function sendGigDetailsReminderEmail(params: SendGigDetailsReminderEmailParams) {
-  const emailHtml = await render(
-    GigDetailsReminderEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Reminder: please confirm ${params.projectName}`, getSubjectDate(params.services)),
+    react: GigDetailsReminderEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       projectName: params.projectName,
@@ -1032,22 +958,11 @@ export async function sendGigDetailsReminderEmail(params: SendGigDetailsReminder
       confirmUrl: params.confirmUrl,
       originalSentDate: params.originalSentDate,
       branding: params.branding,
-    })
-  )
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`Reminder: Please confirm — ${params.projectName}`, getSubjectDate(params.services)),
-    html: emailHtml,
+    }),
+    fromName: params.organizationName,
+    replyToOrgId: params.organizationId,
+    errorContext: 'gig details reminder',
   })
-
-  if (error) {
-    console.error('Failed to send gig details reminder email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Music Uploaded Email
@@ -1055,6 +970,7 @@ interface SendMusicUploadedEmailParams {
   to: string
   musicianName: string
   organizationName: string
+  organizationId?: string
   projectName: string
   files: { name: string; size: number; downloadUrl: string }[]
   confirmUrl: string
@@ -1065,8 +981,10 @@ interface SendMusicUploadedEmailParams {
 }
 
 export async function sendMusicUploadedEmail(params: SendMusicUploadedEmailParams) {
-  const emailHtml = await render(
-    MusicUploadedEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Music available: ${params.projectName}`, params.performanceDate || ''),
+    react: MusicUploadedEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       projectName: params.projectName,
@@ -1075,22 +993,12 @@ export async function sendMusicUploadedEmail(params: SendMusicUploadedEmailParam
       notes: params.notes,
       contactEmail: params.contactEmail,
       branding: params.branding,
-    })
-  )
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`Music Available — ${params.projectName}`, params.performanceDate || ''),
-    html: emailHtml,
+    }),
+    fromName: params.organizationName,
+    replyTo: params.contactEmail || undefined,
+    replyToOrgId: params.organizationId,
+    errorContext: 'music uploaded',
   })
-
-  if (error) {
-    console.error('Failed to send music uploaded email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Music Reminder Email
@@ -1098,6 +1006,7 @@ interface SendMusicReminderEmailParams {
   to: string
   musicianName: string
   organizationName: string
+  organizationId?: string
   projectName: string
   files: { name: string; size: number; downloadUrl: string }[]
   confirmUrl: string
@@ -1107,8 +1016,10 @@ interface SendMusicReminderEmailParams {
 }
 
 export async function sendMusicReminderEmail(params: SendMusicReminderEmailParams) {
-  const emailHtml = await render(
-    MusicReminderEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Reminder: download your music for ${params.projectName}`, params.performanceDate || ''),
+    react: MusicReminderEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       projectName: params.projectName,
@@ -1116,22 +1027,12 @@ export async function sendMusicReminderEmail(params: SendMusicReminderEmailParam
       confirmUrl: params.confirmUrl,
       contactEmail: params.contactEmail,
       branding: params.branding,
-    })
-  )
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`Reminder: Download your music — ${params.projectName}`, params.performanceDate || ''),
-    html: emailHtml,
+    }),
+    fromName: params.organizationName,
+    replyTo: params.contactEmail || undefined,
+    replyToOrgId: params.organizationId,
+    errorContext: 'music reminder',
   })
-
-  if (error) {
-    console.error('Failed to send music reminder email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Pre-Gig Notification Email (to org owners)
@@ -1149,8 +1050,10 @@ interface SendPreGigNotificationEmailParams {
 }
 
 export async function sendPreGigNotificationEmail(params: SendPreGigNotificationEmailParams) {
-  const emailHtml = await render(
-    PreGigNotificationEmail({
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Upcoming: ${params.projectName} is in 2 days - review reminder`, params.gigDate || ''),
+    react: PreGigNotificationEmail({
       organizationName: params.organizationName,
       projectName: params.projectName,
       gigDate: params.gigDate,
@@ -1160,22 +1063,9 @@ export async function sendPreGigNotificationEmail(params: SendPreGigNotification
       musicSent: params.musicSent,
       reviewUrl: params.reviewUrl,
       branding: params.branding,
-    })
-  )
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`Upcoming: ${params.projectName} is in 2 days — review reminder`, params.gigDate || ''),
-    html: emailHtml,
+    }),
+    errorContext: 'pre-gig notification',
   })
-
-  if (error) {
-    console.error('Failed to send pre-gig notification email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }
 
 // Staffing Alert Email (to org admins when gig is understaffed)
@@ -1198,8 +1088,13 @@ interface SendStaffingAlertParams {
 }
 
 export async function sendStaffingAlertEmail(params: SendStaffingAlertParams) {
-  const emailHtml = await render(
-    StaffingAlertEmail({
+  const urgencyLabel =
+    params.daysAway <= 3 ? 'Heads up' : params.daysAway <= 7 ? 'Heads up' : 'Heads up'
+
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`${urgencyLabel}: ${params.projectName} has ${params.unfilledPositions.length} unfilled positions`, params.gigDate || ''),
+    react: StaffingAlertEmail({
       organizationName: params.organizationName,
       projectName: params.projectName,
       gigDate: params.gigDate,
@@ -1210,23 +1105,7 @@ export async function sendStaffingAlertEmail(params: SendStaffingAlertParams) {
       unfilledPositions: params.unfilledPositions,
       dashboardUrl: params.dashboardUrl,
       branding: params.branding,
-    })
-  )
-
-  const urgencyLabel =
-    params.daysAway <= 3 ? 'Urgent' : params.daysAway <= 7 ? 'Action Needed' : 'Heads Up'
-
-  const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: params.to,
-    subject: withDate(`${urgencyLabel}: ${params.projectName} has ${params.unfilledPositions.length} unfilled positions`, params.gigDate || ''),
-    html: emailHtml,
+    }),
+    errorContext: 'staffing alert',
   })
-
-  if (error) {
-    console.error('Failed to send staffing alert email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return { ...data, emailHtml }
 }

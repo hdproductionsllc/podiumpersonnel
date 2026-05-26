@@ -19,7 +19,7 @@ interface AdminOfferResponseEmailProps {
   instrument: string
   chairNumber: number
   totalChairs?: number
-  status: 'accepted' | 'declined'
+  status: 'accepted' | 'declined' | 'rescinded'
   responseNotes?: string | null
   dashboardUrl: string
 }
@@ -38,13 +38,23 @@ export function AdminOfferResponseEmail({
   dashboardUrl,
 }: AdminOfferResponseEmailProps) {
   const isAccepted = status === 'accepted'
+  const isRescinded = status === 'rescinded'
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
+
+  const verb = isAccepted ? 'accepted' : isRescinded ? 'had their offer rescinded for' : 'declined'
+  const bannerLabel = isAccepted ? 'Offer Accepted' : isRescinded ? 'Offer Rescinded' : 'Offer Declined'
+  const bannerIconChar = isAccepted ? '✓' : isRescinded ? '↺' : '✗'
+  const responseLabel = isAccepted ? 'ACCEPTED' : isRescinded ? 'RESCINDED' : 'DECLINED'
+  const responseStyle = isAccepted ? acceptedText : declinedText
+  const bannerStyle = isAccepted ? acceptedBanner : declinedBanner
 
   return (
     <Html>
       <Head />
       <Preview>
-        {musicianName} has {isAccepted ? 'accepted' : 'declined'} the offer for {projectName}
+        {isRescinded
+          ? `Offer to ${musicianName} for ${projectName} was rescinded`
+          : `${musicianName} has ${verb} the offer for ${projectName}`}
       </Preview>
       <Body style={main}>
         <Container style={container}>
@@ -53,17 +63,19 @@ export function AdminOfferResponseEmail({
           </Section>
 
           <Section style={content}>
-            <Section style={isAccepted ? acceptedBanner : declinedBanner}>
-              <Text style={bannerIcon}>{isAccepted ? '✓' : '✗'}</Text>
-              <Text style={bannerText}>
-                Offer {isAccepted ? 'Accepted' : 'Declined'}
-              </Text>
+            <Section style={bannerStyle}>
+              <Text style={bannerIcon}>{bannerIconChar}</Text>
+              <Text style={bannerText}>{bannerLabel}</Text>
             </Section>
 
             {adminName && <Text style={greeting}>Hi {adminName},</Text>}
 
             <Text style={paragraph}>
-              <strong>{musicianName}</strong> has {isAccepted ? 'accepted' : 'declined'} the contract offer for:
+              {isRescinded ? (
+                <>The offer to <strong>{musicianName}</strong> was rescinded for:</>
+              ) : (
+                <><strong>{musicianName}</strong> has {verb} the contract offer for:</>
+              )}
             </Text>
 
             <Section style={detailsBox}>
@@ -76,14 +88,12 @@ export function AdminOfferResponseEmail({
                 {musicianEmail && ` (${musicianEmail})`}
               </Text>
               <Text style={detailsItem}>
-                <strong>Response:</strong>{' '}
-                <span style={isAccepted ? acceptedText : declinedText}>
-                  {isAccepted ? 'ACCEPTED' : 'DECLINED'}
-                </span>
+                <strong>{isRescinded ? 'Status' : 'Response'}:</strong>{' '}
+                <span style={responseStyle}>{responseLabel}</span>
               </Text>
             </Section>
 
-            {responseNotes && (
+            {responseNotes && !isRescinded && (
               <>
                 <Text style={sectionTitle}>Notes from musician:</Text>
                 <Section style={notesBox}>

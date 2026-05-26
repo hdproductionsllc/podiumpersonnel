@@ -96,6 +96,29 @@ export async function resolveMusicianIds(
   return { musicianIds: musicians.map((m) => m.id) }
 }
 
+/**
+ * Returns the email of the organization's owner, for use as Reply-To on
+ * musician-facing emails so musician replies route to a real human instead
+ * of the unmonitored hello@ inbox. Falls back to null if the org has no
+ * owner (shouldn't happen in practice) or the owner has no email.
+ */
+export async function getOrgOwnerEmail(organizationId: string): Promise<string | null> {
+  const serviceClient = createServiceClient()
+
+  const { data: members } = await serviceClient
+    .from('organization_members')
+    .select('user_id')
+    .eq('organization_id', organizationId)
+    .eq('role', 'owner')
+    .limit(1)
+
+  const ownerId = members?.[0]?.user_id
+  if (!ownerId) return null
+
+  const { data: userData } = await serviceClient.auth.admin.getUserById(ownerId)
+  return userData?.user?.email ?? null
+}
+
 // Helper to get admin/owner emails for an organization
 export async function getOrgAdminEmails(organizationId: string): Promise<string[]> {
   const serviceClient = createServiceClient()

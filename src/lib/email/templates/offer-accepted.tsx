@@ -50,20 +50,11 @@ export function OfferAcceptedEmail({
       </Preview>
       <Body style={main}>
         <Container style={container}>
-          <Section style={header}>
-            <Text style={heading}>{organizationName}</Text>
-          </Section>
-
           <Section style={content}>
-            <Section style={successBanner}>
-              <Text style={successIcon}>✓</Text>
-              <Text style={successText}>You're Confirmed!</Text>
-            </Section>
-
-            <Text style={greeting}>Dear {musicianName},</Text>
+            <Text style={greeting}>Hi {musicianName},</Text>
 
             <Text style={paragraph}>
-              Thank you for accepting the contract offer. You are now confirmed for the following engagement:
+              Thanks for accepting - you're confirmed for the following:
             </Text>
 
             <Section style={detailsBox}>

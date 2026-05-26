@@ -515,7 +515,7 @@ export type Database = {
           project_position_id: string
           musician_id: string
           token: string
-          status: 'pending' | 'viewed' | 'accepted' | 'declined' | 'expired'
+          status: 'pending' | 'viewed' | 'accepted' | 'declined' | 'rescinded' | 'expired'
           custom_pay: number | null
           sent_at: string | null
           viewed_at: string | null
@@ -530,7 +530,7 @@ export type Database = {
           project_position_id: string
           musician_id: string
           token?: string
-          status?: 'pending' | 'viewed' | 'accepted' | 'declined' | 'expired'
+          status?: 'pending' | 'viewed' | 'accepted' | 'declined' | 'rescinded' | 'expired'
           custom_pay?: number | null
           sent_at?: string | null
           viewed_at?: string | null
@@ -545,7 +545,7 @@ export type Database = {
           project_position_id?: string
           musician_id?: string
           token?: string
-          status?: 'pending' | 'viewed' | 'accepted' | 'declined' | 'expired'
+          status?: 'pending' | 'viewed' | 'accepted' | 'declined' | 'rescinded' | 'expired'
           custom_pay?: number | null
           sent_at?: string | null
           viewed_at?: string | null

@@ -46,48 +46,36 @@ export function PortalInvitationEmail({
       </Preview>
       <Body style={main}>
         <Container style={container}>
-          <Section style={{ ...header, backgroundColor: brandColor }}>
-            {logoUrl ? (
+          {logoUrl && (
+            <Section style={header}>
               <Img
                 src={logoUrl}
                 alt={organizationName}
-                height="48"
-                style={{ margin: '0 auto', maxWidth: '200px' }}
+                height="40"
+                style={{ margin: '0 auto', maxWidth: '160px' }}
               />
-            ) : (
-              <Text style={heading}>{organizationName}</Text>
-            )}
-          </Section>
+            </Section>
+          )}
 
           <Section style={content}>
             <Text style={greeting}>Hi {musicianName},</Text>
 
             <Text style={paragraph}>
-              <strong>{organizationName}</strong> has added you to their roster on Podium
-              and invited you to activate your musician portal account.
+              <strong>{organizationName}</strong> added you to their musician roster on Podium.
+              You can activate your portal account to view and respond to offers, see your
+              schedule, and manage your availability across organizations.
             </Text>
 
-            <Section style={benefitsBox}>
-              <Text style={benefitsTitle}>With the Podium Musician Portal, you can:</Text>
-              <Text style={benefitItem}>&#10003; View and respond to contract offers in one place</Text>
-              <Text style={benefitItem}>&#10003; See your schedule across all organizations</Text>
-              <Text style={benefitItem}>&#10003; Manage your availability and profile</Text>
-              <Text style={benefitItem}>&#10003; Get notified about new opportunities</Text>
-            </Section>
-
-            <Section style={buttonContainer}>
-              <Button style={{ ...button, backgroundColor: brandColor }} href={activationUrl}>
-                Activate Your Account
-              </Button>
-            </Section>
-
-            <Text style={smallText}>
-              This invitation link will expire on {expirationDate}.
+            <Text style={paragraph}>
+              Activate your account here:{' '}
+              <a href={activationUrl} style={{ color: brandColor, textDecoration: 'underline', wordBreak: 'break-all' }}>
+                {activationUrl}
+              </a>
             </Text>
 
-            <Text style={smallText}>
-              If you already have a Podium account, you can link this musician profile
-              to your existing account during activation.
+            <Text style={paragraph}>
+              The link expires on {expirationDate}. If you already have a Podium account,
+              you can link this musician profile to it during activation.
             </Text>
           </Section>
 

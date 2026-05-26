@@ -169,6 +169,7 @@ export async function POST(
           to: musician.email,
           musicianName: musician.first_name,
           organizationName: organization?.name || 'Orchestra',
+          organizationId: organization?.id,
           projectName: project.name,
           files: musicianFiles.map((f: any) => ({
             name: f.file_name,

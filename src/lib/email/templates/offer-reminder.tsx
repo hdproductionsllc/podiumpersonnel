@@ -47,65 +47,52 @@ export function OfferReminderEmail({
     <Html>
       <Head />
       <Preview>
-        Reminder: Call for {projectName} expires soon
+        {projectName} - response still needed
       </Preview>
       <Body style={main}>
         <Container style={container}>
-          <Section style={{ ...header, backgroundColor: brandColor }}>
-            {logoUrl ? (
+          {logoUrl && (
+            <Section style={header}>
               <Img
                 src={logoUrl}
                 alt={organizationName}
-                height="48"
-                style={{ margin: '0 auto', maxWidth: '200px' }}
+                height="40"
+                style={{ margin: '0 auto', maxWidth: '160px' }}
               />
-            ) : (
-              <Text style={heading}>{organizationName}</Text>
-            )}
-          </Section>
+            </Section>
+          )}
 
           <Section style={content}>
-            <Text style={greeting}>Dear {musicianName},</Text>
+            <Text style={greeting}>Hi {musicianName},</Text>
 
             <Text style={paragraph}>
-              This is a friendly reminder that you have a pending call from{' '}
-              <strong>{organizationName}</strong> that requires your response.
+              Just following up on the {instrument}{showChair ? ` chair ${chairNumber}` : ''} for{' '}
+              <strong>{projectName}</strong> with {organizationName} - we still need your response.
+              {expiresAt && (
+                <>
+                  {' '}The deadline is{' '}
+                  <strong>
+                    {new Date(expiresAt).toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      month: 'long',
+                      day: 'numeric',
+                    })}
+                  </strong>
+                  {urgentStyle ? (daysRemaining === 0 ? ' (today)' : daysRemaining === 1 ? ' (tomorrow)' : '') : ''}.
+                </>
+              )}
             </Text>
 
-            {urgentStyle && (
-              <Section style={urgentBox}>
-                <Text style={urgentText}>
-                  ⚠️ This offer expires {daysRemaining === 0 ? 'today' : daysRemaining === 1 ? 'tomorrow' : `in ${daysRemaining} days`}!
-                </Text>
-              </Section>
-            )}
+            <Text style={paragraph}>
+              You can view the details and respond here:{' '}
+              <a href={responseUrl} style={{ color: brandColor, textDecoration: 'underline' }}>
+                {responseUrl}
+              </a>
+            </Text>
 
-            <Section style={detailsBox}>
-              <Text style={detailsTitle}>{projectName}</Text>
-              <Text style={detailsItem}>
-                <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
-              </Text>
-              {expiresAt && (
-                <Text style={detailsItem}>
-                  <strong>Response deadline:</strong>{' '}
-                  {new Date(expiresAt).toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
-                </Text>
-              )}
-            </Section>
-
-            <Section style={buttonContainer}>
-              <Button style={{ ...button, backgroundColor: brandColor }} href={responseUrl}>
-                View & Respond
-              </Button>
-            </Section>
-
-            <Text style={smallText}>
-              Please respond at your earliest convenience to secure your position.
+            <Text style={paragraph}>
+              Thanks,<br />
+              {organizationName}
             </Text>
           </Section>
 

@@ -223,6 +223,7 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
         to: member.email,
         musicianName: member.name.split(' ')[0],
         organizationName: organization?.name || 'Orchestra',
+        organizationId: organization?.id,
         projectName: project.name,
         ensembleType: project.ensemble_type,
         services: formattedServices,

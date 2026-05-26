@@ -71,24 +71,22 @@ export function GigDetailsEmail({
       </Preview>
       <Body style={main}>
         <Container style={container}>
-          <Section style={{ ...header, backgroundColor: brandColor }}>
-            {logoUrl ? (
+          {logoUrl && (
+            <Section style={header}>
               <Img
                 src={logoUrl}
                 alt={organizationName}
-                height="48"
-                style={{ margin: '0 auto', maxWidth: '200px' }}
+                height="40"
+                style={{ margin: '0 auto', maxWidth: '160px' }}
               />
-            ) : (
-              <Text style={heading}>{organizationName}</Text>
-            )}
-          </Section>
+            </Section>
+          )}
 
           <Section style={content}>
-            <Text style={greeting}>Hi {musicianName}!</Text>
+            <Text style={greeting}>Hi {musicianName},</Text>
 
             <Text style={paragraph}>
-              Here are the details for <strong>{projectName}</strong>. Please review everything below and confirm at the bottom.
+              Here are the details for <strong>{projectName}</strong>. Please review and confirm at the bottom.
             </Text>
 
             {/* Event Details */}
@@ -206,11 +204,12 @@ export function GigDetailsEmail({
               <Text style={checklistItem}>✓ Parking and access instructions</Text>
               <Text style={checklistItem}>✓ Ensemble roster and contact info</Text>
 
-              <Section style={buttonContainer}>
-                <Button style={{ ...button, backgroundColor: brandColor }} href={confirmUrl}>
-                  I've Read All Details — Confirm
-                </Button>
-              </Section>
+              <Text style={paragraph}>
+                Confirm here:{' '}
+                <a href={confirmUrl} style={{ color: brandColor, textDecoration: 'underline', wordBreak: 'break-all' }}>
+                  {confirmUrl}
+                </a>
+              </Text>
             </Section>
 
             <Text style={smallText}>

@@ -76,21 +76,19 @@ export function ContractOfferEmail({
       </Preview>
       <Body style={main}>
         <Container style={container}>
-          <Section style={{ ...header, backgroundColor: brandColor }}>
-            {logoUrl ? (
+          {logoUrl && (
+            <Section style={header}>
               <Img
                 src={logoUrl}
                 alt={organizationName}
-                height="48"
-                style={{ margin: '0 auto', maxWidth: '200px' }}
+                height="40"
+                style={{ margin: '0 auto', maxWidth: '160px' }}
               />
-            ) : (
-              <Text style={heading}>{organizationName}</Text>
-            )}
-          </Section>
+            </Section>
+          )}
 
           <Section style={content}>
-            <Text style={greeting}>Dear {musicianName},</Text>
+            <Text style={greeting}>Hi {musicianName},</Text>
 
             {personalMessage && (
               <Section style={personalMessageBox}>
@@ -99,7 +97,7 @@ export function ContractOfferEmail({
             )}
 
             <Text style={paragraph}>
-              You have been called to perform with <strong>{organizationName}</strong> for the following project:
+              {organizationName} would like to book you for the following:
             </Text>
 
             <Section style={detailsBox}>
@@ -175,15 +173,16 @@ export function ContractOfferEmail({
               </>
             )}
 
-            <Section style={buttonContainer}>
-              <Button style={{ ...button, backgroundColor: brandColor }} href={responseUrl}>
-                View & Respond
-              </Button>
-            </Section>
+            <Text style={paragraph}>
+              View the full details and respond here:{' '}
+              <a href={responseUrl} style={{ color: brandColor, textDecoration: 'underline', wordBreak: 'break-all' }}>
+                {responseUrl}
+              </a>
+            </Text>
 
-            <Text style={smallText}>
-              Click the button above to view the full details and accept or decline.
-              After responding, you can create a free Podium account to manage all your gigs in one place.
+            <Text style={paragraph}>
+              Thanks,<br />
+              {organizationName}
             </Text>
           </Section>
 

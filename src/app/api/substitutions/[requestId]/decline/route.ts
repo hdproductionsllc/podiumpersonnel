@@ -134,6 +134,7 @@ export async function POST(
         to: requestingMusician.email,
         musicianName: `${requestingMusician.first_name} ${requestingMusician.last_name}`,
         organizationName: organization?.name || 'Orchestra',
+        organizationId: organization?.id,
         projectName: project?.name || 'Project',
         instrument: instrument?.name || 'Instrument',
         chairNumber: position?.chair_number || 1,

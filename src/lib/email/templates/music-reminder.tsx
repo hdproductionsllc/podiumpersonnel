@@ -54,25 +54,22 @@ export function MusicReminderEmail({
       </Preview>
       <Body style={main}>
         <Container style={container}>
-          <Section style={{ ...header, backgroundColor: brandColor }}>
-            {logoUrl ? (
+          {logoUrl && (
+            <Section style={header}>
               <Img
                 src={logoUrl}
                 alt={organizationName}
-                height="48"
-                style={{ margin: '0 auto', maxWidth: '200px' }}
+                height="40"
+                style={{ margin: '0 auto', maxWidth: '160px' }}
               />
-            ) : (
-              <Text style={heading}>{organizationName}</Text>
-            )}
-          </Section>
+            </Section>
+          )}
 
           <Section style={content}>
             <Text style={greeting}>Hi {musicianName},</Text>
 
             <Text style={paragraph}>
-              This is a reminder to download your music for <strong>{projectName}</strong>.
-              Click each file below to download directly.
+              Following up on the music for <strong>{projectName}</strong> - it's still waiting for you to download.
             </Text>
 
             <Text style={subheading}>Files:</Text>
@@ -93,11 +90,12 @@ export function MusicReminderEmail({
               After downloading, please confirm you've received and loaded all files on your iPad/tablet successfully:
             </Text>
 
-            <Section style={buttonContainer}>
-              <Button style={{ ...button, backgroundColor: brandColor }} href={confirmUrl}>
-                Confirm Music Received
-              </Button>
-            </Section>
+            <Text style={paragraph}>
+              Confirm here:{' '}
+              <a href={confirmUrl} style={{ color: brandColor, textDecoration: 'underline', wordBreak: 'break-all' }}>
+                {confirmUrl}
+              </a>
+            </Text>
 
             <Text style={smallText}>
               Questions? Contact {organizationName}{contactEmail ? <> at <Link href={`mailto:${contactEmail}`} style={{ color: '#8898aa' }}>{contactEmail}</Link></> : ''}.

@@ -36,26 +36,22 @@ export function W9RequestEmail({
       </Preview>
       <Body style={main}>
         <Container style={container}>
-          <Section style={{ ...header, backgroundColor: brandColor }}>
-            {logoUrl ? (
+          {logoUrl && (
+            <Section style={header}>
               <Img
                 src={logoUrl}
                 alt={organizationName}
-                height="48"
-                style={{ margin: '0 auto', maxWidth: '200px' }}
+                height="40"
+                style={{ margin: '0 auto', maxWidth: '160px' }}
               />
-            ) : (
-              <Text style={heading}>{organizationName}</Text>
-            )}
-          </Section>
+            </Section>
+          )}
 
           <Section style={content}>
-            <Text style={greeting}>Dear {musicianName},</Text>
+            <Text style={greeting}>Hi {musicianName},</Text>
 
             <Text style={paragraph}>
-              We hope this message finds you well. As part of our record-keeping requirements,
-              we need to have a completed <strong>W-9 form</strong> on file for all musicians
-              we work with.
+              We need a completed <strong>W-9 form</strong> on file for all musicians we work with.
             </Text>
 
             <Section style={infoBox}>

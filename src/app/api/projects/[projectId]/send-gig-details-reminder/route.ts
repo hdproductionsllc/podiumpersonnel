@@ -157,6 +157,7 @@ export async function POST(
           to: musician.email,
           musicianName: musician.first_name,
           organizationName: organization?.name || 'Orchestra',
+          organizationId: organization?.id,
           projectName: project.name,
           services: formattedServices,
           confirmUrl,
