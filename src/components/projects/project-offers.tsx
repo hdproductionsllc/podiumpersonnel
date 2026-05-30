@@ -55,6 +55,8 @@ const OFFER_STATUS_COLORS: Record<string, string> = {
   viewed: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
   accepted: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300',
   declined: 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300',
+  rescinded: 'bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300',
+  released: 'bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300',
   expired: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
 }
 
@@ -63,6 +65,8 @@ const OFFER_STATUS_LABELS: Record<string, string> = {
   viewed: 'Viewed',
   accepted: 'Accepted',
   declined: 'Declined',
+  rescinded: 'Rescinded',
+  released: 'Released',
   expired: 'Expired',
 }
 

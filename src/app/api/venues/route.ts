@@ -110,7 +110,10 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     console.error('Venue creation failed:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Could not save the venue. Please try again, or contact support if it continues.' },
+      { status: 500 }
+    )
   }
 
   return NextResponse.json({ id: venue.id })

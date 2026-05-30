@@ -10,6 +10,17 @@ export async function POST(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
+  try {
+    return await handleAccept(_request, token)
+  } catch (err) {
+    // Never surface a raw 500 on the musician's most important flow — send them
+    // back to the gig page, which renders status-appropriate messaging.
+    console.error(`Error processing accept for gig token ${token}:`, err)
+    return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
+  }
+}
+
+async function handleAccept(_request: Request, token: string) {
   const supabase = createServiceClient()
 
   // Find the offer by token with all related data for emails
@@ -94,20 +105,24 @@ export async function POST(
     return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
   }
 
-  // Update position: assign musician and set status to confirmed
-  // Only update if no musician is already assigned (prevents race condition)
-  const { data: updatedPosition } = await supabase
+  // Update position: assign musician and set status to confirmed.
+  // Normal offer: the chair must be unassigned (prevents two musicians winning
+  // the same chair). Substitution: the chair is held by the requesting (original)
+  // musician and is atomically transferred to the substitute.
+  let positionUpdate = supabase
     .from('project_positions')
     .update({
       musician_id: offer.musician_id,
       status: 'confirmed',
     })
     .eq('id', offer.project_position_id)
-    .is('musician_id', null)
-    .select('id')
+  positionUpdate = subRequest
+    ? positionUpdate.eq('musician_id', subRequest.requesting_musician_id)
+    : positionUpdate.is('musician_id', null)
+  const { data: updatedPosition } = await positionUpdate.select('id')
 
   if (!updatedPosition || updatedPosition.length === 0) {
-    // Position was already filled — revert the offer status
+    // Chair was no longer available to this musician — revert the offer status
     await supabase
       .from('contract_offers')
       .update({ status: 'pending', responded_at: null })
@@ -122,6 +137,15 @@ export async function POST(
       .from('substitution_requests')
       .update({ status: 'filled' })
       .eq('id', subRequest.id)
+
+    // Release the original musician's prior accepted offer for this chair so
+    // they are no longer counted as confirmed.
+    await supabase
+      .from('contract_offers')
+      .update({ status: 'released' })
+      .eq('project_position_id', offer.project_position_id)
+      .eq('musician_id', subRequest.requesting_musician_id)
+      .eq('status', 'accepted')
 
     // Get the original musician's accepted offer token for the gig URL
     const originalMusician = subRequest.requesting_musician as any

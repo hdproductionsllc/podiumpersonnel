@@ -96,7 +96,24 @@
       "Bash(gh api:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(ping:*)",
-      "Bash(git -C \"C:\\\\Users\\\\david\\\\Documents\\\\Podium\" status -u)"
+      "Bash(git -C \"C:\\\\Users\\\\david\\\\Documents\\\\Podium\" status -u)",
+      "WebFetch(domain:en.wikipedia.org)",
+      "WebFetch(domain:freepercussionlessons.com)",
+      "WebFetch(domain:theclassicalstation.org)",
+      "WebFetch(domain:vidaartmanagement.com)",
+      "Bash(git status:*)",
+      "Bash(grep:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(npx @pdfjs/sharp-cli:*)",
+      "Bash(request has been approved\" which implied finality. Updated email and\nportal to clarify the sub is being contacted, not confirmed. Portal\nstatus messages now include the substitute''s name for clarity.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git log:*)",
+      "WebFetch(domain:resend.com)",
+      "Bash(been uploaded.\"\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(offered — waiting on responses\" until all are actually confirmed.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(npx vitest:*)",
+      "Bash(git stash:*)",
+      "Bash(npx:*)",
+      "Bash(openssl rand:*)"
     ]
   }
 }

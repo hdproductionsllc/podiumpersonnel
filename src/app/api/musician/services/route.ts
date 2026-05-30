@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, resolveMusicianIds } from '@/lib/supabase/server'
+import { serverError } from '@/lib/api-helpers'
 
 export async function GET(request: Request) {
   const supabase = await createClient()
@@ -96,7 +97,7 @@ export async function GET(request: Request) {
   const { data: services, error } = await servicesQuery
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return serverError('Failed to load musician services', error)
   }
 
   // Enrich services with project and position info

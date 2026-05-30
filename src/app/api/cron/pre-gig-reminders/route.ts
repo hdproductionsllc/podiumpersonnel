@@ -4,6 +4,7 @@ import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendPreGigNotificationEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
+import { cronDisabledResponse } from '@/lib/cron'
 
 export async function GET(request: NextRequest) {
   // Verify cron secret
@@ -11,6 +12,9 @@ export async function GET(request: NextRequest) {
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  const disabled = cronDisabledResponse('pre-gig-reminders')
+  if (disabled) return disabled
 
   const supabase = createServiceClient()
   const baseUrl = getAppUrl()

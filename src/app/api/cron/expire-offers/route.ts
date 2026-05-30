@@ -4,6 +4,7 @@ import { getNextCandidates } from '@/lib/next-candidate'
 import { sendOfferExpiredEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
+import { cronDisabledResponse, notifyOps } from '@/lib/cron'
 
 export async function GET(request: NextRequest) {
   // Verify cron secret — Vercel sets this automatically for cron jobs
@@ -11,6 +12,9 @@ export async function GET(request: NextRequest) {
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  const disabled = cronDisabledResponse('expire-offers')
+  if (disabled) return disabled
 
   const supabase = createServiceClient()
   const baseUrl = getAppUrl()
@@ -47,7 +51,8 @@ export async function GET(request: NextRequest) {
 
   if (fetchError) {
     console.error('Failed to fetch expired offers:', fetchError)
-    return NextResponse.json({ error: fetchError.message }, { status: 500 })
+    await notifyOps('expire-offers', fetchError)
+    return NextResponse.json({ error: 'Failed to fetch expired offers' }, { status: 500 })
   }
 
   if (!expiredOffers || expiredOffers.length === 0) {
@@ -87,12 +92,15 @@ export async function GET(request: NextRequest) {
 
     processed++
 
-    // 1b. Reset position — but only if no other active offer exists for this position
+    // 1b. Reset position — but only if no other active or accepted offer exists.
+    // Including 'accepted' protects the substitution flow: when a substitute's
+    // pending offer expires, the chair is still held by the original musician's
+    // accepted offer and must not be vacated.
     const { data: otherActiveOffers } = await supabase
       .from('contract_offers')
       .select('id')
       .eq('project_position_id', position.id)
-      .in('status', ['pending', 'viewed'])
+      .in('status', ['pending', 'viewed', 'accepted'])
       .neq('id', offer.id)
       .limit(1)
 

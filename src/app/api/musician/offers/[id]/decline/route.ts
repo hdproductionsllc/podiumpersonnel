@@ -108,8 +108,9 @@ export async function POST(
     .eq('status', 'approved')
     .maybeSingle()
 
-  // Update offer to declined
-  const { error: offerUpdateError } = await supabase
+  // Update offer to declined (optimistic lock: only if still pending/viewed, so
+  // a concurrent accept can't be clobbered by a stale decline).
+  const { data: declinedOffer, error: offerUpdateError } = await supabase
     .from('contract_offers')
     .update({
       status: 'declined',
@@ -117,18 +118,25 @@ export async function POST(
       response_notes: declineReason,
     })
     .eq('id', offer.id)
+    .in('status', ['pending', 'viewed'])
+    .select('id')
 
   if (offerUpdateError) {
     console.error('Failed to update offer status:', offerUpdateError)
     return NextResponse.json({ error: 'Failed to decline offer' }, { status: 500 })
   }
 
-  // Update position status (back to vacant so another offer can be sent)
-  // But only if this is NOT a substitution
+  if (!declinedOffer || declinedOffer.length === 0) {
+    return NextResponse.json({ error: 'This offer has already been responded to' }, { status: 409 })
+  }
+
+  // Reset position to vacant so another offer can be sent. Clear musician_id too
+  // (defensive — never leave a vacant chair still pointing at a musician).
+  // Substitutions keep the chair with the original musician, so skip it.
   if (!subRequest) {
     const { error: positionUpdateError } = await supabase
       .from('project_positions')
-      .update({ status: 'vacant' })
+      .update({ musician_id: null, status: 'vacant' })
       .eq('id', offer.project_position_id)
 
     if (positionUpdateError) {

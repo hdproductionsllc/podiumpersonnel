@@ -93,6 +93,9 @@ export function GigPageClient({
   const [showSubRequestForm, setShowSubRequestForm] = useState(false)
   const [subRequestSubmitted, setSubRequestSubmitted] = useState(false)
   const [currentSubRequest, setCurrentSubRequest] = useState(existingSubRequest)
+  // Tracks which native form is submitting so we can disable both buttons and
+  // avoid double-taps on slow mobile connections (the POST does a full redirect).
+  const [submitting, setSubmitting] = useState<false | 'accept' | 'decline'>(false)
 
   const isExpired = expiresAt && new Date(expiresAt) < new Date()
   const canRespond = offerStatus === 'pending' || offerStatus === 'viewed'
@@ -425,8 +428,14 @@ export function GigPageClient({
                 </div>
               )}
 
+              {offerStatus === 'rescinded' && (
+                <div className="rounded-md bg-amber-50 dark:bg-amber-950 p-4 text-amber-800 dark:text-amber-200">
+                  This offer was withdrawn by the organization. No response is needed.
+                </div>
+              )}
+
               {/* Portal link - shown after responding */}
-              {(offerStatus === 'accepted' || offerStatus === 'declined') && (
+              {(offerStatus === 'accepted' || offerStatus === 'declined' || offerStatus === 'rescinded') && (
                 <div className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-4">
                   {musicianHasAccount ? (
                     <>
@@ -485,14 +494,33 @@ export function GigPageClient({
                     .
                   </p>
                   <div className="flex flex-col sm:flex-row gap-3">
-                    <form action={`/api/gig/${token}/accept`} method="POST" className="flex-1">
-                      <Button type="submit" className="w-full h-12 sm:h-10 text-base sm:text-sm font-semibold">
-                        Accept Offer
+                    <form
+                      action={`/api/gig/${token}/accept`}
+                      method="POST"
+                      className="flex-1"
+                      onSubmit={() => setSubmitting('accept')}
+                    >
+                      <Button
+                        type="submit"
+                        disabled={submitting !== false}
+                        className="w-full h-12 sm:h-10 text-base sm:text-sm font-semibold"
+                      >
+                        {submitting === 'accept' ? 'Accepting…' : 'Accept Offer'}
                       </Button>
                     </form>
-                    <form action={`/api/gig/${token}/decline`} method="POST" className="flex-1">
-                      <Button type="submit" variant="outline" className="w-full h-11 sm:h-10 text-base sm:text-sm">
-                        Decline
+                    <form
+                      action={`/api/gig/${token}/decline`}
+                      method="POST"
+                      className="flex-1"
+                      onSubmit={() => setSubmitting('decline')}
+                    >
+                      <Button
+                        type="submit"
+                        variant="outline"
+                        disabled={submitting !== false}
+                        className="w-full h-11 sm:h-10 text-base sm:text-sm"
+                      >
+                        {submitting === 'decline' ? 'Declining…' : 'Decline'}
                       </Button>
                     </form>
                   </div>

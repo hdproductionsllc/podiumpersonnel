@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { SupportHint } from '@/components/ui/support-link'
 
 export default function NotFound() {
   return (
@@ -15,6 +16,7 @@ export default function NotFound() {
             <Link href="/dashboard">Go to Dashboard</Link>
           </Button>
         </div>
+        <SupportHint />
       </div>
     </div>
   )

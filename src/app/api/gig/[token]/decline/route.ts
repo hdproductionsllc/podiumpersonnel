@@ -9,6 +9,17 @@ export async function POST(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
+  try {
+    return await handleDecline(_request, token)
+  } catch (err) {
+    // Never surface a raw 500 on the musician's most important flow — send them
+    // back to the gig page, which renders status-appropriate messaging.
+    console.error(`Error processing decline for gig token ${token}:`, err)
+    return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
+  }
+}
+
+async function handleDecline(_request: Request, token: string) {
   const supabase = createServiceClient()
 
   // Find the offer by token with all related data for emails
@@ -77,21 +88,36 @@ export async function POST(
     .eq('status', 'approved')
     .maybeSingle()
 
-  // Update offer to declined
-  await supabase
+  // Update offer to declined (optimistic lock: only if still pending/viewed, so
+  // a concurrent accept can't be clobbered by a stale decline).
+  const { data: declinedOffer, error: declineError } = await supabase
     .from('contract_offers')
     .update({
       status: 'declined',
       responded_at: new Date().toISOString(),
     })
     .eq('id', offer.id)
+    .in('status', ['pending', 'viewed'])
+    .select('id')
 
-  // Update position status to declined (back to vacant so another offer can be sent)
-  // But only if this is NOT a substitution - for substitutions, position stays with original musician
+  if (declineError) {
+    console.error(`Failed to decline offer ${offer.id}:`, declineError)
+    return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
+  }
+
+  if (!declinedOffer || declinedOffer.length === 0) {
+    // Already responded to (e.g. accepted in a concurrent request) — don't reset
+    // the chair or send a decline email.
+    return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
+  }
+
+  // Reset position to vacant so another offer can be sent. Clear musician_id too
+  // (defensive — never leave a vacant chair still pointing at a musician).
+  // Substitutions keep the chair with the original musician, so skip it.
   if (!subRequest) {
     await supabase
       .from('project_positions')
-      .update({ status: 'vacant' })
+      .update({ musician_id: null, status: 'vacant' })
       .eq('id', offer.project_position_id)
   }
 

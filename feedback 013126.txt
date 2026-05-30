@@ -1,0 +1,399 @@
+Item 1 — Musician Input Parsing & Missing Information
+A. Data Parsing Issue (Critical)
+
+Problem
+
+Musician input parsing is still incorrect.
+
+Fields containing mixed names and phone numbers are being misinterpreted.
+
+Phone numbers are sometimes parsed as musician names, creating bad records.
+
+Action for Claude
+
+Audit the Project String Quartet registration data in the database.
+
+Identify exactly where the parser failed on mixed-content fields.
+
+Improve parsing logic to:
+
+Detect phone-number patterns reliably
+
+Prevent numeric strings from being assigned to name fields
+
+Gracefully handle “messy” or non-standard input instead of guessing
+
+Goal
+
+Robust handling of real-world, inconsistent user input without corrupting musician records.
+
+B. User Experience Issue: Overwhelming Musician List
+
+Problem
+
+Users are overwhelmed when they see many musicians with missing or incomplete information.
+
+This negatively impacts confidence during initial setup.
+
+Action for Claude
+
+Reframe the experience to reassure users that:
+
+Musician details can be updated later
+
+Full data entry is not required upfront
+
+Required Change
+
+At minimum, ensure each musician is assigned an instrument.
+
+If instrument data is missing:
+
+Prompt users to use the batch edit tool to assign instruments
+
+This ensures the system knows “who plays what,” even before hiring decisions are made
+
+C. UX Implementation Options
+
+Post-import tooltip or modal explaining missing info and batch edit usage
+
+Contextual guidance on the Musician page to guide first-time users
+
+Goal
+
+Reduce cognitive overload
+
+Guide users toward the next meaningful action
+
+Copy-Paste Prompt for Claude Code
+
+We successfully registered Project String Quartet. Please audit the musician import data and fix parsing issues where mixed name/phone fields are incorrectly interpreted (phone numbers being parsed as names). Improve robustness for messy real-world input.
+Additionally, improve the UX on the Musician page: users feel overwhelmed by many musicians with missing information. Reassure users that details can be updated later, but ensure instruments are assigned at minimum. If instruments are missing, prompt users to use the batch edit tool. This can be implemented as a post-import tooltip/modal or contextual guidance on the Musician page.
+
+Item 2 — Excel Import Loading Feedback
+A. User Experience Issue
+
+Problem
+
+During Excel import, there is no visible loading indicator.
+
+Users are left unsure whether the import is still running or if the app froze.
+
+B. Required UX Change
+
+Action for Claude
+
+Add a visible loading state during Excel import and background parsing:
+
+Progress/loading bar
+
+Spinner / activity indicator
+
+Modal or inline status message (e.g., “Importing musicians… Parsing data…”)
+
+C. Behavior Expectations
+
+Loading indicator should appear immediately after submission, persist while parsing runs, and dismiss automatically when the process completes or errors
+
+Copy-Paste Prompt for Claude Code
+
+Add a visible loading state during Excel imports. Currently, users receive no feedback while parsing runs in the background, which makes them think the app has frozen. Implement a loading bar, spinner, or similar indicator that appears immediately after file submission and persists until the import completes or errors.
+
+Item 3 — Phone Number Display and Standardization
+A. User Interface Issue
+
+Problem
+
+Phone numbers word-wrap when browser width is small, splitting across lines
+
+Other columns have space, so phone numbers should not wrap
+
+Action
+
+Ensure phone numbers display on a single line
+
+Other columns may shrink proportionally, but phone column must never wrap
+
+B. Data Standardization & Validation
+
+Problem
+
+Phone numbers are currently stored/displayed exactly as typed
+
+Action
+
+Enforce standardized phone number format, e.g.: (123) 456-7890
+
+Validate input on import or entry:
+
+Ensure 10 digits
+
+Automatically format
+
+Flag invalid numbers
+
+Copy-Paste Prompt for Claude Code
+
+Update the spreadsheet view so phone numbers always display on a single line, regardless of browser width, shrinking other columns as needed.
+Additionally, standardize and validate phone numbers:
+
+Format as (123) 456-7890
+
+Ensure exactly 10 digits
+
+Automatically apply formatting on import or entry
+
+Flag invalid numbers for correction
+
+Item 4 — Musician Import via Phone Contacts
+A. Feature Request
+
+Problem
+
+Only spreadsheet imports are supported; phone contacts cannot be uploaded
+
+Action
+
+Accept contact exports (CSV, vCard) and auto-populate musician fields: name, phone, email
+
+B. Mobile Integration
+
+Goal
+
+On mobile, allow users to directly select and upload contacts from their phone
+
+C. UX Requirement
+
+Problem
+
+Users need confirmation that their contacts are being processed
+
+Action
+
+Show loading indicator (spinner, progress bar, status message) during import
+
+Copy-Paste Prompt for Claude Code
+
+Enable musician import from phone contacts, both on desktop and mobile.
+
+On desktop: accept contact exports (CSV, vCard, etc.) and parse them to auto-populate musician fields (name, phone, email, etc.).
+
+On mobile: allow users to directly select and upload contacts from their phone, with automatic parsing.
+
+During processing, display a loading indicator (spinner, progress bar, or status message) so users know their data is being imported.
+
+Item 5 — Minimal Required Musician Info & Project Workflow
+A. User Experience Issue
+
+Problem
+
+Users feel blocked if all musician info is not available upfront
+
+B. Required UX/Workflow Change
+
+Action for Claude
+
+Prompt users to create a project with partial musician data
+
+Allow sending the first call immediately
+
+Store any missing info when entered later to the musician’s contact record
+
+Copy-Paste Prompt for Claude Code
+
+Update the project creation workflow so that users do not need all musician information upfront.
+
+Prompt users to create a project with partial musician data (e.g., name, instrument).
+
+Allow them to send their first call immediately.
+
+When missing information is entered later, automatically update and store it in the musician’s contact record.
+
+Item 6 — Project Description: Internal vs. External Visibility
+A. User Experience Issue
+
+Problem
+
+Users do not know if project description is internal or visible to musicians
+
+B. Required UX/Workflow Change
+
+Action for Claude
+
+Indicate clearly:
+
+“Visible to musicians”
+
+“Internal notes only”
+
+Optionally, create separate fields:
+
+External Description
+
+Internal Notes
+
+Copy-Paste Prompt for Claude Code
+
+Clarify the visibility of the project description field:
+
+Indicate whether the description is sent to musicians or is internal only.
+
+Optionally, create separate fields for External Description (visible to musicians) and Internal Notes (internal only), so users know what will be shared.
+
+Item 7 — Project Creation: Services Visibility & Guidance
+A. User Experience Issue
+
+Problem
+
+Services section is not visible after project creation
+
+Edit button is ambiguous
+
+B. Required UX/Workflow Changes
+
+Action for Claude
+
+Auto-expand services section
+
+Provide guidance for first-time users
+
+Rename “Edit” → “Edit Project Details”
+
+Copy-Paste Prompt for Claude Code
+
+On project creation, auto-expand the services section so users can immediately add rehearsals and performances.
+
+For first-time users, display guidance that services live under the project and that rehearsals/performances must be added to the service for calls to work.
+
+Rename the ambiguous “Edit” button to “Edit Project Details” to clarify that services are not added there.
+
+Item 8 — Services: Add New Musician from Dropdown
+
+Action for Claude
+
+Allow adding a new musician directly from the service dropdown
+
+Place option at end of list, submit to database, make immediately selectable
+
+Copy-Paste Prompt for Claude Code
+
+In the services section, update the musician dropdown to allow adding a new musician directly from the list.
+
+Place the “Add New Musician” option at the end of the populated list.
+
+Submitting a new musician should save them to the database and make them immediately selectable in the dropdown.
+
+Item 9 — Calendar & Time Functionality
+A. Calendar Display Issues
+
+Calendars overlapping
+
+Incorrect default month view
+
+B. Time Display Issues
+
+Seconds displayed unnecessarily
+
+End time resets on edit
+
+C. Spreadsheet & Call Time Tracking
+
+Call time not displayed in spreadsheet
+
+Copy-Paste Prompt for Claude Code
+
+Fix calendar and time functionality as follows:
+
+Calendars fit within container and do not overlap
+
+Default to month of project date
+
+Show only hours and minutes
+
+Preserve user-set end time
+
+Add “Call Time” column in spreadsheet
+
+Item 10 — Quick Preset Label Clarity
+
+Action for Claude
+
+Rename “Quick Preset” to “Quick Ensemble Preset” or “Ensemble Preset”
+
+Copy-Paste Prompt for Claude Code
+
+Update the label for “Quick Preset” to something clearer, such as “Quick Ensemble Preset” or “Ensemble Preset”, so users immediately understand its purpose.
+
+Item 11 — Leader Fee Display on Calls
+
+Action for Claude
+
+Ensure leader fee is included in call notifications
+
+Verify breakdown is correct
+
+Copy-Paste Prompt for Claude Code
+
+Fix the call display so that the leader fee is included in the total pay shown to musicians. Currently, only base pay is visible. Ensure that the breakdown correctly shows base pay + leader fee.
+
+Item 12 — Address Links & Calendar Export (ICS/Google Calendar)
+
+Action for Claude
+
+Make addresses clickable in call notifications (Google Maps link)
+
+Ensure Google Calendar links and ICS files work correctly with date, time, location, and attendees
+
+Copy-Paste Prompt for Claude Code
+
+Make the project/service address clickable in call notifications, linking directly to Google Maps.
+Fix calendar integration so that Google Calendar links and ICS files work correctly, including:
+
+Correct date and time
+
+Location field with clickable address
+
+Accurate attendee info
+
+Item 13 — Musician Portal & “Request a Sub” Flow
+
+Action for Claude
+
+Remove “Request a Sub” from initial call response link
+
+Allow portal creation from confirmation email
+
+Only allow requesting a sub after portal creation and acceptance
+
+Copy-Paste Prompt for Claude Code
+
+Remove the “Request a Sub” option from the initial call response link, so it only appears after a musician has accepted the offer.
+Enable musicians to create a portal from the confirmation email if they skipped it during acceptance.
+Once the portal is created, allow them to request a sub if they need to cancel.
+
+Item 14 — Musician Portal: Redirect Loop Issue
+
+Action for Claude
+
+Fix redirected too many times error
+
+Ensure portal loads correctly from offer acceptance, confirmation email, and direct login
+
+Copy-Paste Prompt for Claude Code
+
+Fix the musician portal access so that it no longer triggers “redirected too many times” errors. Ensure the portal loads correctly from the offer acceptance, confirmation email link, and direct login without entering a redirect loop.
+
+Item 15 — Project Workflow: Musician Status Menu
+
+Action for Claude
+
+Remove dropdown for confirmed musicians
+
+Convert status to read-only display
+
+Keep only meaningful actions (replacement, rescheduling)
+
+Copy-Paste Prompt for Claude Code
+
+On the company side, for confirmed musicians, remove the status dropdown menu (Confirmed / Approved / Pending, etc.) and convert it into a read-only status display.
+Keep only actionable buttons that make sense, such as initiating a replacement or rescheduling. Re-architect the workflow so the UI reflects realistic admin actions and avoids confusing or unusable dropdown options.

@@ -54,6 +54,12 @@ export async function POST(
       return NextResponse.json({ error: 'Send record not found' }, { status: 404 })
     }
 
+    // Cross-tenant guard: sendRecord is fetched via the RLS-bypassing service
+    // client, so confirm it belongs to the caller's org before emailing.
+    if (sendRecord.organization_id !== mem.organization_id) {
+      return NextResponse.json({ error: 'Send record not found' }, { status: 404 })
+    }
+
     // Get unconfirmed confirmations
     const { data: unconfirmed, error: confError } = await serviceClient
       .from('gig_detail_confirmations')

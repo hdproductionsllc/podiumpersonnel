@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { SupportLink } from '@/components/ui/support-link'
 
 interface ConfirmMusicClientProps {
   token: string
@@ -103,7 +104,12 @@ export function ConfirmMusicClient({
                 </div>
 
                 {error && (
-                  <p className="text-sm text-red-600 text-center">{error}</p>
+                  <div className="text-center text-sm">
+                    <p className="text-red-600">{error}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Having trouble? Email <SupportLink subject="Help confirming music" />
+                    </p>
+                  </div>
                 )}
 
                 <Button

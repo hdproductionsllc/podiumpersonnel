@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
-import { sendOfferDeclinedEmail, sendAdminOfferResponseEmail, sendSubDeclinedFindAnotherEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
+import { sendOfferRescindedEmail, sendAdminOfferResponseEmail, sendSubDeclinedFindAnotherEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 
+// Admin rescinds an outstanding offer for a position.
+// Distinct from a musician declining: the offer is withdrawn before they responded.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ positionId: string }> }
@@ -11,7 +13,6 @@ export async function POST(
     const { positionId } = await params
     const supabase = await createClient()
 
-    // Verify user is authenticated
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -20,16 +21,14 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get decline reason from body if provided
-    let declineReason: string | null = null
+    let rescindReason: string | null = null
     try {
       const body = await request.json()
-      declineReason = body.reason || null
+      rescindReason = body.reason || null
     } catch {
       // No body provided, that's fine
     }
 
-    // Fetch the position with related data
     const { data: position, error: positionError } = await supabase
       .from('project_positions')
       .select(`
@@ -61,7 +60,6 @@ export async function POST(
     const timezone = organization?.timezone || DEFAULT_TIMEZONE
     const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, timezone) : ''
 
-    // Verify user has permission (is admin/owner of this organization)
     const { data: membership } = await supabase
       .from('organization_members')
       .select('role')
@@ -73,7 +71,6 @@ export async function POST(
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 })
     }
 
-    // Find the active (pending/viewed) offer for this position
     const { data: offer, error: offerError } = await supabase
       .from('contract_offers')
       .select(`
@@ -94,7 +91,6 @@ export async function POST(
 
     const musician = offer.musician as any
 
-    // Check if this is a substitution offer
     const { data: subRequest } = await supabase
       .from('substitution_requests')
       .select(`
@@ -109,19 +105,18 @@ export async function POST(
       .eq('status', 'approved')
       .maybeSingle()
 
-    // Update offer to declined
     const { error: offerUpdateError } = await supabase
       .from('contract_offers')
       .update({
-        status: 'declined',
+        status: 'rescinded',
         responded_at: new Date().toISOString(),
-        response_notes: declineReason,
+        response_notes: rescindReason,
       })
       .eq('id', offer.id)
 
     if (offerUpdateError) {
       console.error('Failed to update offer status:', offerUpdateError)
-      return NextResponse.json({ error: 'Failed to decline offer' }, { status: 500 })
+      return NextResponse.json({ error: 'Failed to rescind offer' }, { status: 500 })
     }
 
     // Reset position to vacant (unless substitution — position stays with original musician)
@@ -136,7 +131,7 @@ export async function POST(
       }
     }
 
-    // Handle substitution case
+    // Handle substitution case — the original musician still needs another sub
     if (subRequest) {
       await supabase
         .from('substitution_requests')
@@ -172,6 +167,7 @@ export async function POST(
           to: originalMusician.email,
           musicianName: `${originalMusician.first_name} ${originalMusician.last_name}`,
           organizationName: organization?.name || 'Orchestra',
+          organizationId: organization?.id,
           projectName: project?.name || 'Project',
           instrument: instrument?.name || 'Instrument',
           chairNumber: positionData.chair_number || 1,
@@ -184,7 +180,6 @@ export async function POST(
       }
     }
 
-    // Send confirmation emails
     try {
       let totalChairs = 1
       if (project?.id && instrument?.id) {
@@ -196,22 +191,20 @@ export async function POST(
         totalChairs = count || 1
       }
 
-      // Send decline confirmation to musician
       if (musician?.email) {
-        await sendOfferDeclinedEmail({
+        await sendOfferRescindedEmail({
           to: musician.email,
           musicianName: `${musician.first_name} ${musician.last_name}`,
           organizationName: organization?.name || 'Orchestra',
+          organizationId: organization?.id,
           projectName: project?.name || 'Project',
           instrument: instrument?.name || 'Instrument',
           chairNumber: positionData.chair_number || 1,
           totalChairs,
-          declineReason,
           performanceDate,
-        }).catch((err) => console.warn('Failed to send musician confirmation:', err))
+        }).catch((err) => console.warn('Failed to send musician rescinded notification:', err))
       }
 
-      // Notify organization admins
       if (project?.organization_id) {
         const adminEmails = await getOrgAdminEmails(project.organization_id)
 
@@ -226,8 +219,8 @@ export async function POST(
             instrument: instrument?.name || 'Instrument',
             chairNumber: positionData.chair_number || 1,
             totalChairs,
-            status: 'declined',
-            responseNotes: declineReason,
+            status: 'rescinded',
+            responseNotes: rescindReason,
             dashboardUrl: `${baseUrl}/dashboard/projects`,
             performanceDate,
           }).catch((err) => console.warn('Failed to send admin notification:', err))
@@ -237,11 +230,11 @@ export async function POST(
       console.warn('Email sending failed:', emailError)
     }
 
-    return NextResponse.json({ success: true, status: 'declined' })
+    return NextResponse.json({ success: true, status: 'rescinded' })
   } catch (error) {
-    console.error('Failed to decline offer:', error)
+    console.error('Failed to rescind offer:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to decline offer' },
+      { error: error instanceof Error ? error.message : 'Failed to rescind offer' },
       { status: 500 }
     )
   }
