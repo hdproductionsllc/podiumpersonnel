@@ -868,7 +868,20 @@ export function ProjectPositions({
         instrumentName={assignInstrumentId ? positions.find(p => p.instrument_id === assignInstrumentId)?.instrument?.name : undefined}
         chairNumber={assignChairNumber}
         musicians={musicians}
-        existingOfferMusicianIds={uniqueProjectOfferIds}
+        existingOfferMusicianIds={
+          // Exclude musicians booked/offered on OTHER chairs (prevents double-booking),
+          // but allow the musician who holds THIS chair's offer to be selected — that's
+          // the case where they accepted by text and the admin is confirming manually.
+          [...new Set(
+            positions
+              .filter((p) => p.id !== assignPositionId)
+              .flatMap((p) =>
+                p.contract_offers
+                  .filter((o) => o.status === 'pending' || o.status === 'viewed' || o.status === 'accepted')
+                  .map((o) => o.musician_id)
+              )
+          )]
+        }
         onSuccess={() => {
           // Check staffing progress after this assignment
           if (positions.length > 0) {

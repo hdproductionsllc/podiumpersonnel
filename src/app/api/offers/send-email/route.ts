@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
+import { createClient, createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendContractOfferEmail, sendAdminOfferSentEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { logEmailConfig } from '@/lib/email/client'
@@ -73,6 +73,20 @@ export async function POST(request: NextRequest) {
     const instrument = position?.instrument as any
     const services = project?.services as any[] || []
     const timezone = organization?.timezone || DEFAULT_TIMEZONE
+
+    // Enforce one active offer per chair: retire any OTHER outstanding offers on
+    // this position so sending a new call cleanly supersedes the previous one.
+    // Without this, a prior pending offer lingers and could still be accepted for
+    // a chair that's already moved on to (or been given to) someone else.
+    if (position?.id) {
+      const serviceClient = createServiceClient()
+      await serviceClient
+        .from('contract_offers')
+        .update({ status: 'expired', responded_at: new Date().toISOString() })
+        .eq('project_position_id', position.id)
+        .neq('id', offerId)
+        .in('status', ['pending', 'viewed'])
+    }
 
     await attachVenueDetails(services)
 

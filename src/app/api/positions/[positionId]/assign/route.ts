@@ -105,21 +105,28 @@ export async function POST(
       )
     }
 
-    // Check for active offers for this musician in this project
-    const allPosIds = (projectPositions || []).map((p: any) => p.id)
-    const { data: existingOffers } = await supabase
-      .from('contract_offers')
-      .select('id')
-      .eq('musician_id', musicianId)
-      .in('project_position_id', allPosIds)
-      .in('status', ['pending', 'viewed'])
-      .limit(1)
+    // Check for active offers for this musician on OTHER positions in this project.
+    // An outstanding offer for THIS position is expected and fine — it's exactly the
+    // case where a musician was offered the chair and accepted out-of-band (e.g. by
+    // text/phone), so we let the admin assign them and resolve that offer below.
+    const otherPosIds = (projectPositions || [])
+      .map((p: any) => p.id)
+      .filter((id: string) => id !== positionId)
+    if (otherPosIds.length > 0) {
+      const { data: existingOffers } = await supabase
+        .from('contract_offers')
+        .select('id')
+        .eq('musician_id', musicianId)
+        .in('project_position_id', otherPosIds)
+        .in('status', ['pending', 'viewed'])
+        .limit(1)
 
-    if (existingOffers && existingOffers.length > 0) {
-      return NextResponse.json(
-        { error: 'This musician already has a pending offer in this project' },
-        { status: 400 }
-      )
+      if (existingOffers && existingOffers.length > 0) {
+        return NextResponse.json(
+          { error: 'This musician already has a pending offer for another position in this project' },
+          { status: 400 }
+        )
+      }
     }
 
     // Assign the musician directly — no contract_offer, no email
@@ -145,6 +152,23 @@ export async function POST(
         { status: 409 }
       )
     }
+
+    // Resolve outstanding offers on this now-filled chair:
+    // - the assigned musician's own pending offer → accepted (they said yes off-app)
+    // - any other musician's pending offer → expired (the chair is taken)
+    const nowIso = new Date().toISOString()
+    await supabase
+      .from('contract_offers')
+      .update({ status: 'accepted', responded_at: nowIso })
+      .eq('project_position_id', positionId)
+      .eq('musician_id', musicianId)
+      .in('status', ['pending', 'viewed'])
+    await supabase
+      .from('contract_offers')
+      .update({ status: 'expired', responded_at: nowIso })
+      .eq('project_position_id', positionId)
+      .neq('musician_id', musicianId)
+      .in('status', ['pending', 'viewed'])
 
     return NextResponse.json({ success: true })
   } catch (error) {
