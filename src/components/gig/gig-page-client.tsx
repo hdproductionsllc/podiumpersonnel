@@ -425,8 +425,14 @@ export function GigPageClient({
                 </div>
               )}
 
+              {offerStatus === 'rescinded' && (
+                <div className="rounded-md bg-amber-50 dark:bg-amber-950 p-4 text-amber-800 dark:text-amber-200">
+                  This offer was withdrawn by the organization. No response is needed.
+                </div>
+              )}
+
               {/* Portal link - shown after responding */}
-              {(offerStatus === 'accepted' || offerStatus === 'declined') && (
+              {(offerStatus === 'accepted' || offerStatus === 'declined' || offerStatus === 'rescinded') && (
                 <div className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-4">
                   {musicianHasAccount ? (
                     <>

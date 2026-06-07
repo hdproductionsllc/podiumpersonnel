@@ -449,6 +449,8 @@ export default async function DashboardPage() {
         return { action: 'Offer accepted', detail: `${musicianName} for ${instrument}`, color: 'text-green-600 dark:text-green-400' }
       case 'declined':
         return { action: 'Offer declined', detail: `${musicianName} for ${instrument}`, color: 'text-red-600 dark:text-red-400' }
+      case 'rescinded':
+        return { action: 'Offer rescinded', detail: `${musicianName} for ${instrument}`, color: 'text-orange-600 dark:text-orange-400' }
       default:
         return { action: 'Offer updated', detail: `${musicianName}`, color: 'text-muted-foreground' }
     }
@@ -666,6 +668,7 @@ export default async function DashboardPage() {
                     <div className={`mt-0.5 h-2 w-2 rounded-full ${
                       offer.status === 'accepted' ? 'bg-green-500' :
                       offer.status === 'declined' ? 'bg-red-500' :
+                      offer.status === 'rescinded' ? 'bg-orange-500' :
                       offer.status === 'viewed' ? 'bg-yellow-500' :
                       'bg-blue-500'
                     }`} />

@@ -60,9 +60,9 @@ export async function GET(request: Request) {
       .in('status', ['pending', 'viewed'])
       .order('expires_at', { ascending: true, nullsFirst: false })
   } else {
-    // History - accepted, declined, expired
+    // History - accepted, declined, rescinded, expired
     query = query
-      .in('status', ['accepted', 'declined', 'expired'])
+      .in('status', ['accepted', 'declined', 'rescinded', 'expired'])
       .order('responded_at', { ascending: false, nullsFirst: false })
   }
 

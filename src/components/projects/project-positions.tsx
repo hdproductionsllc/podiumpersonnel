@@ -197,8 +197,8 @@ export function ProjectPositions({
   const [subRequestPosition, setSubRequestPosition] = useState<PositionJoined | null>(null)
   const [unassignPosition, setUnassignPosition] = useState<PositionJoined | null>(null)
   const [unassigning, setUnassigning] = useState(false)
-  const [declinePosition, setDeclinePosition] = useState<PositionJoined | null>(null)
-  const [declining, setDeclining] = useState(false)
+  const [rescindPosition, setRescindPosition] = useState<PositionJoined | null>(null)
+  const [rescinding, setRescinding] = useState(false)
   const [preSelectedMusicianId, setPreSelectedMusicianId] = useState<string | null>(null)
   const [isFollowUp, setIsFollowUp] = useState(false)
   const [ensembleDriftOpen, setEnsembleDriftOpen] = useState(false)
@@ -396,29 +396,29 @@ export function ProjectPositions({
     }
   }
 
-  async function confirmDeclineOnBehalf() {
-    if (!declinePosition) return
-    setDeclining(true)
+  async function confirmRescind() {
+    if (!rescindPosition) return
+    setRescinding(true)
 
     try {
-      const response = await fetch(`/api/positions/${declinePosition.id}/decline-offer`, {
+      const response = await fetch(`/api/positions/${rescindPosition.id}/rescind-offer`, {
         method: 'POST',
       })
 
       const result = await response.json()
 
       if (!response.ok) {
-        toast.error(result.error || 'Failed to decline offer')
+        toast.error(result.error || 'Failed to rescind offer')
         return
       }
 
-      toast.success('Offer declined on behalf of musician')
+      toast.success('Offer rescinded')
       onPositionChange()
     } catch {
-      toast.error('Failed to decline offer')
+      toast.error('Failed to rescind offer')
     } finally {
-      setDeclining(false)
-      setDeclinePosition(null)
+      setRescinding(false)
+      setRescindPosition(null)
     }
   }
 
@@ -653,10 +653,10 @@ export function ProjectPositions({
                                       variant="ghost"
                                       size="sm"
                                       className="h-6 text-xs text-destructive"
-                                      onClick={() => setDeclinePosition(position)}
-                                      title="Decline this offer on behalf of the musician"
+                                      onClick={() => setRescindPosition(position)}
+                                      title="Withdraw this outstanding offer"
                                     >
-                                      Decline
+                                      Rescind
                                     </Button>
                                   )}
                                 </div>
@@ -984,8 +984,8 @@ export function ProjectPositions({
         </div>
       )}
 
-      {declinePosition && (() => {
-        const pendingOffer = declinePosition.contract_offers.find(
+      {rescindPosition && (() => {
+        const pendingOffer = rescindPosition.contract_offers.find(
           o => o.status === 'pending' || o.status === 'viewed'
         )
         const musicianName = pendingOffer
@@ -995,9 +995,9 @@ export function ProjectPositions({
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
             <div className="w-full max-w-md rounded-lg border bg-background p-6 shadow-lg">
-              <h3 className="text-lg font-semibold">Decline Offer on Behalf</h3>
+              <h3 className="text-lg font-semibold">Rescind Offer</h3>
               <p className="mt-2 text-sm text-muted-foreground">
-                Are you sure you want to decline this offer on behalf of the musician?
+                Withdraw this outstanding offer? The position will return to vacant and the offer link will stop working.
               </p>
 
               <div className="mt-4 rounded-lg border bg-muted/30 p-4 space-y-2">
@@ -1010,9 +1010,9 @@ export function ProjectPositions({
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Position:</span>
                   <span>
-                    {declinePosition.instrument?.name}
-                    {(chairCountByInstrument.get(declinePosition.instrument_id) || 0) > 1
-                      ? `, ${getPositionTitle(declinePosition.instrument?.name || '', declinePosition.chair_number, declinePosition.instrument?.section, undefined, positions.length).title}`
+                    {rescindPosition.instrument?.name}
+                    {(chairCountByInstrument.get(rescindPosition.instrument_id) || 0) > 1
+                      ? `, ${getPositionTitle(rescindPosition.instrument?.name || '', rescindPosition.chair_number, rescindPosition.instrument?.section, undefined, positions.length).title}`
                       : ''
                     }
                   </span>
@@ -1020,15 +1020,15 @@ export function ProjectPositions({
               </div>
 
               <div className="mt-4 rounded bg-amber-50 dark:bg-amber-950/50 p-3 text-sm text-amber-700 dark:text-amber-300">
-                The musician will receive a decline confirmation email.
+                The musician will be emailed that the offer was withdrawn.
               </div>
 
               <div className="mt-4 flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setDeclinePosition(null)} disabled={declining}>
+                <Button variant="outline" onClick={() => setRescindPosition(null)} disabled={rescinding}>
                   Cancel
                 </Button>
-                <Button variant="destructive" onClick={confirmDeclineOnBehalf} disabled={declining}>
-                  {declining ? 'Declining...' : 'Confirm Decline'}
+                <Button variant="destructive" onClick={confirmRescind} disabled={rescinding}>
+                  {rescinding ? 'Rescinding...' : 'Confirm Rescind'}
                 </Button>
               </div>
             </div>

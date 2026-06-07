@@ -4,6 +4,7 @@ export {
   sendOfferReminderEmail,
   sendOfferAcceptedEmail,
   sendOfferDeclinedEmail,
+  sendOfferRescindedEmail,
   sendAdminOfferResponseEmail,
   sendEmail,
 } from './send'
