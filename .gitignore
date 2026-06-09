@@ -57,3 +57,6 @@ nul
 *.xlsx
 bravura-master/
 podium-marketing/
+
+# local database backups (large, contain PII)
+scripts/backups/
