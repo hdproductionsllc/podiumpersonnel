@@ -32,6 +32,17 @@
 - Server-side Places API enrichment when client geocoding is unavailable — the API route looks up place details by `place_id` using the server-side Google Places API.
 **Rule:** Never rely on the session-based Supabase client (`createClient()`) for cross-table reads in Next.js server components. If the data is needed for rendering and the user is already authenticated, use `createServiceClient()`. Also: Supabase `.insert()` does NOT throw on failure — always check the `error` return value. And: never silently swallow errors with empty `catch {}` blocks.
 
+## "Fixed" means fixed LIVE — never claim a fix before it's deployed
+**Date:** 2026-06-09
+**Bug (process, not code):** Told the user the music-upload bug was fixed and even suggested they test it — but the change was only committed locally, never pushed/deployed. They retried on production (old code) and hit the same error. Wasted their time and broke trust.
+**Root cause:** Conflated "I wrote the fix and tsc passes" with "it works for the user." For this user, the only state that matters is what's live on production.
+**Rule:** Do NOT tell this user something is "fixed" until it is deployed to production (committed → pushed to `master` → Vercel deploy landed) AND ideally verified there. Until then, say exactly what state it's in: "written locally, not deployed," or "pushed, deploying now — don't test yet." When code is done but not live, the honest status is "not fixed yet." Never invite them to test against code that isn't deployed. Vercel auto-deploys on push to `master`, so "make it live" = commit + push to master.
+
+## Use the right here-string syntax for the tool you're calling
+**Date:** 2026-06-09
+**Bug:** Ran `git commit -m @'...'@` (PowerShell here-string) inside the **Bash** tool. Bash treats `@'...'@` as a literal `@` + single-quoted string + literal `@`, so a stray `@` leaked into the commit subject line.
+**Rule:** `@'...'@` here-strings are PowerShell-only. In the Bash tool use a normal single-quoted `-m 'subject\n\nbody'` or `-F`/stdin. Match quoting syntax to the shell the tool actually runs.
+
 ## Google Maps URLs: always include address + query_place_id
 **Date:** 2026-03-27
 **Bug:** Google Maps links resolved to wrong locations (e.g. "Our Lady of Solitude Church" in Soledad, CA instead of Palm Springs, CA).
