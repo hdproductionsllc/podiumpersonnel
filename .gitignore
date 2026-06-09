@@ -50,3 +50,10 @@ supabase/.temp/
 next-env.d.ts
 
 .vercel
+
+# Stray files / non-source assets
+nul
+*.zip
+*.xlsx
+bravura-master/
+podium-marketing/

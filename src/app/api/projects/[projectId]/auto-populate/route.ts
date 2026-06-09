@@ -216,7 +216,11 @@ export async function PUT(
     .select()
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error('Auto-populate failed:', error)
+    return NextResponse.json(
+      { error: 'Could not auto-populate positions. Please try again, or contact support if it continues.' },
+      { status: 500 }
+    )
   }
 
   return NextResponse.json({

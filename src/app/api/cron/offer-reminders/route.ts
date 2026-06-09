@@ -3,6 +3,7 @@ import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferReminderEmail, sendOfferExpiringSoonEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
+import { cronDisabledResponse, notifyOps } from '@/lib/cron'
 
 export async function GET(request: NextRequest) {
   // Verify cron secret — Vercel sets this automatically for cron jobs
@@ -10,6 +11,9 @@ export async function GET(request: NextRequest) {
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  const disabled = cronDisabledResponse('offer-reminders')
+  if (disabled) return disabled
 
   const supabase = createServiceClient()
   const baseUrl = getAppUrl()
@@ -61,7 +65,8 @@ export async function GET(request: NextRequest) {
 
   if (fetchError) {
     console.error('Failed to fetch expiring offers:', fetchError)
-    return NextResponse.json({ error: fetchError.message }, { status: 500 })
+    await notifyOps('offer-reminders', fetchError)
+    return NextResponse.json({ error: 'Failed to fetch expiring offers' }, { status: 500 })
   }
 
   if (!expiringOffers || expiringOffers.length === 0) {
@@ -83,6 +88,19 @@ export async function GET(request: NextRequest) {
     if (!musician || !position || !project) {
       console.warn(`Skipping offer ${offer.id} — missing related data`)
       continue
+    }
+
+    // Claim this offer atomically BEFORE sending, so an overlapping cron run
+    // can't send the musician a duplicate reminder. Only one run wins the claim.
+    const { data: claimed } = await supabase
+      .from('contract_offers')
+      .update({ reminder_sent_at: now.toISOString() })
+      .eq('id', offer.id)
+      .is('reminder_sent_at', null)
+      .select('id')
+
+    if (!claimed || claimed.length === 0) {
+      continue // another run already claimed and is sending this reminder
     }
 
     const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
@@ -187,11 +205,7 @@ export async function GET(request: NextRequest) {
       console.error(`Failed to send admin heads-up for offer ${offer.id}:`, emailError)
     }
 
-    // 3. Mark reminder as sent
-    await supabase
-      .from('contract_offers')
-      .update({ reminder_sent_at: now.toISOString() })
-      .eq('id', offer.id)
+    // reminder_sent_at was already stamped atomically when we claimed the offer above.
   }
 
   console.log(`Cron: sent ${musicianEmails} musician reminders, ${adminEmails} admin heads-ups`)

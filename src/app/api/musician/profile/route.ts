@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email/send'
 import { getAppUrl } from '@/lib/utils'
 import { getRegionFromZip } from '@/lib/zip-region-map'
+import { serverError } from '@/lib/api-helpers'
 
 export async function GET() {
   const supabase = await createClient()
@@ -121,7 +122,7 @@ export async function PATCH(request: Request) {
     .eq('is_active', true)
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return serverError('Failed to load musician profile', error)
   }
 
   // Notify org admins when musician uploads W9

@@ -157,3 +157,65 @@ Hui Ping/Hui-Ping Lee, Tom/Thomas Patrick Farrell. (Most in Subito String Quarte
 - BIMI logo display in inbox (requires VMC certificate, $$$).
 - Admin-facing template visual cleanup.
 - Engagement-based pruning of unresponsive recipients.
+
+---
+
+# Ship-Readiness Plan (from deep review 2026-05-29)
+
+Full analysis: `tasks/ship-readiness-review.md`. Status: 🔴 RED — do not test against real musicians until Phase 0 is done.
+
+## Phase 0 — Stop the bleeding (BEFORE any more testing) ✅ DONE 2026-05-29
+- [x] Add `EMAIL_SAFE_MODE` + `EMAIL_ALLOWLIST` + `filterRecipients()` helper in `src/lib/email/client.ts`
+- [x] Gate both send chokepoints: sendTransactional + sendEmail (both `resend.emails.send` sites)
+- [x] Suppressed sends log `[EMAIL SUPPRESSED]` and return synthetic `{ id: null }` (callers untouched)
+- [x] Default `EMAIL_SAFE_MODE` ON when unset (fail-safe); documented in `.env.example`
+- [x] Add `CRON_ENABLED` flag (`src/lib/cron.ts`) wired into 5 cron routes (keepalive exempt)
+- [x] Seed `EMAIL_ALLOWLIST` with henrydavidphotography@gmail.com (in `.env.local` + `.env.example`)
+- [x] Cross-tenant org check in `src/lib/send-gig-details.ts` (closed blocker leak)
+- [x] BONUS: closed 2nd cross-tenant leak in send-gig-details-reminder route
+- [x] 13 new tests in `email-safe-mode.test.ts`; full suite 90/90 green; tsc clean
+- [ ] **USER ACTION:** set `EMAIL_SAFE_MODE=true` + `EMAIL_ALLOWLIST=...` in Vercel env (prod/preview)
+
+## Phase 1 — Prevent permanent data loss ✅ DONE 2026-05-29
+- [x] Musician delete → deactivates (`is_active=false`) when payment history exists; preserves it
+- [x] Project delete → archives (`status='cancelled'`) when payment history exists
+- [x] Migration `062_protect_payment_records.sql`: payments FKs → `ON DELETE RESTRICT` (DB backstop)
+- [x] Instrument delete blocks when used by positions (esp confirmed) or musicians
+- [x] 9 regression tests in `data-safety.test.ts`
+- [ ] **USER ACTION:** run migration 062 in Supabase; confirm daily backups / PITR enabled in dashboard
+
+## Phase 2 — Fix the core offer lifecycle ✅ DONE 2026-05-29
+- [x] Substitute-accept branch in both accept routes (transfer chair from original); release original's offer
+- [x] Migration `063_add_released_offer_status.sql` + type union + status labels (released/rescinded)
+- [x] Optimistic status locks on both decline routes; clear `musician_id` on reset
+- [x] Token decline now captures DB error + bails out if already responded
+- [x] Expiry cron excludes `accepted` offers when deciding to vacate (sub-flow protection)
+- [x] `released` rendered on musician offer-detail + included in portal history
+- [x] 14 regression tests in `offer-lifecycle.test.ts`; suite 113/113 green; tsc clean
+- [ ] **USER ACTION:** run migration 063 in Supabase
+
+## Phase 3 — Errors route to help, no dead ends ✅ DONE 2026-05-29
+- [x] `src/lib/constants.ts` (`SUPPORT_EMAIL` + `supportMailto`) + `SupportLink`/`SupportHint` components
+- [x] Support hint in all 4 error.tsx + root not-found.tsx + new `global-error.tsx` + both confirm clients
+- [x] Friendly public not-found.tsx for gig + confirm-details + confirm-music (→ musician portal, not /dashboard)
+- [x] Wrapped gig accept/decline handlers in try/catch → redirect back to `/gig/[token]`
+- [x] Standardized 500s: `serverError` helper on 3 musician routes; generic messages on venues + auto-populate
+- [x] tsc clean; 113 tests; `next build` compiles successfully
+- Note: auth forms still hardcode the email string (works; can swap to SUPPORT_EMAIL later — cosmetic)
+
+## Phase 4 — Billing correctness (before turning billing ON) ✅ DONE 2026-05-30
+- [x] Explicit `NEXT_PUBLIC_BILLING_ENABLED` flag gates all enforcement (default OFF); documented in QA-BILLING.md
+- [x] `resolveOrgPlan` honors `trial_ends_at` with days-remaining countdown (when billing on)
+- [x] Webhook idempotency via `stripe_events` table (migration 064); handles created/payment_failed/invoice.paid
+- [x] `stripe_customer_id` fallback for invoice events + logging when org can't be resolved
+- [x] `getOrgPlan` fails closed (returns free) on lookup error when billing enabled
+- [x] 9 regression tests in `billing-webhook.test.ts`; plan tests rewritten for both modes; suite 122/122 green
+- [ ] **USER ACTION:** run migration 064; set `NEXT_PUBLIC_BILLING_ENABLED=true` in Vercel only when launching billing
+
+## Phase 5 — Reliability & polish ✅ DONE 2026-05-30
+- [x] offer-reminders claims the offer atomically (reminder_sent_at) before sending — no duplicate reminders
+- [x] `notifyOps` helper emails PLATFORM_ADMIN_EMAIL on fatal cron failures (offer-reminders + expire-offers); respects allowlist
+- [x] Public gig accept/decline buttons show a submitting state + disable to prevent double-taps
+- [x] `rescinded`/`released` in OFFER_STATUS labels (Phase 2); Clear All now uses the app Dialog with a count
+- [x] Dashboard redirects to /onboarding instead of crashing on a null org
+- [x] 6 regression tests in `reliability.test.ts`; suite 128/128 green; `next build` clean

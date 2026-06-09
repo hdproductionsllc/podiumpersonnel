@@ -186,6 +186,7 @@ export function ProjectPositions({
   const [addPositionMode, setAddPositionMode] = useState<'presets' | 'single'>('presets')
   const [savePresetOpen, setSavePresetOpen] = useState(false)
   const [clearing, setClearing] = useState(false)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [offerPositionId, setOfferPositionId] = useState<string | null>(null)
   const [offerInstrumentId, setOfferInstrumentId] = useState<string | null>(null)
   const [offerChairNumber, setOfferChairNumber] = useState<number>(1)
@@ -347,20 +348,24 @@ export function ProjectPositions({
     onPositionChange()
   }
 
-  async function handleClearAll() {
+  function handleClearAll() {
     // Check if any positions are confirmed
     const confirmedPositions = positions.filter(p => p.status === 'confirmed' || p.musician_id)
     if (confirmedPositions.length > 0) {
       toast.error(`Cannot clear all positions. ${confirmedPositions.length} position(s) have confirmed musicians. Unassign them first.`)
       return
     }
-    if (!confirm('Remove all positions from this project?')) return
+    setShowClearConfirm(true)
+  }
+
+  async function confirmClearAll() {
     setClearing(true)
     const supabase = createClient()
     const { error } = await supabase.from('project_positions').delete().eq('project_id', projectId)
     if (error) {
       toast.error('Failed to clear positions')
     } else {
+      setShowClearConfirm(false)
       onPositionChange()
     }
     setClearing(false)
@@ -935,6 +940,27 @@ export function ProjectPositions({
             </Button>
             <Button onClick={() => handleUpdateEnsembleType(ensembleLabelInput.trim() || null)} disabled={updatingEnsembleType || !ensembleLabelInput.trim()}>
               {updatingEnsembleType ? 'Updating...' : 'Update'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Clear All Positions Confirmation */}
+      <Dialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remove all positions?</DialogTitle>
+            <DialogDescription>
+              This will remove all {positions.length} position{positions.length === 1 ? '' : 's'} from
+              this project. This can&apos;t be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="ghost" onClick={() => setShowClearConfirm(false)} disabled={clearing}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmClearAll} disabled={clearing}>
+              {clearing ? 'Removing…' : `Remove ${positions.length} position${positions.length === 1 ? '' : 's'}`}
             </Button>
           </DialogFooter>
         </DialogContent>

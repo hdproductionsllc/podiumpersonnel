@@ -121,17 +121,21 @@ export async function POST(
     return NextResponse.json({ error: 'This offer has already been responded to' }, { status: 409 })
   }
 
-  // Update position: assign musician and set status to confirmed
-  // Only update if no musician is already assigned (prevents race condition)
-  const { data: updatedPosition, error: positionUpdateError } = await supabase
+  // Update position: assign musician and set status to confirmed.
+  // Normal offer: the chair must be unassigned (prevents two musicians winning
+  // the same chair). Substitution: the chair is held by the requesting (original)
+  // musician and is atomically transferred to the substitute.
+  let positionUpdate = supabase
     .from('project_positions')
     .update({
       musician_id: offer.musician_id,
       status: 'confirmed',
     })
     .eq('id', offer.project_position_id)
-    .is('musician_id', null)
-    .select('id')
+  positionUpdate = subRequest
+    ? positionUpdate.eq('musician_id', subRequest.requesting_musician_id)
+    : positionUpdate.is('musician_id', null)
+  const { data: updatedPosition, error: positionUpdateError } = await positionUpdate.select('id')
 
   if (positionUpdateError) {
     console.error('Failed to update position:', positionUpdateError)
@@ -139,7 +143,7 @@ export async function POST(
   }
 
   if (!updatedPosition || updatedPosition.length === 0) {
-    // Position was already filled — revert the offer status
+    // Chair was no longer available to this musician — revert the offer status
     await supabase
       .from('contract_offers')
       .update({ status: 'pending', responded_at: null })
@@ -153,6 +157,15 @@ export async function POST(
       .from('substitution_requests')
       .update({ status: 'filled' })
       .eq('id', subRequest.id)
+
+    // Release the original musician's prior accepted offer for this chair so
+    // they are no longer counted as confirmed.
+    await supabase
+      .from('contract_offers')
+      .update({ status: 'released' })
+      .eq('project_position_id', offer.project_position_id)
+      .eq('musician_id', subRequest.requesting_musician_id)
+      .eq('status', 'accepted')
 
     const originalMusician = subRequest.requesting_musician as any
     const serviceName = (subRequest.service as any)?.name || null

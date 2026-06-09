@@ -93,6 +93,9 @@ export function GigPageClient({
   const [showSubRequestForm, setShowSubRequestForm] = useState(false)
   const [subRequestSubmitted, setSubRequestSubmitted] = useState(false)
   const [currentSubRequest, setCurrentSubRequest] = useState(existingSubRequest)
+  // Tracks which native form is submitting so we can disable both buttons and
+  // avoid double-taps on slow mobile connections (the POST does a full redirect).
+  const [submitting, setSubmitting] = useState<false | 'accept' | 'decline'>(false)
 
   const isExpired = expiresAt && new Date(expiresAt) < new Date()
   const canRespond = offerStatus === 'pending' || offerStatus === 'viewed'
@@ -491,14 +494,33 @@ export function GigPageClient({
                     .
                   </p>
                   <div className="flex flex-col sm:flex-row gap-3">
-                    <form action={`/api/gig/${token}/accept`} method="POST" className="flex-1">
-                      <Button type="submit" className="w-full h-12 sm:h-10 text-base sm:text-sm font-semibold">
-                        Accept Offer
+                    <form
+                      action={`/api/gig/${token}/accept`}
+                      method="POST"
+                      className="flex-1"
+                      onSubmit={() => setSubmitting('accept')}
+                    >
+                      <Button
+                        type="submit"
+                        disabled={submitting !== false}
+                        className="w-full h-12 sm:h-10 text-base sm:text-sm font-semibold"
+                      >
+                        {submitting === 'accept' ? 'Accepting…' : 'Accept Offer'}
                       </Button>
                     </form>
-                    <form action={`/api/gig/${token}/decline`} method="POST" className="flex-1">
-                      <Button type="submit" variant="outline" className="w-full h-11 sm:h-10 text-base sm:text-sm">
-                        Decline
+                    <form
+                      action={`/api/gig/${token}/decline`}
+                      method="POST"
+                      className="flex-1"
+                      onSubmit={() => setSubmitting('decline')}
+                    >
+                      <Button
+                        type="submit"
+                        variant="outline"
+                        disabled={submitting !== false}
+                        className="w-full h-11 sm:h-10 text-base sm:text-sm"
+                      >
+                        {submitting === 'decline' ? 'Declining…' : 'Decline'}
                       </Button>
                     </form>
                   </div>

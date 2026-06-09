@@ -77,6 +77,14 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
     throw new Error('Project not found')
   }
 
+  // Cross-tenant guard: this helper uses the RLS-bypassing service client, so
+  // we must verify the project belongs to the caller's org before emailing its
+  // musicians. Without this, an admin could pass another org's projectId and
+  // both email that org's musicians and read their roster.
+  if (project.organization_id !== organizationId) {
+    throw new Error('Project not found')
+  }
+
   const organization = project.organization as any
   const services = (project.services as any[]) || []
   const positions = (project.project_positions as any[]) || []

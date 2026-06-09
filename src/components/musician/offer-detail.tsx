@@ -184,6 +184,8 @@ export function OfferDetail({ offer, services, totalPay, totalChairs, instrument
         return <Badge variant="destructive">Declined</Badge>
       case 'rescinded':
         return <Badge variant="secondary">Withdrawn by organization</Badge>
+      case 'released':
+        return <Badge variant="secondary">Released (substitute confirmed)</Badge>
       case 'expired':
         return <Badge variant="secondary">Expired</Badge>
       default:

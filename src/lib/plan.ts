@@ -32,15 +32,31 @@ export const PLAN_LIMITS = {
 } as const
 
 /**
+ * Master switch for whether billing is enforced. While this is off (the default
+ * until launch) every org gets full Pro access regardless of subscription state.
+ * Set NEXT_PUBLIC_BILLING_ENABLED=true to turn on real plan resolution + gating.
+ * NEXT_PUBLIC_ so the same answer is computed on both server and client.
+ */
+export function isBillingEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true'
+}
+
+/**
  * Resolve the effective plan from org billing columns.
  *
- * Resolution order:
- * 1. subscription_status is 'active' or 'trialing' → Pro
- * 2. subscription_status is 'past_due' → Pro (grace period)
- * 3. plan_tier explicitly set to 'free' → Free
- * 4. Everything else → Pro (billing not yet launched, all orgs get full access)
+ * When billing is NOT enabled → Pro for everyone (pre-launch).
+ * When enabled, resolution order:
+ * 1. subscription_status 'active' / 'trialing' → Pro
+ * 2. subscription_status 'past_due' → Pro (grace period while Stripe retries)
+ * 3. trial_ends_at in the future → Pro (trial), with days remaining
+ * 4. Everything else (trial expired or canceled) → Free
  */
 export function resolveOrgPlan(org: OrgBilling): ResolvedPlan {
+  // Pre-launch: billing not enforced, everyone gets full access.
+  if (!isBillingEnabled()) {
+    return { tier: 'pro', status: 'pro', trialDaysRemaining: null, canUpgrade: false }
+  }
+
   const subStatus = org.subscription_status
 
   // Active Stripe subscription
@@ -53,13 +69,17 @@ export function resolveOrgPlan(org: OrgBilling): ResolvedPlan {
     return { tier: 'pro', status: 'past_due', trialDaysRemaining: null, canUpgrade: false }
   }
 
-  // Explicitly downgraded to free (e.g. canceled subscription)
-  if (org.plan_tier === 'free') {
-    return { tier: 'free', status: 'free', trialDaysRemaining: null, canUpgrade: true }
+  // No active subscription — honor the free trial window if it hasn't elapsed.
+  if (org.trial_ends_at) {
+    const msRemaining = new Date(org.trial_ends_at).getTime() - Date.now()
+    if (msRemaining > 0) {
+      const trialDaysRemaining = Math.ceil(msRemaining / (1000 * 60 * 60 * 24))
+      return { tier: 'pro', status: 'trial', trialDaysRemaining, canUpgrade: true }
+    }
   }
 
-  // Default: all orgs get pro access until billing is fully launched
-  return { tier: 'pro', status: 'pro', trialDaysRemaining: null, canUpgrade: false }
+  // Trial expired or explicitly downgraded to free.
+  return { tier: 'free', status: 'free', trialDaysRemaining: null, canUpgrade: true }
 }
 
 // --- Feature gate helpers ---

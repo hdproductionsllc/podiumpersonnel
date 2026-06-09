@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
+import { SupportHint } from '@/components/ui/support-link'
 
 export default function GlobalError({
   error,
@@ -47,6 +48,7 @@ export default function GlobalError({
             Go to Dashboard
           </Button>
         </div>
+        <SupportHint errorId={error.digest} />
       </div>
     </div>
   )

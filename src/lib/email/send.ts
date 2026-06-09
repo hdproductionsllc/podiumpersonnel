@@ -1,4 +1,4 @@
-import { resend, EMAIL_FROM_ADDRESS, EMAIL_REPLY_TO, buildFromAddress } from './client'
+import { resend, EMAIL_FROM_ADDRESS, EMAIL_REPLY_TO, buildFromAddress, filterRecipients } from './client'
 import { getOrgOwnerEmail } from '../supabase/server'
 import type * as React from 'react'
 import { ContractOfferEmail } from './templates/contract-offer'
@@ -105,9 +105,20 @@ async function sendTransactional(args: {
     }
   }
 
+  // Safe-mode gate: suppress non-allowlisted recipients during testing.
+  const { allowed, suppressed } = filterRecipients(args.to)
+  if (suppressed.length > 0) {
+    console.log(
+      `[EMAIL SUPPRESSED] (${args.errorContext}) "${args.subject}" → ${suppressed.join(', ')}`
+    )
+  }
+  if (allowed.length === 0) {
+    return { id: null, emailHtml }
+  }
+
   const { data, error } = await resend.emails.send({
     from: buildFromAddress(args.fromName),
-    to: args.to,
+    to: allowed,
     subject: args.subject,
     html: emailHtml,
     text: emailText,
@@ -826,9 +837,18 @@ interface SendEmailParams {
 export async function sendEmail(params: SendEmailParams) {
   const { to, subject, html, text } = params
 
+  // Safe-mode gate: suppress non-allowlisted recipients during testing.
+  const { allowed, suppressed } = filterRecipients(to)
+  if (suppressed.length > 0) {
+    console.log(`[EMAIL SUPPRESSED] (generic) "${subject}" → ${suppressed.join(', ')}`)
+  }
+  if (allowed.length === 0) {
+    return { id: null, emailHtml: html }
+  }
+
   const { data, error } = await resend.emails.send({
     from: buildFromAddress(),
-    to,
+    to: allowed,
     subject,
     html,
     text: text || html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),

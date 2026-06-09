@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, resolveMusicianIds } from '@/lib/supabase/server'
+import { serverError } from '@/lib/api-helpers'
 
 export async function GET(request: Request) {
   const supabase = await createClient()
@@ -60,16 +61,16 @@ export async function GET(request: Request) {
       .in('status', ['pending', 'viewed'])
       .order('expires_at', { ascending: true, nullsFirst: false })
   } else {
-    // History - accepted, declined, rescinded, expired
+    // History - accepted, declined, rescinded, released, expired
     query = query
-      .in('status', ['accepted', 'declined', 'rescinded', 'expired'])
+      .in('status', ['accepted', 'declined', 'rescinded', 'released', 'expired'])
       .order('responded_at', { ascending: false, nullsFirst: false })
   }
 
   const { data: offers, error } = await query.limit(50)
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return serverError('Failed to load musician offers', error)
   }
 
   return NextResponse.json({ offers: offers || [] })
