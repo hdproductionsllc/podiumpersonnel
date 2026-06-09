@@ -11,6 +11,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import { createClient } from '@/lib/supabase/client'
 import { SendMusicDialog } from './send-music-dialog'
 
 interface ProjectFileInstrument {
@@ -121,19 +122,48 @@ export function ProjectFilesSection({
 
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append('file', selectedFile)
-      formData.append('scope', scope)
-      if (scope === 'assigned' && selectedInstruments.length > 0) {
-        formData.append('instrumentIds', JSON.stringify(selectedInstruments))
-      }
-      if (uploadNotes.trim()) {
-        formData.append('notes', uploadNotes.trim())
+      // 1. Ask the server for a short-lived signed upload URL. The file bytes go
+      //    straight to Supabase Storage — never through the API route — so we're
+      //    not capped by Vercel's ~4.5MB serverless request-body limit.
+      const urlRes = await fetch(`/api/projects/${projectId}/files/upload-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: selectedFile.name,
+          fileSize: selectedFile.size,
+          mimeType: selectedFile.type,
+        }),
+      })
+      const urlData = await urlRes.json()
+      if (!urlRes.ok) {
+        throw new Error(urlData.error || 'Upload failed')
       }
 
+      // 2. Upload the PDF directly to storage using the signed token.
+      const supabase = createClient()
+      const { error: uploadError } = await supabase.storage
+        .from('project-files')
+        .uploadToSignedUrl(urlData.path, urlData.token, selectedFile, {
+          contentType: 'application/pdf',
+        })
+      if (uploadError) {
+        throw new Error('Failed to upload file. Please try again.')
+      }
+
+      // 3. Record the file metadata (small JSON — well within limits).
       const res = await fetch(`/api/projects/${projectId}/files`, {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storagePath: urlData.path,
+          fileName: selectedFile.name,
+          scope,
+          instrumentIds:
+            scope === 'assigned' && selectedInstruments.length > 0
+              ? selectedInstruments
+              : null,
+          notes: uploadNotes.trim() || null,
+        }),
       })
 
       const data = await res.json()

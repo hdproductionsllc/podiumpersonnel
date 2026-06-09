@@ -1,3 +1,72 @@
+# Fix music/parts upload failing on files >4.5MB (2026-06-09)
+
+**Problem:** Uploading a PDF part fails with `Unexpected token 'R', "Request En"... is not valid JSON`.
+Root cause: app advertises a 40MB limit, but the upload streams the file *through* a Vercel
+serverless API route, which has a hard ~4.5MB request-body cap. Vercel rejects oversized bodies at
+the edge with a plain-text "Request Entity Too Large", and the client's `res.json()` chokes on the "R".
+
+**Fix from first principles:** Don't route file bytes through the serverless function at all.
+Browser asks the server for a short-lived **signed upload URL**, uploads the PDF **directly to
+Supabase Storage** (handles 40MB+), then posts only small JSON metadata to record the row. The
+API never sees the bytes, so the 4.5MB cap is irrelevant and the promised 40MB actually works.
+
+## Steps
+- [x] New route `POST /api/projects/[projectId]/files/upload-url` — auth/admin/project checks,
+      validate pdf + size, mint a signed upload URL via admin client, return `{ token, path }`.
+- [x] Repurpose `POST /api/projects/[projectId]/files` — accept JSON metadata instead of formData;
+      validate storagePath is within this org/project; verify object exists in storage (authoritative
+      size, no orphan rows); insert project_files row + instrument assignments.
+- [x] Rework client `handleUpload` in `project-files-section.tsx` — get URL → uploadToSignedUrl →
+      POST metadata. Use browser supabase client.
+- [x] `npx tsc --noEmit` clean.
+- [ ] User: verify a >5MB PDF uploads successfully in the app.
+- [ ] CHECK: confirm the `project-files` storage bucket's max-file-size limit in Supabase is ≥40MB
+      (Storage → buckets → project-files). The old path never sent >4.5MB, so the bucket cap is untested.
+
+---
+
+# Merge duplicate musician records (2026-06-08)
+
+**Problem:** Roster has duplicate musician entries within a single org — same person entered
+twice, often with the email on one copy and missing on the other (e.g. Christopher Ahn has the
+email, Chris Ahn has the phone, both in Subito Strings).
+
+**Scope decided with user:** Only merge "confident" pairs where a clear keeper exists (a record
+WITH an email). Pairs where neither copy has an email are left for manual review (could be two
+different people sharing a name). Never merge across organizations — each org keeps its own roster.
+
+**Principle:** Merge, not delete. Keep the email-bearing record, move any history (instruments,
+book entries, positions, offers, subs, schedules, payments) onto it, fill its blank fields from
+the twin, then remove the emptied twin. (Matches the house rule: preserve records with history.)
+
+## The 12 merges (keeper ← twin)
+- 6 trivial (twin is an empty stub, no history): Ruzanna Sargsyan, Amanda Marshall, Leah Metzler,
+  Graham Woodland, Victoria Bietz, Tara Santiago [Subito Strings / Project SQ].
+- 6 with history to move: Shelly Ren, Foster Wang, Rachel Halvorson, Danielle Cho,
+  Mc Kayla Talasek, Christopher/Chris Ahn.
+- No payment/1099 records sit on any twin being removed (all on keepers) — verified.
+
+## Steps
+- [x] Write `scripts/merge-duplicate-musicians.js` (backup → dry-run → apply).
+- [x] Run backup: dump all 24 musician rows + their FK rows to timestamped JSON (reversibility).
+      → `scripts/backups/musicians-merge-2026-06-08T14-37-36-170Z.json`
+- [x] Dry-run: print exact planned reassignments/deletes/field-fills.
+- [x] Apply merges (handle `musician_instruments` unique(musician_id,instrument_id) conflicts).
+- [x] Verify: total 419 → 407 (12 removed), 0 twins remain, keepers intact, Christopher Ahn keeper
+      now has email + phone, 0 remaining same-org dup groups have an email on any copy. DONE.
+
+## Left for manual review (~16 pairs, no email on either copy)
+Both-blank same-org pairs: Michelle Sheehy, Sorah Myung, Daniel Smith, Clement Chow (phone only),
+Rebecca Matayoshi, Ruzanna Sargsyan [SSQ], Hillary Smith, Shelly Ren [SSQ], Chris Ahn [SSQ],
+Victoria Bietz [SSQ], Jennifer Li, Garik Terzian, Ginger Murphy, Maksim Velichkin,
+Hui Ping/Hui-Ping Lee, Tom/Thomas Patrick Farrell. (Most in Subito String Quartet.)
+
+## Out of scope
+- Cross-org "duplicates" (same person on two orgs' rosters) — by design, not touched.
+- A reusable in-app merge UI — candidate for v2 so this doesn't recur on future imports.
+
+---
+
 # Rescind Offer (replace admin "Decline on behalf")
 
 **Problem:** In project positions table, when a position has the `offered` status, the admin sees a destructive "Decline" button. The label is misleading (decline = musician action) and the underlying action sends the musician a "You declined the offer" email even though the admin is the one cancelling.
@@ -18,7 +87,13 @@
 - [x] `src/components/gig/gig-page-client.tsx` — gig link shows "withdrawn" message instead of nothing if a musician opens a rescinded link.
 - [x] `npx tsc --noEmit` clean (after clearing stale `.next/types`).
 - [x] Migration 061 run in Supabase — verified 2026-05-22 via REST round-trip on offer `224d2d9d…`: UPDATE to `status='rescinded'` accepted by CHECK constraint.
-- [ ] User: visual verification in dev — send an offer, click Rescind, confirm modal copy, confirm musician inbox shows "withdrawn" not "declined."
+- [x] 2026-06-07: Re-applied JUST the rescind feature onto `master` (it had been stranded in the
+      unmerged `ship-readiness-hardening` mega-commit; master still showed old "Decline on behalf").
+      Cherry-picked the rescind bits by hand (skipped unrelated Clear-All/null-org/submit-state/`released`
+      changes). Committed `5f639833`, pushed to origin/master (Vercel auto-deploy). `tsc --noEmit` clean.
+      Re-verified prod constraint allows `rescinded` via safe round-trip probe on offer `538316ff…`
+      (flipped to rescinded, restored to declined).
+- [ ] User: visual verification in prod — send an offer, click Rescind, confirm modal copy, confirm musician inbox shows "withdrawn" not "declined."
 
 ## Decisions (kept narrow on purpose)
 - `next-candidate.ts` and `project-offers.tsx` waterfall: NOT including `'rescinded'`. Rationale: declined = "musician said no, don't suggest them again"; rescinded = "admin pulled it back, often for unrelated reasons" — the admin is already in active control, no need for waterfall suggestions, and the rescinded musician should remain a valid manual candidate.
