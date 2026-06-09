@@ -1,3 +1,50 @@
+# LAUNCH: land hardening, verify everything, go live (2026-06-09)
+
+Full plan: `~/.claude/plans/serene-wobbling-lightning.md`. Scope per David: everything
+except billing/payments enforcement; existing orgs free forever; "1000% sure it works."
+
+## Phase 1 — Merge stranded `ship-readiness-hardening` into master
+- [x] Merge on branch `land-ship-readiness` (commit c8b88d35). Only 2 conflicts, both
+      taken from branch side (strict supersets): musician/offers route, offer-detail badge.
+- [x] Comped-Pro tier in `resolveOrgPlan` (`plan_tier='pro'` + no sub = Pro forever),
+      placed AFTER past_due so paying subscribers keep grace-period status. +2 tests.
+- [x] `npm install` (lucide 0.562→1.7.0 major, radix-ui meta removed) — no breakage.
+- [x] tsc clean, 134/134 vitest, production build green.
+- [x] Sanity: upload-flow files byte-identical to master; rescind route + email intact.
+- [x] `getAppUrl()` trims (prod env var had a literal trailing newline in the URL).
+
+## Phase 2 — Database
+- [x] Probed prod: 051 applied, 064 missing; 047/059/062/063 idempotent → one SQL file.
+- [x] `scripts/launch-pending-migrations.sql` written (047+059+062+063+064 + self-verify).
+- [x] All 6 existing orgs comped to `plan_tier='pro'` via REST (inert until billing flips).
+- [ ] **David: run `scripts/launch-pending-migrations.sql` in Supabase SQL editor** —
+      063 is REQUIRED before deploy (accept routes write status='released').
+- [ ] David: confirm Supabase backups/PITR enabled (Dashboard → Database → Backups).
+
+## Phase 3 — Vercel env (DONE) + deploy (gated on Phase 2 SQL)
+- [x] Production: `EMAIL_SAFE_MODE=false` (was "" = would have suppressed ALL prod email
+      on deploy!), clean `NEXT_PUBLIC_APP_URL`, removed stale SIGNUP_ACCESS_CODE/EMAIL_FROM/ALLOWLIST.
+- [x] Preview: `EMAIL_SAFE_MODE=true` + `EMAIL_ALLOWLIST=henrydavidphotography@gmail.com`
+      → previews are now guaranteed email-safe test environments.
+- [ ] Push `land-ship-readiness` → master → Vercel deploy (AFTER SQL runs).
+
+## Phase 4 — E2E verification (after deploy)
+- [ ] Deploy healthy, function logs clean.
+- [ ] Offer to David's own email → lands in Primary tab → accept via gig link.
+- [ ] Rescind flow (modal copy + "withdrawn" email). Decline flow. Sub-request flow.
+- [ ] Gig details send. >5MB PDF upload. Bucket cap ≥40MB. Musician portal login.
+- [ ] Security: cross-tenant send-gig-details rejected; storage isolation.
+- [ ] Fresh signup funnel (marketing site → signup → onboarding → welcome email).
+- [ ] mail-tester.com spam score.
+
+## Phase 5 — Hygiene (non-blocking)
+- [ ] Duplicate "Project String Quartet" org (5ba29961…) — investigate, archive if empty.
+- [ ] ~15 no-email duplicate musician pairs — review with David, then merge script.
+- [ ] bravura/podium-marketing/xlsx clutter out of repo root.
+- [x] `tasks/billing-launch.md` runbook written (billing = 30-min config job when ready).
+
+---
+
 # Fix music/parts upload failing on files >4.5MB (2026-06-09)
 
 **Problem:** Uploading a PDF part fails with `Unexpected token 'R', "Request En"... is not valid JSON`.
