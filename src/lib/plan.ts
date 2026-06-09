@@ -48,8 +48,9 @@ export function isBillingEnabled(): boolean {
  * When enabled, resolution order:
  * 1. subscription_status 'active' / 'trialing' → Pro
  * 2. subscription_status 'past_due' → Pro (grace period while Stripe retries)
- * 3. trial_ends_at in the future → Pro (trial), with days remaining
- * 4. Everything else (trial expired or canceled) → Free
+ * 3. plan_tier 'pro' with no subscription → Pro forever (comped)
+ * 4. trial_ends_at in the future → Pro (trial), with days remaining
+ * 5. Everything else (trial expired or canceled) → Free
  */
 export function resolveOrgPlan(org: OrgBilling): ResolvedPlan {
   // Pre-launch: billing not enforced, everyone gets full access.
@@ -67,6 +68,13 @@ export function resolveOrgPlan(org: OrgBilling): ResolvedPlan {
   // Past due — grace period, Stripe is retrying payment
   if (subStatus === 'past_due') {
     return { tier: 'pro', status: 'past_due', trialDaysRemaining: null, canUpgrade: false }
+  }
+
+  // Comped tier: plan_tier explicitly 'pro' with no Stripe subscription is Pro
+  // forever (e.g. the founding orgs). The webhook flips plan_tier to 'free' on
+  // cancellation, so former subscribers don't land here.
+  if (org.plan_tier === 'pro') {
+    return { tier: 'pro', status: 'pro', trialDaysRemaining: null, canUpgrade: false }
   }
 
   // No active subscription — honor the free trial window if it hasn't elapsed.

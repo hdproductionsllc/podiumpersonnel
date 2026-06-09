@@ -131,6 +131,25 @@ describe('resolveOrgPlan', () => {
       })
     })
 
+    describe('comped tier (plan_tier pro, no subscription)', () => {
+      it('returns pro forever with no subscription and an expired trial', () => {
+        const plan = resolveOrgPlan(makeOrg({
+          plan_tier: 'pro',
+          trial_ends_at: daysFromNow(-90),
+          subscription_status: null,
+        }))
+        expect(plan.tier).toBe('pro')
+        expect(plan.status).toBe('pro')
+        expect(plan.trialDaysRemaining).toBeNull()
+        expect(plan.canUpgrade).toBe(false)
+      })
+
+      it('still reports past_due when a real subscription is retrying', () => {
+        const plan = resolveOrgPlan(makeOrg({ plan_tier: 'pro', subscription_status: 'past_due' }))
+        expect(plan.status).toBe('past_due')
+      })
+    })
+
     describe('explicit free / canceled', () => {
       it('returns free when plan is free with no trial', () => {
         const plan = resolveOrgPlan(makeOrg({ plan_tier: 'free' }))
