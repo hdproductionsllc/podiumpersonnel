@@ -35,5 +35,6 @@ export const DEFAULT_BRAND_COLOR = '#1E293B'
 
 /** Base URL for the application, used in emails and links */
 export function getAppUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  // trim: a stray trailing newline in the env var must not leak into URLs
+  return (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').trim()
 }
