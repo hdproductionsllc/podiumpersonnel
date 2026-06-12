@@ -113,7 +113,7 @@ async function sendTransactional(args: {
     )
   }
   if (allowed.length === 0) {
-    return { id: null, emailHtml }
+    return { id: null, emailHtml, subject: args.subject }
   }
 
   const { data, error } = await resend.emails.send({
@@ -134,7 +134,7 @@ async function sendTransactional(args: {
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return { ...data, emailHtml }
+  return { ...data, emailHtml, subject: args.subject }
 }
 
 // Contract Offer Email

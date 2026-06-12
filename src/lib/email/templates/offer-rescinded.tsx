@@ -49,7 +49,7 @@ export function OfferRescindedEmail({
             </Text>
 
             <Text style={paragraph}>
-              This often happens when staffing plans change. If you have questions, please reach out to {organizationName} directly. We hope to work with you on future projects.
+              If you have any questions, you can reach {organizationName} by replying to this email.
             </Text>
 
             <Text style={signOff}>

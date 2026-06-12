@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferAcceptedEmail, sendAdminOfferResponseEmail, sendMusicianReleasedEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
+import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
 
@@ -182,7 +183,7 @@ export async function POST(
 
     if (originalMusician?.email) {
       try {
-        await sendMusicianReleasedEmail({
+        const releasedResult = await sendMusicianReleasedEmail({
           to: originalMusician.email,
           musicianName: `${originalMusician.first_name} ${originalMusician.last_name}`,
           organizationName: organization?.name || 'Orchestra',
@@ -194,7 +195,24 @@ export async function POST(
           serviceName,
           substituteName: `${musician?.first_name} ${musician?.last_name}`,
           performanceDate,
-        }).catch((err) => console.warn('Failed to send musician released email:', err))
+        }).catch((err) => {
+          console.warn('Failed to send musician released email:', err)
+          return null
+        })
+
+        if (releasedResult && project?.organization_id) {
+          await logEmail({
+            organizationId: project.organization_id,
+            recipientEmail: originalMusician.email,
+            recipientName: `${originalMusician.first_name} ${originalMusician.last_name}`,
+            subject: releasedResult.subject,
+            emailType: 'musician_released',
+            musicianId: originalMusician.id,
+            projectId: project.id,
+            resendEmailId: releasedResult.id || null,
+            body: releasedResult.emailHtml,
+          })
+        }
       } catch (emailError) {
         console.warn('Email sending failed:', emailError)
       }
@@ -247,7 +265,7 @@ export async function POST(
       const calendarUrl = `${baseUrl}/api/offers/${offer.id}/calendar?token=${(offer as any).token}`
       const googleCalendarUrl = `${baseUrl}/api/offers/${offer.id}/calendar?token=${(offer as any).token}&format=google`
 
-      await sendOfferAcceptedEmail({
+      const acceptedResult = await sendOfferAcceptedEmail({
         to: musician.email,
         musicianName: `${musician.first_name} ${musician.last_name}`,
         organizationName: organization?.name || 'Orchestra',
@@ -260,7 +278,25 @@ export async function POST(
         services: formattedServices,
         calendarUrl,
         googleCalendarUrl,
-      }).catch((err) => console.warn('Failed to send musician confirmation:', err))
+      }).catch((err) => {
+        console.warn('Failed to send musician confirmation:', err)
+        return null
+      })
+
+      if (acceptedResult && project?.organization_id) {
+        await logEmail({
+          organizationId: project.organization_id,
+          recipientEmail: musician.email,
+          recipientName: `${musician.first_name} ${musician.last_name}`,
+          subject: acceptedResult.subject,
+          emailType: 'offer_accepted',
+          musicianId: musician.id,
+          projectId: project.id,
+          offerId: offer.id,
+          resendEmailId: acceptedResult.id || null,
+          body: acceptedResult.emailHtml,
+        })
+      }
     }
 
     if (project?.organization_id) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendPortalInvitationEmail } from '@/lib/email/send'
+import { logEmail } from '@/lib/email/log'
 import crypto from 'crypto'
 import { getAppUrl } from '@/lib/utils'
 import { getOrgPlan } from '@/lib/api-helpers'
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
       const organization = musician.organization as any
 
       // Send invitation email
-      await sendPortalInvitationEmail({
+      const inviteResult = await sendPortalInvitationEmail({
         to: musician.email!,
         musicianName: `${musician.first_name} ${musician.last_name}`,
         organizationName: organization.name,
@@ -113,6 +114,17 @@ export async function POST(request: Request) {
           logoUrl: organization.email_logo_url,
           brandColor: organization.email_brand_color,
         },
+      })
+
+      await logEmail({
+        organizationId: organization.id,
+        recipientEmail: musician.email!,
+        recipientName: `${musician.first_name} ${musician.last_name}`,
+        subject: inviteResult.subject,
+        emailType: 'portal_invite',
+        musicianId: musician.id,
+        resendEmailId: inviteResult.id || null,
+        body: inviteResult.emailHtml,
       })
 
       sent++

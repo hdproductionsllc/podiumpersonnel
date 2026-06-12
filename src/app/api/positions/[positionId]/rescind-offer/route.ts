@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferRescindedEmail, sendAdminOfferResponseEmail, sendSubDeclinedFindAnotherEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
+import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 
 // Admin rescinds an outstanding offer for a position.
@@ -163,7 +164,7 @@ export async function POST(
       const gigUrl = originalOffer ? `${baseUrl}/gig/${originalOffer.token}` : baseUrl
 
       if (originalMusician?.email) {
-        await sendSubDeclinedFindAnotherEmail({
+        const subDeclinedResult = await sendSubDeclinedFindAnotherEmail({
           to: originalMusician.email,
           musicianName: `${originalMusician.first_name} ${originalMusician.last_name}`,
           organizationName: organization?.name || 'Orchestra',
@@ -176,7 +177,25 @@ export async function POST(
           suggestedSubName: subRequest.suggested_sub_name || `${musician?.first_name} ${musician?.last_name}`,
           gigUrl,
           performanceDate,
-        }).catch((err) => console.warn('Failed to send sub declined email:', err))
+        }).catch((err) => {
+          console.warn('Failed to send sub declined email:', err)
+          return null
+        })
+
+        if (subDeclinedResult && project?.organization_id) {
+          await logEmail({
+            organizationId: project.organization_id,
+            recipientEmail: originalMusician.email,
+            recipientName: `${originalMusician.first_name} ${originalMusician.last_name}`,
+            subject: subDeclinedResult.subject,
+            emailType: 'sub_declined',
+            musicianId: originalMusician.id,
+            projectId: project.id,
+            offerId: offer.id,
+            resendEmailId: subDeclinedResult.id || null,
+            body: subDeclinedResult.emailHtml,
+          })
+        }
       }
     }
 
@@ -192,7 +211,7 @@ export async function POST(
       }
 
       if (musician?.email) {
-        await sendOfferRescindedEmail({
+        const rescindedResult = await sendOfferRescindedEmail({
           to: musician.email,
           musicianName: `${musician.first_name} ${musician.last_name}`,
           organizationName: organization?.name || 'Orchestra',
@@ -202,7 +221,25 @@ export async function POST(
           chairNumber: positionData.chair_number || 1,
           totalChairs,
           performanceDate,
-        }).catch((err) => console.warn('Failed to send musician rescinded notification:', err))
+        }).catch((err) => {
+          console.warn('Failed to send musician rescinded notification:', err)
+          return null
+        })
+
+        if (rescindedResult && project?.organization_id) {
+          await logEmail({
+            organizationId: project.organization_id,
+            recipientEmail: musician.email,
+            recipientName: `${musician.first_name} ${musician.last_name}`,
+            subject: rescindedResult.subject,
+            emailType: 'offer_rescinded',
+            musicianId: musician.id,
+            projectId: project.id,
+            offerId: offer.id,
+            resendEmailId: rescindedResult.id || null,
+            body: rescindedResult.emailHtml,
+          })
+        }
       }
 
       if (project?.organization_id) {

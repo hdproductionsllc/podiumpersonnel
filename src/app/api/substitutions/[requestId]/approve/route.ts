@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendSubRequestApprovedEmail, sendContractOfferEmail, sendAdminOfferSentEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
+import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
 import { attachVenueDetails } from '@/lib/venue-attach'
@@ -230,7 +231,7 @@ export async function POST(
   try {
     // Send "approved" email to requesting musician
     if (requestingMusician?.email) {
-      await sendSubRequestApprovedEmail({
+      const approvedResult = await sendSubRequestApprovedEmail({
         to: requestingMusician.email,
         musicianName: `${requestingMusician.first_name} ${requestingMusician.last_name}`,
         organizationName: organization?.name || 'Orchestra',
@@ -242,12 +243,29 @@ export async function POST(
         serviceName,
         performanceDate,
         suggestedSubName: subRequest.suggested_sub_name,
-      }).catch((err) => console.warn('Failed to send approved email:', err))
+      }).catch((err) => {
+        console.warn('Failed to send approved email:', err)
+        return null
+      })
+
+      if (approvedResult && project?.organization_id) {
+        await logEmail({
+          organizationId: project.organization_id,
+          recipientEmail: requestingMusician.email,
+          recipientName: `${requestingMusician.first_name} ${requestingMusician.last_name}`,
+          subject: approvedResult.subject,
+          emailType: 'sub_request_approved',
+          musicianId: requestingMusician.id,
+          projectId: project.id,
+          resendEmailId: approvedResult.id || null,
+          body: approvedResult.emailHtml,
+        })
+      }
     }
 
     // Send contract offer to substitute
     if (subRequest.suggested_sub_email) {
-      await sendContractOfferEmail({
+      const subOfferResult = await sendContractOfferEmail({
         to: subRequest.suggested_sub_email,
         musicianName: subRequest.suggested_sub_name,
         organizationName: organization?.name || 'Orchestra',
@@ -265,7 +283,25 @@ export async function POST(
           brandColor: organization?.email_brand_color,
           footerText: organization?.email_footer_text,
         },
-      }).catch((err) => console.warn('Failed to send offer email:', err))
+      }).catch((err) => {
+        console.warn('Failed to send offer email:', err)
+        return null
+      })
+
+      if (subOfferResult && project?.organization_id) {
+        await logEmail({
+          organizationId: project.organization_id,
+          recipientEmail: subRequest.suggested_sub_email,
+          recipientName: subRequest.suggested_sub_name,
+          subject: subOfferResult.subject,
+          emailType: 'contract_offer',
+          musicianId: substituteMusician.id,
+          projectId: project.id,
+          offerId: contractOffer.id,
+          resendEmailId: subOfferResult.id || null,
+          body: subOfferResult.emailHtml,
+        })
+      }
     }
 
     // Send notification to admins

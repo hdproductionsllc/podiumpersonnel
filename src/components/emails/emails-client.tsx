@@ -12,10 +12,19 @@ const EMAIL_TYPE_LABELS: Record<string, string> = {
   offer_reminder: 'Reminder',
   offer_accepted: 'Accepted',
   offer_declined: 'Declined',
+  offer_rescinded: 'Rescinded',
+  musician_released: 'Released',
+  sub_declined: 'Sub Declined',
+  sub_request_approved: 'Sub Approved',
   w9_request: 'W-9 Request',
   portal_invite: 'Portal Invite',
   offer_expired: 'Expired',
   admin_offer_sent: 'Admin Notification',
+  gig_details: 'Gig Details',
+  gig_details_confirmed: 'Details Confirmed',
+  music_confirmed: 'Music Confirmed',
+  pre_gig_notification: 'Pre-Gig Reminder',
+  staffing_alert: 'Staffing Alert',
 }
 
 const EMAIL_TYPE_VARIANTS: Record<string, 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline'> = {
@@ -23,10 +32,19 @@ const EMAIL_TYPE_VARIANTS: Record<string, 'default' | 'secondary' | 'success' | 
   offer_reminder: 'warning',
   offer_accepted: 'success',
   offer_declined: 'destructive',
+  offer_rescinded: 'warning',
+  musician_released: 'outline',
+  sub_declined: 'destructive',
+  sub_request_approved: 'success',
   w9_request: 'secondary',
   portal_invite: 'secondary',
   offer_expired: 'outline',
   admin_offer_sent: 'outline',
+  gig_details: 'default',
+  gig_details_confirmed: 'success',
+  music_confirmed: 'success',
+  pre_gig_notification: 'warning',
+  staffing_alert: 'warning',
 }
 
 interface EmailsClientProps {
