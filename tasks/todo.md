@@ -29,10 +29,16 @@ except billing/payments enforcement; existing orgs free forever; "1000% sure it 
 - [ ] Push `land-ship-readiness` → master → Vercel deploy (AFTER SQL runs).
 
 ## Phase 4 — E2E verification (after deploy)
-- [ ] Deploy healthy, function logs clean.
+- [x] Deploy healthy (one failed build caught pre-live: undeclared @react-email/render; fixed).
+- [x] Real-usage validation 06-12: offers to 3 real musicians delivered, accept flow worked,
+      rescind delivered ("withdrawn" email confirmed via Resend, status=delivered).
+- [x] FOUND + FIXED (d078d309): 5 routes sent email without logging to email_logs →
+      invisible in Sent Emails tab (rescind, portal accept/decline, portal invites,
+      sub approve). All now log; sendTransactional returns subject; tab labels added;
+      Sorah's missed rescind row backfilled. Rescind copy made matter-of-fact per David.
 - [ ] Offer to David's own email → lands in Primary tab → accept via gig link.
-- [ ] Rescind flow (modal copy + "withdrawn" email). Decline flow. Sub-request flow.
-- [ ] Gig details send. >5MB PDF upload. Bucket cap ≥40MB. Musician portal login.
+- [ ] Sub-request flow end-to-end (exercises 'released' status).
+- [ ] Gig details send. >5MB PDF upload. Musician portal login. (Bucket cap 40MB ✓)
 - [ ] Security: cross-tenant send-gig-details rejected; storage isolation.
 - [ ] Fresh signup funnel (marketing site → signup → onboarding → welcome email).
 - [ ] mail-tester.com spam score.
