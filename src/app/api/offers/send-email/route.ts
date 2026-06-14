@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
       organizationId: organization?.id,
       recipientEmail: musician.email,
       recipientName: `${musician.first_name} ${musician.last_name}`,
-      subject: `Call: ${project?.name} - ${instrument?.name}`,
+      subject: result?.subject || `Call: ${project?.name} - ${instrument?.name}`,
       emailType: 'contract_offer',
       musicianId: musician.id,
       projectId: project?.id,

@@ -112,12 +112,12 @@ export async function POST(
           chairNumber: positionData.chair_number || 1,
           totalChairs,
           performanceDate,
-        }).then(() => {
+        }).then((result) => {
           logEmail({
             organizationId: project?.organization_id,
             recipientEmail: musician.email,
             recipientName: `${musician.first_name} ${musician.last_name}`,
-            subject: musicianSubject,
+            subject: result?.subject || musicianSubject,
             emailType: 'position_unassigned',
             musicianId: musician.id,
             projectId: project?.id,

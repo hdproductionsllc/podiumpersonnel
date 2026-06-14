@@ -214,7 +214,7 @@ export async function POST(
             organizationId: organization.id,
             recipientEmail: musician.email,
             recipientName: `${musician.first_name} ${musician.last_name}`,
-            subject: `Music Available — ${project.name}`,
+            subject: result?.subject || `Music available: ${project.name}`,
             emailType: 'music_available',
             musicianId: musician.id,
             projectId: projectId,

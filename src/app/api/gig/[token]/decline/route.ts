@@ -211,7 +211,7 @@ async function handleDecline(_request: Request, token: string) {
           organizationId: project.organization_id,
           recipientEmail: musician.email,
           recipientName: `${musician.first_name} ${musician.last_name}`,
-          subject: `Thank you for your response - ${project?.name || 'Project'}`,
+          subject: declinedResult?.subject || `Thank you for your response - ${project?.name || 'Project'}`,
           emailType: 'offer_declined',
           musicianId: musician.id,
           projectId: project.id,

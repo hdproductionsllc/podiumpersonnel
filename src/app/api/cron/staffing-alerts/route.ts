@@ -166,7 +166,7 @@ export async function GET(request: NextRequest) {
       await logEmail({
         organizationId: project.organization_id,
         recipientEmail: adminEmails[0],
-        subject: `Staffing Alert: ${project.name} — ${unfilled.length} unfilled positions`,
+        subject: result?.subject || `Staffing Alert: ${project.name} - ${unfilled.length} unfilled positions`,
         emailType: 'staffing_alert',
         projectId: project.id,
         resendEmailId: result?.id || null,

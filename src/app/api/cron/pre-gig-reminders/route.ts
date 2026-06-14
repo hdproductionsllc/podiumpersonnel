@@ -174,7 +174,7 @@ export async function GET(request: NextRequest) {
         organizationId: project.organization_id,
         recipientEmail: adminEmails[0],
         recipientName: undefined,
-        subject: `Upcoming: ${project.name} is in 2 days — review reminder`,
+        subject: result?.subject || `Upcoming: ${project.name} is in 2 days - review reminder`,
         emailType: 'pre_gig_notification',
         projectId: project.id,
         resendEmailId: result?.id || null,

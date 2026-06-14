@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
       organizationId: organization?.id,
       recipientEmail: musician.email,
       recipientName: `${musician.first_name} ${musician.last_name}`,
-      subject: `Reminder: ${project?.name} - ${instrument?.name}`,
+      subject: result?.subject || `Reminder: ${project?.name} - response needed`,
       emailType: 'offer_reminder',
       musicianId: musician.id,
       projectId: project?.id,

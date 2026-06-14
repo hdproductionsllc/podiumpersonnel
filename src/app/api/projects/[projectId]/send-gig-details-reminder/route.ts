@@ -175,7 +175,7 @@ export async function POST(
           organizationId: organization.id,
           recipientEmail: musician.email,
           recipientName: `${musician.first_name} ${musician.last_name}`,
-          subject: `Reminder: Please confirm — ${project.name}`,
+          subject: result?.subject || `Reminder: please confirm ${project.name}`,
           emailType: 'gig_details_reminder',
           musicianId: musician.id,
           projectId: projectId,

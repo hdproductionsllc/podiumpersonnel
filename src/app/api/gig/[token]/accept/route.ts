@@ -253,7 +253,7 @@ async function handleAccept(_request: Request, token: string) {
           organizationId: project.organization_id,
           recipientEmail: musician.email,
           recipientName: `${musician.first_name} ${musician.last_name}`,
-          subject: `Confirmed: You're booked for ${project?.name || 'Project'}`,
+          subject: acceptedResult?.subject || `Confirmed: You're booked for ${project?.name || 'Project'}`,
           emailType: 'offer_accepted',
           musicianId: musician.id,
           projectId: project.id,

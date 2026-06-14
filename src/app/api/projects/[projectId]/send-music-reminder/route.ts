@@ -189,7 +189,7 @@ export async function POST(
             organizationId: organization.id,
             recipientEmail: musician.email,
             recipientName: `${musician.first_name} ${musician.last_name}`,
-            subject: `Reminder: Download your music — ${project.name}`,
+            subject: result?.subject || `Reminder: download your music for ${project.name}`,
             emailType: 'music_reminder',
             musicianId: musician.id,
             projectId: projectId,

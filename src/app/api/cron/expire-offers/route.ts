@@ -159,7 +159,7 @@ export async function GET(request: NextRequest) {
           organizationId: project.organization_id,
           recipientEmail: adminEmails[0],
           recipientName: undefined,
-          subject: `Offer Expired: ${musician.first_name} ${musician.last_name} - ${project.name}`,
+          subject: expiredResult?.subject || `Offer Expired: ${musician.first_name} ${musician.last_name} - ${project.name}`,
           emailType: 'offer_expired',
           musicianId: musician.id,
           projectId: project.id,

@@ -245,7 +245,7 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
         organizationId: organization.id,
         recipientEmail: member.email,
         recipientName: member.name,
-        subject: `Gig Details — ${project.name}`,
+        subject: result?.subject || `Gig details: ${project.name}`,
         emailType: 'gig_details',
         musicianId: member.musicianId,
         projectId: projectId,
