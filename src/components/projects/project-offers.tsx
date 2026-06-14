@@ -469,9 +469,9 @@ export function ProjectOffers({
                             variant="ghost"
                             size="sm"
                             onClick={() => onSendWaterfall(offer.project_position_id, offer.musician_id, offer.custom_pay, true)}
-                            title="Send a follow-up message to this musician"
+                            title="Send this musician a new offer with a fresh link and deadline"
                           >
-                            Follow Up
+                            Re-offer
                           </Button>
                         )}
                       </div>
@@ -626,7 +626,7 @@ export function ProjectOffers({
                       disabled={sendingFollowUp}
                       onClick={handleBatchFollowUp}
                     >
-                      {sendingFollowUp ? 'Sending...' : `Follow up with ${selectedExpired.size} selected`}
+                      {sendingFollowUp ? 'Sending...' : `Re-offer ${selectedExpired.size} selected`}
                     </Button>
                   )}
                 </div>
@@ -667,7 +667,7 @@ export function ProjectOffers({
                           }
                         }}
                       >
-                        Follow Up
+                        Re-offer
                       </Button>
                     </div>
                   ))}
