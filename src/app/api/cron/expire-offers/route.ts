@@ -79,14 +79,24 @@ export async function GET(request: NextRequest) {
     const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
     const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, organization?.timezone) : ''
 
-    // 1. Mark offer as expired
-    const { error: updateError } = await supabase
+    // 1. Mark offer as expired — optimistic lock, same pattern as accept/decline:
+    // only transition offers still pending/viewed. An offer accepted between the
+    // fetch above and this update (a real window — this loop sleeps 600ms per
+    // offer) must not be flipped to expired and have its confirmed chair vacated.
+    const { data: expiredRows, error: updateError } = await supabase
       .from('contract_offers')
       .update({ status: 'expired' })
       .eq('id', offer.id)
+      .in('status', ['pending', 'viewed'])
+      .select('id')
 
     if (updateError) {
       console.error(`Failed to expire offer ${offer.id}:`, updateError)
+      continue
+    }
+
+    if (!expiredRows || expiredRows.length === 0) {
+      // Offer changed state since the fetch (e.g. accepted) — leave it alone
       continue
     }
 
