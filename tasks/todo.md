@@ -34,8 +34,10 @@ Additive-only migrations; backup before each; David applies SQL before dependent
 - [ ] **David: backup, then run 065** → then deploy
 - [ ] Smoke: prod dashboard identical
 
-## Phase 2 — Template-driven sidebar
-- [ ] `sidebar.tsx` → NAV_META + `useVertical().nav`; frozen-nav test; smoke identical
+## Phase 2 — Template-driven sidebar  ✅ SHIPPED (b1d53c9f)
+- [x] `sidebar.tsx` → NAV_ICONS + `NAV_ROUTES` (shared testable module) + `useVertical().nav`
+- [x] `nav-mapping.test.ts` freezes default sidebar (label+route+emphasis); removed dead CalendarIcon
+- [x] 184 tests green, build clean, pushed to master. Smoke: default sidebar unchanged.
 
 ## Phase 3 — Title seam
 - [ ] 4 call sites (project-positions, book-instrument-chairs) → `titleRules` + flags

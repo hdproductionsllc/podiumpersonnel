@@ -202,21 +202,3 @@ function ordinal(n: number): string {
   return n + (s[(v - 20) % 10] || s[v] || s[0])
 }
 
-/**
- * Get a formatted display string for a chair position
- */
-export function formatChairPosition(
-  instrumentName: string,
-  chairNumber: number,
-  section?: string | null,
-  showChairNumber: boolean = true,
-  ensembleSize?: number
-): string {
-  const position = getPositionTitle(instrumentName, chairNumber, section, undefined, ensembleSize)
-
-  if (showChairNumber && !position.title.includes('Chair')) {
-    return `${position.title} (Chair ${chairNumber})`
-  }
-
-  return position.title
-}

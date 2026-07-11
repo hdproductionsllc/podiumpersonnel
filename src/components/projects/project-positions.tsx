@@ -18,10 +18,9 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
-import { getPositionTitle } from '@/lib/orchestra-positions'
-import { checkEnsembleDrift } from '@/lib/ensemble-detection'
 import type { Service } from '@/types'
 import { usePlan } from '@/components/providers/plan-provider'
+import { useVertical } from '@/components/providers/vertical-provider'
 import { canUseSavedEnsembles } from '@/lib/plan'
 import {
   Dialog,
@@ -181,6 +180,8 @@ export function ProjectPositions({
   onWaterfallHandled,
 }: ProjectPositionsProps) {
   const plan = usePlan()
+  const { titleRules } = useVertical()
+  const { getPositionTitle, checkGroupDrift } = titleRules
   const [importOpen, setImportOpen] = useState(false)
   const [addPositionOpen, setAddPositionOpen] = useState(false)
   const [addPositionMode, setAddPositionMode] = useState<'presets' | 'single'>('presets')
@@ -453,7 +454,7 @@ export function ProjectPositions({
       instrument_name: p.instrument?.name || '',
       chair_number: p.chair_number,
     }))
-    const { drifted, suggestion } = checkEnsembleDrift(ensembleType, positionsForDetection)
+    const { drifted, suggestion } = checkGroupDrift(ensembleType, positionsForDetection)
     if (drifted) {
       setEnsembleDriftSuggestion(suggestion)
       setEnsembleLabelInput(suggestion || '')

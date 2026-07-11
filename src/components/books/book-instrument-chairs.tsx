@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { getPositionTitle } from '@/lib/orchestra-positions'
+import { useVertical } from '@/components/providers/vertical-provider'
 import type { BookEntryJoined, InstrumentOption, MusicianForDropdown } from './books-client'
 
 interface BookInstrumentChairsProps {
@@ -25,6 +25,8 @@ export function BookInstrumentChairs({
   canManage,
   onEntryChange,
 }: BookInstrumentChairsProps) {
+  const { titleRules } = useVertical()
+  const { getPositionTitle } = titleRules
   const [pendingChair, setPendingChair] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
