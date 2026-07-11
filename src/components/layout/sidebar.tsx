@@ -7,6 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Logo } from '@/components/ui/logo'
 import { usePlan } from '@/components/providers/plan-provider'
+import { useVertical } from '@/components/providers/vertical-provider'
+import { NAV_ROUTES } from '@/lib/verticals'
+import type { NavItemId } from '@/lib/verticals'
 
 function HomeIcon({ className }: { className?: string }) {
   return (
@@ -67,14 +70,6 @@ function MapPinIcon({ className }: { className?: string }) {
   )
 }
 
-function CalendarIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-    </svg>
-  )
-}
-
 function CurrencyIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
@@ -92,17 +87,19 @@ function SettingsIcon({ className }: { className?: string }) {
   )
 }
 
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, emphasize: false },
-  { name: 'Projects', href: '/dashboard/projects', icon: FolderIcon, emphasize: true },
-  { name: 'Musicians', href: '/dashboard/musicians', icon: UsersIcon, emphasize: false },
-  { name: 'Saved Ensembles', href: '/dashboard/books', icon: BookIcon, emphasize: false },
-  { name: 'Payments', href: '/dashboard/payments', icon: CurrencyIcon, emphasize: false },
-  { name: 'Venues', href: '/dashboard/venues', icon: MapPinIcon, emphasize: false },
-  // { name: 'Schedules', href: '/dashboard/schedules', icon: CalendarIcon, emphasize: false },
-  { name: 'Instruments', href: '/dashboard/instruments', icon: MusicIcon, emphasize: false },
-  { name: 'Sent Emails', href: '/dashboard/emails', icon: EnvelopeIcon, emphasize: false },
-]
+// Icon per nav id. Labels/order/visibility come from the active vertical's nav
+// config; routes come from NAV_ROUTES. Both are stable across verticals — only
+// the wording changes, so the same sidebar structure serves every org type.
+const NAV_ICONS: Record<NavItemId, typeof HomeIcon> = {
+  dashboard: HomeIcon,
+  projects: FolderIcon,
+  musicians: UsersIcon,
+  books: BookIcon,
+  payments: CurrencyIcon,
+  venues: MapPinIcon,
+  instruments: MusicIcon,
+  emails: EnvelopeIcon,
+}
 
 function SidebarPlanIndicator() {
   const plan = usePlan()
@@ -135,11 +132,19 @@ function SidebarPlanIndicator() {
 
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
+  const { nav } = useVertical()
+
+  const items = nav.map(({ id, label, emphasize }) => ({
+    name: label,
+    href: NAV_ROUTES[id],
+    icon: NAV_ICONS[id],
+    emphasize: emphasize ?? false,
+  }))
 
   return (
     <>
       <nav className="flex-1 space-y-0.5 px-3 py-4">
-        {navigation.map((item) => {
+        {items.map((item) => {
           const isActive = item.href === '/dashboard'
             ? pathname === '/dashboard'
             : pathname === item.href || pathname.startsWith(item.href + '/')

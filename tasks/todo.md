@@ -6,9 +6,12 @@ Rule of the whole project: every phase is a provable NO-OP for the 4-5 live orgs
 Additive-only migrations; backup before each; David applies SQL before dependent deploy.
 
 ## Phase 0 — Safety net (no product code)
-- [ ] Behavioral tests replace the 4 highest-stakes tripwires: offer accept,
-      sub-transfer accept, decline race (optimistic lock), expiry cron filter
-      (mocked Supabase client; old tripwires stay until each twin lands)
+- [x] Behavioral tests: in-memory Supabase mock + 18 tests invoking the real
+      accept/decline/expire-cron handlers (races, sub transfer, chair protection).
+      Old tripwires kept alongside.
+- [x] **BONUS: found + fixed a real prod race** — expire-offers cron had no
+      optimistic lock; an offer accepted mid-run could be flipped to expired and
+      its confirmed chair vacated. Fixed (0b8fd709) + regression test. DEPLOYED.
 - [x] `docs/runbooks/database-safety.md` — backup-before-migration runbook + PITR steps
 - [x] `docs/runbooks/staging.md` + `scripts/staging-replay.sql` (64 migrations, in order);
       `.env.staging.local` added to .gitignore
@@ -16,7 +19,8 @@ Additive-only migrations; backup before each; David applies SQL before dependent
       Backups) — still the open checkbox from launch; may need paid add-on (his call)
 - [ ] **David: create free-tier staging Supabase project** (or provide access token),
       then run `scripts/staging-replay.sql` there
-- [ ] tsc + `npm test` green; commit + push
+- [x] tsc + 180/180 tests + production build green; committed (75f66a63,
+      0b8fd709, a4784785) and pushed to master 2026-07-11
 
 ## Phase 1 — Vertical foundation (invisible)
 - [x] `src/lib/verticals/` module: types, terms, registry (resolveVertical never throws,

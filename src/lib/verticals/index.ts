@@ -1,4 +1,5 @@
 export { VERTICALS, DEFAULT_VERTICAL, resolveVertical } from './registry'
+export { NAV_ROUTES } from './nav-routes'
 export { term, termCount } from './terms'
 export type { TermKey, TermOpts } from './terms'
 export { canUseChairs, canInferTitles, canDetectEnsembles, showBooksTab } from './features'
