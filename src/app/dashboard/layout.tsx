@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { PlanProvider } from '@/components/providers/plan-provider'
+import { VerticalProvider } from '@/components/providers/vertical-provider'
 import { TrialBanner } from '@/components/billing/trial-banner'
 import { resolveOrgPlan } from '@/lib/plan'
 import type { OrgBilling } from '@/lib/plan'
@@ -56,7 +57,22 @@ export default async function DashboardLayout({
 
   const plan = resolveOrgPlan(org)
 
+  // Fetch the vertical key separately so a missing column (migration 065 not
+  // yet applied) can't disturb the billing query above. Null → default template.
+  let verticalKey: string | null = null
+  try {
+    const { data: verticalData } = await supabase
+      .from('organizations')
+      .select('vertical')
+      .eq('id', membership.organization_id)
+      .single()
+    verticalKey = (verticalData as { vertical?: string } | null)?.vertical ?? null
+  } catch {
+    // Column doesn't exist yet — default template
+  }
+
   return (
+    <VerticalProvider verticalKey={verticalKey}>
     <PlanProvider plan={plan}>
       <div className="flex h-screen bg-background">
         <Sidebar />
@@ -69,5 +85,6 @@ export default async function DashboardLayout({
         </div>
       </div>
     </PlanProvider>
+    </VerticalProvider>
   )
 }

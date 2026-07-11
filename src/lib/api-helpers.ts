@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveOrgPlan, isBillingEnabled, type ResolvedPlan, type OrgBilling } from '@/lib/plan'
+import { resolveVertical, type VerticalTemplate } from '@/lib/verticals'
 
 export function apiSuccess<T>(data: T, status = 200) {
   return NextResponse.json(data, { status })
@@ -102,4 +103,24 @@ export async function getOrgPlan(organizationId: string): Promise<ResolvedPlan |
     return null
   }
   return resolveOrgPlan(org as OrgBilling)
+}
+
+/**
+ * Resolve an org's vertical template for server code (API routes, emails).
+ * Unlike getOrgPlan this always fails OPEN to the default template: a wrong
+ * label is cosmetic, but throwing inside an email path would break real sends.
+ */
+export async function getOrgVertical(organizationId: string): Promise<VerticalTemplate> {
+  try {
+    const adminClient = createAdminClient()
+    const { data: org } = await adminClient
+      .from('organizations')
+      .select('vertical')
+      .eq('id', organizationId)
+      .single()
+    return resolveVertical(org?.vertical)
+  } catch {
+    // Column not migrated yet, or lookup failed — default template
+    return resolveVertical(null)
+  }
 }
