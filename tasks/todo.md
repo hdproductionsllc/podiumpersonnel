@@ -39,9 +39,11 @@ Additive-only migrations; backup before each; David applies SQL before dependent
 - [x] `nav-mapping.test.ts` freezes default sidebar (label+route+emphasis); removed dead CalendarIcon
 - [x] 184 tests green, build clean, pushed to master. Smoke: default sidebar unchanged.
 
-## Phase 3 — Title seam
-- [ ] 4 call sites (project-positions, book-instrument-chairs) → `titleRules` + flags
-- [ ] Delete dead `formatChairPosition`; title matrix test vs originals; smoke
+## Phase 3 — Title seam  ✅ SHIPPED (c7df2b20)
+- [x] project-positions + book-instrument-chairs → `useVertical().titleRules`
+      (getPositionTitle + checkGroupDrift); music = identical, non-music = plainTitleRules
+- [x] Deleted dead `formatChairPosition`. Guarded by existing reference-equality
+      + title-matrix tests. 184 green, build clean, pushed.
 
 ## Phase 4 — String sweep: dashboard pages (~130)
 ## Phase 5 — String sweep: components (hotspots, then long tail by folder)
