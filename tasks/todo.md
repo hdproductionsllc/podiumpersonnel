@@ -1,3 +1,57 @@
+# V2.0: Vertical Template Architecture (started 2026-07-11)
+
+Full plan: `~/.claude/plans/glistening-forging-thimble.md` · Strategy: `tasks/v2-strategy.md`
+Rule of the whole project: every phase is a provable NO-OP for the 4-5 live orgs
+(default template `music_contractor` = today's UI string-for-string, frozen by test).
+Additive-only migrations; backup before each; David applies SQL before dependent deploy.
+
+## Phase 0 — Safety net (no product code)
+- [ ] Behavioral tests replace the 4 highest-stakes tripwires: offer accept,
+      sub-transfer accept, decline race (optimistic lock), expiry cron filter
+      (mocked Supabase client; old tripwires stay until each twin lands)
+- [x] `docs/runbooks/database-safety.md` — backup-before-migration runbook + PITR steps
+- [x] `docs/runbooks/staging.md` + `scripts/staging-replay.sql` (64 migrations, in order);
+      `.env.staging.local` added to .gitignore
+- [ ] **David: confirm Supabase PITR/backups** (Dashboard → Project Settings → Database →
+      Backups) — still the open checkbox from launch; may need paid add-on (his call)
+- [ ] **David: create free-tier staging Supabase project** (or provide access token),
+      then run `scripts/staging-replay.sql` there
+- [ ] tsc + `npm test` green; commit + push
+
+## Phase 1 — Vertical foundation (invisible)
+- [x] `src/lib/verticals/` module: types, terms, registry (resolveVertical never throws,
+      Object.hasOwn guard), features, title-rules, seeds, 7 templates fully authored
+- [x] `vertical-provider.tsx` (mirrors PlanProvider; passes key only), `useVertical()`/`useTerms()`
+- [x] `getOrgVertical()` in api-helpers (fails OPEN to default)
+- [x] dashboard layout: fetch `vertical` in its own try/catch (isolated from billing
+      query); mount VerticalProvider
+- [x] `vertical-identity.test.ts` + `verticals-registry.test.ts` — 28 tests green
+- [x] Migration `065_add_org_vertical.sql` written (column + CHECK, with -- verify)
+- [ ] **David: backup, then run 065** → then deploy
+- [ ] Smoke: prod dashboard identical
+
+## Phase 2 — Template-driven sidebar
+- [ ] `sidebar.tsx` → NAV_META + `useVertical().nav`; frozen-nav test; smoke identical
+
+## Phase 3 — Title seam
+- [ ] 4 call sites (project-positions, book-instrument-chairs) → `titleRules` + flags
+- [ ] Delete dead `formatChairPosition`; title matrix test vs originals; smoke
+
+## Phase 4 — String sweep: dashboard pages (~130)
+## Phase 5 — String sweep: components (hotspots, then long tail by folder)
+## Phase 6 — String sweep: emails (EmailTerms, render-identity tests, self-send diff)
+
+## Phase 7 — Go live for new signups
+- [ ] Migration `066_org_vertical_seeding.sql`: DROP 3-arg + CREATE 4-arg RPC
+      (NOT create-or-replace — overload trap), keep SQL instrument seed for music path,
+      re-GRANT EXECUTE, -- verify block
+- [ ] Idempotent `/api/organization/seed-skills` route; onboarding picker (7 cards);
+      settings read-only org type
+- [ ] Staging: one org per vertical, full walk; **David: backup, run 066**, deploy
+- [ ] Prod: old-code signup check, one throwaway vertical org, live orgs unchanged
+
+---
+
 # LAUNCH: land hardening, verify everything, go live (2026-06-09)
 
 Full plan: `~/.claude/plans/serene-wobbling-lightning.md`. Scope per David: everything
