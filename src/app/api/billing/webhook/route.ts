@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getStripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { priceIdToTier, type PaidTier } from '@/lib/plan'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type Stripe from 'stripe'
+
+function validPaidTier(t: unknown): PaidTier | null {
+  return t === 'ensemble' || t === 'orchestra' || t === 'symphony' ? t : null
+}
+
+/** Which paid tier a subscription is on, from its price (fallback: metadata). */
+function tierFromSubscription(sub: Stripe.Subscription): PaidTier {
+  const priceId = sub.items?.data?.[0]?.price?.id
+  return priceIdToTier(priceId) ?? validPaidTier(sub.metadata?.tier) ?? 'ensemble'
+}
 
 /**
  * Resolve which org an event belongs to. Subscription/checkout events carry
@@ -76,10 +87,11 @@ export async function POST(request: NextRequest) {
       )
       if (!orgId || !session.subscription) break
 
+      const tier = validPaidTier(session.metadata?.tier) ?? 'ensemble'
       await adminClient
         .from('organizations')
         .update({
-          plan_tier: 'pro',
+          plan_tier: tier,
           subscription_status: 'active',
           stripe_subscription_id: session.subscription as string,
         })
@@ -98,7 +110,9 @@ export async function POST(request: NextRequest) {
       if (!orgId) break
 
       const status = subscription.status
-      const planTier = ['active', 'trialing', 'past_due'].includes(status) ? 'pro' : 'free'
+      const planTier = ['active', 'trialing', 'past_due'].includes(status)
+        ? tierFromSubscription(subscription)
+        : 'free'
 
       await adminClient
         .from('organizations')
@@ -136,7 +150,8 @@ export async function POST(request: NextRequest) {
       const orgId = await resolveOrgId(adminClient, undefined, (invoice.customer as string) ?? null)
       if (!orgId) break
 
-      // Enter grace period — resolveOrgPlan keeps past_due as Pro while Stripe retries.
+      // Enter grace period — resolveOrgPlan keeps past_due at the paid tier while
+      // Stripe retries. plan_tier is left untouched so we don't lose the tier.
       await adminClient
         .from('organizations')
         .update({ subscription_status: 'past_due' })
@@ -151,9 +166,13 @@ export async function POST(request: NextRequest) {
       const orgId = await resolveOrgId(adminClient, undefined, (invoice.customer as string) ?? null)
       if (!orgId) break
 
+      // Map the invoiced price to a tier. If we can't (unknown price), only
+      // confirm the status active — never blindly downgrade an existing tier.
+      const priceId = (invoice.lines?.data?.[0] as { price?: { id?: string } } | undefined)?.price?.id
+      const paidTier = priceIdToTier(priceId)
       await adminClient
         .from('organizations')
-        .update({ plan_tier: 'pro', subscription_status: 'active' })
+        .update(paidTier ? { plan_tier: paidTier, subscription_status: 'active' } : { subscription_status: 'active' })
         .eq('id', orgId)
       break
     }

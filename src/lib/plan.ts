@@ -1,120 +1,148 @@
-// Single source of truth for plan resolution and feature gating
+// Single source of truth for plan resolution and feature gating.
+//
+// Four tiers (plus a transient trial). "Comped" orgs (the founding orgs) always
+// get top-tier access even when billing is enforced — protected by is_comped so
+// turning enforcement on never touches them.
 
-export type PlanTier = 'trial' | 'free' | 'pro'
-export type PlanStatus = 'trial' | 'free' | 'pro' | 'past_due'
+export type PaidTier = 'ensemble' | 'orchestra' | 'symphony'
+export type PlanTier = 'free' | PaidTier
+export type PlanStatus = 'free' | 'trial' | 'active' | 'past_due' | 'comped'
+
+/** Ordering for "at least tier X" feature gates. */
+export const TIER_RANK: Record<PlanTier, number> = {
+  free: 0,
+  ensemble: 1,
+  orchestra: 2,
+  symphony: 3,
+}
 
 export type OrgBilling = {
-  plan_tier: PlanTier
+  plan_tier: string | null
   trial_ends_at: string | null
   stripe_customer_id: string | null
   stripe_subscription_id: string | null
   subscription_status: string | null
+  is_comped: boolean | null
 }
 
 export type ResolvedPlan = {
-  tier: 'free' | 'pro'
+  tier: PlanTier
   status: PlanStatus
   trialDaysRemaining: number | null
   canUpgrade: boolean
 }
 
-export const PLAN_LIMITS = {
-  free: {
-    musicians: 25,
-    activeProjects: 3,
-    adminSeats: 1, // owner only
-  },
-  pro: {
-    musicians: Infinity,
-    activeProjects: Infinity,
-    adminSeats: Infinity,
-  },
-} as const
+export const PLAN_LIMITS: Record<PlanTier, { musicians: number; activeProjects: number; adminSeats: number }> = {
+  free: { musicians: 25, activeProjects: 3, adminSeats: 1 },
+  ensemble: { musicians: 60, activeProjects: Infinity, adminSeats: 1 },
+  orchestra: { musicians: 250, activeProjects: Infinity, adminSeats: 3 },
+  symphony: { musicians: Infinity, activeProjects: Infinity, adminSeats: Infinity },
+}
 
 /**
- * Master switch for whether billing is enforced. While this is off (the default
- * until launch) every org gets full Pro access regardless of subscription state.
- * Set NEXT_PUBLIC_BILLING_ENABLED=true to turn on real plan resolution + gating.
- * NEXT_PUBLIC_ so the same answer is computed on both server and client.
+ * Master switch for whether billing is enforced. While off (the default) every
+ * org gets full top-tier access regardless of subscription. Set
+ * NEXT_PUBLIC_BILLING_ENABLED=true to turn on real resolution + gating.
+ * NEXT_PUBLIC_ so server and client compute the same answer.
  */
 export function isBillingEnabled(): boolean {
   return process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true'
 }
 
+function asPaidTier(t: string | null | undefined): PaidTier | null {
+  return t === 'ensemble' || t === 'orchestra' || t === 'symphony' ? t : null
+}
+
+/** Map a Stripe price id to its tier (reads the tier price env vars). */
+export function priceIdToTier(priceId: string | null | undefined): PaidTier | null {
+  if (!priceId) return null
+  if (priceId === process.env.STRIPE_ENSEMBLE_PRICE_ID) return 'ensemble'
+  if (priceId === process.env.STRIPE_ORCHESTRA_PRICE_ID) return 'orchestra'
+  if (priceId === process.env.STRIPE_SYMPHONY_PRICE_ID) return 'symphony'
+  return null
+}
+
+/** Map a tier to its Stripe price id (undefined if the env var isn't set). */
+export function tierToPriceId(tier: PaidTier): string | undefined {
+  const map: Record<PaidTier, string | undefined> = {
+    ensemble: process.env.STRIPE_ENSEMBLE_PRICE_ID,
+    orchestra: process.env.STRIPE_ORCHESTRA_PRICE_ID,
+    symphony: process.env.STRIPE_SYMPHONY_PRICE_ID,
+  }
+  return map[tier]
+}
+
 /**
- * Resolve the effective plan from org billing columns.
+ * Resolve the effective plan from an org's billing columns.
  *
- * When billing is NOT enabled → Pro for everyone (pre-launch).
- * When enabled, resolution order:
- * 1. subscription_status 'active' / 'trialing' → Pro
- * 2. subscription_status 'past_due' → Pro (grace period while Stripe retries)
- * 3. plan_tier 'pro' with no subscription → Pro forever (comped)
- * 4. trial_ends_at in the future → Pro (trial), with days remaining
- * 5. Everything else (trial expired or canceled) → Free
+ * Resolution order:
+ * 1. Comped orgs → Symphony forever (survives enforcement; founding orgs).
+ * 2. Billing not enforced (pre-launch) → Symphony for everyone.
+ * 3. Active / trialing / past_due subscription → the subscribed paid tier
+ *    (plan_tier, kept in sync by the webhook). past_due keeps access (grace).
+ * 4. Trial window not elapsed → full (Symphony) trial access, with days left.
+ * 5. Otherwise → Free.
  */
 export function resolveOrgPlan(org: OrgBilling): ResolvedPlan {
-  // Pre-launch: billing not enforced, everyone gets full access.
+  if (org.is_comped) {
+    return { tier: 'symphony', status: 'comped', trialDaysRemaining: null, canUpgrade: false }
+  }
+
   if (!isBillingEnabled()) {
-    return { tier: 'pro', status: 'pro', trialDaysRemaining: null, canUpgrade: false }
+    return { tier: 'symphony', status: 'active', trialDaysRemaining: null, canUpgrade: false }
   }
 
   const subStatus = org.subscription_status
-
-  // Active Stripe subscription
-  if (subStatus === 'active' || subStatus === 'trialing') {
-    return { tier: 'pro', status: 'pro', trialDaysRemaining: null, canUpgrade: false }
+  if (subStatus === 'active' || subStatus === 'trialing' || subStatus === 'past_due') {
+    const tier = asPaidTier(org.plan_tier) ?? 'ensemble'
+    const status: PlanStatus = subStatus === 'past_due' ? 'past_due' : 'active'
+    return { tier, status, trialDaysRemaining: null, canUpgrade: tier !== 'symphony' }
   }
 
-  // Past due — grace period, Stripe is retrying payment
-  if (subStatus === 'past_due') {
-    return { tier: 'pro', status: 'past_due', trialDaysRemaining: null, canUpgrade: false }
-  }
-
-  // Comped tier: plan_tier explicitly 'pro' with no Stripe subscription is Pro
-  // forever (e.g. the founding orgs). The webhook flips plan_tier to 'free' on
-  // cancellation, so former subscribers don't land here.
-  if (org.plan_tier === 'pro') {
-    return { tier: 'pro', status: 'pro', trialDaysRemaining: null, canUpgrade: false }
-  }
-
-  // No active subscription — honor the free trial window if it hasn't elapsed.
   if (org.trial_ends_at) {
     const msRemaining = new Date(org.trial_ends_at).getTime() - Date.now()
     if (msRemaining > 0) {
       const trialDaysRemaining = Math.ceil(msRemaining / (1000 * 60 * 60 * 24))
-      return { tier: 'pro', status: 'trial', trialDaysRemaining, canUpgrade: true }
+      return { tier: 'symphony', status: 'trial', trialDaysRemaining, canUpgrade: true }
     }
   }
 
-  // Trial expired or explicitly downgraded to free.
   return { tier: 'free', status: 'free', trialDaysRemaining: null, canUpgrade: true }
 }
 
-// --- Feature gate helpers ---
+// --- Feature gate helpers (stable interface for all consumers) ---
+
+function atLeast(plan: ResolvedPlan, tier: PlanTier): boolean {
+  return TIER_RANK[plan.tier] >= TIER_RANK[tier]
+}
 
 export function canAddMusician(plan: ResolvedPlan, currentCount: number): boolean {
-  if (plan.tier === 'pro') return true
-  return currentCount < PLAN_LIMITS.free.musicians
+  return currentCount < PLAN_LIMITS[plan.tier].musicians
 }
 
 export function canCreateProject(plan: ResolvedPlan, activeCount: number): boolean {
-  if (plan.tier === 'pro') return true
-  return activeCount < PLAN_LIMITS.free.activeProjects
+  return activeCount < PLAN_LIMITS[plan.tier].activeProjects
 }
 
 export function canAddMember(plan: ResolvedPlan, currentCount: number): boolean {
-  if (plan.tier === 'pro') return true
-  return currentCount < PLAN_LIMITS.free.adminSeats
+  return currentCount < PLAN_LIMITS[plan.tier].adminSeats
 }
 
+// Ensemble and up
 export function canUseEmailFeatures(plan: ResolvedPlan): boolean {
-  return plan.tier === 'pro'
+  return atLeast(plan, 'ensemble')
 }
-
 export function canBulkImport(plan: ResolvedPlan): boolean {
-  return plan.tier === 'pro'
+  return atLeast(plan, 'ensemble')
+}
+export function canUseSavedEnsembles(plan: ResolvedPlan): boolean {
+  return atLeast(plan, 'ensemble')
 }
 
-export function canUseSavedEnsembles(plan: ResolvedPlan): boolean {
-  return plan.tier === 'pro'
+// Orchestra and up
+export function canUseSubstitutions(plan: ResolvedPlan): boolean {
+  return atLeast(plan, 'orchestra')
+}
+export function canExport(plan: ResolvedPlan): boolean {
+  return atLeast(plan, 'orchestra')
 }

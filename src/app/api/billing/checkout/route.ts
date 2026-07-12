@@ -2,12 +2,26 @@ import { NextResponse } from 'next/server'
 import { getStripe } from '@/lib/stripe'
 import { requireOrgAdmin, apiError } from '@/lib/api-helpers'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { tierToPriceId, type PaidTier } from '@/lib/plan'
 
-export async function POST() {
-  const { supabase, user, membership, error } = await requireOrgAdmin()
+const PAID_TIERS: PaidTier[] = ['ensemble', 'orchestra', 'symphony']
+
+export async function POST(request: Request) {
+  const { user, membership, error } = await requireOrgAdmin()
   if (error || !user || !membership) return error!
 
-  // Fetch org billing info
+  // Which tier is being purchased? (defaults to the entry paid tier)
+  let tier: PaidTier = 'ensemble'
+  try {
+    const body = await request.json()
+    if (PAID_TIERS.includes(body?.tier)) tier = body.tier
+  } catch {
+    // no body — use default
+  }
+
+  const priceId = tierToPriceId(tier)
+  if (!priceId) return apiError('That plan is not available right now. Please contact support.', 400)
+
   const adminClient = createAdminClient()
   const { data: org } = await adminClient
     .from('organizations')
@@ -32,16 +46,15 @@ export async function POST() {
       .eq('id', org.id)
   }
 
-  // Create Checkout Session
   const session = await getStripe().checkout.sessions.create({
     customer: customerId,
     mode: 'subscription',
-    line_items: [{ price: process.env.STRIPE_PRO_PRICE_ID!, quantity: 1 }],
+    line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?billing=success`,
     cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?billing=cancel`,
-    metadata: { organization_id: org.id },
+    metadata: { organization_id: org.id, tier },
     subscription_data: {
-      metadata: { organization_id: org.id },
+      metadata: { organization_id: org.id, tier },
     },
   })
 

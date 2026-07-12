@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import {
   resolveOrgPlan,
   canAddMusician,
@@ -7,12 +7,17 @@ import {
   canUseEmailFeatures,
   canBulkImport,
   canUseSavedEnsembles,
+  canUseSubstitutions,
+  canExport,
+  priceIdToTier,
+  tierToPriceId,
   PLAN_LIMITS,
+  TIER_RANK,
   type OrgBilling,
   type ResolvedPlan,
+  type PlanTier,
 } from '../plan'
 
-// Helper to create org billing data with sensible defaults
 function makeOrg(overrides: Partial<OrgBilling> = {}): OrgBilling {
   return {
     plan_tier: 'free',
@@ -20,277 +25,171 @@ function makeOrg(overrides: Partial<OrgBilling> = {}): OrgBilling {
     stripe_customer_id: null,
     stripe_subscription_id: null,
     subscription_status: null,
+    is_comped: false,
     ...overrides,
   }
 }
 
-// Helper for dates
 function daysFromNow(days: number): string {
   const d = new Date()
   d.setDate(d.getDate() + days)
   return d.toISOString()
 }
 
-// ─────────────────────────────────────────────────
-// resolveOrgPlan
-// ─────────────────────────────────────────────────
-describe('resolveOrgPlan', () => {
-  const ORIG = process.env.NEXT_PUBLIC_BILLING_ENABLED
-  afterEach(() => {
-    if (ORIG === undefined) delete process.env.NEXT_PUBLIC_BILLING_ENABLED
-    else process.env.NEXT_PUBLIC_BILLING_ENABLED = ORIG
-  })
+function plan(tier: PlanTier): ResolvedPlan {
+  return { tier, status: 'active', trialDaysRemaining: null, canUpgrade: false }
+}
 
-  describe('billing NOT enabled (pre-launch default)', () => {
-    beforeEach(() => {
-      delete process.env.NEXT_PUBLIC_BILLING_ENABLED
-    })
+const ORIG_ENV = { ...process.env }
+beforeEach(() => {
+  process.env.STRIPE_ENSEMBLE_PRICE_ID = 'price_ens'
+  process.env.STRIPE_ORCHESTRA_PRICE_ID = 'price_orch'
+  process.env.STRIPE_SYMPHONY_PRICE_ID = 'price_symph'
+})
+afterEach(() => {
+  process.env = { ...ORIG_ENV }
+})
 
-    it('grants pro to everyone regardless of billing columns', () => {
-      expect(resolveOrgPlan(makeOrg({ plan_tier: 'free' })).tier).toBe('pro')
-      expect(
-        resolveOrgPlan(makeOrg({ plan_tier: 'trial', trial_ends_at: daysFromNow(-5) })).tier
-      ).toBe('pro')
-      expect(resolveOrgPlan(makeOrg({ subscription_status: 'canceled' })).tier).toBe('pro')
-    })
+describe('resolveOrgPlan — billing OFF (pre-launch)', () => {
+  beforeEach(() => { delete process.env.NEXT_PUBLIC_BILLING_ENABLED })
 
-    it('never reports a trial countdown pre-launch', () => {
-      const plan = resolveOrgPlan(makeOrg({ plan_tier: 'trial', trial_ends_at: daysFromNow(10) }))
-      expect(plan.trialDaysRemaining).toBeNull()
-    })
-  })
-
-  describe('billing enabled', () => {
-    beforeEach(() => {
-      process.env.NEXT_PUBLIC_BILLING_ENABLED = 'true'
-    })
-
-    describe('active Stripe subscription', () => {
-      it('returns pro when subscription_status is active', () => {
-        const plan = resolveOrgPlan(makeOrg({
-          plan_tier: 'pro',
-          subscription_status: 'active',
-          stripe_subscription_id: 'sub_123',
-        }))
-        expect(plan.tier).toBe('pro')
-        expect(plan.status).toBe('pro')
-        expect(plan.canUpgrade).toBe(false)
-        expect(plan.trialDaysRemaining).toBeNull()
-      })
-
-      it('returns pro when subscription_status is trialing (Stripe trial)', () => {
-        const plan = resolveOrgPlan(makeOrg({ plan_tier: 'pro', subscription_status: 'trialing' }))
-        expect(plan.tier).toBe('pro')
-        expect(plan.status).toBe('pro')
-      })
-
-      it('active subscription overrides expired trial', () => {
-        const plan = resolveOrgPlan(makeOrg({
-          plan_tier: 'trial',
-          trial_ends_at: daysFromNow(-5),
-          subscription_status: 'active',
-        }))
-        expect(plan.tier).toBe('pro')
-        expect(plan.status).toBe('pro')
-      })
-    })
-
-    describe('past_due subscription (grace period)', () => {
-      it('returns pro with past_due status', () => {
-        const plan = resolveOrgPlan(makeOrg({ plan_tier: 'pro', subscription_status: 'past_due' }))
-        expect(plan.tier).toBe('pro')
-        expect(plan.status).toBe('past_due')
-        expect(plan.canUpgrade).toBe(false)
-      })
-    })
-
-    describe('trial window', () => {
-      it('returns pro with days remaining when trial is in the future', () => {
-        const plan = resolveOrgPlan(makeOrg({ plan_tier: 'trial', trial_ends_at: daysFromNow(10) }))
-        expect(plan.tier).toBe('pro')
-        expect(plan.status).toBe('trial')
-        expect(plan.trialDaysRemaining).toBeGreaterThan(0)
-        expect(plan.canUpgrade).toBe(true)
-      })
-
-      it('drops to free when the trial has expired', () => {
-        const plan = resolveOrgPlan(makeOrg({ plan_tier: 'trial', trial_ends_at: daysFromNow(-1) }))
-        expect(plan.tier).toBe('free')
-        expect(plan.status).toBe('free')
-      })
-
-      it('drops to free when trial_ends_at just elapsed', () => {
-        const justExpired = new Date(Date.now() - 1000).toISOString()
-        const plan = resolveOrgPlan(makeOrg({ plan_tier: 'trial', trial_ends_at: justExpired }))
-        expect(plan.tier).toBe('free')
-      })
-
-      it('drops to free when there is no trial date and no subscription', () => {
-        const plan = resolveOrgPlan(makeOrg({ plan_tier: 'trial', trial_ends_at: null }))
-        expect(plan.tier).toBe('free')
-      })
-    })
-
-    describe('comped tier (plan_tier pro, no subscription)', () => {
-      it('returns pro forever with no subscription and an expired trial', () => {
-        const plan = resolveOrgPlan(makeOrg({
-          plan_tier: 'pro',
-          trial_ends_at: daysFromNow(-90),
-          subscription_status: null,
-        }))
-        expect(plan.tier).toBe('pro')
-        expect(plan.status).toBe('pro')
-        expect(plan.trialDaysRemaining).toBeNull()
-        expect(plan.canUpgrade).toBe(false)
-      })
-
-      it('still reports past_due when a real subscription is retrying', () => {
-        const plan = resolveOrgPlan(makeOrg({ plan_tier: 'pro', subscription_status: 'past_due' }))
-        expect(plan.status).toBe('past_due')
-      })
-    })
-
-    describe('explicit free / canceled', () => {
-      it('returns free when plan is free with no trial', () => {
-        const plan = resolveOrgPlan(makeOrg({ plan_tier: 'free' }))
-        expect(plan.tier).toBe('free')
-        expect(plan.canUpgrade).toBe(true)
-      })
-
-      it('returns free when subscription canceled and trial elapsed', () => {
-        const plan = resolveOrgPlan(makeOrg({
-          plan_tier: 'free',
-          subscription_status: 'canceled',
-          trial_ends_at: daysFromNow(-30),
-        }))
-        expect(plan.tier).toBe('free')
-      })
-    })
-
-    describe('resolution priority', () => {
-      it('active subscription wins over an active trial window', () => {
-        const plan = resolveOrgPlan(makeOrg({
-          plan_tier: 'trial',
-          trial_ends_at: daysFromNow(14),
-          subscription_status: 'active',
-          stripe_subscription_id: 'sub_123',
-        }))
-        expect(plan.status).toBe('pro')
-      })
-
-      it('past_due wins over an active trial window', () => {
-        const plan = resolveOrgPlan(makeOrg({
-          plan_tier: 'trial',
-          trial_ends_at: daysFromNow(14),
-          subscription_status: 'past_due',
-        }))
-        expect(plan.status).toBe('past_due')
-      })
-    })
+  it('grants top-tier (symphony) access to everyone', () => {
+    const p = resolveOrgPlan(makeOrg({ plan_tier: 'free' }))
+    expect(p.tier).toBe('symphony')
+    expect(p.canUpgrade).toBe(false)
   })
 })
 
-// ─────────────────────────────────────────────────
-// Feature gate helpers
-// ─────────────────────────────────────────────────
-describe('feature gate helpers', () => {
-  const proPlan: ResolvedPlan = { tier: 'pro', status: 'pro', trialDaysRemaining: null, canUpgrade: false }
-  const freePlan: ResolvedPlan = { tier: 'free', status: 'free', trialDaysRemaining: null, canUpgrade: true }
-  const trialPlan: ResolvedPlan = { tier: 'pro', status: 'trial', trialDaysRemaining: 10, canUpgrade: true }
-
-  describe('canAddMusician', () => {
-    it('always true on pro', () => {
-      expect(canAddMusician(proPlan, 0)).toBe(true)
-      expect(canAddMusician(proPlan, 100)).toBe(true)
-      expect(canAddMusician(proPlan, 10000)).toBe(true)
-    })
-
-    it('always true on trial (pro access)', () => {
-      expect(canAddMusician(trialPlan, 50)).toBe(true)
-    })
-
-    it('true on free when under limit', () => {
-      expect(canAddMusician(freePlan, 0)).toBe(true)
-      expect(canAddMusician(freePlan, 24)).toBe(true)
-    })
-
-    it('false on free at limit', () => {
-      expect(canAddMusician(freePlan, 25)).toBe(false)
-    })
-
-    it('false on free over limit', () => {
-      expect(canAddMusician(freePlan, 30)).toBe(false)
-    })
+describe('resolveOrgPlan — comped orgs', () => {
+  it('are symphony/comped even when billing is enforced', () => {
+    process.env.NEXT_PUBLIC_BILLING_ENABLED = 'true'
+    const p = resolveOrgPlan(makeOrg({ is_comped: true, plan_tier: 'free' }))
+    expect(p.tier).toBe('symphony')
+    expect(p.status).toBe('comped')
+    expect(p.canUpgrade).toBe(false)
   })
 
-  describe('canCreateProject', () => {
-    it('always true on pro', () => {
-      expect(canCreateProject(proPlan, 0)).toBe(true)
-      expect(canCreateProject(proPlan, 100)).toBe(true)
-    })
-
-    it('true on free when under limit', () => {
-      expect(canCreateProject(freePlan, 0)).toBe(true)
-      expect(canCreateProject(freePlan, 2)).toBe(true)
-    })
-
-    it('false on free at limit', () => {
-      expect(canCreateProject(freePlan, 3)).toBe(false)
-    })
-
-    it('false on free over limit', () => {
-      expect(canCreateProject(freePlan, 5)).toBe(false)
-    })
-  })
-
-  describe('canAddMember', () => {
-    it('always true on pro', () => {
-      expect(canAddMember(proPlan, 5)).toBe(true)
-    })
-
-    it('true on free when under limit (0 non-owner admins)', () => {
-      expect(canAddMember(freePlan, 0)).toBe(true)
-    })
-
-    it('false on free at limit (1 = owner only)', () => {
-      expect(canAddMember(freePlan, 1)).toBe(false)
-    })
-  })
-
-  describe('pro-only features', () => {
-    it('canUseEmailFeatures', () => {
-      expect(canUseEmailFeatures(proPlan)).toBe(true)
-      expect(canUseEmailFeatures(trialPlan)).toBe(true)
-      expect(canUseEmailFeatures(freePlan)).toBe(false)
-    })
-
-    it('canBulkImport', () => {
-      expect(canBulkImport(proPlan)).toBe(true)
-      expect(canBulkImport(trialPlan)).toBe(true)
-      expect(canBulkImport(freePlan)).toBe(false)
-    })
-
-    it('canUseSavedEnsembles', () => {
-      expect(canUseSavedEnsembles(proPlan)).toBe(true)
-      expect(canUseSavedEnsembles(trialPlan)).toBe(true)
-      expect(canUseSavedEnsembles(freePlan)).toBe(false)
-    })
+  it('stay comped regardless of subscription state', () => {
+    process.env.NEXT_PUBLIC_BILLING_ENABLED = 'true'
+    const p = resolveOrgPlan(makeOrg({ is_comped: true, subscription_status: 'canceled' }))
+    expect(p.tier).toBe('symphony')
   })
 })
 
-// ─────────────────────────────────────────────────
-// PLAN_LIMITS constant
-// ─────────────────────────────────────────────────
-describe('PLAN_LIMITS', () => {
-  it('free limits are correct', () => {
-    expect(PLAN_LIMITS.free.musicians).toBe(25)
-    expect(PLAN_LIMITS.free.activeProjects).toBe(3)
-    expect(PLAN_LIMITS.free.adminSeats).toBe(1)
+describe('resolveOrgPlan — billing ON', () => {
+  beforeEach(() => { process.env.NEXT_PUBLIC_BILLING_ENABLED = 'true' })
+
+  it('active subscription resolves to the subscribed tier', () => {
+    for (const tier of ['ensemble', 'orchestra', 'symphony'] as const) {
+      const p = resolveOrgPlan(makeOrg({ plan_tier: tier, subscription_status: 'active' }))
+      expect(p.tier).toBe(tier)
+      expect(p.status).toBe('active')
+    }
   })
 
-  it('pro limits are unlimited', () => {
-    expect(PLAN_LIMITS.pro.musicians).toBe(Infinity)
-    expect(PLAN_LIMITS.pro.activeProjects).toBe(Infinity)
-    expect(PLAN_LIMITS.pro.adminSeats).toBe(Infinity)
+  it('canUpgrade is false only at the top tier', () => {
+    expect(resolveOrgPlan(makeOrg({ plan_tier: 'ensemble', subscription_status: 'active' })).canUpgrade).toBe(true)
+    expect(resolveOrgPlan(makeOrg({ plan_tier: 'symphony', subscription_status: 'active' })).canUpgrade).toBe(false)
+  })
+
+  it('past_due keeps the paid tier (grace period)', () => {
+    const p = resolveOrgPlan(makeOrg({ plan_tier: 'orchestra', subscription_status: 'past_due' }))
+    expect(p.tier).toBe('orchestra')
+    expect(p.status).toBe('past_due')
+  })
+
+  it('an unmatched paid plan_tier falls back to ensemble (never crashes)', () => {
+    const p = resolveOrgPlan(makeOrg({ plan_tier: 'garbage', subscription_status: 'active' }))
+    expect(p.tier).toBe('ensemble')
+  })
+
+  it('active trial grants symphony access with days remaining', () => {
+    const p = resolveOrgPlan(makeOrg({ trial_ends_at: daysFromNow(10) }))
+    expect(p.tier).toBe('symphony')
+    expect(p.status).toBe('trial')
+    expect(p.trialDaysRemaining).toBeGreaterThan(0)
+  })
+
+  it('expired trial drops to free', () => {
+    const p = resolveOrgPlan(makeOrg({ trial_ends_at: daysFromNow(-1) }))
+    expect(p.tier).toBe('free')
+    expect(p.status).toBe('free')
+  })
+
+  it('no subscription and no trial → free', () => {
+    const p = resolveOrgPlan(makeOrg({ subscription_status: 'canceled' }))
+    expect(p.tier).toBe('free')
+  })
+})
+
+describe('price ↔ tier mapping', () => {
+  it('maps price ids to tiers', () => {
+    expect(priceIdToTier('price_ens')).toBe('ensemble')
+    expect(priceIdToTier('price_orch')).toBe('orchestra')
+    expect(priceIdToTier('price_symph')).toBe('symphony')
+    expect(priceIdToTier('price_unknown')).toBeNull()
+    expect(priceIdToTier(null)).toBeNull()
+  })
+  it('maps tiers back to price ids', () => {
+    expect(tierToPriceId('ensemble')).toBe('price_ens')
+    expect(tierToPriceId('orchestra')).toBe('price_orch')
+    expect(tierToPriceId('symphony')).toBe('price_symph')
+  })
+})
+
+describe('count-based gates respect per-tier limits', () => {
+  it('musician limits', () => {
+    expect(canAddMusician(plan('free'), 24)).toBe(true)
+    expect(canAddMusician(plan('free'), 25)).toBe(false)
+    expect(canAddMusician(plan('ensemble'), 59)).toBe(true)
+    expect(canAddMusician(plan('ensemble'), 60)).toBe(false)
+    expect(canAddMusician(plan('orchestra'), 249)).toBe(true)
+    expect(canAddMusician(plan('orchestra'), 250)).toBe(false)
+    expect(canAddMusician(plan('symphony'), 100000)).toBe(true)
+  })
+  it('project limits (free capped, paid unlimited)', () => {
+    expect(canCreateProject(plan('free'), 3)).toBe(false)
+    expect(canCreateProject(plan('ensemble'), 999)).toBe(true)
+  })
+  it('admin seat limits', () => {
+    expect(canAddMember(plan('free'), 1)).toBe(false)
+    expect(canAddMember(plan('ensemble'), 1)).toBe(false)
+    expect(canAddMember(plan('orchestra'), 2)).toBe(true)
+    expect(canAddMember(plan('orchestra'), 3)).toBe(false)
+    expect(canAddMember(plan('symphony'), 50)).toBe(true)
+  })
+})
+
+describe('feature gates by minimum tier', () => {
+  it('ensemble-and-up features', () => {
+    for (const fn of [canUseEmailFeatures, canBulkImport, canUseSavedEnsembles]) {
+      expect(fn(plan('free'))).toBe(false)
+      expect(fn(plan('ensemble'))).toBe(true)
+      expect(fn(plan('orchestra'))).toBe(true)
+      expect(fn(plan('symphony'))).toBe(true)
+    }
+  })
+  it('orchestra-and-up features', () => {
+    for (const fn of [canUseSubstitutions, canExport]) {
+      expect(fn(plan('free'))).toBe(false)
+      expect(fn(plan('ensemble'))).toBe(false)
+      expect(fn(plan('orchestra'))).toBe(true)
+      expect(fn(plan('symphony'))).toBe(true)
+    }
+  })
+})
+
+describe('tier structure invariants', () => {
+  it('ranks are strictly increasing free < ensemble < orchestra < symphony', () => {
+    expect(TIER_RANK.free).toBeLessThan(TIER_RANK.ensemble)
+    expect(TIER_RANK.ensemble).toBeLessThan(TIER_RANK.orchestra)
+    expect(TIER_RANK.orchestra).toBeLessThan(TIER_RANK.symphony)
+  })
+  it('limits are non-decreasing up the tiers', () => {
+    const tiers: PlanTier[] = ['free', 'ensemble', 'orchestra', 'symphony']
+    for (let i = 1; i < tiers.length; i++) {
+      expect(PLAN_LIMITS[tiers[i]].musicians).toBeGreaterThanOrEqual(PLAN_LIMITS[tiers[i - 1]].musicians)
+      expect(PLAN_LIMITS[tiers[i]].adminSeats).toBeGreaterThanOrEqual(PLAN_LIMITS[tiers[i - 1]].adminSeats)
+    }
   })
 })

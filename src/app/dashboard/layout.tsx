@@ -36,16 +36,17 @@ export default async function DashboardLayout({
 
   // Try to fetch billing columns (may not exist if migration hasn't run yet)
   let org: OrgBilling = {
-    plan_tier: 'pro',
+    plan_tier: 'free',
     trial_ends_at: null,
     stripe_customer_id: null,
     stripe_subscription_id: null,
     subscription_status: null,
+    is_comped: true,
   }
   try {
     const { data: orgData } = await supabase
       .from('organizations')
-      .select('plan_tier, trial_ends_at, stripe_customer_id, stripe_subscription_id, subscription_status')
+      .select('plan_tier, trial_ends_at, stripe_customer_id, stripe_subscription_id, subscription_status, is_comped')
       .eq('id', membership.organization_id)
       .single()
     if (orgData) {

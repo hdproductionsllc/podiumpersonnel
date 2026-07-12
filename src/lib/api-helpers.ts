@@ -68,7 +68,7 @@ export async function requireOrgPlan() {
   const adminClient = createAdminClient()
   const { data: org } = await adminClient
     .from('organizations')
-    .select('plan_tier, trial_ends_at, stripe_customer_id, stripe_subscription_id, subscription_status')
+    .select('plan_tier, trial_ends_at, stripe_customer_id, stripe_subscription_id, subscription_status, is_comped')
     .eq('id', membership.organization_id)
     .single()
 
@@ -88,7 +88,7 @@ export async function getOrgPlan(organizationId: string): Promise<ResolvedPlan |
   const adminClient = createAdminClient()
   const { data: org, error } = await adminClient
     .from('organizations')
-    .select('plan_tier, trial_ends_at, stripe_customer_id, stripe_subscription_id, subscription_status')
+    .select('plan_tier, trial_ends_at, stripe_customer_id, stripe_subscription_id, subscription_status, is_comped')
     .eq('id', organizationId)
     .single()
 
