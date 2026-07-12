@@ -66,6 +66,7 @@ interface GigPageClientProps {
   instruments: Instrument[]
   existingSubRequest: SubRequest | null
   musicianHasAccount: boolean
+  subsEnabled?: boolean
 }
 
 export function GigPageClient({
@@ -89,6 +90,7 @@ export function GigPageClient({
   instruments,
   existingSubRequest,
   musicianHasAccount,
+  subsEnabled = true,
 }: GigPageClientProps) {
   const [showSubRequestForm, setShowSubRequestForm] = useState(false)
   const [subRequestSubmitted, setSubRequestSubmitted] = useState(false)
@@ -99,7 +101,7 @@ export function GigPageClient({
 
   const isExpired = expiresAt && new Date(expiresAt) < new Date()
   const canRespond = offerStatus === 'pending' || offerStatus === 'viewed'
-  const canRequestSub = offerStatus === 'accepted' && !currentSubRequest && musicianHasAccount
+  const canRequestSub = offerStatus === 'accepted' && !currentSubRequest && musicianHasAccount && subsEnabled
 
   function handleSubRequestSuccess() {
     setShowSubRequestForm(false)

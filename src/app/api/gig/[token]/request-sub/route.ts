@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendAdminSubRequestEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
+import { getOrgPlan } from '@/lib/api-helpers'
+import { canUseSubstitutions } from '@/lib/plan'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 
 export async function POST(
@@ -84,6 +86,16 @@ export async function POST(
   const organization = project?.organization as any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const instrument = position?.instrument as any
+
+  // The substitution workflow is an Orchestra-tier feature. getOrgPlan returns
+  // null when billing is not enforced (pre-launch) — in that case, no gating.
+  const plan = await getOrgPlan(project.organization_id)
+  if (plan && !canUseSubstitutions(plan)) {
+    return NextResponse.json(
+      { error: 'This organization is not set up to take substitute requests through Podium. Please contact them directly.' },
+      { status: 403 }
+    )
+  }
 
   const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
   const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, organization?.timezone || DEFAULT_TIMEZONE) : ''

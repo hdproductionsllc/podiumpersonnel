@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getOrgPlan } from '@/lib/api-helpers'
+import { canExport } from '@/lib/plan'
 import { DEFAULT_TIMEZONE } from '@/lib/utils'
 import * as XLSX from 'xlsx'
 
@@ -23,6 +25,16 @@ export async function POST(request: Request) {
 
   if (membership.role !== 'owner' && membership.role !== 'admin') {
     return NextResponse.json({ error: 'Permission denied' }, { status: 403 })
+  }
+
+  // Export is an Orchestra-tier feature. getOrgPlan returns null when billing
+  // is not enforced (pre-launch) — in that case, no gating.
+  const plan = await getOrgPlan(membership.organization_id)
+  if (plan && !canExport(plan)) {
+    return NextResponse.json(
+      { error: 'Payment export is available on the Orchestra plan and above.' },
+      { status: 402 }
+    )
   }
 
   const { data: org } = await supabase

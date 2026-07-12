@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/server'
 import { GigPageClient } from '@/components/gig/gig-page-client'
+import { getOrgPlan } from '@/lib/api-helpers'
+import { canUseSubstitutions } from '@/lib/plan'
 import { DEFAULT_TIMEZONE } from '@/lib/utils'
 
 interface GigPageProps {
@@ -103,6 +105,14 @@ export default async function GigPage({ params }: GigPageProps) {
     instruments = instrumentData || []
   }
 
+  // Whether this org's plan includes the substitution workflow (Orchestra+).
+  // null plan = billing not enforced = enabled.
+  let subsEnabled = true
+  if (position?.project?.organization_id) {
+    const plan = await getOrgPlan(position.project.organization_id)
+    subsEnabled = !plan || canUseSubstitutions(plan)
+  }
+
   // Check for existing sub request
   let existingSubRequest = null
   if (offerData.status === 'accepted' && musician?.id && position?.id) {
@@ -153,6 +163,7 @@ export default async function GigPage({ params }: GigPageProps) {
       instruments={instruments}
       existingSubRequest={existingSubRequest}
       musicianHasAccount={!!musician?.user_id}
+      subsEnabled={subsEnabled}
     />
   )
 }
