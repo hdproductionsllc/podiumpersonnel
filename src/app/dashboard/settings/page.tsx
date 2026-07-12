@@ -19,7 +19,7 @@ export default async function SettingsPage({
     .from('organization_members')
     .select(`
       role,
-      organization:organizations(id, name, slug, timezone, musician_policy, disable_staffing_alerts, email_logo_url, email_brand_color, email_footer_text)
+      organization:organizations(id, name, slug, timezone, vertical, musician_policy, disable_staffing_alerts, email_logo_url, email_brand_color, email_footer_text)
     `)
     .eq('user_id', user.id)
     .single()
@@ -33,6 +33,7 @@ export default async function SettingsPage({
     name: string
     slug: string
     timezone: string
+    vertical: string
     musician_policy: string | null
     disable_staffing_alerts: boolean
     email_logo_url: string | null

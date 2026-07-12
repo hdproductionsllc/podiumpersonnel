@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { VERTICAL_KEYS } from '@/lib/verticals'
 
 export const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -30,6 +31,10 @@ export const onboardingSchema = z.object({
     .min(2, 'Organization name must be at least 2 characters')
     .max(100, 'Organization name must be less than 100 characters'),
   timezone: z.string().min(1, 'Timezone is required'),
+  // Required in the schema; the onboarding form supplies 'music_contractor' via
+  // defaultValues (avoids the zod .default() input/output type split that trips
+  // up react-hook-form's resolver typing).
+  vertical: z.enum(VERTICAL_KEYS),
 })
 
 export const forgotPasswordSchema = z.object({

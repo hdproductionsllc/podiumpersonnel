@@ -6,7 +6,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createClient } from '@/lib/supabase/client'
 import { onboardingSchema, type OnboardingInput } from '@/lib/validations/auth'
-import { DEFAULT_TIMEZONE } from '@/lib/utils'
+import { VERTICALS, DEFAULT_VERTICAL } from '@/lib/verticals'
+import { DEFAULT_TIMEZONE, cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -63,6 +64,7 @@ export function OnboardingForm() {
       fullName: '',
       organizationName: '',
       timezone: detectedTimezone,
+      vertical: DEFAULT_VERTICAL,
     },
   })
 
@@ -100,6 +102,7 @@ export function OnboardingForm() {
         p_name: data.organizationName,
         p_slug: slug,
         p_timezone: data.timezone,
+        p_vertical: data.vertical,
       })
 
     if (orgError) {
@@ -110,6 +113,16 @@ export function OnboardingForm() {
       }
       setIsLoading(false)
       return
+    }
+
+    // Seed the org's starter skills for the chosen vertical. Await it (an empty
+    // skills list is a bad first-run) but never let a failure block onboarding —
+    // the org is already usable and the route is idempotent, so a later retry
+    // (or the SQL-seeded verticals) fills it in.
+    try {
+      await fetch('/api/organization/seed-skills', { method: 'POST' })
+    } catch {
+      // Ignore — seeding is best-effort and idempotent
     }
 
     // Send welcome email (don't await — don't block the redirect)
@@ -156,6 +169,47 @@ export function OnboardingForm() {
                       placeholder="John Smith"
                       {...field}
                     />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="vertical"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel required>What kind of organization are you?</FormLabel>
+                  <FormControl>
+                    <div
+                      role="radiogroup"
+                      aria-label="Organization type"
+                      className="grid gap-2 sm:grid-cols-2"
+                    >
+                      {Object.values(VERTICALS).map((vertical) => {
+                        const selected = field.value === vertical.key
+                        return (
+                          <button
+                            type="button"
+                            key={vertical.key}
+                            role="radio"
+                            aria-checked={selected}
+                            onClick={() => field.onChange(vertical.key)}
+                            className={cn(
+                              'flex flex-col rounded-md border p-3 text-left text-sm ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                              selected
+                                ? 'border-primary bg-primary/5'
+                                : 'border-input hover:bg-accent hover:text-accent-foreground'
+                            )}
+                          >
+                            <span className="font-medium">{vertical.displayName}</span>
+                            <span className="mt-0.5 text-xs text-muted-foreground">
+                              {vertical.description}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>

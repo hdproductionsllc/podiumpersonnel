@@ -20,6 +20,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import { resolveVertical } from '@/lib/verticals'
 
 const TIMEZONE_OPTIONS = [
   { value: 'America/New_York', label: 'Eastern Time (ET)' },
@@ -32,7 +33,7 @@ const TIMEZONE_OPTIONS = [
 ]
 
 interface OrganizationSectionProps {
-  organization: { id: string; name: string; slug: string; timezone: string; musician_policy?: string | null; disable_staffing_alerts?: boolean }
+  organization: { id: string; name: string; slug: string; timezone: string; vertical?: string; musician_policy?: string | null; disable_staffing_alerts?: boolean }
   role: 'owner' | 'admin' | 'member'
 }
 
@@ -164,6 +165,18 @@ export function OrganizationSection({ organization, role }: OrganizationSectionP
                 </FormItem>
               )}
             />
+            <div className="space-y-2">
+              <Label htmlFor="organization-type">Organization type</Label>
+              <Input
+                id="organization-type"
+                value={resolveVertical(organization.vertical).displayName}
+                disabled
+                readOnly
+              />
+              <p className="text-muted-foreground text-sm">
+                Contact support to change your organization type.
+              </p>
+            </div>
             <FormField
               control={form.control}
               name="musician_policy"
