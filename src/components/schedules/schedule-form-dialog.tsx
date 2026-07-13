@@ -6,6 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { scheduleSchema, type ScheduleInput } from '@/lib/validations/schedules'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import type { CompetingSchedule } from '@/types'
 
 type MusicianOption = {
@@ -37,6 +39,7 @@ export function ScheduleFormDialog({
   preselectedMusicianId,
   onSuccess,
 }: ScheduleFormDialogProps) {
+  const terms = useTerms()
   const [error, setError] = useState<string | null>(null)
   const isEdit = !!schedule
 
@@ -102,13 +105,13 @@ export function ScheduleFormDialog({
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Musician</label>
+            <label className="text-sm font-medium">{term(terms, 'person')}</label>
             <select
               className="w-full rounded-md border bg-background px-3 py-2 text-sm"
               {...form.register('musician_id')}
               disabled={!!preselectedMusicianId}
             >
-              <option value="">Select a musician...</option>
+              <option value="">Select a {term(terms, 'person', { case: 'lower' })}...</option>
               {musicians.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.last_name}, {m.first_name}

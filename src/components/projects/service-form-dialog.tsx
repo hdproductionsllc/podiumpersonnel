@@ -34,6 +34,8 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { formatTimezoneLabel } from '@/lib/utils'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import type { Service } from '@/types'
 
 /** Convert a UTC ISO string to a datetime-local value in the org's timezone */
@@ -101,6 +103,7 @@ export function ServiceFormDialog({
   existingServiceCounts,
   onSuccess,
 }: ServiceFormDialogProps) {
+  const terms = useTerms()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dateWarning, setDateWarning] = useState<string | null>(null)
@@ -263,9 +266,9 @@ export function ServiceFormDialog({
     }
 
     if (projectStartDate && dateStr < projectStartDate) {
-      setDateWarning(`This service is before the project start date (${projectStartDate})`)
+      setDateWarning(`This ${term(terms, 'session', { case: 'lower' })} is before the ${term(terms, 'work', { case: 'lower' })} start date (${projectStartDate})`)
     } else if (projectEndDate && dateStr > projectEndDate) {
-      setDateWarning(`This service is after the project end date (${projectEndDate})`)
+      setDateWarning(`This ${term(terms, 'session', { case: 'lower' })} is after the ${term(terms, 'work', { case: 'lower' })} end date (${projectEndDate})`)
     } else {
       setDateWarning(null)
     }
@@ -362,12 +365,12 @@ export function ServiceFormDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? 'Edit Service' : 'Add Service'}
+            {isEditing ? `Edit ${term(terms, 'session')}` : `Add ${term(terms, 'session')}`}
           </DialogTitle>
           <DialogDescription>
             {isEditing
-              ? 'Update the service details.'
-              : 'Add a new service to this project.'}
+              ? `Update the ${term(terms, 'session', { case: 'lower' })} details.`
+              : `Add a new ${term(terms, 'session', { case: 'lower' })} to this ${term(terms, 'work', { case: 'lower' })}.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -418,7 +421,7 @@ export function ServiceFormDialog({
 
             {/* Service Date */}
             <div className="space-y-2">
-              <label className="text-sm font-medium leading-none">Service Date</label>
+              <label className="text-sm font-medium leading-none">{term(terms, 'session')} Date</label>
               <DateTimePicker
                 value={datepickerValue}
                 onChange={handleDateChange}
@@ -624,7 +627,7 @@ export function ServiceFormDialog({
                           onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
                         />
                       </FormControl>
-                      <p className="text-xs text-muted-foreground">Per musician per service</p>
+                      <p className="text-xs text-muted-foreground">Per {term(terms, 'person', { case: 'lower' })} per {term(terms, 'session', { case: 'lower' })}</p>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -646,7 +649,7 @@ export function ServiceFormDialog({
                           onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 50)}
                         />
                       </FormControl>
-                      <p className="text-xs text-muted-foreground">Added to Violin 1 / Chair 1</p>
+                      <p className="text-xs text-muted-foreground">Added to Violin 1 / {term(terms, 'rank')} 1</p>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -665,7 +668,7 @@ export function ServiceFormDialog({
               <Button type="submit" disabled={isLoading}>
                 {isLoading
                   ? isEditing ? 'Saving...' : 'Adding...'
-                  : isEditing ? 'Save Changes' : 'Add Service'}
+                  : isEditing ? 'Save Changes' : `Add ${term(terms, 'session')}`}
               </Button>
             </DialogFooter>
           </form>

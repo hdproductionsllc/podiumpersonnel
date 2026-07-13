@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS, type InstrumentSection } from '@/lib/validations/instruments'
 
 interface Instrument {
@@ -98,6 +100,7 @@ export function AddPositionDialog({
   initialMode = 'presets',
   onSuccess,
 }: AddPositionDialogProps) {
+  const terms = useTerms()
   const [instruments, setInstruments] = useState<Instrument[]>([])
   const [savedPresets, setSavedPresets] = useState<SavedPreset[]>([])
   const [mode, setMode] = useState<'presets' | 'single'>('presets')
@@ -172,7 +175,7 @@ export function AddPositionDialog({
     for (const [instrumentName, chair] of preset.instruments) {
       const instrumentId = getInstrumentId(instrumentName)
       if (!instrumentId) {
-        setError(`Instrument "${instrumentName}" not found. Please add it in Settings > Instruments first.`)
+        setError(`${term(terms, 'skill')} "${instrumentName}" not found. Please add it in Settings > ${term(terms, 'skill', { plural: true })} first.`)
         setLoading(false)
         return
       }
@@ -223,7 +226,7 @@ export function AddPositionDialog({
     for (const position of preset.positions) {
       const instrumentId = getInstrumentId(position.instrument_name)
       if (!instrumentId) {
-        setError(`Instrument "${position.instrument_name}" not found. Please add it in Settings > Instruments first.`)
+        setError(`${term(terms, 'skill')} "${position.instrument_name}" not found. Please add it in Settings > ${term(terms, 'skill', { plural: true })} first.`)
         setLoading(false)
         return
       }
@@ -422,13 +425,13 @@ export function AddPositionDialog({
         ) : (
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Instrument</label>
+              <label className="text-sm font-medium">{term(terms, 'skill')}</label>
               <select
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 value={selectedInstrumentId}
                 onChange={(e) => setSelectedInstrumentId(e.target.value)}
               >
-                <option value="">-- Select instrument --</option>
+                <option value="">-- Select {term(terms, 'skill', { case: 'lower' })} --</option>
                 {INSTRUMENT_SECTIONS.map((section) => {
                   const sectionInstruments = groupedInstruments[section]
                   if (sectionInstruments.length === 0) return null
@@ -446,7 +449,7 @@ export function AddPositionDialog({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Chair Number</label>
+              <label className="text-sm font-medium">{term(terms, 'rank')} Number</label>
               <Input
                 type="number"
                 min={1}
@@ -454,7 +457,7 @@ export function AddPositionDialog({
                 onChange={(e) => setChairNumber(parseInt(e.target.value) || 1)}
               />
               <p className="text-xs text-muted-foreground">
-                Chair 1 typically receives the leader fee for principal positions.
+                {term(terms, 'rank')} 1 typically receives the leader fee for principal positions.
               </p>
             </div>
 

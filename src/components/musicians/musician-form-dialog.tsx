@@ -25,6 +25,8 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import type { MusicianWithInstruments, InstrumentOption } from './musicians-client'
 
 function formatPhoneNumber(phone: string): string {
@@ -60,6 +62,7 @@ export function MusicianFormDialog({
   const [moreDetailsOpen, setMoreDetailsOpen] = useState(false)
   const [complianceOpen, setComplianceOpen] = useState(false)
   const isEditing = !!musician
+  const terms = useTerms()
 
   const form = useForm<MusicianInput>({
     resolver: zodResolver(musicianSchema),
@@ -253,7 +256,7 @@ export function MusicianFormDialog({
         .single()
 
       if (insertError || !newMusician) {
-        setError(insertError?.message || 'Failed to create musician')
+        setError(insertError?.message || `Failed to create ${term(terms, 'person', { case: 'lower' })}`)
         setIsLoading(false)
         return
       }
@@ -303,12 +306,12 @@ export function MusicianFormDialog({
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? 'Edit Musician' : 'Add Musician'}
+            {isEditing ? `Edit ${term(terms, 'person')}` : `Add ${term(terms, 'person')}`}
           </DialogTitle>
           <DialogDescription>
             {isEditing
-              ? 'Update the musician details.'
-              : 'Add a new musician to your orchestra.'}
+              ? `Update the ${term(terms, 'person', { case: 'lower' })} details.`
+              : `Add a new ${term(terms, 'person', { case: 'lower' })} to your orchestra.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -366,11 +369,11 @@ export function MusicianFormDialog({
             />
 
             <div className="space-y-2">
-              <FormLabel>Instruments</FormLabel>
+              <FormLabel>{term(terms, 'skill', { plural: true })}</FormLabel>
               <div className="max-h-48 overflow-y-auto rounded-md border p-3 space-y-2">
                 {instruments.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    No instruments defined yet. You can add instruments later in the Instruments page.
+                    No {term(terms, 'skill', { plural: true, case: 'lower' })} defined yet. You can add {term(terms, 'skill', { plural: true, case: 'lower' })} later in the {term(terms, 'skill', { plural: true })} page.
                   </p>
                 ) : (
                   instruments.map((instrument) => {
@@ -779,7 +782,7 @@ export function MusicianFormDialog({
               <Button type="submit" disabled={isLoading}>
                 {isLoading
                   ? isEditing ? 'Saving...' : 'Adding...'
-                  : isEditing ? 'Save Changes' : 'Add Musician'}
+                  : isEditing ? 'Save Changes' : `Add ${term(terms, 'person')}`}
               </Button>
             </DialogFooter>
           </form>

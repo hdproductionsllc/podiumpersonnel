@@ -12,6 +12,8 @@ import { PrepopulateButton } from './prepopulate-button'
 import { AddMissingButton } from './add-missing-button'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
 import type { Instrument } from '@/types'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 export type MusicianInfo = {
   id: string
@@ -40,6 +42,7 @@ export function InstrumentsClient({
   userRole,
 }: InstrumentsClientProps) {
   const router = useRouter()
+  const terms = useTerms()
   const [formOpen, setFormOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [editingInstrument, setEditingInstrument] = useState<Instrument | null>(null)
@@ -96,9 +99,9 @@ export function InstrumentsClient({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="page-header">
-          <h2 className="text-3xl font-bold tracking-tight">Instruments</h2>
+          <h2 className="text-3xl font-bold tracking-tight">{term(terms, 'skill', { plural: true })}</h2>
           <p className="text-muted-foreground mt-1">
-            Manage the instruments in your orchestra.
+            Manage the {term(terms, 'skill', { plural: true, case: 'lower' })} in your orchestra.
           </p>
           <div className="mt-3 w-12 h-px bg-gold/50" />
         </div>
@@ -117,7 +120,7 @@ export function InstrumentsClient({
                 onSuccess={handleSuccess}
               />
             )}
-            <Button onClick={handleAdd}>Add Instrument</Button>
+            <Button onClick={handleAdd}>Add {term(terms, 'skill')}</Button>
           </div>
         )}
       </div>
@@ -128,7 +131,7 @@ export function InstrumentsClient({
         <div className="flex flex-wrap items-center gap-3">
           <input
             type="text"
-            placeholder="Search instruments..."
+            placeholder={`Search ${term(terms, 'skill', { plural: true, case: 'lower' })}...`}
             className="rounded-md border bg-background px-3 py-2 text-sm w-64"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -153,7 +156,7 @@ export function InstrumentsClient({
             </Button>
           )}
           <span className="text-xs text-muted-foreground ml-auto">
-            {filteredInstruments.length} of {instruments.length} instruments
+            {filteredInstruments.length} of {instruments.length} {term(terms, 'skill', { plural: true, case: 'lower' })}
           </span>
         </div>
       )}
@@ -165,14 +168,14 @@ export function InstrumentsClient({
               <path strokeLinecap="round" strokeLinejoin="round" d="m9 9 10.5-3m0 6.553v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 1 1-.99-3.467l2.31-.66a2.25 2.25 0 0 0 1.632-2.163Zm0 0V4.103A2.25 2.25 0 0 0 17.378 2h-.403a2.25 2.25 0 0 0-1.5.563L9 9m10.5-3H9m0 0v7.5m0 0-4.5 1.286v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 1 1-.99-3.467l2.31-.66A2.25 2.25 0 0 0 4.5 14.25v-7.5" />
             </svg>
           }
-          title="No instruments yet"
-          description="Set up your instrument library to assign musicians and build positions."
+          title={`No ${term(terms, 'skill', { plural: true, case: 'lower' })} yet`}
+          description={`Set up your ${term(terms, 'skill', { case: 'lower' })} library to assign ${term(terms, 'person', { plural: true, case: 'lower' })} and build positions.`}
           action={canManage ? (
             <PrepopulateButton organizationId={organizationId} onSuccess={handleSuccess} />
           ) : undefined}
         />
       ) : filteredInstruments.length === 0 ? (
-        <EmptyState title="No instruments match your filters" />
+        <EmptyState title={`No ${term(terms, 'skill', { plural: true, case: 'lower' })} match your filters`} />
       ) : (
         <div className="space-y-8">
           {INSTRUMENT_SECTIONS.map((section) => {

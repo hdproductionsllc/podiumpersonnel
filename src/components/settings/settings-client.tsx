@@ -11,6 +11,8 @@ import { EmailBrandingSection } from './email-branding-section'
 import { BillingSection } from './billing-section'
 import { Card, CardContent } from '@/components/ui/card'
 import { X, PartyPopper } from 'lucide-react'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 const tabs = [
   { id: 'organization', label: 'Organization' },
@@ -43,6 +45,7 @@ interface SettingsClientProps {
 
 export function SettingsClient({ organization, role, currentUserId, showSetupPrompt, openBillingTab }: SettingsClientProps) {
   const router = useRouter()
+  const terms = useTerms()
   const [activeTab, setActiveTab] = useState<TabId>(openBillingTab ? 'billing' : 'organization')
   const [showWelcome, setShowWelcome] = useState(showSetupPrompt || false)
 
@@ -69,8 +72,8 @@ export function SettingsClient({ organization, role, currentUserId, showSetupPro
               <div className="flex-1">
                 <h3 className="font-semibold">Welcome to Podium!</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Your organization has been created. Take a moment to set up your <strong>Musician Policy</strong> below -
-                  this is shown to musicians when they accept contract offers.
+                  Your organization has been created. Take a moment to set up your <strong>{term(terms, 'person')} Policy</strong> below -
+                  this is shown to {term(terms, 'person', { plural: true, case: 'lower' })} when they accept contract offers.
                 </p>
               </div>
               <Button variant="ghost" size="icon" onClick={dismissWelcome} className="shrink-0">

@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { STANDARD_INSTRUMENTS } from '@/lib/validations/instruments'
 import { toast } from 'sonner'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 interface AddMissingButtonProps {
   organizationId: string
@@ -19,6 +21,7 @@ export function AddMissingButton({
 }: AddMissingButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [showDialog, setShowDialog] = useState(false)
+  const terms = useTerms()
 
   // Find instruments that are in standard list but not in organization
   const missingInstruments = STANDARD_INSTRUMENTS.filter(
@@ -54,7 +57,7 @@ export function AddMissingButton({
       return
     }
 
-    toast.success(`Added ${missingInstruments.length} instrument${missingInstruments.length !== 1 ? 's' : ''}`)
+    toast.success(`Added ${missingInstruments.length} ${term(terms, 'skill', { case: 'lower', plural: missingInstruments.length !== 1 })}`)
     onSuccess()
   }
 
@@ -70,9 +73,9 @@ export function AddMissingButton({
       {showDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-lg border bg-background p-6 shadow-lg max-h-[80vh] overflow-hidden flex flex-col">
-            <h3 className="text-lg font-semibold">Add Missing Instruments</h3>
+            <h3 className="text-lg font-semibold">Add Missing {term(terms, 'skill', { plural: true })}</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              The following {missingInstruments.length} instrument{missingInstruments.length !== 1 ? 's are' : ' is'} available in the standard library but not in your organization:
+              The following {missingInstruments.length} {term(terms, 'skill', { case: 'lower', plural: missingInstruments.length !== 1 })}{missingInstruments.length !== 1 ? ' are' : ' is'} available in the standard library but not in your organization:
             </p>
 
             <div className="mt-4 flex-1 overflow-y-auto max-h-64 rounded border bg-muted/30 p-3">

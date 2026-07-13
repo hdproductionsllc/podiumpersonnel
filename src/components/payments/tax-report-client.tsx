@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 type TaxPayment = {
   id: string
@@ -36,6 +38,8 @@ interface TaxReportClientProps {
 const DEFAULT_THRESHOLD = 600
 
 export function TaxReportClient({ payments, organizationName }: TaxReportClientProps) {
+  const terms = useTerms()
+
   // Determine available years from payment data
   const availableYears = useMemo(() => {
     const years = new Set<number>()
@@ -148,7 +152,7 @@ export function TaxReportClient({ payments, organizationName }: TaxReportClientP
       ws['!cols'] = colWidths
 
       XLSX.writeFile(wb, `1099-report-${organizationName.replace(/\s+/g, '-')}-${selectedYear}.xlsx`)
-      toast.success(`Exported ${rows.length} musician${rows.length !== 1 ? 's' : ''} to Excel`)
+      toast.success(`Exported ${rows.length} ${term(terms, 'person', { plural: rows.length !== 1, case: 'lower' })} to Excel`)
     } catch {
       toast.error('Failed to export report')
     }
@@ -217,7 +221,7 @@ export function TaxReportClient({ payments, organizationName }: TaxReportClientP
           <p className="text-2xl font-bold text-primary">{formatCurrency(stats.totalPaid)}</p>
         </div>
         <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm font-medium text-muted-foreground">Musicians Paid</p>
+          <p className="text-sm font-medium text-muted-foreground">{term(terms, 'person', { plural: true })} Paid</p>
           <p className="text-2xl font-bold">{stats.totalMusicians}</p>
         </div>
         <div className="rounded-lg border bg-card p-4">
@@ -252,7 +256,7 @@ export function TaxReportClient({ payments, organizationName }: TaxReportClientP
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/50">
               <tr>
-                <th className="px-4 py-3 text-left font-medium">Musician</th>
+                <th className="px-4 py-3 text-left font-medium">{term(terms, 'person')}</th>
                 <th className="px-4 py-3 text-left font-medium">Contact</th>
                 <th className="px-4 py-3 text-right font-medium">Total Paid</th>
                 <th className="px-4 py-3 text-center font-medium">Payments</th>

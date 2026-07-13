@@ -5,6 +5,8 @@ import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
 import { BookSectionGroup } from './book-section-group'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import { toast } from 'sonner'
 import type { BookWithEntries, InstrumentOption, MusicianForDropdown } from './books-client'
 
@@ -23,6 +25,7 @@ export function BookDetail({
   canManage,
   onEntryChange,
 }: BookDetailProps) {
+  const terms = useTerms()
   const [showAddInstrument, setShowAddInstrument] = useState(false)
 
   // Get instruments that have entries in this book
@@ -70,14 +73,14 @@ export function BookDetail({
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
-            Add Instrument
+            {`Add ${term(terms, 'skill')}`}
           </Button>
         )}
       </div>
 
       {showAddInstrument && (
         <div className="rounded-lg border bg-muted/30 p-4">
-          <h4 className="font-medium mb-3">Select instruments to add:</h4>
+          <h4 className="font-medium mb-3">{`Select ${term(terms, 'skill', { plural: true, case: 'lower' })} to add:`}</h4>
           <div className="space-y-4 max-h-64 overflow-y-auto">
             {INSTRUMENT_SECTIONS.map((section) => {
               if (availableGrouped[section].length === 0) return null
@@ -136,14 +139,14 @@ export function BookDetail({
       {instrumentsInBook.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <p className="text-muted-foreground mb-4">
-            No instruments in this ensemble yet.
+            {`No ${term(terms, 'skill', { plural: true, case: 'lower' })} in this ensemble yet.`}
           </p>
           {canManage && instrumentsNotInBook.length > 0 && (
             <Button
               variant="outline"
               onClick={() => setShowAddInstrument(true)}
             >
-              Add Your First Instrument
+              {`Add Your First ${term(terms, 'skill')}`}
             </Button>
           )}
         </div>

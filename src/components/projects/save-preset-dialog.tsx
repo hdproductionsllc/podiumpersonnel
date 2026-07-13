@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import { toast } from 'sonner'
 
 interface Position {
@@ -40,6 +42,7 @@ export function SavePresetDialog({
   organizationId,
   onSuccess,
 }: SavePresetDialogProps) {
+  const terms = useTerms()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState('custom')
@@ -116,7 +119,7 @@ export function SavePresetDialog({
         <DialogHeader>
           <DialogTitle>Save as Preset</DialogTitle>
           <DialogDescription>
-            Save the current staffing configuration for reuse in future projects.
+            Save the current staffing configuration for reuse in future {term(terms, 'work', { plural: true, case: 'lower' })}.
           </DialogDescription>
         </DialogHeader>
 

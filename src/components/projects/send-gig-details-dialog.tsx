@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import type { Service } from '@/types'
 import type { PositionJoined } from './project-positions'
 
@@ -59,6 +61,7 @@ export function SendGigDetailsDialog({
   organizationId,
   timezone,
 }: SendGigDetailsDialogProps) {
+  const terms = useTerms()
   const [sending, setSending] = useState(false)
   const [sendingReminder, setSendingReminder] = useState(false)
   const [sent, setSent] = useState(false)
@@ -120,7 +123,7 @@ export function SendGigDetailsDialog({
       if (data.failedNames?.length > 0) {
         toast.warning(`Sent to ${data.sent} of ${data.total}. Failed: ${data.failedNames.join(', ')}`)
       } else {
-        toast.success(`Gig details sent to ${data.sent} musician${data.sent !== 1 ? 's' : ''}`)
+        toast.success(`Gig details sent to ${data.sent} ${term(terms, 'person', { plural: data.sent !== 1, case: 'lower' })}`)
       }
 
       // Refresh status
@@ -153,7 +156,7 @@ export function SendGigDetailsDialog({
       } else if (data.failed > 0) {
         toast.warning(`Reminder sent to ${data.reminded} of ${data.total} (${data.failed} failed — may be missing email)`)
       } else {
-        toast.success(`Reminder sent to ${data.reminded} musician${data.reminded !== 1 ? 's' : ''}`)
+        toast.success(`Reminder sent to ${data.reminded} ${term(terms, 'person', { plural: data.reminded !== 1, case: 'lower' })}`)
       }
 
       // Refresh status
@@ -288,7 +291,7 @@ export function SendGigDetailsDialog({
                 >
                   {sendingReminder
                     ? 'Sending...'
-                    : `Send Reminder to ${unconfirmedCount} Musician${unconfirmedCount !== 1 ? 's' : ''}`}
+                    : `Send Reminder to ${unconfirmedCount} ${term(terms, 'person', { plural: unconfirmedCount !== 1 })}`}
                 </Button>
               </DialogFooter>
             )}
@@ -304,10 +307,10 @@ export function SendGigDetailsDialog({
           <div className="space-y-4">
             <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
               <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
-                You are about to send a gig details email to {filledPositions.length} musician{filledPositions.length !== 1 ? 's' : ''}.
+                You are about to send a gig details email to {filledPositions.length} {term(terms, 'person', { plural: filledPositions.length !== 1, case: 'lower' })}.
               </p>
               <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                Each musician will receive the full schedule, venue details, roster with contact info, and a confirmation link.
+                Each {term(terms, 'person', { case: 'lower' })} will receive the full schedule, venue details, roster with contact info, and a confirmation link.
                 {notes.trim() ? ' Your additional notes will also be included.' : ''}
               </p>
             </div>
@@ -332,7 +335,7 @@ export function SendGigDetailsDialog({
                 onClick={handleSend}
                 disabled={sending}
               >
-                {sending ? 'Sending...' : `Send Now to ${filledPositions.length} Musician${filledPositions.length !== 1 ? 's' : ''}`}
+                {sending ? 'Sending...' : `Send Now to ${filledPositions.length} ${term(terms, 'person', { plural: filledPositions.length !== 1 })}`}
               </Button>
             </DialogFooter>
           </div>
@@ -340,7 +343,7 @@ export function SendGigDetailsDialog({
           /* Preview View */
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Preview what each musician will receive. Review all details below, add any notes, then proceed to send.
+              Preview what each {term(terms, 'person', { case: 'lower' })} will receive. Review all details below, add any notes, then proceed to send.
             </p>
 
             {/* Email Preview Card */}
@@ -425,7 +428,7 @@ export function SendGigDetailsDialog({
                     ))}
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Each musician&apos;s email and phone number will be shown in the roster so they can contact each other.
+                    Each {term(terms, 'person', { case: 'lower' })}&apos;s email and phone number will be shown in the roster so they can contact each other.
                   </p>
                 </div>
 
@@ -449,7 +452,7 @@ export function SendGigDetailsDialog({
                 {/* Confirmation note */}
                 <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg px-4 py-3">
                   <p className="text-xs text-green-700 dark:text-green-300">
-                    Each musician will also see a &quot;I&apos;ve Read All Details&quot; confirmation button. You can track who has confirmed from this dialog.
+                    Each {term(terms, 'person', { case: 'lower' })} will also see a &quot;I&apos;ve Read All Details&quot; confirmation button. You can track who has confirmed from this dialog.
                   </p>
                 </div>
               </div>
@@ -463,7 +466,7 @@ export function SendGigDetailsDialog({
                 onClick={() => setShowConfirmSend(true)}
                 disabled={filledPositions.length === 0}
               >
-                Review & Send to {filledPositions.length} Musician{filledPositions.length !== 1 ? 's' : ''}
+                Review & Send to {filledPositions.length} {term(terms, 'person', { plural: filledPositions.length !== 1 })}
               </Button>
             </DialogFooter>
           </div>

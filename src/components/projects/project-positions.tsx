@@ -21,6 +21,7 @@ import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instrumen
 import type { Service } from '@/types'
 import { usePlan } from '@/components/providers/plan-provider'
 import { useVertical } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import { canUseSavedEnsembles } from '@/lib/plan'
 import {
   Dialog,
@@ -180,7 +181,7 @@ export function ProjectPositions({
   onWaterfallHandled,
 }: ProjectPositionsProps) {
   const plan = usePlan()
-  const { titleRules } = useVertical()
+  const { titleRules, terms } = useVertical()
   const { getPositionTitle, checkGroupDrift } = titleRules
   const [importOpen, setImportOpen] = useState(false)
   const [addPositionOpen, setAddPositionOpen] = useState(false)
@@ -271,12 +272,12 @@ export function ProjectPositions({
 
   function handleSendOffer(position: PositionJoined) {
     if (services.length === 0) {
-      toast.error('Add at least one service (rehearsal, concert, etc.) before sending offers.')
+      toast.error(`Add at least one ${term(terms, 'session', { case: 'lower' })} (rehearsal, concert, etc.) before sending offers.`)
       return
     }
     const missingVenue = services.filter(s => !s.venue && !s.venue_id)
     if (missingVenue.length > 0) {
-      toast.error('All services need a venue before sending offers. A venue can be "TBD" if not yet confirmed.')
+      toast.error(`All ${term(terms, 'session', { plural: true, case: 'lower' })} need a venue before sending offers. A venue can be "TBD" if not yet confirmed.`)
       return
     }
     setOfferPositionId(position.id)
@@ -309,11 +310,11 @@ export function ProjectPositions({
     ])
     setLoadingMusicianId(null)
     if (musicianRes.error || !musicianRes.data) {
-      toast.error('Could not load musician: ' + (musicianRes.error?.message || 'not found'))
+      toast.error(`Could not load ${term(terms, 'person', { case: 'lower' })}: ` + (musicianRes.error?.message || 'not found'))
       return
     }
     if (instrumentsRes.error) {
-      toast.error('Could not load instruments: ' + instrumentsRes.error.message)
+      toast.error(`Could not load ${term(terms, 'skill', { plural: true, case: 'lower' })}: ` + instrumentsRes.error.message)
       return
     }
     setEditingMusician(musicianRes.data as MusicianWithInstruments)
@@ -337,7 +338,7 @@ export function ProjectPositions({
   async function handleRemovePosition(position: PositionJoined) {
     // Prevent removal of confirmed positions
     if (position.status === 'confirmed' || position.musician_id) {
-      toast.error('Cannot remove a position with a confirmed musician. Unassign them first.')
+      toast.error(`Cannot remove a position with a confirmed ${term(terms, 'person', { case: 'lower' })}. Unassign them first.`)
       return
     }
     const supabase = createClient()
@@ -353,7 +354,7 @@ export function ProjectPositions({
     // Check if any positions are confirmed
     const confirmedPositions = positions.filter(p => p.status === 'confirmed' || p.musician_id)
     if (confirmedPositions.length > 0) {
-      toast.error(`Cannot clear all positions. ${confirmedPositions.length} position(s) have confirmed musicians. Unassign them first.`)
+      toast.error(`Cannot clear all positions. ${confirmedPositions.length} position(s) have confirmed ${term(terms, 'person', { plural: true, case: 'lower' })}. Unassign them first.`)
       return
     }
     setShowClearConfirm(true)
@@ -388,14 +389,14 @@ export function ProjectPositions({
       const result = await response.json()
 
       if (!response.ok) {
-        toast.error(result.error || 'Failed to unassign musician')
+        toast.error(result.error || `Failed to unassign ${term(terms, 'person', { case: 'lower' })}`)
         return
       }
 
-      toast.success('Musician unassigned and notified')
+      toast.success(`${term(terms, 'person')} unassigned and notified`)
       onPositionChange()
     } catch {
-      toast.error('Failed to unassign musician')
+      toast.error(`Failed to unassign ${term(terms, 'person', { case: 'lower' })}`)
     } finally {
       setUnassigning(false)
       setUnassignPosition(null)
@@ -443,7 +444,7 @@ export function ProjectPositions({
       status: 'vacant',
     })
     if (error) {
-      toast.error('Failed to add chair')
+      toast.error(`Failed to add ${term(terms, 'rank', { case: 'lower' })}`)
       return
     }
     onPositionChange()
@@ -520,7 +521,7 @@ export function ProjectPositions({
               Add Position
             </Button>
             <Button size="sm" variant="outline" onClick={() => setImportOpen(true)} disabled={!canUseSavedEnsembles(plan)} title={!canUseSavedEnsembles(plan) ? 'Pro feature' : undefined}>
-              Import from Saved Ensemble
+              Import from {term(terms, 'groupList')}
             </Button>
             {totalPositions > 0 && (
               <Button size="sm" variant="outline" onClick={() => setSavePresetOpen(true)} disabled={!canUseSavedEnsembles(plan)} title={!canUseSavedEnsembles(plan) ? 'Pro feature' : undefined}>
@@ -533,16 +534,16 @@ export function ProjectPositions({
 
       {totalPositions === 0 ? (
         <p className="text-sm text-muted-foreground py-2">
-          No positions defined. Import from a saved ensemble or add positions manually.
+          No positions defined. Import from a {term(terms, 'groupList', { case: 'lower' })} or add positions manually.
         </p>
       ) : (
         <div className="overflow-x-auto rounded-md border bg-background">
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/30">
               <tr>
-                <th className="px-3 py-2 text-left font-medium text-xs whitespace-nowrap">Instrument</th>
-                <th className="px-3 py-2 text-left font-medium text-xs whitespace-nowrap">Chair</th>
-                <th className="px-3 py-2 text-left font-medium text-xs w-full">Musician</th>
+                <th className="px-3 py-2 text-left font-medium text-xs whitespace-nowrap">{term(terms, 'skill')}</th>
+                <th className="px-3 py-2 text-left font-medium text-xs whitespace-nowrap">{term(terms, 'rank')}</th>
+                <th className="px-3 py-2 text-left font-medium text-xs w-full">{term(terms, 'person')}</th>
                 <th className="px-3 py-2 text-left font-medium text-xs whitespace-nowrap">Status</th>
                 <th className="px-3 py-2 text-left font-medium text-xs whitespace-nowrap">Pay</th>
                 {canManage && (
@@ -601,7 +602,7 @@ export function ProjectPositions({
                                       onClick={() => handleEditMusician(position.musician!.id)}
                                       disabled={isLoading}
                                       className="text-left text-primary hover:underline disabled:opacity-60 disabled:cursor-wait"
-                                      title="Edit musician details"
+                                      title={`Edit ${term(terms, 'person', { case: 'lower' })} details`}
                                     >
                                       {position.musician.first_name} {position.musician.last_name}
                                     </button>
@@ -724,7 +725,7 @@ export function ProjectPositions({
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleDuplicatePosition(position)}
-                                title="Add another chair for this instrument"
+                                title={`Add another ${term(terms, 'rank', { case: 'lower' })} for this ${term(terms, 'skill', { case: 'lower' })}`}
                               >
                                 +
                               </Button>
@@ -766,7 +767,7 @@ export function ProjectPositions({
                                     </DropdownMenuItem>
                                   )}
                                   <DropdownMenuItem onClick={() => handleDuplicatePosition(position)}>
-                                    Add Chair
+                                    Add {term(terms, 'rank')}
                                   </DropdownMenuItem>
                                   {position.status !== 'confirmed' && !position.musician_id && (
                                     <>
@@ -953,7 +954,7 @@ export function ProjectPositions({
             <DialogTitle>Remove all positions?</DialogTitle>
             <DialogDescription>
               This will remove all {positions.length} position{positions.length === 1 ? '' : 's'} from
-              this project. This can&apos;t be undone.
+              this {term(terms, 'work', { case: 'lower' })}. This can&apos;t be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -973,12 +974,12 @@ export function ProjectPositions({
           <div className="w-full max-w-md rounded-lg border bg-background p-6 shadow-lg">
             <h3 className="text-lg font-semibold">Confirm Unassignment</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              Are you sure you want to unassign this musician?
+              Are you sure you want to unassign this {term(terms, 'person', { case: 'lower' })}?
             </p>
 
             <div className="mt-4 rounded-lg border bg-muted/30 p-4 space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Musician:</span>
+                <span className="text-muted-foreground">{term(terms, 'person')}:</span>
                 <span className="font-medium">
                   {unassignPosition.musician?.first_name} {unassignPosition.musician?.last_name}
                 </span>
@@ -996,7 +997,7 @@ export function ProjectPositions({
             </div>
 
             <div className="mt-4 rounded bg-amber-50 dark:bg-amber-950/50 p-3 text-sm text-amber-700 dark:text-amber-300">
-              Both the musician and organization admins will be notified by email.
+              Both the {term(terms, 'person', { case: 'lower' })} and organization admins will be notified by email.
             </div>
 
             <div className="mt-4 flex justify-end gap-2">
@@ -1030,7 +1031,7 @@ export function ProjectPositions({
               <div className="mt-4 rounded-lg border bg-muted/30 p-4 space-y-2">
                 {musicianName && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Musician:</span>
+                    <span className="text-muted-foreground">{term(terms, 'person')}:</span>
                     <span className="font-medium">{musicianName}</span>
                   </div>
                 )}
@@ -1047,7 +1048,7 @@ export function ProjectPositions({
               </div>
 
               <div className="mt-4 rounded bg-amber-50 dark:bg-amber-950/50 p-3 text-sm text-amber-700 dark:text-amber-300">
-                The musician will be emailed that the offer was withdrawn.
+                The {term(terms, 'person', { case: 'lower' })} will be emailed that the offer was withdrawn.
               </div>
 
               <div className="mt-4 flex justify-end gap-2">

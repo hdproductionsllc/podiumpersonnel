@@ -13,6 +13,8 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import type { MusicianWithInstruments, InstrumentOption } from './musicians-client'
 
 interface BulkEditDialogProps {
@@ -30,6 +32,7 @@ export function BulkEditDialog({
   instruments,
   onSuccess,
 }: BulkEditDialogProps) {
+  const terms = useTerms()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -150,10 +153,10 @@ export function BulkEditDialog({
     setIsLoading(false)
 
     if (successCount > 0) {
-      toast.success(`Updated ${successCount} musician${successCount !== 1 ? 's' : ''}`)
+      toast.success(`Updated ${successCount} ${term(terms, 'person', { case: 'lower' })}${successCount !== 1 ? 's' : ''}`)
     }
     if (errorCount > 0) {
-      toast.error(`Failed to update ${errorCount} musician${errorCount !== 1 ? 's' : ''}`)
+      toast.error(`Failed to update ${errorCount} ${term(terms, 'person', { case: 'lower' })}${errorCount !== 1 ? 's' : ''}`)
     }
 
     if (successCount > 0) {
@@ -182,9 +185,9 @@ export function BulkEditDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Bulk Edit Musicians</DialogTitle>
+          <DialogTitle>Bulk Edit {term(terms, 'person', { plural: true })}</DialogTitle>
           <DialogDescription>
-            Edit {musicians.length} selected musician{musicians.length !== 1 ? 's' : ''}.
+            Edit {musicians.length} selected {term(terms, 'person', { case: 'lower' })}{musicians.length !== 1 ? 's' : ''}.
             Check the fields you want to update.
           </DialogDescription>
         </DialogHeader>
@@ -205,7 +208,7 @@ export function BulkEditDialog({
                 checked={updateInstruments}
                 onChange={(e) => setUpdateInstruments(e.target.checked)}
               />
-              <span className="font-medium">Update Instruments</span>
+              <span className="font-medium">Update {term(terms, 'skill', { plural: true })}</span>
             </label>
 
             {updateInstruments && (
@@ -245,7 +248,7 @@ export function BulkEditDialog({
 
                 <div className="max-h-40 overflow-y-auto rounded-md border p-3 space-y-2">
                   {instruments.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No instruments defined.</p>
+                    <p className="text-sm text-muted-foreground">No {term(terms, 'skill', { plural: true, case: 'lower' })} defined.</p>
                   ) : (
                     instruments.map((instrument) => (
                       <label
@@ -408,7 +411,7 @@ export function BulkEditDialog({
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={isLoading}>
-            {isLoading ? 'Updating...' : `Update ${musicians.length} Musician${musicians.length !== 1 ? 's' : ''}`}
+            {isLoading ? 'Updating...' : `Update ${musicians.length} ${term(terms, 'person')}${musicians.length !== 1 ? 's' : ''}`}
           </Button>
         </DialogFooter>
       </DialogContent>

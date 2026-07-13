@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 interface ExportDialogProps {
   open: boolean
@@ -21,6 +23,7 @@ export function ExportDialog({
 }: ExportDialogProps) {
   const [isExporting, setIsExporting] = useState(false)
   const [format, setFormat] = useState<'quickbooks' | 'detailed'>('quickbooks')
+  const terms = useTerms()
 
   if (!open) return null
 
@@ -115,7 +118,7 @@ export function ExportDialog({
                 <div>
                   <div className="font-medium">Detailed Format</div>
                   <div className="text-sm text-muted-foreground">
-                    Full payment details for internal records. Includes all fields: project, service, dates, status, payment method, notes, and more.
+                    Full payment details for internal records. Includes all fields: {term(terms, 'work', { case: 'lower' })}, {term(terms, 'session', { case: 'lower' })}, dates, status, payment method, notes, and more.
                   </div>
                 </div>
               </label>

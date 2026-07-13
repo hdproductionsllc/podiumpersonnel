@@ -20,7 +20,8 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { resolveVertical } from '@/lib/verticals'
+import { resolveVertical, term } from '@/lib/verticals'
+import { useTerms } from '@/components/providers/vertical-provider'
 
 const TIMEZONE_OPTIONS = [
   { value: 'America/New_York', label: 'Eastern Time (ET)' },
@@ -39,6 +40,7 @@ interface OrganizationSectionProps {
 
 export function OrganizationSection({ organization, role }: OrganizationSectionProps) {
   const router = useRouter()
+  const terms = useTerms()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -159,7 +161,7 @@ export function OrganizationSection({ organization, role }: OrganizationSectionP
                     </select>
                   </FormControl>
                   <FormDescription>
-                    Used for displaying dates and times in emails and the musician portal.
+                    Used for displaying dates and times in emails and the {term(terms, 'person', { case: 'lower' })} portal.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -182,18 +184,18 @@ export function OrganizationSection({ organization, role }: OrganizationSectionP
               name="musician_policy"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Musician Policy</FormLabel>
+                  <FormLabel>{term(terms, 'person')} Policy</FormLabel>
                   <FormControl>
                     <Textarea
                       {...field}
                       value={field.value || ''}
                       disabled={!canEdit}
                       rows={10}
-                      placeholder="Enter your organization's musician policy here. This will be shown to musicians when they accept contract offers."
+                      placeholder={`Enter your organization's ${term(terms, 'person', { case: 'lower' })} policy here. This will be shown to ${term(terms, 'person', { plural: true, case: 'lower' })} when they accept contract offers.`}
                     />
                   </FormControl>
                   <FormDescription>
-                    Customize the policy that musicians agree to when accepting offers. Leave blank to use the default policy.
+                    Customize the policy that {term(terms, 'person', { plural: true, case: 'lower' })} agree to when accepting offers. Leave blank to use the default policy.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

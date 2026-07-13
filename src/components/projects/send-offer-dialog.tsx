@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 export type MusicianScheduleEntry = {
   id: string
@@ -70,6 +72,7 @@ export function SendOfferDialog({
   onSuccess,
   onSendNext,
 }: SendOfferDialogProps) {
+  const terms = useTerms()
   const [selectedMusicianId, setSelectedMusicianId] = useState('')
   const [expiresIn, setExpiresIn] = useState<string>('2')
   const [customDeadline, setCustomDeadline] = useState('')
@@ -433,7 +436,7 @@ export function SendOfferDialog({
 
       if (existingActive && existingActive.length > 0) {
         setLoading(false)
-        setError('This musician already has an active offer for another position in this project.')
+        setError(`This ${term(terms, 'person', { case: 'lower' })} already has an active offer for another position in this ${term(terms, 'work', { case: 'lower' })}.`)
         return
       }
     }
@@ -487,10 +490,10 @@ export function SendOfferDialog({
         })
 
         if (!response.ok) {
-          toast.error('Offer created but email failed to send. Contact the musician manually.')
+          toast.error(`Offer created but email failed to send. Contact the ${term(terms, 'person', { case: 'lower' })} manually.`)
         }
       } catch {
-        toast.error('Offer created but email failed to send. Contact the musician manually.')
+        toast.error(`Offer created but email failed to send. Contact the ${term(terms, 'person', { case: 'lower' })} manually.`)
       }
     }
 
@@ -612,7 +615,7 @@ export function SendOfferDialog({
       <div className="relative bg-background rounded-lg border shadow-lg w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <h3 className="text-lg font-semibold">Send Contract Offer</h3>
         <p className="text-sm text-muted-foreground">
-          Select a musician to send an offer for this position.
+          Select a {term(terms, 'person', { case: 'lower' })} to send an offer for this position.
         </p>
 
         {error && (
@@ -623,10 +626,10 @@ export function SendOfferDialog({
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Musician</label>
+            <label className="text-sm font-medium">{term(terms, 'person')}</label>
             {availableMusicians.length === 0 && allAvailable.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No available musicians. Add one below or from the Musicians page.
+                No available {term(terms, 'person', { plural: true, case: 'lower' })}. Add one below or from the {term(terms, 'person', { plural: true })} page.
               </p>
             ) : (
               <>
@@ -723,7 +726,7 @@ export function SendOfferDialog({
                               {otherGroup.length > 0 && (
                                 <>
                                   <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted/50 border-t">
-                                    Other musicians
+                                    Other {term(terms, 'person', { plural: true, case: 'lower' })}
                                   </div>
                                   {otherGroup.map((m) => {
                                     const hasConflict = m.competing_schedules && m.competing_schedules.length > 0
@@ -742,7 +745,7 @@ export function SendOfferDialog({
                                             proficiency: 'professional',
                                           })
                                           m.musician_instruments.push({ instrument_id: instrumentId })
-                                          toast.success(`Added ${instrumentName || 'instrument'} to ${m.first_name} ${m.last_name}'s profile`)
+                                          toast.success(`Added ${instrumentName || term(terms, 'skill', { case: 'lower' })} to ${m.first_name} ${m.last_name}'s profile`)
                                           setSelectedMusicianId(m.id)
                                           setSearchQuery('')
                                           setSearchOpen(false)
@@ -752,7 +755,7 @@ export function SendOfferDialog({
                                           <span className="font-medium text-sm truncate">
                                             {m.last_name}, {m.first_name}
                                           </span>
-                                          <span className="text-xs text-muted-foreground flex-shrink-0">(other instrument)</span>
+                                          <span className="text-xs text-muted-foreground flex-shrink-0">(other {term(terms, 'skill', { case: 'lower' })})</span>
                                           {!m.email && !updatedEmails[m.id] && (
                                             <span className="text-xs text-amber-600 dark:text-amber-400 flex-shrink-0" title="No email">
                                               No email
@@ -781,7 +784,7 @@ export function SendOfferDialog({
                         })()
                       ) : (
                         <div className="px-3 py-4 text-sm text-muted-foreground text-center">
-                          No musicians match &quot;{searchQuery}&quot;
+                          No {term(terms, 'person', { plural: true, case: 'lower' })} match &quot;{searchQuery}&quot;
                         </div>
                       )}
                     </div>
@@ -790,7 +793,7 @@ export function SendOfferDialog({
 
                 {selectedMusicianId && !hasEmail && (
                   <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200">
-                    <p className="font-medium mb-2">This musician has no email on file.</p>
+                    <p className="font-medium mb-2">This {term(terms, 'person', { case: 'lower' })} has no email on file.</p>
                     <div className="flex gap-2">
                       <input
                         type="email"
@@ -840,11 +843,11 @@ export function SendOfferDialog({
                     className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
                     onClick={() => setShowAddMusician(true)}
                   >
-                    + Add New Musician
+                    + Add New {term(terms, 'person')}
                   </button>
                 ) : (
                   <div className="rounded-md border bg-muted/30 p-3 space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Quick Add Musician</p>
+                    <p className="text-xs font-medium text-muted-foreground">Quick Add {term(terms, 'person')}</p>
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -921,7 +924,7 @@ export function SendOfferDialog({
                             setNewEmail('')
                             setShowAddMusician(false)
                           } catch {
-                            setError('Failed to add musician')
+                            setError(`Failed to add ${term(terms, 'person', { case: 'lower' })}`)
                           } finally {
                             setAddingMusician(false)
                           }
@@ -960,7 +963,7 @@ export function SendOfferDialog({
                 <svg className="h-4 w-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
                 </svg>
-                <span className="font-medium">Schedule conflict with other projects:</span>
+                <span className="font-medium">Schedule conflict with other {term(terms, 'work', { plural: true, case: 'lower' })}:</span>
               </div>
               <ul className="ml-6 space-y-0.5">
                 {conflictWarnings.map((c, i) => (
@@ -1145,7 +1148,7 @@ export function SendOfferDialog({
 
         <div className="rounded-md border bg-muted/30 p-4 space-y-3">
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Musician:</span>
+            <span className="text-muted-foreground">{term(terms, 'person')}:</span>
             <span className="font-medium">
               {selectedMusician?.first_name} {selectedMusician?.last_name}
             </span>
@@ -1187,7 +1190,7 @@ export function SendOfferDialog({
           )}
           {sendEmail && !hasEmail && (
             <div className="pt-2 border-t text-sm text-amber-600 font-medium">
-              No email will be sent - musician has no email on file.
+              No email will be sent - {term(terms, 'person', { case: 'lower' })} has no email on file.
               You must contact them manually.
             </div>
           )}

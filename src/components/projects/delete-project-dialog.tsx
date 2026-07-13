@@ -11,6 +11,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import type { ProjectWithServices } from './projects-client'
 
 interface DeleteProjectDialogProps {
@@ -26,6 +28,7 @@ export function DeleteProjectDialog({
   project,
   onSuccess,
 }: DeleteProjectDialogProps) {
+  const terms = useTerms()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [paymentCount, setPaymentCount] = useState<number | null>(null)
@@ -79,7 +82,7 @@ export function DeleteProjectDialog({
 
     if (deleteError) {
       const friendly = /foreign key|violates|constraint/i.test(deleteError.message)
-        ? 'This project has payment records and cannot be deleted. Archive it instead to preserve history.'
+        ? `This ${term(terms, 'work', { case: 'lower' })} has payment records and cannot be deleted. Archive it instead to preserve history.`
         : deleteError.message
       setError(friendly)
       setIsLoading(false)
@@ -116,7 +119,7 @@ export function DeleteProjectDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {hasPayments ? 'Archive Project' : 'Delete Project'}
+            {hasPayments ? `Archive ${term(terms, 'work')}` : `Delete ${term(terms, 'work')}`}
           </DialogTitle>
           <DialogDescription>
             {checking ? (
@@ -126,14 +129,14 @@ export function DeleteProjectDialog({
                 &quot;{project?.name}&quot; has {paymentCount} payment record
                 {paymentCount === 1 ? '' : 's'} that must be kept for your pay and tax
                 history, so it can&apos;t be deleted. You can archive it instead — it will be
-                hidden from your active projects (under &quot;Show Archived&quot;) while all
+                hidden from your active {term(terms, 'work', { plural: true, case: 'lower' })} (under &quot;Show Archived&quot;) while all
                 services and payments stay intact.
               </>
             ) : (
               <>
                 Are you sure you want to delete &quot;{project?.name}&quot;?
                 {serviceCount > 0 && (
-                  <> This will also delete {serviceCount} associated service{serviceCount !== 1 ? 's' : ''}.</>
+                  <> This will also delete {serviceCount} associated {term(terms, 'session', { plural: serviceCount !== 1, case: 'lower' })}.</>
                 )}{' '}
                 This action cannot be undone.
               </>
@@ -157,7 +160,7 @@ export function DeleteProjectDialog({
           </Button>
           {hasPayments ? (
             <Button onClick={handleArchive} disabled={isLoading || checking}>
-              {isLoading ? 'Archiving…' : 'Archive Project'}
+              {isLoading ? 'Archiving…' : `Archive ${term(terms, 'work')}`}
             </Button>
           ) : (
             <Button

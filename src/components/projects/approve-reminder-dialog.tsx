@@ -21,6 +21,8 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 interface ReminderData {
   reminder: {
@@ -73,6 +75,7 @@ export function ApproveReminderDialog({
   onOpenChange,
   reminderId,
 }: ApproveReminderDialogProps) {
+  const terms = useTerms()
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [data, setData] = useState<ReminderData | null>(null)
@@ -181,7 +184,7 @@ export function ApproveReminderDialog({
       }
       setSent(true)
       setSentCount(json.sent)
-      toast.success(`Gig details sent to ${json.sent} musician${json.sent !== 1 ? 's' : ''}`)
+      toast.success(`Gig details sent to ${json.sent} ${term(terms, 'person', { plural: json.sent !== 1, case: 'lower' })}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to approve reminder')
     } finally {
@@ -223,7 +226,7 @@ export function ApproveReminderDialog({
             <div>
               <h3 className="font-semibold text-lg">{data.project.name}</h3>
               <p className="text-sm text-muted-foreground">
-                {data.musicianCount} confirmed musician{data.musicianCount !== 1 ? 's' : ''}
+                {data.musicianCount} confirmed {term(terms, 'person', { plural: data.musicianCount !== 1, case: 'lower' })}
               </p>
             </div>
 
@@ -290,7 +293,7 @@ export function ApproveReminderDialog({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label htmlFor="reminder-notes" className="text-sm font-medium">
-                  Add updates for your musicians
+                  Add updates for your {term(terms, 'person', { plural: true, case: 'lower' })}
                 </label>
                 {notes.trim() && !showSaveTemplate && (
                   <button
@@ -385,7 +388,7 @@ export function ApproveReminderDialog({
               )}
 
               <p className="text-xs text-muted-foreground">
-                These notes will be included in the gig details email sent to musicians.
+                These notes will be included in the gig details email sent to {term(terms, 'person', { plural: true, case: 'lower' })}.
                 {templates.length === 0 && ' You can save frequently used notes as templates for quick reuse.'}
               </p>
             </div>
@@ -395,7 +398,7 @@ export function ApproveReminderDialog({
                 Cancel
               </Button>
               <Button onClick={handleApprove} disabled={sending}>
-                {sending ? 'Sending...' : `Approve & Send to ${data.musicianCount} Musician${data.musicianCount !== 1 ? 's' : ''}`}
+                {sending ? 'Sending...' : `Approve & Send to ${data.musicianCount} ${term(terms, 'person', { plural: data.musicianCount !== 1 })}`}
               </Button>
             </DialogFooter>
           </>
@@ -412,7 +415,7 @@ export function ApproveReminderDialog({
             <div>
               <h3 className="font-semibold text-lg">Reminder Sent</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                Gig details have been sent to {sentCount} musician{sentCount !== 1 ? 's' : ''}.
+                Gig details have been sent to {sentCount} {term(terms, 'person', { plural: sentCount !== 1, case: 'lower' })}.
               </p>
             </div>
             <Button onClick={() => onOpenChange(false)}>Done</Button>

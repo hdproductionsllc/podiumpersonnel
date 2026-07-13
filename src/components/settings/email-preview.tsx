@@ -1,5 +1,8 @@
 'use client'
 
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
+
 interface EmailPreviewProps {
   organizationName: string
   logoUrl?: string
@@ -13,6 +16,7 @@ export function EmailPreview({
   brandColor,
   footerText,
 }: EmailPreviewProps) {
+  const terms = useTerms()
   return (
     <div className="border rounded-lg overflow-hidden bg-gray-100">
       <div className="max-w-[600px] mx-auto bg-white shadow-sm">
@@ -35,24 +39,24 @@ export function EmailPreview({
 
         {/* Content */}
         <div className="p-6">
-          <p className="text-gray-700 mb-4">Dear Musician Name,</p>
+          <p className="text-gray-700 mb-4">Dear {term(terms, 'person')} Name,</p>
 
           <p className="text-gray-600 text-sm mb-4">
             You have been offered a position with{' '}
-            <strong>{organizationName}</strong> for the following project:
+            <strong>{organizationName}</strong> for the following {term(terms, 'work', { case: 'lower' })}:
           </p>
 
           <div className="bg-gray-50 border rounded-lg p-4 mb-4">
-            <h2 className="font-bold text-gray-900 mb-2">Sample Project Name</h2>
+            <h2 className="font-bold text-gray-900 mb-2">Sample {term(terms, 'work')} Name</h2>
             <p className="text-gray-600 text-sm">
-              <strong>Position:</strong> Violin 1, Chair 1
+              <strong>Position:</strong> Violin 1, {term(terms, 'rank')} 1
             </p>
             <p className="text-gray-600 text-sm">
               <strong>Please respond by:</strong> January 31, 2025
             </p>
           </div>
 
-          <h3 className="font-bold text-gray-900 text-sm mb-2">Services:</h3>
+          <h3 className="font-bold text-gray-900 text-sm mb-2">{term(terms, 'session', { plural: true })}:</h3>
           <div
             className="bg-gray-50 border-l-4 p-3 mb-4"
             style={{ borderLeftColor: brandColor }}

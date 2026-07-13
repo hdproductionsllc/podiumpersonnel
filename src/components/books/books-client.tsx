@@ -8,6 +8,8 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { BookFormDialog } from './book-form-dialog'
 import { DeleteBookDialog } from './delete-book-dialog'
 import { BookDetail } from './book-detail'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import type { Book } from '@/types'
 
 export type BookEntryJoined = {
@@ -56,6 +58,7 @@ export function BooksClient({
   userRole,
 }: BooksClientProps) {
   const router = useRouter()
+  const terms = useTerms()
   const [selectedBookId, setSelectedBookId] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -116,7 +119,7 @@ export function BooksClient({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="page-header">
-          <h2 className="text-3xl font-bold tracking-tight">Saved Ensembles</h2>
+          <h2 className="text-3xl font-bold tracking-tight">{term(terms, 'groupList', { plural: true })}</h2>
           <p className="text-muted-foreground mt-1">
             Manage personnel lists for your orchestra.
           </p>
@@ -160,8 +163,8 @@ export function BooksClient({
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
             </svg>
           }
-          title="No saved ensembles yet"
-          description="Save your go-to musician lineups so you can quickly staff future projects."
+          title={`No ${term(terms, 'groupList', { plural: true, case: 'lower' })} yet`}
+          description={`Save your go-to ${term(terms, 'person', { case: 'lower' })} lineups so you can quickly staff future ${term(terms, 'work', { plural: true, case: 'lower' })}.`}
           action={canManage ? <Button onClick={handleAdd}>Add Your First Ensemble</Button> : undefined}
         />
       ) : filteredBooks.length === 0 ? (

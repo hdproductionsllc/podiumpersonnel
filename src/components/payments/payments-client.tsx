@@ -10,6 +10,8 @@ import { PaymentStatusDialog } from './payment-status-dialog'
 import { ExportDialog } from './export-dialog'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 const PAGE_SIZE = 50
 
@@ -79,6 +81,7 @@ export function PaymentsClient({
   initialStatusFilter = '',
 }: PaymentsClientProps) {
   const router = useRouter()
+  const terms = useTerms()
   const canManage = userRole === 'owner' || userRole === 'admin'
 
   // Filter state
@@ -268,7 +271,7 @@ export function PaymentsClient({
         <div className="page-header">
           <h2 className="text-3xl font-bold tracking-tight">Payments</h2>
           <p className="text-muted-foreground mt-1">
-            Track and manage musician payments.
+            Track and manage {term(terms, 'person', { case: 'lower' })} payments.
           </p>
           <div className="mt-3 w-12 h-px bg-gold/50" />
         </div>
@@ -333,7 +336,7 @@ export function PaymentsClient({
       <div className="flex flex-wrap items-center gap-3">
         <input
           type="text"
-          placeholder="Search by name or project..."
+          placeholder={`Search by name or ${term(terms, 'work', { case: 'lower' })}...`}
           className="rounded-md border bg-background px-3 py-2 text-sm w-64"
           value={search}
           onChange={(e) => { setSearch(e.target.value); resetPage() }}
@@ -343,7 +346,7 @@ export function PaymentsClient({
           value={projectFilter}
           onChange={(e) => { setProjectFilter(e.target.value); resetPage() }}
         >
-          <option value="">All projects</option>
+          <option value="">All {term(terms, 'work', { plural: true, case: 'lower' })}</option>
           {projects.map((p) => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
@@ -460,7 +463,7 @@ export function PaymentsClient({
             </svg>
           }
           title="No payments yet"
-          description="Generate payments once you have confirmed musician positions on services."
+          description={`Generate payments once you have confirmed ${term(terms, 'person', { case: 'lower' })} positions on ${term(terms, 'session', { plural: true, case: 'lower' })}.`}
           action={canManage ? (
             <Button onClick={handleGeneratePayments} disabled={isGenerating}>
               Generate Payments from Confirmed Positions
@@ -485,9 +488,9 @@ export function PaymentsClient({
                       />
                     </th>
                   )}
-                  <th className="px-4 py-3 text-left font-medium">Musician</th>
-                  <th className="px-4 py-3 text-left font-medium">Project</th>
-                  <th className="px-4 py-3 text-left font-medium">Service</th>
+                  <th className="px-4 py-3 text-left font-medium">{term(terms, 'person')}</th>
+                  <th className="px-4 py-3 text-left font-medium">{term(terms, 'work')}</th>
+                  <th className="px-4 py-3 text-left font-medium">{term(terms, 'session')}</th>
                   <th className="px-4 py-3 text-left font-medium">Date</th>
                   <th className="px-4 py-3 text-right font-medium">Amount</th>
                   <th className="px-4 py-3 text-center font-medium">Type</th>

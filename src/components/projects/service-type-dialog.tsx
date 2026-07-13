@@ -8,6 +8,8 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 interface ServiceTypeDialogProps {
   open: boolean
@@ -20,13 +22,14 @@ export function ServiceTypeDialog({
   onOpenChange,
   onSelect,
 }: ServiceTypeDialogProps) {
+  const terms = useTerms()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Service</DialogTitle>
+          <DialogTitle>Add {term(terms, 'session')}</DialogTitle>
           <DialogDescription>
-            What type of service would you like to add?
+            What type of {term(terms, 'session', { case: 'lower' })} would you like to add?
           </DialogDescription>
         </DialogHeader>
 
@@ -38,7 +41,7 @@ export function ServiceTypeDialog({
           >
             <span className="font-semibold">Rehearsal</span>
             <span className="text-sm text-muted-foreground font-normal">
-              Practice session for the musicians
+              Practice session for the {term(terms, 'person', { plural: true, case: 'lower' })}
             </span>
           </Button>
 

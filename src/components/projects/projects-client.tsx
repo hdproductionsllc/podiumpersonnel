@@ -38,6 +38,8 @@ import {
   type PaymentStatus,
 } from '@/lib/validations/projects'
 import { usePlan } from '@/components/providers/plan-provider'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import { canCreateProject, canUseEmailFeatures, PLAN_LIMITS } from '@/lib/plan'
 import { UpgradePrompt } from '@/components/billing/upgrade-prompt'
 
@@ -135,6 +137,7 @@ function ServicesList({
   onEditService: (projectId: string, service: Service) => void
   onDeleteService: (service: Service) => void
 }) {
+  const terms = useTerms()
   const sorted = [...services].sort(
     (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
   )
@@ -142,16 +145,16 @@ function ServicesList({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold">Services</h4>
+        <h4 className="text-sm font-semibold">{term(terms, 'session', { plural: true })}</h4>
         {canManage && (
           <Button size="sm" variant="outline" onClick={() => onAddService(projectId)}>
-            Add Service
+            Add {term(terms, 'session')}
           </Button>
         )}
       </div>
 
       {sorted.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-2">No services yet. Add rehearsals and performances to this project — these are the events your musicians need to attend.</p>
+        <p className="text-sm text-muted-foreground py-2">No {term(terms, 'session', { plural: true, case: 'lower' })} yet. Add rehearsals and performances to this {term(terms, 'work', { case: 'lower' })} — these are the events your {term(terms, 'person', { plural: true, case: 'lower' })} need to attend.</p>
       ) : (
         <div className="overflow-x-auto rounded-md border bg-background">
           <table className="w-full text-sm">
@@ -252,6 +255,7 @@ export function ProjectsClient({
 }: ProjectsClientProps) {
   const router = useRouter()
   const plan = usePlan()
+  const terms = useTerms()
 
   // Project dialog state
   const [projectFormOpen, setProjectFormOpen] = useState(false)
@@ -405,7 +409,7 @@ export function ProjectsClient({
       .update({ status: 'completed' })
       .eq('id', project.id)
     if (error) {
-      toast.error('Failed to mark project as completed')
+      toast.error(`Failed to mark ${term(terms, 'work', { case: 'lower' })} as completed`)
       return
     }
     toast.success(`"${project.name}" marked as completed`)
@@ -433,7 +437,7 @@ export function ProjectsClient({
 
     // Celebrate first project created
     if (newProject && projects.length === 0) {
-      toast.success('Your first project is created!')
+      toast.success(`Your first ${term(terms, 'work', { case: 'lower' })} is created!`)
     }
 
     // Auto-create services and positions based on template
@@ -658,9 +662,9 @@ export function ProjectsClient({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="page-header">
-          <h2 className="text-3xl font-bold tracking-tight">Projects</h2>
+          <h2 className="text-3xl font-bold tracking-tight">{term(terms, 'work', { plural: true })}</h2>
           <p className="text-muted-foreground mt-1">
-            Manage your projects and their services.
+            Manage your {term(terms, 'work', { plural: true, case: 'lower' })} and their {term(terms, 'session', { plural: true, case: 'lower' })}.
           </p>
           <div className="mt-3 w-12 h-px bg-gold/50" />
         </div>
@@ -668,10 +672,10 @@ export function ProjectsClient({
           (() => {
             const activeCount = projects.filter(p => p.status === 'active' || p.status === 'draft').length
             return canCreateProject(plan, activeCount) ? (
-              <Button onClick={handleAddProject}>Add Project</Button>
+              <Button onClick={handleAddProject}>Add {term(terms, 'work')}</Button>
             ) : (
-              <Button variant="outline" disabled title={`Free plan is limited to ${PLAN_LIMITS.free.activeProjects} active projects`}>
-                Add Project (Limit Reached)
+              <Button variant="outline" disabled title={`Free plan is limited to ${PLAN_LIMITS.free.activeProjects} active ${term(terms, 'work', { plural: true, case: 'lower' })}`}>
+                Add {term(terms, 'work')} (Limit Reached)
               </Button>
             )
           })()
@@ -684,8 +688,8 @@ export function ProjectsClient({
         const activeCount = projects.filter(p => p.status === 'active' || p.status === 'draft').length
         return !canCreateProject(plan, activeCount) ? (
           <UpgradePrompt
-            feature="Project Limit Reached"
-            description={`Free plan is limited to ${PLAN_LIMITS.free.activeProjects} active projects. Upgrade to Pro for unlimited projects.`}
+            feature={`${term(terms, 'work')} Limit Reached`}
+            description={`Free plan is limited to ${PLAN_LIMITS.free.activeProjects} active ${term(terms, 'work', { plural: true, case: 'lower' })}. Upgrade to Pro for unlimited ${term(terms, 'work', { plural: true, case: 'lower' })}.`}
             compact
           />
         ) : null
@@ -711,7 +715,7 @@ export function ProjectsClient({
         <div className="flex flex-wrap items-center gap-3">
           <input
             type="text"
-            placeholder="Search projects..."
+            placeholder={`Search ${term(terms, 'work', { plural: true, case: 'lower' })}...`}
             className="rounded-md border bg-background px-3 py-2 text-sm w-64"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -739,7 +743,7 @@ export function ProjectsClient({
             </Button>
           )}
           <span className="text-xs text-muted-foreground ml-auto">
-            {filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''}
+            {filteredProjects.length} {term(terms, 'work', { plural: filteredProjects.length !== 1, case: 'lower' })}
           </span>
         </div>
       )}
@@ -751,12 +755,12 @@ export function ProjectsClient({
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" />
             </svg>
           }
-          title="No projects yet"
-          description="Create your first project to start managing rehearsals, performances, and musicians."
-          action={canManage ? <Button onClick={handleAddProject}>Add Your First Project</Button> : undefined}
+          title={`No ${term(terms, 'work', { plural: true, case: 'lower' })} yet`}
+          description={`Create your first ${term(terms, 'work', { case: 'lower' })} to start managing rehearsals, performances, and ${term(terms, 'person', { plural: true, case: 'lower' })}.`}
+          action={canManage ? <Button onClick={handleAddProject}>Add Your First {term(terms, 'work')}</Button> : undefined}
         />
       ) : filteredProjects.length === 0 ? (
-        <EmptyState title="No projects match your filters" />
+        <EmptyState title={`No ${term(terms, 'work', { plural: true, case: 'lower' })} match your filters`} />
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
@@ -771,8 +775,8 @@ export function ProjectsClient({
                 <th className="px-3 py-3 text-right font-medium">Contract</th>
                 <th className="px-3 py-3 text-right font-medium">Deposit</th>
                 <th className="px-3 py-3 text-left font-medium">Payment</th>
-                <th className="px-3 py-3 text-left font-medium">Musicians</th>
-                <th className="px-3 py-3 text-left font-medium">Services</th>
+                <th className="px-3 py-3 text-left font-medium">{term(terms, 'person', { plural: true })}</th>
+                <th className="px-3 py-3 text-left font-medium">{term(terms, 'session', { plural: true })}</th>
                 {canManage && (
                   <th className="px-3 py-3 text-right font-medium">Actions</th>
                 )}
@@ -1165,7 +1169,7 @@ export function ProjectsClient({
               musicianId: p.musician_id!,
               firstName: p.musician!.first_name,
               lastName: p.musician!.last_name,
-              instrument: p.instrument?.name || 'Instrument',
+              instrument: p.instrument?.name || term(terms, 'skill'),
               phone: p.musician!.phone || null,
             }))}
           onPhonesSaved={() => router.refresh()}

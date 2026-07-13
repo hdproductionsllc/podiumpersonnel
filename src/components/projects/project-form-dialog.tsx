@@ -34,6 +34,8 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import type { ProjectWithServices } from './projects-client'
 
 type TemplateType = 'string-quartet' | 'string-trio' | 'duo' | 'solo' | 'orchestra' | 'custom'
@@ -102,6 +104,7 @@ export function ProjectFormDialog({
   isFirstProject,
   onSuccess,
 }: ProjectFormDialogProps) {
+  const terms = useTerms()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showTemplatePicker, setShowTemplatePicker] = useState(false)
@@ -440,12 +443,12 @@ export function ProjectFormDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? 'Edit Project' : 'Add Project'}
+            {isEditing ? `Edit ${term(terms, 'work')}` : `Add ${term(terms, 'work')}`}
           </DialogTitle>
           <DialogDescription>
             {isEditing
-              ? 'Update the project details.'
-              : 'A project represents a gig, concert, or event — it can include one or more rehearsals and performances.'}
+              ? `Update the ${term(terms, 'work', { case: 'lower' })} details.`
+              : `A ${term(terms, 'work', { case: 'lower' })} represents a gig, concert, or event — it can include one or more rehearsals and performances.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -483,13 +486,13 @@ export function ProjectFormDialog({
                         <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                       </svg>
-                      Shared with musicians
+                      Shared with {term(terms, 'person', { plural: true, case: 'lower' })}
                     </span>
                   </div>
                   <FormControl>
                     <textarea
                       className="flex min-h-[80px] w-full rounded-md border border-input border-l-4 border-l-blue-400 dark:border-l-blue-600 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      placeholder="Project description..."
+                      placeholder={`${term(terms, 'work')} description...`}
                       {...field}
                     />
                   </FormControl>
@@ -953,7 +956,7 @@ export function ProjectFormDialog({
               <Button type="submit" disabled={isLoading}>
                 {isLoading
                   ? isEditing ? 'Saving...' : 'Creating...'
-                  : isEditing ? 'Save Changes' : 'Create Project'}
+                  : isEditing ? 'Save Changes' : `Create ${term(terms, 'work')}`}
               </Button>
             </DialogFooter>
           </form>

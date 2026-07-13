@@ -1,5 +1,7 @@
 'use client'
 
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import type { ConflictInfo } from './project-positions'
 
 interface ConflictsSummaryProps {
@@ -8,6 +10,7 @@ interface ConflictsSummaryProps {
 }
 
 export function ConflictsSummary({ conflicts, timezone }: ConflictsSummaryProps) {
+  const terms = useTerms()
   if (conflicts.length === 0) return null
 
   return (
@@ -24,9 +27,9 @@ export function ConflictsSummary({ conflicts, timezone }: ConflictsSummaryProps)
         <table className="w-full text-sm">
           <thead className="border-b border-amber-200 dark:border-amber-900">
             <tr>
-              <th className="px-3 py-2 text-left font-medium text-xs">Musician</th>
+              <th className="px-3 py-2 text-left font-medium text-xs">{term(terms, 'person')}</th>
               <th className="px-3 py-2 text-left font-medium text-xs">Position</th>
-              <th className="px-3 py-2 text-left font-medium text-xs">Service</th>
+              <th className="px-3 py-2 text-left font-medium text-xs">{term(terms, 'session')}</th>
               <th className="px-3 py-2 text-left font-medium text-xs">Conflict</th>
             </tr>
           </thead>

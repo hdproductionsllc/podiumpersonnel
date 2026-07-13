@@ -11,6 +11,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import type { BookWithEntries } from './books-client'
 
 interface DeleteBookDialogProps {
@@ -26,6 +28,7 @@ export function DeleteBookDialog({
   book,
   onSuccess,
 }: DeleteBookDialogProps) {
+  const terms = useTerms()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -61,7 +64,7 @@ export function DeleteBookDialog({
           <DialogDescription>
             Are you sure you want to delete &quot;{book?.name}&quot;?
             {entryCount > 0 && (
-              <> This will also remove {entryCount} musician assignment{entryCount !== 1 ? 's' : ''}.</>
+              <> This will also remove {entryCount} {term(terms, 'person', { case: 'lower' })} assignment{entryCount !== 1 ? 's' : ''}.</>
             )}
             {' '}This action cannot be undone.
           </DialogDescription>

@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import { SendMusicDialog } from './send-music-dialog'
 
 interface ProjectFileInstrument {
@@ -87,6 +89,7 @@ export function ProjectFilesSection({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [initialized, setInitialized] = useState(false)
+  const terms = useTerms()
 
   // Get unique instruments from project positions
   const projectInstruments = Array.from(
@@ -303,7 +306,7 @@ export function ProjectFilesSection({
 
       {files.length === 0 ? (
         <p className="text-sm text-muted-foreground py-2">
-          No files uploaded yet. Upload PDFs of sheet music and parts to distribute to your musicians.
+          No files uploaded yet. Upload PDFs of sheet music and parts to distribute to your {term(terms, 'person', { plural: true, case: 'lower' })}.
         </p>
       ) : (
         <div className="overflow-x-auto rounded-md border bg-background">
@@ -339,7 +342,7 @@ export function ProjectFilesSection({
                   </td>
                   <td className="px-3 py-2">
                     {file.scope === 'all' ? (
-                      <Badge variant="secondary">All Musicians</Badge>
+                      <Badge variant="secondary">All {term(terms, 'person', { plural: true })}</Badge>
                     ) : (
                       <div className="flex flex-wrap gap-1">
                         {file.project_file_instruments.map((fi) => (
@@ -484,7 +487,7 @@ export function ProjectFilesSection({
                     onChange={() => setScope('all')}
                     className="accent-primary"
                   />
-                  <span className="text-sm">All Musicians</span>
+                  <span className="text-sm">All {term(terms, 'person', { plural: true })}</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -513,7 +516,7 @@ export function ProjectFilesSection({
                     </label>
                   ))}
                   {projectInstruments.length === 0 && (
-                    <p className="text-xs text-muted-foreground">No instruments assigned to this project yet.</p>
+                    <p className="text-xs text-muted-foreground">No {term(terms, 'skill', { plural: true, case: 'lower' })} assigned to this {term(terms, 'work', { case: 'lower' })} yet.</p>
                   )}
                 </div>
               )}

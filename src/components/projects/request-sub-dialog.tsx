@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import type { Service } from '@/types'
 
 interface RequestSubDialogProps {
@@ -26,6 +28,7 @@ export function RequestSubDialog({
   timezone,
   onSuccess,
 }: RequestSubDialogProps) {
+  const terms = useTerms()
   const [serviceId, setServiceId] = useState<string>('')
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(false)
@@ -84,13 +87,13 @@ export function RequestSubDialog({
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Service</label>
+            <label className="text-sm font-medium">{term(terms, 'session')}</label>
             <select
               className="w-full rounded-md border bg-background px-3 py-2 text-sm"
               value={serviceId}
               onChange={(e) => setServiceId(e.target.value)}
             >
-              <option value="">All services</option>
+              <option value="">All {term(terms, 'session', { plural: true, case: 'lower' })}</option>
               {services.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} ({new Date(s.start_time).toLocaleDateString('en-US', { ...(timezone ? { timeZone: timezone } : {}) })})

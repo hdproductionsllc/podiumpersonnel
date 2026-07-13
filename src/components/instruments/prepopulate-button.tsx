@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { STANDARD_INSTRUMENTS } from '@/lib/validations/instruments'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 interface PrepopulateButtonProps {
   organizationId: string
@@ -16,6 +18,7 @@ export function PrepopulateButton({
 }: PrepopulateButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const terms = useTerms()
 
   async function handlePrepopulate() {
     setIsLoading(true)
@@ -52,7 +55,7 @@ export function PrepopulateButton({
         onClick={handlePrepopulate}
         disabled={isLoading}
       >
-        {isLoading ? 'Adding instruments...' : 'Add Standard Orchestra'}
+        {isLoading ? `Adding ${term(terms, 'skill', { plural: true, case: 'lower' })}...` : 'Add Standard Orchestra'}
       </Button>
       {error && (
         <p className="text-sm text-destructive mt-1">{error}</p>

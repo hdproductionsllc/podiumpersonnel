@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/form'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmailPreview } from './email-preview'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 const DEFAULT_BRAND_COLOR = '#1E293B'
 
@@ -44,6 +46,7 @@ interface EmailBrandingSectionProps {
 
 export function EmailBrandingSection({ organization, role }: EmailBrandingSectionProps) {
   const router = useRouter()
+  const terms = useTerms()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -95,7 +98,7 @@ export function EmailBrandingSection({ organization, role }: EmailBrandingSectio
       <CardHeader>
         <CardTitle>Email Branding</CardTitle>
         <CardDescription>
-          Customize the appearance of emails sent to musicians
+          Customize the appearance of emails sent to {term(terms, 'person', { plural: true, case: 'lower' })}
         </CardDescription>
       </CardHeader>
       <CardContent>

@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 type BookOption = {
   id: string
@@ -29,6 +31,7 @@ export function ImportFromBookDialog({
   projectId,
   onSuccess,
 }: ImportFromBookDialogProps) {
+  const terms = useTerms()
   const [selectedBookId, setSelectedBookId] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -109,7 +112,7 @@ export function ImportFromBookDialog({
       <div className="relative bg-background rounded-lg border shadow-lg w-full max-w-md p-6 space-y-4">
         <h3 className="text-lg font-semibold">Import from Ensemble</h3>
         <p className="text-sm text-muted-foreground">
-          Select an ensemble to create positions from its entries. Musicians will be pre-assigned.
+          Select an ensemble to create positions from its entries. {term(terms, 'person', { plural: true })} will be pre-assigned.
         </p>
 
         {error && (

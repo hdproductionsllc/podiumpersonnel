@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 export type SubRequestJoined = {
   id: string
@@ -61,6 +63,7 @@ export function SubRequests({
   onRequestChange,
 }: SubRequestsProps) {
   const router = useRouter()
+  const terms = useTerms()
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [showDeclineReason, setShowDeclineReason] = useState<string | null>(null)
   const [declineReason, setDeclineReason] = useState('')
@@ -167,8 +170,8 @@ export function SubRequests({
           <thead className="border-b bg-muted/30">
             <tr>
               <th className="px-3 py-2 text-left font-medium text-xs">Position</th>
-              <th className="px-3 py-2 text-left font-medium text-xs">Musician</th>
-              <th className="px-3 py-2 text-left font-medium text-xs">Service</th>
+              <th className="px-3 py-2 text-left font-medium text-xs">{term(terms, 'person')}</th>
+              <th className="px-3 py-2 text-left font-medium text-xs">{term(terms, 'session')}</th>
               <th className="px-3 py-2 text-left font-medium text-xs">Reason</th>
               <th className="px-3 py-2 text-left font-medium text-xs">Suggested Sub</th>
               <th className="px-3 py-2 text-left font-medium text-xs">Status</th>
@@ -181,7 +184,7 @@ export function SubRequests({
             {requests.map((req) => (
               <tr key={req.id} className="hover:bg-muted/30">
                 <td className="px-3 py-2 text-muted-foreground">
-                  {req.position_instrument}{(chairsByInstrument[req.position_instrument]?.size || 0) > 1 ? `, Chair ${req.position_chair}` : ''}
+                  {req.position_instrument}{(chairsByInstrument[req.position_instrument]?.size || 0) > 1 ? `, ${term(terms, 'rank')} ${req.position_chair}` : ''}
                 </td>
                 <td className="px-3 py-2">
                   {req.requesting_musician.first_name} {req.requesting_musician.last_name}
@@ -189,7 +192,7 @@ export function SubRequests({
                 <td className="px-3 py-2 text-muted-foreground">
                   {req.service
                     ? `${req.service.name} (${new Date(req.service.start_time).toLocaleDateString('en-US', { timeZone: timezone })})`
-                    : 'All services'}
+                    : `All ${term(terms, 'session', { plural: true, case: 'lower' })}`}
                 </td>
                 <td className="px-3 py-2 text-muted-foreground max-w-32 truncate" title={req.reason || undefined}>
                   {req.reason || '—'}

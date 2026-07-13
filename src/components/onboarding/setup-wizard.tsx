@@ -5,6 +5,9 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Logo } from '@/components/ui/logo'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
+import type { TermDictionary } from '@/lib/verticals'
 
 function SidebarTab({ label }: { label: string }) {
   return (
@@ -17,12 +20,13 @@ function SidebarTab({ label }: { label: string }) {
   )
 }
 
-const STEPS = [
+function getSteps(terms: TermDictionary) {
+  return [
   {
     title: 'Welcome to Podium Personnel!',
     body: (
       <p className="text-muted-foreground">
-        Your orchestral instruments are already pre-loaded. Here&apos;s a quick overview of how Podium works to help you manage your personnel.
+        Your orchestral {term(terms, 'skill', { plural: true, case: 'lower' })} are already pre-loaded. Here&apos;s a quick overview of how Podium works to help you manage your personnel.
       </p>
     ),
     icon: <Logo variant="dark" size="md" />,
@@ -32,14 +36,14 @@ const STEPS = [
     body: (
       <div className="space-y-3">
         <p className="text-muted-foreground">
-          Import a spreadsheet or add musicians one by one — names and instruments are all you need to get started. Emails, phones, and other details can always come later.
+          Import a spreadsheet or add {term(terms, 'person', { plural: true, case: 'lower' })} one by one — names and {term(terms, 'skill', { plural: true, case: 'lower' })} are all you need to get started. Emails, phones, and other details can always come later.
         </p>
         <p className="text-muted-foreground">
-          Then set your <strong>call order</strong> — rank your musicians by preference so Podium always knows who to call first. When a gig opens up, your top picks get the offer automatically.
+          Then set your <strong>call order</strong> — rank your {term(terms, 'person', { plural: true, case: 'lower' })} by preference so Podium always knows who to call first. When a gig opens up, your top picks get the offer automatically.
         </p>
         <div className="pt-1">
           <span className="text-xs text-muted-foreground">Find it in the sidebar:</span>{' '}
-          <SidebarTab label="Musicians" />
+          <SidebarTab label={term(terms, 'person', { plural: true })} />
         </div>
       </div>
     ),
@@ -50,14 +54,14 @@ const STEPS = [
     ),
   },
   {
-    title: 'Create Projects & Services',
+    title: `Create ${term(terms, 'work', { plural: true })} & ${term(terms, 'session', { plural: true })}`,
     body: (
       <div className="space-y-3">
         <p className="text-muted-foreground">
-          A <strong>project</strong> is the container for a gig — it could be a full concert series with multiple rehearsals and performances, or just a single casual event.
+          A <strong>{term(terms, 'work', { case: 'lower' })}</strong> is the container for a gig — it could be a full concert series with multiple rehearsals and performances, or just a single casual event.
         </p>
         <p className="text-muted-foreground">
-          Inside each project, you add <strong>services</strong> — the individual rehearsals and performances your musicians need to show up for, each with a call time, start time, and end time.
+          Inside each {term(terms, 'work', { case: 'lower' })}, you add <strong>{term(terms, 'session', { plural: true, case: 'lower' })}</strong> — the individual rehearsals and performances your {term(terms, 'person', { plural: true, case: 'lower' })} need to show up for, each with a call time, start time, and end time.
         </p>
         <div className="rounded-md bg-muted/50 border px-3 py-2 text-sm text-left">
           <div className="font-semibold">Holiday Concert</div>
@@ -69,7 +73,7 @@ const STEPS = [
         </div>
         <div className="pt-1">
           <span className="text-xs text-muted-foreground">Find it in the sidebar:</span>{' '}
-          <SidebarTab label="Projects" />
+          <SidebarTab label={term(terms, 'work', { plural: true })} />
         </div>
       </div>
     ),
@@ -84,10 +88,10 @@ const STEPS = [
     body: (
       <div className="space-y-3">
         <p className="text-muted-foreground">
-          Still inside the <SidebarTab label="Projects" /> tab, add positions to your project — like <strong>Violin 1</strong>, <strong>Cello</strong>, or <strong>Trumpet</strong> — and send calls to your musicians. Podium will automatically suggest players who are higher on your call list.
+          Still inside the <SidebarTab label={term(terms, 'work', { plural: true })} /> tab, add positions to your {term(terms, 'work', { case: 'lower' })} — like <strong>Violin 1</strong>, <strong>Cello</strong>, or <strong>Trumpet</strong> — and send calls to your {term(terms, 'person', { plural: true, case: 'lower' })}. Podium will automatically suggest players who are higher on your call list.
         </p>
         <p className="text-muted-foreground">
-          Musicians receive an email and can accept or decline directly from the link — no account required.
+          {term(terms, 'person', { plural: true })} receive an email and can accept or decline directly from the link — no account required.
         </p>
       </div>
     ),
@@ -101,7 +105,7 @@ const STEPS = [
     title: 'You\'re All Set!',
     body: (
       <p className="text-muted-foreground">
-        That&apos;s the workflow: <strong>Musicians</strong> &rarr; <strong>Project</strong> &rarr; <strong>Services</strong> &rarr; <strong>Staff</strong> &rarr; <strong>Send Calls</strong>. Your dashboard will guide you through what to do next.
+        That&apos;s the workflow: <strong>{term(terms, 'person', { plural: true })}</strong> &rarr; <strong>{term(terms, 'work')}</strong> &rarr; <strong>{term(terms, 'session', { plural: true })}</strong> &rarr; <strong>Staff</strong> &rarr; <strong>Send Calls</strong>. Your dashboard will guide you through what to do next.
       </p>
     ),
     icon: (
@@ -110,7 +114,8 @@ const STEPS = [
       </svg>
     ),
   },
-]
+  ]
+}
 
 interface SetupWizardProps {
   userId: string
@@ -118,6 +123,8 @@ interface SetupWizardProps {
 }
 
 export function SetupWizard({ userId, organizationId }: SetupWizardProps) {
+  const terms = useTerms()
+  const STEPS = getSteps(terms)
   const [step, setStep] = useState(0)
   const [dismissed, setDismissed] = useState(false)
 

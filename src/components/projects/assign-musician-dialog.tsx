@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import type { MusicianForOffer } from './send-offer-dialog'
 
 interface AssignMusicianDialogProps {
@@ -29,6 +31,7 @@ export function AssignMusicianDialog({
   existingOfferMusicianIds,
   onSuccess,
 }: AssignMusicianDialogProps) {
+  const terms = useTerms()
   const [selectedMusicianId, setSelectedMusicianId] = useState('')
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -141,7 +144,7 @@ export function AssignMusicianDialog({
       const result = await response.json()
 
       if (!response.ok) {
-        setError(result.error || 'Failed to assign musician')
+        setError(result.error || `Failed to assign ${term(terms, 'person', { case: 'lower' })}`)
         setLoading(false)
         return
       }
@@ -152,7 +155,7 @@ export function AssignMusicianDialog({
       onOpenChange(false)
       onSuccess()
     } catch {
-      setError('Failed to assign musician')
+      setError(`Failed to assign ${term(terms, 'person', { case: 'lower' })}`)
     } finally {
       setLoading(false)
     }
@@ -181,7 +184,7 @@ export function AssignMusicianDialog({
 
           <div className="rounded-md border bg-muted/30 p-4 space-y-3">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Musician:</span>
+              <span className="text-muted-foreground">{term(terms, 'person')}:</span>
               <span className="font-medium">
                 {selectedMusician?.first_name} {selectedMusician?.last_name}
               </span>
@@ -214,9 +217,9 @@ export function AssignMusicianDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/50" onClick={handleClose} />
       <div className="relative bg-background rounded-lg border shadow-lg w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-        <h3 className="text-lg font-semibold">Assign Musician</h3>
+        <h3 className="text-lg font-semibold">Assign {term(terms, 'person')}</h3>
         <p className="text-sm text-muted-foreground">
-          Directly assign a musician to this position. No offer email will be sent.
+          Directly assign a {term(terms, 'person', { case: 'lower' })} to this position. No offer email will be sent.
         </p>
 
         {error && (
@@ -227,10 +230,10 @@ export function AssignMusicianDialog({
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Musician</label>
+            <label className="text-sm font-medium">{term(terms, 'person')}</label>
             {availableMusicians.length === 0 && allAvailable.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No available musicians. Add one below or from the Musicians page.
+                No available {term(terms, 'person', { plural: true, case: 'lower' })}. Add one below or from the {term(terms, 'person', { plural: true })} page.
               </p>
             ) : (
               <>
@@ -325,7 +328,7 @@ export function AssignMusicianDialog({
                               {otherGroup.length > 0 && (
                                 <>
                                   <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted/50 border-t">
-                                    Other musicians
+                                    Other {term(terms, 'person', { plural: true, case: 'lower' })}
                                   </div>
                                   {otherGroup.map((m) => {
                                     const hasConflict = m.competing_schedules && m.competing_schedules.length > 0
@@ -343,7 +346,7 @@ export function AssignMusicianDialog({
                                             proficiency: 'professional',
                                           })
                                           m.musician_instruments.push({ instrument_id: instrumentId })
-                                          toast.success(`Added ${instrumentName || 'instrument'} to ${m.first_name} ${m.last_name}'s profile`)
+                                          toast.success(`Added ${instrumentName || term(terms, 'skill', { case: 'lower' })} to ${m.first_name} ${m.last_name}'s profile`)
                                           setSelectedMusicianId(m.id)
                                           setSearchQuery('')
                                           setSearchOpen(false)
@@ -382,7 +385,7 @@ export function AssignMusicianDialog({
                         })()
                       ) : (
                         <div className="px-3 py-4 text-sm text-muted-foreground text-center">
-                          No musicians match &quot;{searchQuery}&quot;
+                          No {term(terms, 'person', { plural: true, case: 'lower' })} match &quot;{searchQuery}&quot;
                         </div>
                       )}
                     </div>
@@ -395,11 +398,11 @@ export function AssignMusicianDialog({
                     className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
                     onClick={() => setShowAddMusician(true)}
                   >
-                    + Add New Musician
+                    + Add New {term(terms, 'person')}
                   </button>
                 ) : (
                   <div className="rounded-md border bg-muted/30 p-3 space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Quick Add Musician</p>
+                    <p className="text-xs font-medium text-muted-foreground">Quick Add {term(terms, 'person')}</p>
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -476,7 +479,7 @@ export function AssignMusicianDialog({
                             setNewEmail('')
                             setShowAddMusician(false)
                           } catch {
-                            setError('Failed to add musician')
+                            setError(`Failed to add ${term(terms, 'person', { case: 'lower' })}`)
                           } finally {
                             setAddingMusician(false)
                           }

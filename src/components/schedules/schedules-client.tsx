@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { EmptyState } from '@/components/ui/empty-state'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import { ScheduleFormDialog } from './schedule-form-dialog'
 import { DeleteScheduleDialog } from './delete-schedule-dialog'
 import type { CompetingSchedule } from '@/types'
@@ -30,6 +32,7 @@ export function SchedulesClient({
   musicians,
   canManage,
 }: SchedulesClientProps) {
+  const terms = useTerms()
   const router = useRouter()
   const [formOpen, setFormOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -89,7 +92,7 @@ export function SchedulesClient({
         <div className="page-header">
           <h2 className="text-3xl font-bold tracking-tight">Schedules</h2>
           <p className="text-muted-foreground mt-1">
-            Track musician availability and external commitments.
+            Track {term(terms, 'person', { case: 'lower' })} availability and external commitments.
           </p>
           <div className="mt-3 w-12 h-px bg-gold/50" />
         </div>
@@ -114,7 +117,7 @@ export function SchedulesClient({
             value={musicianFilter}
             onChange={(e) => setMusicianFilter(e.target.value)}
           >
-            <option value="">All musicians</option>
+            <option value="">All {term(terms, 'person', { plural: true, case: 'lower' })}</option>
             {musicians.map((m) => (
               <option key={m.id} value={m.id}>{m.last_name}, {m.first_name}</option>
             ))}
@@ -142,7 +145,7 @@ export function SchedulesClient({
             </svg>
           }
           title="No schedule conflicts yet"
-          description="Track your musicians' outside commitments to avoid double-booking."
+          description={`Track your ${term(terms, 'person', { plural: true, case: 'lower' })}' outside commitments to avoid double-booking.`}
           action={canManage ? <Button onClick={handleAdd}>Add First Entry</Button> : undefined}
         />
       ) : filteredSchedules.length === 0 ? (
@@ -204,12 +207,13 @@ function ScheduleTable({
   onEdit: (s: ScheduleWithMusician) => void
   onDelete: (s: ScheduleWithMusician) => void
 }) {
+  const terms = useTerms()
   return (
     <div className="overflow-x-auto rounded-md border">
       <table className="w-full text-sm">
         <thead className="border-b bg-muted/50">
           <tr>
-            <th className="px-4 py-3 text-left font-medium">Musician</th>
+            <th className="px-4 py-3 text-left font-medium">{term(terms, 'person')}</th>
             <th className="px-4 py-3 text-left font-medium">Title</th>
             <th className="px-4 py-3 text-left font-medium">Start</th>
             <th className="px-4 py-3 text-left font-medium">End</th>

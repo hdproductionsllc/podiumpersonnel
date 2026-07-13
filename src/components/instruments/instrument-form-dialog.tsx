@@ -29,6 +29,8 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import type { Instrument } from '@/types'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 interface InstrumentFormDialogProps {
   open: boolean
@@ -48,6 +50,7 @@ export function InstrumentFormDialog({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const isEditing = !!instrument
+  const terms = useTerms()
 
   const form = useForm<InstrumentInput>({
     resolver: zodResolver(instrumentSchema),
@@ -129,12 +132,12 @@ export function InstrumentFormDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? 'Edit Instrument' : 'Add Instrument'}
+            {isEditing ? `Edit ${term(terms, 'skill')}` : `Add ${term(terms, 'skill')}`}
           </DialogTitle>
           <DialogDescription>
             {isEditing
-              ? 'Update the instrument details.'
-              : 'Add a new instrument to your orchestra.'}
+              ? `Update the ${term(terms, 'skill', { case: 'lower' })} details.`
+              : `Add a new ${term(terms, 'skill', { case: 'lower' })} to your orchestra.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -229,7 +232,7 @@ export function InstrumentFormDialog({
               <Button type="submit" disabled={isLoading}>
                 {isLoading
                   ? isEditing ? 'Saving...' : 'Adding...'
-                  : isEditing ? 'Save Changes' : 'Add Instrument'}
+                  : isEditing ? 'Save Changes' : `Add ${term(terms, 'skill')}`}
               </Button>
             </DialogFooter>
           </form>

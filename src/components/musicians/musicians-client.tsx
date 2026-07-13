@@ -17,6 +17,8 @@ import { INSTRUMENT_SECTIONS, SECTION_LABELS, type InstrumentSection } from '@/l
 import { usePlan } from '@/components/providers/plan-provider'
 import { canAddMusician, canBulkImport, canUseEmailFeatures, PLAN_LIMITS } from '@/lib/plan'
 import { UpgradePrompt } from '@/components/billing/upgrade-prompt'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 function formatPhoneNumber(phone: string | null): string {
   if (!phone) return '\u2014'
@@ -103,6 +105,7 @@ export function MusiciansClient({
 }: MusiciansClientProps) {
   const router = useRouter()
   const plan = usePlan()
+  const terms = useTerms()
   const [formOpen, setFormOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [editingMusician, setEditingMusician] = useState<MusicianWithInstruments | null>(null)
@@ -627,7 +630,7 @@ export function MusiciansClient({
                 size="sm"
                 className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700"
                 onClick={(e) => { e.stopPropagation(); window.open(`/musician?impersonate=${musician.id}`, '_blank') }}
-                title="View portal as this musician"
+                title={`View portal as this ${term(terms, 'person', { case: 'lower' })}`}
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
@@ -819,7 +822,7 @@ export function MusiciansClient({
 
   function handleSendW9Request() {
     if (selectedNeedW9.length === 0) {
-      toast.error('No selected musicians need a W-9 request (must have email and no W-9 on file)')
+      toast.error(`No selected ${term(terms, 'person', { plural: true, case: 'lower' })} need a W-9 request (must have email and no W-9 on file)`)
       return
     }
     setShowW9Confirm(true)
@@ -844,10 +847,10 @@ export function MusiciansClient({
       }
 
       if (result.sent > 0) {
-        toast.success(`Sent W-9 request to ${result.sent} musician${result.sent !== 1 ? 's' : ''}`)
+        toast.success(`Sent W-9 request to ${result.sent} ${term(terms, 'person', { case: 'lower' })}${result.sent !== 1 ? 's' : ''}`)
       }
       if (result.failed > 0) {
-        toast.warning(`Failed to send to ${result.failed} musician${result.failed !== 1 ? 's' : ''}`)
+        toast.warning(`Failed to send to ${result.failed} ${term(terms, 'person', { case: 'lower' })}${result.failed !== 1 ? 's' : ''}`)
       }
     } catch {
       toast.error('Failed to send W-9 requests')
@@ -895,7 +898,7 @@ export function MusiciansClient({
 
       if (result.success > 0) {
         const tagMsg = importTag.trim() ? ` with tag "${importTag.trim()}"` : ''
-        toast.success(`Successfully imported ${result.success} musician${result.success !== 1 ? 's' : ''}${tagMsg}`)
+        toast.success(`Successfully imported ${result.success} ${term(terms, 'person', { case: 'lower' })}${result.success !== 1 ? 's' : ''}${tagMsg}`)
         setImportStats({
           total: result.success,
           withEmail: result.stats?.withEmail ?? 0,
@@ -936,16 +939,16 @@ export function MusiciansClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="rounded-lg bg-background p-6 shadow-lg text-center space-y-3">
             <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
-            <p className="font-medium">Importing musicians...</p>
-            <p className="text-sm text-muted-foreground">Parsing your spreadsheet and adding musicians to your roster.</p>
+            <p className="font-medium">Importing {term(terms, 'person', { plural: true, case: 'lower' })}...</p>
+            <p className="text-sm text-muted-foreground">Parsing your spreadsheet and adding {term(terms, 'person', { plural: true, case: 'lower' })} to your roster.</p>
           </div>
         </div>
       )}
       <div className="flex items-center justify-between">
         <div className="page-header">
-          <h2 className="text-3xl font-bold tracking-tight">Musicians</h2>
+          <h2 className="text-3xl font-bold tracking-tight">{term(terms, 'person', { plural: true })}</h2>
           <p className="text-muted-foreground mt-1">
-            Manage your musicians. Details can be updated anytime — focus on getting names in first.
+            Manage your {term(terms, 'person', { plural: true, case: 'lower' })}. Details can be updated anytime — focus on getting names in first.
           </p>
           <div className="mt-3 w-12 h-px bg-gold/50" />
         </div>
@@ -975,7 +978,7 @@ export function MusiciansClient({
                         onChange={(e) => setImportTag(e.target.value)}
                       />
                       <p className="mt-1 text-xs text-muted-foreground">
-                        All imported musicians will be tagged with this label
+                        All imported {term(terms, 'person', { plural: true, case: 'lower' })} will be tagged with this label
                       </p>
                     </div>
                     <div className="flex gap-2 flex-wrap">
@@ -1042,10 +1045,10 @@ export function MusiciansClient({
               Call Order
             </Button>
             {canAddMusician(plan, musicians.length) ? (
-              <Button onClick={handleAdd}>Add Musician</Button>
+              <Button onClick={handleAdd}>Add {term(terms, 'person')}</Button>
             ) : (
-              <Button variant="outline" disabled title={`Free plan is limited to ${PLAN_LIMITS.free.musicians} musicians`}>
-                Add Musician (Limit Reached)
+              <Button variant="outline" disabled title={`Free plan is limited to ${PLAN_LIMITS.free.musicians} ${term(terms, 'person', { plural: true, case: 'lower' })}`}>
+                Add {term(terms, 'person')} (Limit Reached)
               </Button>
             )}
           </div>
@@ -1056,8 +1059,8 @@ export function MusiciansClient({
 
       {!canAddMusician(plan, musicians.length) && (
         <UpgradePrompt
-          feature="Musician Limit Reached"
-          description={`Free plan is limited to ${PLAN_LIMITS.free.musicians} musicians. Upgrade to Pro for unlimited musicians.`}
+          feature={`${term(terms, 'person')} Limit Reached`}
+          description={`Free plan is limited to ${PLAN_LIMITS.free.musicians} ${term(terms, 'person', { plural: true, case: 'lower' })}. Upgrade to Pro for unlimited ${term(terms, 'person', { plural: true, case: 'lower' })}.`}
           compact
         />
       )}
@@ -1073,7 +1076,7 @@ export function MusiciansClient({
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold">Set your call order</p>
               <p className="text-sm text-muted-foreground">
-                Rank musicians by instrument so the best fit gets called first when filling gig positions.
+                Rank {term(terms, 'person', { plural: true, case: 'lower' })} by {term(terms, 'skill', { case: 'lower' })} so the best fit gets called first when filling gig positions.
               </p>
             </div>
             <Button
@@ -1118,7 +1121,7 @@ export function MusiciansClient({
               value={instrumentFilter}
               onChange={(e) => setInstrumentFilter(e.target.value)}
             >
-              <option value="">All instruments</option>
+              <option value="">All {term(terms, 'skill', { plural: true, case: 'lower' })}</option>
               {instruments.map((inst) => (
                 <option key={inst.id} value={inst.id}>{inst.name}</option>
               ))}
@@ -1196,7 +1199,7 @@ export function MusiciansClient({
               </Button>
             )}
             <span className="text-xs text-muted-foreground ml-auto">
-              {filteredMusicians.length} of {musicians.length} musicians
+              {filteredMusicians.length} of {musicians.length} {term(terms, 'person', { plural: true, case: 'lower' })}
             </span>
           </div>
 
@@ -1228,7 +1231,7 @@ export function MusiciansClient({
           {/* Instrument filter chips - only show instruments that musicians have */}
           {usedInstruments.length > 0 && (
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              <span className="text-xs text-muted-foreground mr-1 shrink-0">Filter by instrument:</span>
+              <span className="text-xs text-muted-foreground mr-1 shrink-0">Filter by {term(terms, 'skill', { case: 'lower' })}:</span>
               {usedInstruments.map((inst) => (
                 <button
                   key={inst.id}
@@ -1371,12 +1374,12 @@ export function MusiciansClient({
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
             </svg>
           }
-          title="No musicians yet"
-          description="Add musicians to your roster to start assigning them to projects."
-          action={canManage ? <Button onClick={handleAdd}>Add Your First Musician</Button> : undefined}
+          title={`No ${term(terms, 'person', { plural: true, case: 'lower' })} yet`}
+          description={`Add ${term(terms, 'person', { plural: true, case: 'lower' })} to your roster to start assigning them to ${term(terms, 'work', { plural: true, case: 'lower' })}.`}
+          action={canManage ? <Button onClick={handleAdd}>Add Your First {term(terms, 'person')}</Button> : undefined}
         />
       ) : filteredMusicians.length === 0 ? (
-        <EmptyState title="No musicians match your filters" />
+        <EmptyState title={`No ${term(terms, 'person', { plural: true, case: 'lower' })} match your filters`} />
       ) : (
         <>
           {/* Select & Batch Edit Button */}
@@ -1401,7 +1404,7 @@ export function MusiciansClient({
           {selectMode && selectedIds.size > 0 && (
             <div className="flex items-center gap-4 rounded-lg bg-gold/10 border border-gold/20 dark:bg-gold/5 p-3 mb-4">
               <span className="text-sm font-medium">
-                {selectedIds.size} musician{selectedIds.size !== 1 ? 's' : ''} selected
+                {selectedIds.size} {term(terms, 'person', { case: 'lower' })}{selectedIds.size !== 1 ? 's' : ''} selected
               </span>
               <Button size="sm" onClick={() => setBulkEditOpen(true)}>
                 Bulk Edit
@@ -1454,7 +1457,7 @@ export function MusiciansClient({
                         </span>
                       )}
                       <span className="ml-auto text-sm text-muted-foreground">
-                        {groupMusicians.length} musician{groupMusicians.length !== 1 ? 's' : ''}
+                        {groupMusicians.length} {term(terms, 'person', { case: 'lower' })}{groupMusicians.length !== 1 ? 's' : ''}
                       </span>
                     </button>
                     {!isCollapsed && (
@@ -1554,10 +1557,10 @@ export function MusiciansClient({
                       </svg>
                       <span className="font-semibold text-muted-foreground">Unassigned</span>
                       <span className="rounded-full bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-300">
-                        No instrument
+                        No {term(terms, 'skill', { case: 'lower' })}
                       </span>
                       <span className="ml-auto text-sm text-muted-foreground">
-                        {unassigned.length} musician{unassigned.length !== 1 ? 's' : ''}
+                        {unassigned.length} {term(terms, 'person', { case: 'lower' })}{unassigned.length !== 1 ? 's' : ''}
                       </span>
                     </button>
                     {!isCollapsed && (
@@ -1637,7 +1640,7 @@ export function MusiciansClient({
 
               {groupedByInstrument.groups.length === 0 && groupedByInstrument.unassigned.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-8">
-                  No musicians match the current filters.
+                  No {term(terms, 'person', { plural: true, case: 'lower' })} match the current filters.
                 </p>
               )}
             </div>
@@ -1665,7 +1668,7 @@ export function MusiciansClient({
           <DialogHeader>
             <DialogTitle>Remove from {removingInstrument?.name}?</DialogTitle>
             <DialogDescription>
-              This will remove {removingMusician?.first_name} {removingMusician?.last_name} from the {removingInstrument?.name} section. They will remain in your roster and keep any other instrument assignments.
+              This will remove {removingMusician?.first_name} {removingMusician?.last_name} from the {removingInstrument?.name} section. They will remain in your roster and keep any other {term(terms, 'skill', { case: 'lower' })} assignments.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-between sm:items-center gap-2">
@@ -1709,10 +1712,10 @@ export function MusiciansClient({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {importStats ? `${importStats.total} Musician${importStats.total !== 1 ? 's' : ''} Imported!` : 'Musicians Imported!'}
+              {importStats ? `${importStats.total} ${term(terms, 'person')}${importStats.total !== 1 ? 's' : ''} Imported!` : `${term(terms, 'person', { plural: true })} Imported!`}
             </DialogTitle>
             <DialogDescription>
-              Your musicians are in. Here&apos;s a summary and what to do next:
+              Your {term(terms, 'person', { plural: true, case: 'lower' })} are in. Here&apos;s a summary and what to do next:
             </DialogDescription>
           </DialogHeader>
 
@@ -1743,8 +1746,8 @@ export function MusiciansClient({
             <div className="flex items-start gap-3">
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex-shrink-0">1</div>
               <div>
-                <p className="text-sm font-medium">Assign instruments</p>
-                <p className="text-xs text-muted-foreground">Use the batch edit tool to assign instruments to multiple musicians at once.</p>
+                <p className="text-sm font-medium">Assign {term(terms, 'skill', { plural: true, case: 'lower' })}</p>
+                <p className="text-xs text-muted-foreground">Use the batch edit tool to assign {term(terms, 'skill', { plural: true, case: 'lower' })} to multiple {term(terms, 'person', { plural: true, case: 'lower' })} at once.</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -1757,8 +1760,8 @@ export function MusiciansClient({
             <div className="flex items-start gap-3">
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-100 text-green-700 text-xs font-bold flex-shrink-0">3</div>
               <div>
-                <p className="text-sm font-medium">Create a project</p>
-                <p className="text-xs text-muted-foreground">Head to Projects to set up your first gig or concert and start sending calls.</p>
+                <p className="text-sm font-medium">Create a {term(terms, 'work', { case: 'lower' })}</p>
+                <p className="text-xs text-muted-foreground">Head to {term(terms, 'work', { plural: true })} to set up your first gig or concert and start sending calls.</p>
               </div>
             </div>
           </div>
@@ -1780,7 +1783,7 @@ export function MusiciansClient({
           <div className="w-full max-w-2xl rounded-lg border bg-background p-6 shadow-lg max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold">Confirm W-9 Request Email</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              Review the email that will be sent to {selectedNeedW9.length} musician{selectedNeedW9.length !== 1 ? 's' : ''}.
+              Review the email that will be sent to {selectedNeedW9.length} {term(terms, 'person', { case: 'lower' })}{selectedNeedW9.length !== 1 ? 's' : ''}.
             </p>
 
             {/* Email Preview */}
@@ -1790,10 +1793,10 @@ export function MusiciansClient({
                 <p className="text-sm font-medium">W-9 Form Request - {organizationName}</p>
               </div>
               <div className="p-4 space-y-3 text-sm">
-                <p>Dear <span className="italic text-muted-foreground">[Musician Name]</span>,</p>
+                <p>Dear <span className="italic text-muted-foreground">[{term(terms, 'person')} Name]</span>,</p>
                 <p className="text-muted-foreground">
                   We hope this message finds you well. As part of our record-keeping requirements,
-                  we need to have a completed <strong>W-9 form</strong> on file for all musicians
+                  we need to have a completed <strong>W-9 form</strong> on file for all {term(terms, 'person', { plural: true, case: 'lower' })}
                   we work with.
                 </p>
                 <div className="rounded bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-3">

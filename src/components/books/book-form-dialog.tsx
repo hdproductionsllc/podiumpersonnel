@@ -5,6 +5,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createClient } from '@/lib/supabase/client'
 import { bookSchema, type BookInput } from '@/lib/validations/books'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import {
   Dialog,
   DialogContent,
@@ -112,6 +114,7 @@ export function BookFormDialog({
   organizationId,
   onSuccess,
 }: BookFormDialogProps) {
+  const terms = useTerms()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedPreset, setSelectedPreset] = useState('empty')
@@ -305,7 +308,7 @@ export function BookFormDialog({
           <DialogDescription>
             {isEditing
               ? 'Rename, add description, or set as default.'
-              : 'Create a new saved ensemble.'}
+              : `Create a new ${term(terms, 'groupList', { case: 'lower' })}.`}
           </DialogDescription>
         </DialogHeader>
 

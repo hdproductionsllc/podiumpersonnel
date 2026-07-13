@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import type { Instrument } from '@/types'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 interface DeleteInstrumentDialogProps {
   open: boolean
@@ -26,6 +28,7 @@ export function DeleteInstrumentDialog({
   instrument,
   onSuccess,
 }: DeleteInstrumentDialogProps) {
+  const terms = useTerms()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
@@ -100,19 +103,19 @@ export function DeleteInstrumentDialog({
   const usageParts: string[] = []
   if ((positionCount ?? 0) > 0) {
     usageParts.push(
-      `${positionCount} project position${positionCount === 1 ? '' : 's'}` +
+      `${positionCount} ${term(terms, 'work', { case: 'lower' })} position${positionCount === 1 ? '' : 's'}` +
         (confirmedCount > 0 ? ` (${confirmedCount} confirmed)` : '')
     )
   }
   if (musicianCount > 0) {
-    usageParts.push(`${musicianCount} musician${musicianCount === 1 ? '' : 's'}`)
+    usageParts.push(`${musicianCount} ${term(terms, 'person', { case: 'lower', plural: musicianCount !== 1 })}`)
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete Instrument</DialogTitle>
+          <DialogTitle>Delete {term(terms, 'skill')}</DialogTitle>
           <DialogDescription>
             {checking ? (
               <>Checking where &quot;{instrument?.name}&quot; is used…</>
@@ -120,7 +123,7 @@ export function DeleteInstrumentDialog({
               <>
                 &quot;{instrument?.name}&quot; is currently used by {usageParts.join(' and ')}.
                 Deleting it would remove those positions and any confirmed staffing. Reassign
-                or remove them first, then delete the instrument.
+                or remove them first, then delete the {term(terms, 'skill', { case: 'lower' })}.
               </>
             ) : (
               <>

@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { PaymentStatusDialog } from '@/components/payments/payment-status-dialog'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 type PositionPayment = {
   id: string
@@ -79,6 +81,7 @@ export function ProjectOffers({
   onSendWaterfall,
 }: ProjectOffersProps) {
   const router = useRouter()
+  const terms = useTerms()
   const [sendingReminder, setSendingReminder] = useState<string | null>(null)
   const [waterfallCandidates, setWaterfallCandidates] = useState<Record<string, WaterfallCandidate[]>>({})
   const [loadingWaterfall, setLoadingWaterfall] = useState<string | null>(null)
@@ -240,7 +243,7 @@ export function ProjectOffers({
           .limit(1)
 
         if (existingOffers && existingOffers.length > 0) {
-          toast.error(`${candidate.first_name} ${candidate.last_name} already has an active offer for another position in this project.`)
+          toast.error(`${candidate.first_name} ${candidate.last_name} already has an active offer for another position in this ${term(terms, 'work', { case: 'lower' })}.`)
           setSendingWaterfall(null)
           return
         }
@@ -355,7 +358,7 @@ export function ProjectOffers({
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/30">
             <tr>
-              <th className="px-3 py-2 text-left font-medium text-xs">Musician</th>
+              <th className="px-3 py-2 text-left font-medium text-xs">{term(terms, 'person')}</th>
               <th className="px-3 py-2 text-left font-medium text-xs">Position</th>
               <th className="px-3 py-2 text-left font-medium text-xs">Status</th>
               <th className="px-3 py-2 text-left font-medium text-xs">Pay</th>
@@ -391,7 +394,7 @@ export function ProjectOffers({
                       {offer.musician.first_name} {offer.musician.last_name}
                     </td>
                     <td className="px-3 py-2 text-muted-foreground">
-                      {offer.position_instrument}{hasMultipleChairs ? `, Chair ${offer.position_chair}` : ''}
+                      {offer.position_instrument}{hasMultipleChairs ? `, ${term(terms, 'rank')} ${offer.position_chair}` : ''}
                     </td>
                   <td className="px-3 py-2">
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${OFFER_STATUS_COLORS[displayStatus] || ''}`}>
@@ -440,7 +443,7 @@ export function ProjectOffers({
                           variant="ghost"
                           size="sm"
                           onClick={() => window.open(`/gig/${offer.token}`, '_blank')}
-                          title="View offer as musician sees it"
+                          title={`View offer as ${term(terms, 'person', { case: 'lower' })} sees it`}
                         >
                           View
                         </Button>
@@ -601,7 +604,7 @@ export function ProjectOffers({
               </svg>
               Expired Offers ({expiredOffers.length})
               <span className="text-xs text-muted-foreground font-normal">
-                — {byMusician.size} musician{byMusician.size !== 1 ? 's' : ''} didn&apos;t respond
+                — {byMusician.size} {term(terms, 'person', { plural: byMusician.size !== 1, case: 'lower' })} didn&apos;t respond
               </span>
             </button>
 
@@ -749,17 +752,17 @@ export function ProjectOffers({
                 <p>Dear {confirmWaterfall.candidate.first_name} {confirmWaterfall.candidate.last_name},</p>
                 <p className="text-muted-foreground">
                   You have been called to perform with{' '}
-                  <strong>{organizationName}</strong> for the following project:
+                  <strong>{organizationName}</strong> for the following {term(terms, 'work', { case: 'lower' })}:
                 </p>
                 <p className="text-xs text-muted-foreground italic">
-                  [Full project details and response link will be included]
+                  [Full {term(terms, 'work', { case: 'lower' })} details and response link will be included]
                 </p>
               </div>
             </div>
 
             {!confirmWaterfall.candidate.email && (
               <div className="mt-3 rounded bg-amber-100 dark:bg-amber-900/50 p-3 text-sm text-amber-700 dark:text-amber-300">
-                Warning: This musician has no email on file. The offer will be created but no email will be sent.
+                Warning: This {term(terms, 'person', { case: 'lower' })} has no email on file. The offer will be created but no email will be sent.
               </div>
             )}
 

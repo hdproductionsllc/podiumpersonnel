@@ -32,6 +32,8 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Star } from 'lucide-react'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS, type InstrumentSection } from '@/lib/validations/instruments'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import type { MusicianWithInstruments, InstrumentOption } from './musicians-client'
 
 interface CallOrderDialogProps {
@@ -99,6 +101,7 @@ export function CallOrderDialog({
   instruments,
 }: CallOrderDialogProps) {
   const router = useRouter()
+  const terms = useTerms()
   const [selectedInstrument, setSelectedInstrument] = useState('')
   const [orderedMusicians, setOrderedMusicians] = useState<SortableMusician[]>([])
   const [isSaving, setIsSaving] = useState(false)
@@ -216,10 +219,10 @@ export function CallOrderDialog({
     setIsSaving(false)
 
     if (errorCount > 0) {
-      toast.error(`Failed to update ${errorCount} musician${errorCount !== 1 ? 's' : ''}`)
+      toast.error(`Failed to update ${errorCount} ${term(terms, 'person', { case: 'lower' })}${errorCount !== 1 ? 's' : ''}`)
     } else {
       const instrumentName = instruments.find((i) => i.id === selectedInstrument)?.name
-      toast.success(`Call order saved for ${orderedMusicians.length} ${instrumentName} musicians`)
+      toast.success(`Call order saved for ${orderedMusicians.length} ${instrumentName} ${term(terms, 'person', { plural: true, case: 'lower' })}`)
       setHasReordered(false)
       router.refresh()
     }
@@ -249,8 +252,8 @@ export function CallOrderDialog({
           </DialogTitle>
           <DialogDescription>
             {selectedInstrument
-              ? 'Drag musicians to set the order they\'ll be offered gigs. #1 gets called first.'
-              : 'Call order determines which musicians get offered gigs first in the waterfall system. Pick an instrument to reorder.'}
+              ? `Drag ${term(terms, 'person', { plural: true, case: 'lower' })} to set the order they'll be offered gigs. #1 gets called first.`
+              : `Call order determines which ${term(terms, 'person', { plural: true, case: 'lower' })} get offered gigs first in the waterfall system. Pick an ${term(terms, 'skill', { case: 'lower' })} to reorder.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -259,7 +262,7 @@ export function CallOrderDialog({
           <div className="py-2">
             {instrumentsBySection.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-6">
-                No instruments with active musicians found.
+                No {term(terms, 'skill', { plural: true, case: 'lower' })} with active {term(terms, 'person', { plural: true, case: 'lower' })} found.
               </p>
             ) : (
               <div className="space-y-4">
@@ -277,7 +280,7 @@ export function CallOrderDialog({
                         >
                           <span className="font-medium">{inst.name}</span>
                           <span className="text-xs text-muted-foreground">
-                            {inst.count} musician{inst.count !== 1 ? 's' : ''}
+                            {inst.count} {term(terms, 'person', { case: 'lower' })}{inst.count !== 1 ? 's' : ''}
                           </span>
                         </button>
                       ))}
@@ -294,12 +297,12 @@ export function CallOrderDialog({
               <svg className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
               </svg>
-              Choose instrument
+              Choose {term(terms, 'skill', { case: 'lower' })}
             </Button>
 
             {orderedMusicians.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-6">
-                No active musicians play this instrument.
+                No active {term(terms, 'person', { plural: true, case: 'lower' })} play this {term(terms, 'skill', { case: 'lower' })}.
               </p>
             ) : (
               <DndContext

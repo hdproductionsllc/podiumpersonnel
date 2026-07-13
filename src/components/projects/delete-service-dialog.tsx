@@ -11,6 +11,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import type { Service } from '@/types'
 
 interface DeleteServiceDialogProps {
@@ -26,6 +28,7 @@ export function DeleteServiceDialog({
   service,
   onSuccess,
 }: DeleteServiceDialogProps) {
+  const terms = useTerms()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -55,7 +58,7 @@ export function DeleteServiceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete Service</DialogTitle>
+          <DialogTitle>Delete {term(terms, 'session')}</DialogTitle>
           <DialogDescription>
             Are you sure you want to delete &quot;{service?.name}&quot;?
             This action cannot be undone.

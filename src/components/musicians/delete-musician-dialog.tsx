@@ -11,6 +11,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import type { MusicianWithInstruments } from './musicians-client'
 
 interface DeleteMusicianDialogProps {
@@ -26,6 +28,7 @@ export function DeleteMusicianDialog({
   musician,
   onSuccess,
 }: DeleteMusicianDialogProps) {
+  const terms = useTerms()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [paymentCount, setPaymentCount] = useState<number | null>(null)
@@ -75,7 +78,7 @@ export function DeleteMusicianDialog({
       // The DB also enforces this via ON DELETE RESTRICT on payments — surface
       // a human-readable message instead of a raw constraint violation.
       const friendly = /foreign key|violates|constraint/i.test(deleteError.message)
-        ? 'This musician has linked records (e.g. payments) and cannot be deleted. Deactivate them instead to preserve history.'
+        ? `This ${term(terms, 'person', { case: 'lower' })} has linked records (e.g. payments) and cannot be deleted. Deactivate them instead to preserve history.`
         : deleteError.message
       setError(friendly)
       setIsLoading(false)
@@ -114,7 +117,7 @@ export function DeleteMusicianDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {hasPayments ? 'Deactivate Musician' : 'Delete Musician'}
+            {hasPayments ? `Deactivate ${term(terms, 'person')}` : `Delete ${term(terms, 'person')}`}
           </DialogTitle>
           <DialogDescription>
             {checking ? (

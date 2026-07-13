@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import type { ProjectFile } from './project-files-section'
 
 interface MusicConfirmationStatus {
@@ -150,6 +152,7 @@ export function SendMusicDialog({
   positions,
   timezone,
 }: SendMusicDialogProps) {
+  const terms = useTerms()
   const [view, setView] = useState<DialogView>('preview')
   const [sending, setSending] = useState(false)
   const [sendId, setSendId] = useState<string | null>(null)
@@ -307,7 +310,7 @@ export function SendMusicDialog({
 
   function viewTitle(): string {
     switch (view) {
-      case 'preview': return 'Send Music to Musicians'
+      case 'preview': return `Send Music to ${term(terms, 'person', { plural: true })}`
       case 'confirm-send': return 'Confirm & Send'
       case 'status': return 'Music Distribution Status'
       case 'preview-action': return 'Email Preview'
@@ -393,7 +396,7 @@ export function SendMusicDialog({
                   <Button
                     onClick={() => setView('preview-action')}
                   >
-                    Send Reminder to {unconfirmedCount} Musician{unconfirmedCount !== 1 ? 's' : ''}
+                    Send Reminder to {unconfirmedCount} {term(terms, 'person', { plural: unconfirmedCount !== 1 })}
                   </Button>
                 )}
               </div>
@@ -405,7 +408,7 @@ export function SendMusicDialog({
           <div className="space-y-4">
             <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
               <p className="text-sm text-blue-800 dark:text-blue-200">
-                This reminder will be sent to <strong>{unconfirmedCount} musician{unconfirmedCount !== 1 ? 's' : ''}</strong> who
+                This reminder will be sent to <strong>{unconfirmedCount} {term(terms, 'person', { plural: unconfirmedCount !== 1, case: 'lower' })}</strong> who
                 have not yet confirmed receipt. Below is a preview of the email they will receive.
               </p>
             </div>
@@ -416,7 +419,7 @@ export function SendMusicDialog({
               </p>
               <EmailPreview
                 type="reminder"
-                musicianName={reminderSampleMusician?.first_name || 'Musician'}
+                musicianName={reminderSampleMusician?.first_name || term(terms, 'person')}
                 organizationName={organizationName}
                 projectName={projectName}
                 files={reminderSampleFiles.map((f) => ({ name: f.file_name, size: f.file_size }))}
@@ -443,12 +446,12 @@ export function SendMusicDialog({
                 </svg>
                 <p className="text-sm font-semibold text-green-800 dark:text-green-200">
                   {sentResult?.type === 'reminder'
-                    ? `Reminder sent to ${sentResult.count} musician${sentResult.count !== 1 ? 's' : ''}`
-                    : `Music notification sent to ${sentResult?.count} musician${sentResult?.count !== 1 ? 's' : ''}`}
+                    ? `Reminder sent to ${sentResult.count} ${term(terms, 'person', { plural: sentResult.count !== 1, case: 'lower' })}`
+                    : `Music notification sent to ${sentResult?.count} ${term(terms, 'person', { plural: sentResult?.count !== 1, case: 'lower' })}`}
                 </p>
               </div>
               <p className="text-xs text-green-700 dark:text-green-300">
-                Each musician received the email shown below.
+                Each {term(terms, 'person', { case: 'lower' })} received the email shown below.
               </p>
             </div>
 
@@ -460,8 +463,8 @@ export function SendMusicDialog({
                 type={sentResult?.type || 'music'}
                 musicianName={
                   sentResult?.type === 'reminder'
-                    ? (reminderSampleMusician?.first_name || sampleMusician?.first_name || 'Musician')
-                    : (sampleMusician?.first_name || 'Musician')
+                    ? (reminderSampleMusician?.first_name || sampleMusician?.first_name || term(terms, 'person'))
+                    : (sampleMusician?.first_name || term(terms, 'person'))
                 }
                 organizationName={organizationName}
                 projectName={projectName}
@@ -485,10 +488,10 @@ export function SendMusicDialog({
           <div className="space-y-4">
             <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
               <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
-                You are about to notify {filledPositions.length} musician{filledPositions.length !== 1 ? 's' : ''} that music is available.
+                You are about to notify {filledPositions.length} {term(terms, 'person', { plural: filledPositions.length !== 1, case: 'lower' })} that music is available.
               </p>
               <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                Each musician will receive an email with their assigned files and a link to download from the portal.
+                Each {term(terms, 'person', { case: 'lower' })} will receive an email with their assigned files and a link to download from the portal.
                 {notes.trim() ? ' Your message will be included.' : ''}
               </p>
             </div>
@@ -529,7 +532,7 @@ export function SendMusicDialog({
               </p>
               <EmailPreview
                 type="music"
-                musicianName={sampleMusician?.first_name || 'Musician'}
+                musicianName={sampleMusician?.first_name || term(terms, 'person')}
                 organizationName={organizationName}
                 projectName={projectName}
                 files={sampleFiles.map((f) => ({ name: f.file_name, size: f.file_size }))}
@@ -545,7 +548,7 @@ export function SendMusicDialog({
                 onClick={handleSend}
                 disabled={sending}
               >
-                {sending ? 'Sending...' : `Send Now to ${filledPositions.length} Musician${filledPositions.length !== 1 ? 's' : ''}`}
+                {sending ? 'Sending...' : `Send Now to ${filledPositions.length} ${term(terms, 'person', { plural: filledPositions.length !== 1 })}`}
               </Button>
             </DialogFooter>
           </div>
@@ -554,7 +557,7 @@ export function SendMusicDialog({
           /* ─── Preview View (initial / resend) ─── */
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Review the files that will be sent to each musician. Musicians will receive an email notification and can download files from their portal.
+              Review the files that will be sent to each {term(terms, 'person', { case: 'lower' })}. {term(terms, 'person', { plural: true })} will receive an email notification and can download files from their portal.
             </p>
 
             {/* File List */}
@@ -595,7 +598,7 @@ export function SendMusicDialog({
             <div>
               <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
                 <span className="inline-block w-1 h-4 bg-primary rounded-full" />
-                Message to Musicians
+                Message to {term(terms, 'person', { plural: true })}
                 <span className="font-normal text-muted-foreground text-xs">(optional)</span>
               </h4>
               <textarea
@@ -609,7 +612,7 @@ export function SendMusicDialog({
             {/* Confirmation note */}
             <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg px-4 py-3">
               <p className="text-xs text-green-700 dark:text-green-300">
-                Musicians will be asked to download all files and click &quot;I Have Received All Music&quot; to confirm. You can track confirmations from this dialog.
+                {term(terms, 'person', { plural: true })} will be asked to download all files and click &quot;I Have Received All Music&quot; to confirm. You can track confirmations from this dialog.
               </p>
             </div>
 
@@ -627,7 +630,7 @@ export function SendMusicDialog({
                 onClick={() => setView('confirm-send')}
                 disabled={filledPositions.length === 0}
               >
-                Review & Send to {filledPositions.length} Musician{filledPositions.length !== 1 ? 's' : ''}
+                Review & Send to {filledPositions.length} {term(terms, 'person', { plural: filledPositions.length !== 1 })}
               </Button>
             </DialogFooter>
           </div>

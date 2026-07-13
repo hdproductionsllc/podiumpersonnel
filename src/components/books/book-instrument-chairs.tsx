@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { useVertical } from '@/components/providers/vertical-provider'
+import { useVertical, useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 import type { BookEntryJoined, InstrumentOption, MusicianForDropdown } from './books-client'
 
 interface BookInstrumentChairsProps {
@@ -27,6 +28,7 @@ export function BookInstrumentChairs({
 }: BookInstrumentChairsProps) {
   const { titleRules } = useVertical()
   const { getPositionTitle } = titleRules
+  const terms = useTerms()
   const [pendingChair, setPendingChair] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -69,7 +71,7 @@ export function BookInstrumentChairs({
 
     if (insertError) {
       if (insertError.code === '23505') {
-        setError('This musician is already assigned to this instrument.')
+        setError(`This ${term(terms, 'person', { case: 'lower' })} is already assigned to this ${term(terms, 'skill', { case: 'lower' })}.`)
       } else {
         setError(insertError.message)
       }
@@ -96,7 +98,7 @@ export function BookInstrumentChairs({
 
     if (updateError) {
       if (updateError.code === '23505') {
-        setError('This musician is already assigned to this instrument.')
+        setError(`This ${term(terms, 'person', { case: 'lower' })} is already assigned to this ${term(terms, 'skill', { case: 'lower' })}.`)
       } else {
         setError(updateError.message)
       }
@@ -146,15 +148,15 @@ export function BookInstrumentChairs({
               onClick={handleAddChair}
               disabled={isLoading || pendingChair !== null}
             >
-              Add Chair
+              {`Add ${term(terms, 'rank')}`}
             </Button>
             <Button
               variant="ghost"
               size="sm"
               className="text-muted-foreground hover:text-destructive"
-              title="Remove this instrument from the ensemble"
+              title={`Remove this ${term(terms, 'skill', { case: 'lower' })} from the ensemble`}
               onClick={async () => {
-                if (!confirm(`Remove ${instrument.name} and all its chairs from this ensemble?`)) return
+                if (!confirm(`Remove ${instrument.name} and all its ${term(terms, 'rank', { plural: true, case: 'lower' })} from this ensemble?`)) return
                 setIsLoading(true)
                 const supabase = createClient()
                 await supabase
@@ -186,7 +188,7 @@ export function BookInstrumentChairs({
       )}
 
       {entries.length === 0 && pendingChair === null && (
-        <p className="text-xs text-muted-foreground">No chairs assigned.</p>
+        <p className="text-xs text-muted-foreground">{`No ${term(terms, 'rank', { plural: true, case: 'lower' })} assigned.`}</p>
       )}
 
       <div className="space-y-1">
@@ -206,7 +208,7 @@ export function BookInstrumentChairs({
                   disabled={isLoading}
                 >
                   {!entry.musician_id && (
-                    <option value="">-- Select musician --</option>
+                    <option value="">{`-- Select ${term(terms, 'person', { case: 'lower' })} --`}</option>
                   )}
                   {dropdownMusicians.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -247,7 +249,7 @@ export function BookInstrumentChairs({
               onChange={(e) => handleAssignMusician(e.target.value, pendingChair)}
               disabled={isLoading}
             >
-              <option value="">-- Select musician --</option>
+              <option value="">{`-- Select ${term(terms, 'person', { case: 'lower' })} --`}</option>
               {getDropdownMusicians().map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.last_name}, {m.first_name}
@@ -268,7 +270,7 @@ export function BookInstrumentChairs({
 
         {availableMusicians.length === 0 && (
           <p className="text-xs text-muted-foreground italic">
-            No musicians play this instrument.
+            {`No ${term(terms, 'person', { plural: true, case: 'lower' })} play this ${term(terms, 'skill', { case: 'lower' })}.`}
           </p>
         )}
       </div>

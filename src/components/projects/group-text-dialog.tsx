@@ -11,6 +11,8 @@ import {
 } from '@/components/ui/dialog'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { useTerms } from '@/components/providers/vertical-provider'
+import { term } from '@/lib/verticals'
 
 interface MusicianPhone {
   positionId: string
@@ -36,6 +38,7 @@ export function GroupTextDialog({
   musicians,
   onPhonesSaved,
 }: GroupTextDialogProps) {
+  const terms = useTerms()
   const [phoneEdits, setPhoneEdits] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const defaultMessage = `Hi everyone - connecting you all for the ${projectName} gig. Please use this thread to coordinate. Looking forward to it!`
@@ -164,7 +167,7 @@ export function GroupTextDialog({
           {missingPhones.length > 0 && (
             <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
               <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
-                {missingPhones.length} musician{missingPhones.length !== 1 ? 's' : ''} missing phone number{missingPhones.length !== 1 ? 's' : ''}
+                {missingPhones.length} {term(terms, 'person', { plural: missingPhones.length !== 1, case: 'lower' })} missing phone number{missingPhones.length !== 1 ? 's' : ''}
               </p>
               <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
                 Enter their numbers below to include them in the group text.
