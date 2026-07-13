@@ -12,6 +12,7 @@ import {
   Img,
 } from '@react-email/components'
 import { type EmailBranding } from './email-layout'
+import { type TermDictionary } from '@/lib/verticals'
 
 interface MusicUploadedEmailProps {
   musicianName: string
@@ -26,6 +27,7 @@ interface MusicUploadedEmailProps {
   notes?: string
   contactEmail?: string
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 function formatFileSize(bytes: number): string {

@@ -11,6 +11,7 @@ import {
   Img,
 } from '@react-email/components'
 import { type EmailBranding } from './email-layout'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface OfferReminderEmailProps {
   musicianName: string
@@ -23,6 +24,7 @@ interface OfferReminderEmailProps {
   expiresAt: string | null
   daysRemaining: number | null
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export function OfferReminderEmail({
@@ -36,7 +38,9 @@ export function OfferReminderEmail({
   expiresAt,
   daysRemaining,
   branding,
+  terms,
 }: OfferReminderEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const urgentStyle = daysRemaining !== null && daysRemaining <= 2
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
   const brandColor = branding?.brandColor || '#f59e0b'
@@ -66,7 +70,7 @@ export function OfferReminderEmail({
             <Text style={greeting}>Hi {musicianName},</Text>
 
             <Text style={paragraph}>
-              Just following up on the {instrument}{showChair ? ` chair ${chairNumber}` : ''} for{' '}
+              Just following up on the {instrument}{showChair ? ` ${term(t, 'rank', { case: 'lower' })} ${chairNumber}` : ''} for{' '}
               <strong>{projectName}</strong> with {organizationName} - we still need your response.
               {expiresAt && (
                 <>

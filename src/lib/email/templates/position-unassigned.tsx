@@ -8,6 +8,7 @@ import {
   Hr,
   Preview,
 } from '@react-email/components'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface PositionUnassignedEmailProps {
   musicianName: string
@@ -16,6 +17,7 @@ interface PositionUnassignedEmailProps {
   instrument: string
   chairNumber: number
   totalChairs?: number
+  terms?: TermDictionary
 }
 
 export function PositionUnassignedEmail({
@@ -25,7 +27,9 @@ export function PositionUnassignedEmail({
   instrument,
   chairNumber,
   totalChairs,
+  terms,
 }: PositionUnassignedEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
   return (
     <Html>
@@ -49,7 +53,7 @@ export function PositionUnassignedEmail({
             <Section style={detailsBox}>
               <Text style={detailsTitle}>{projectName}</Text>
               <Text style={detailsItem}>
-                <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
+                <strong>Position:</strong> {instrument}{showChair ? `, ${term(t, 'rank')} ${chairNumber}` : ''}
               </Text>
             </Section>
 
@@ -58,7 +62,7 @@ export function PositionUnassignedEmail({
             </Text>
 
             <Text style={paragraph}>
-              We appreciate your understanding and hope to work with you on future projects.
+              We appreciate your understanding and hope to work with you on future {term(t, 'work', { plural: true, case: 'lower' })}.
             </Text>
           </Section>
 

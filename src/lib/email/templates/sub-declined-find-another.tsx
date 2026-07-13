@@ -9,6 +9,7 @@ import {
   Hr,
   Preview,
 } from '@react-email/components'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface SubDeclinedFindAnotherEmailProps {
   musicianName: string
@@ -20,6 +21,7 @@ interface SubDeclinedFindAnotherEmailProps {
   serviceName: string | null
   suggestedSubName: string
   gigUrl: string
+  terms?: TermDictionary
 }
 
 export function SubDeclinedFindAnotherEmail({
@@ -32,7 +34,9 @@ export function SubDeclinedFindAnotherEmail({
   serviceName,
   suggestedSubName,
   gigUrl,
+  terms,
 }: SubDeclinedFindAnotherEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
   return (
     <Html>
@@ -61,10 +65,10 @@ export function SubDeclinedFindAnotherEmail({
             <Section style={detailsBox}>
               <Text style={detailsTitle}>{projectName}</Text>
               <Text style={detailsItem}>
-                <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
+                <strong>Position:</strong> {instrument}{showChair ? `, ${term(t, 'rank')} ${chairNumber}` : ''}
               </Text>
               <Text style={detailsItem}>
-                <strong>Service:</strong> {serviceName || 'All services'}
+                <strong>{term(t, 'session')}:</strong> {serviceName || `All ${term(t, 'session', { plural: true, case: 'lower' })}`}
               </Text>
             </Section>
 

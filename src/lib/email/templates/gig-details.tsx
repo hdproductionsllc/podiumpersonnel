@@ -11,6 +11,7 @@ import {
   Img,
 } from '@react-email/components'
 import { type EmailBranding } from './email-layout'
+import { type TermDictionary } from '@/lib/verticals'
 
 interface RosterMember {
   name: string
@@ -46,6 +47,7 @@ interface GigDetailsEmailProps {
   confirmUrl: string
   notes?: string
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export function GigDetailsEmail({

@@ -9,6 +9,7 @@ import {
   Hr,
   Preview,
 } from '@react-email/components'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface OfferAcceptedEmailProps {
   musicianName: string
@@ -27,6 +28,7 @@ interface OfferAcceptedEmailProps {
   }[]
   calendarUrl?: string
   googleCalendarUrl?: string
+  terms?: TermDictionary
 }
 
 export function OfferAcceptedEmail({
@@ -40,7 +42,9 @@ export function OfferAcceptedEmail({
   services,
   calendarUrl,
   googleCalendarUrl,
+  terms,
 }: OfferAcceptedEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
   return (
     <Html>
@@ -60,7 +64,7 @@ export function OfferAcceptedEmail({
             <Section style={detailsBox}>
               <Text style={detailsTitle}>{projectName}</Text>
               <Text style={detailsItem}>
-                <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
+                <strong>Position:</strong> {instrument}{showChair ? `, ${term(t, 'rank')} ${chairNumber}` : ''}
               </Text>
             </Section>
 
@@ -86,7 +90,7 @@ export function OfferAcceptedEmail({
               </Section>
             )}
 
-            <Text style={sectionTitle}>Your Services:</Text>
+            <Text style={sectionTitle}>Your {term(t, 'session', { plural: true })}:</Text>
             <Section style={servicesTable}>
               {services.map((service, index) => (
                 <Section key={index} style={serviceRow}>

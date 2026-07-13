@@ -9,18 +9,22 @@ import {
   Hr,
   Preview,
 } from '@react-email/components'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface AdminWelcomeEmailProps {
   userName: string
   organizationName: string
   dashboardUrl: string
+  terms?: TermDictionary
 }
 
 export function AdminWelcomeEmail({
   userName,
   organizationName,
   dashboardUrl,
+  terms,
 }: AdminWelcomeEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   return (
     <Html>
       <Head />
@@ -37,7 +41,7 @@ export function AdminWelcomeEmail({
             <Text style={greeting}>Welcome, {userName}!</Text>
 
             <Text style={paragraph}>
-              Your organization <strong>{organizationName}</strong> has been created on Podium. Your instruments are already pre-loaded and you&apos;re ready to start managing your personnel.
+              Your organization <strong>{organizationName}</strong> has been created on Podium. Your {term(t, 'skill', { plural: true, case: 'lower' })} are already pre-loaded and you&apos;re ready to start managing your personnel.
             </Text>
 
             <Text style={sectionTitle}>Here&apos;s how to get started:</Text>
@@ -45,21 +49,21 @@ export function AdminWelcomeEmail({
             <Section style={stepBox}>
               <Text style={stepNumber}>1</Text>
               <Text style={stepText}>
-                <strong>Build your roster</strong> — Import a spreadsheet of musicians or add them one by one. Include their call order to make staffing easier.
+                <strong>Build your roster</strong> — Import a spreadsheet of {term(t, 'person', { plural: true, case: 'lower' })} or add them one by one. Include their call order to make staffing easier.
               </Text>
             </Section>
 
             <Section style={stepBox}>
               <Text style={stepNumber}>2</Text>
               <Text style={stepText}>
-                <strong>Create a project</strong> — Set up your next concert, gig, or event and add the rehearsals and performances (services) within it.
+                <strong>Create a {term(t, 'work', { case: 'lower' })}</strong> — Set up your next concert, gig, or event and add the rehearsals and performances ({term(t, 'session', { plural: true, case: 'lower' })}) within it.
               </Text>
             </Section>
 
             <Section style={stepBox}>
               <Text style={stepNumber}>3</Text>
               <Text style={stepText}>
-                <strong>Send calls</strong> — Add positions (like Violin 1, Cello) and send calls to musicians. They can accept or decline directly from the email.
+                <strong>Send calls</strong> — Add positions (like Violin 1, Cello) and send calls to {term(t, 'person', { plural: true, case: 'lower' })}. They can accept or decline directly from the email.
               </Text>
             </Section>
 

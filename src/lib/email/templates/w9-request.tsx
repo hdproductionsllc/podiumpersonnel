@@ -10,12 +10,14 @@ import {
   Img,
 } from '@react-email/components'
 import { type EmailBranding } from './email-layout'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface W9RequestEmailProps {
   musicianName: string
   organizationName: string
   adminEmail?: string
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export function W9RequestEmail({
@@ -23,7 +25,9 @@ export function W9RequestEmail({
   organizationName,
   adminEmail,
   branding,
+  terms,
 }: W9RequestEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const brandColor = branding?.brandColor || '#1E293B'
   const logoUrl = branding?.logoUrl
   const footerText = branding?.footerText
@@ -51,7 +55,7 @@ export function W9RequestEmail({
             <Text style={greeting}>Hi {musicianName},</Text>
 
             <Text style={paragraph}>
-              We need a completed <strong>W-9 form</strong> on file for all musicians we work with.
+              We need a completed <strong>W-9 form</strong> on file for all {term(t, 'person', { plural: true, case: 'lower' })} we work with.
             </Text>
 
             <Section style={infoBox}>

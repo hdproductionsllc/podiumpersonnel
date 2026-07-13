@@ -9,6 +9,7 @@ import {
   Hr,
   Preview,
 } from '@react-email/components'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface NextCandidateInfo {
   name: string
@@ -25,6 +26,7 @@ interface OfferExpiredEmailProps {
   totalChairs?: number
   nextCandidate: NextCandidateInfo | null
   dashboardUrl: string
+  terms?: TermDictionary
 }
 
 export function OfferExpiredEmail({
@@ -36,7 +38,9 @@ export function OfferExpiredEmail({
   totalChairs,
   nextCandidate,
   dashboardUrl,
+  terms,
 }: OfferExpiredEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
 
   return (
@@ -64,10 +68,10 @@ export function OfferExpiredEmail({
             <Section style={detailsBox}>
               <Text style={detailsTitle}>{projectName}</Text>
               <Text style={detailsItem}>
-                <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
+                <strong>Position:</strong> {instrument}{showChair ? `, ${term(t, 'rank')} ${chairNumber}` : ''}
               </Text>
               <Text style={detailsItem}>
-                <strong>Musician:</strong> {musicianName}
+                <strong>{term(t, 'person')}:</strong> {musicianName}
               </Text>
               <Text style={detailsItem}>
                 <strong>Status:</strong>{' '}
@@ -89,13 +93,13 @@ export function OfferExpiredEmail({
             ) : (
               <Section style={noCandidateBox}>
                 <Text style={noCandidateText}>
-                  No more musicians available for this instrument. You may need to expand your roster.
+                  No more {term(t, 'person', { plural: true, case: 'lower' })} available for this {term(t, 'skill', { case: 'lower' })}. You may need to expand your roster.
                 </Text>
               </Section>
             )}
 
             <Text style={actionText}>
-              Visit the dashboard to send an offer to the next musician.
+              Visit the dashboard to send an offer to the next {term(t, 'person', { case: 'lower' })}.
             </Text>
 
             <Section style={buttonContainer}>

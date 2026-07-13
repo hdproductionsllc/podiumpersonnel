@@ -8,6 +8,7 @@ import {
   Hr,
   Preview,
 } from '@react-email/components'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface OfferRescindedEmailProps {
   musicianName: string
@@ -16,6 +17,7 @@ interface OfferRescindedEmailProps {
   instrument: string
   chairNumber: number
   totalChairs?: number
+  terms?: TermDictionary
 }
 
 export function OfferRescindedEmail({
@@ -25,7 +27,9 @@ export function OfferRescindedEmail({
   instrument,
   chairNumber,
   totalChairs,
+  terms,
 }: OfferRescindedEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
   return (
     <Html>
@@ -44,7 +48,7 @@ export function OfferRescindedEmail({
 
             <Text style={paragraph}>
               The contract offer you received for <strong>{projectName}</strong> &mdash;{' '}
-              <strong>{instrument}{showChair ? `, Chair ${chairNumber}` : ''}</strong> &mdash;{' '}
+              <strong>{instrument}{showChair ? `, ${term(t, 'rank')} ${chairNumber}` : ''}</strong> &mdash;{' '}
               has been withdrawn by {organizationName}. No response is needed from you, and the offer link will no longer be active.
             </Text>
 

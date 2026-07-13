@@ -9,6 +9,7 @@ import {
   Hr,
   Preview,
 } from '@react-email/components'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface OfferExpiringSoonEmailProps {
   organizationName: string
@@ -19,6 +20,7 @@ interface OfferExpiringSoonEmailProps {
   totalChairs?: number
   hoursRemaining: number
   dashboardUrl: string
+  terms?: TermDictionary
 }
 
 export function OfferExpiringSoonEmail({
@@ -30,7 +32,9 @@ export function OfferExpiringSoonEmail({
   totalChairs,
   hoursRemaining,
   dashboardUrl,
+  terms,
 }: OfferExpiringSoonEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
 
   return (
@@ -59,10 +63,10 @@ export function OfferExpiringSoonEmail({
             <Section style={detailsBox}>
               <Text style={detailsTitle}>{projectName}</Text>
               <Text style={detailsItem}>
-                <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
+                <strong>Position:</strong> {instrument}{showChair ? `, ${term(t, 'rank')} ${chairNumber}` : ''}
               </Text>
               <Text style={detailsItem}>
-                <strong>Musician:</strong> {musicianName}
+                <strong>{term(t, 'person')}:</strong> {musicianName}
               </Text>
               <Text style={detailsItem}>
                 <strong>Status:</strong>{' '}
@@ -71,8 +75,8 @@ export function OfferExpiringSoonEmail({
             </Section>
 
             <Text style={paragraph}>
-              A reminder has also been sent to the musician. If they don&apos;t respond before the deadline,
-              the offer will expire automatically and you&apos;ll be notified to send to the next musician on the call list.
+              A reminder has also been sent to the {term(t, 'person', { case: 'lower' })}. If they don&apos;t respond before the deadline,
+              the offer will expire automatically and you&apos;ll be notified to send to the next {term(t, 'person', { case: 'lower' })} on the call list.
             </Text>
 
             <Section style={buttonContainer}>

@@ -28,8 +28,32 @@ import { PreGigNotificationEmail } from './templates/pre-gig-notification'
 import { StaffingAlertEmail } from './templates/staffing-alert'
 import { render } from '@react-email/render'
 import { type EmailBranding } from './templates/email-layout'
+import { type TermDictionary, DEFAULT_TERMS } from '@/lib/verticals'
+import { getOrgVertical } from '@/lib/api-helpers'
 
 export type { EmailBranding }
+
+/**
+ * Resolve the terminology dictionary for a send. Order of preference:
+ * an explicit dictionary (call site already resolved it) > the sending org's
+ * vertical (looked up from organizationId) > the built-in music default.
+ * getOrgVertical already fail-opens to the default template, and we guard the
+ * lookup so a terminology miss can never block a real email send.
+ */
+async function resolveEmailTerms(
+  explicit: TermDictionary | undefined,
+  organizationId: string | undefined
+): Promise<TermDictionary> {
+  if (explicit) return explicit
+  if (organizationId) {
+    try {
+      return (await getOrgVertical(organizationId)).terms
+    } catch {
+      return DEFAULT_TERMS
+    }
+  }
+  return DEFAULT_TERMS
+}
 
 /**
  * Extract a short performance date (e.g. "Mar 21") from formatted services for email subject lines.
@@ -170,9 +194,11 @@ interface SendContractOfferParams {
   personalMessage?: string
   ensembleType?: string | null
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export async function sendContractOfferEmail(params: SendContractOfferParams) {
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Call: ${params.projectName} - ${params.instrument}`, getSubjectDate(params.services)),
@@ -194,6 +220,7 @@ export async function sendContractOfferEmail(params: SendContractOfferParams) {
       personalMessage: params.personalMessage,
       ensembleType: params.ensembleType,
       branding: params.branding,
+      terms,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,
@@ -216,9 +243,11 @@ interface SendOfferReminderParams {
   daysRemaining: number | null
   performanceDate?: string
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export async function sendOfferReminderEmail(params: SendOfferReminderParams) {
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Reminder: ${params.projectName} - response needed`, params.performanceDate || ''),
@@ -233,6 +262,7 @@ export async function sendOfferReminderEmail(params: SendOfferReminderParams) {
       expiresAt: params.expiresAt,
       daysRemaining: params.daysRemaining,
       branding: params.branding,
+      terms,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,
@@ -264,9 +294,11 @@ interface SendOfferAcceptedParams {
   }[]
   calendarUrl?: string
   googleCalendarUrl?: string
+  terms?: TermDictionary
 }
 
 export async function sendOfferAcceptedEmail(params: SendOfferAcceptedParams) {
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Confirmed: You're booked for ${params.projectName}`, getSubjectDate(params.services)),
@@ -281,6 +313,7 @@ export async function sendOfferAcceptedEmail(params: SendOfferAcceptedParams) {
       services: params.services,
       calendarUrl: params.calendarUrl,
       googleCalendarUrl: params.googleCalendarUrl,
+      terms,
     }),
     fromName: params.organizationName,
     replyTo: params.contactEmail || undefined,
@@ -301,9 +334,11 @@ interface SendOfferDeclinedParams {
   totalChairs?: number
   declineReason?: string | null
   performanceDate?: string
+  terms?: TermDictionary
 }
 
 export async function sendOfferDeclinedEmail(params: SendOfferDeclinedParams) {
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Thank you for your response - ${params.projectName}`, params.performanceDate || ''),
@@ -315,6 +350,7 @@ export async function sendOfferDeclinedEmail(params: SendOfferDeclinedParams) {
       chairNumber: params.chairNumber,
       totalChairs: params.totalChairs,
       declineReason: params.declineReason,
+      terms,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,
@@ -333,9 +369,11 @@ interface SendOfferRescindedParams {
   chairNumber: number
   totalChairs?: number
   performanceDate?: string
+  terms?: TermDictionary
 }
 
 export async function sendOfferRescindedEmail(params: SendOfferRescindedParams) {
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Offer withdrawn - ${params.projectName}`, params.performanceDate || ''),
@@ -346,6 +384,7 @@ export async function sendOfferRescindedEmail(params: SendOfferRescindedParams) 
       instrument: params.instrument,
       chairNumber: params.chairNumber,
       totalChairs: params.totalChairs,
+      terms,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,
@@ -368,9 +407,11 @@ interface SendAdminOfferResponseParams {
   responseNotes?: string | null
   dashboardUrl: string
   performanceDate?: string
+  terms?: TermDictionary
 }
 
 export async function sendAdminOfferResponseEmail(params: SendAdminOfferResponseParams) {
+  const terms = await resolveEmailTerms(params.terms, undefined)
   const statusText =
     params.status === 'accepted' ? 'Accepted'
     : params.status === 'rescinded' ? 'Rescinded'
@@ -391,6 +432,7 @@ export async function sendAdminOfferResponseEmail(params: SendAdminOfferResponse
       status: params.status,
       responseNotes: params.responseNotes,
       dashboardUrl: params.dashboardUrl,
+      terms,
     }),
     errorContext: 'admin offer response',
   })
@@ -428,9 +470,11 @@ interface SendAdminOfferSentParams {
   expiresAt?: string | null
   ensembleType?: string | null
   timezone?: string
+  terms?: TermDictionary
 }
 
 export async function sendAdminOfferSentEmail(params: SendAdminOfferSentParams) {
+  const terms = await resolveEmailTerms(params.terms, undefined)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Offer Sent: ${params.musicianName} - ${params.projectName}`, getSubjectDate(params.services)),
@@ -452,6 +496,7 @@ export async function sendAdminOfferSentEmail(params: SendAdminOfferSentParams) 
       expiresAt: params.expiresAt,
       ensembleType: params.ensembleType,
       timezone: params.timezone,
+      terms,
     }),
     errorContext: 'admin offer sent',
   })
@@ -465,9 +510,11 @@ interface SendW9RequestParams {
   organizationId?: string
   adminEmail?: string
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export async function sendW9RequestEmail(params: SendW9RequestParams) {
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: `W-9 Form Request - ${params.organizationName}`,
@@ -476,6 +523,7 @@ export async function sendW9RequestEmail(params: SendW9RequestParams) {
       organizationName: params.organizationName,
       adminEmail: params.adminEmail,
       branding: params.branding,
+      terms,
     }),
     fromName: params.organizationName,
     replyTo: params.adminEmail || undefined,
@@ -495,9 +543,11 @@ interface SendPositionUnassignedParams {
   chairNumber: number
   totalChairs?: number
   performanceDate?: string
+  terms?: TermDictionary
 }
 
 export async function sendPositionUnassignedEmail(params: SendPositionUnassignedParams) {
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Position Update: ${params.projectName}`, params.performanceDate || ''),
@@ -508,6 +558,7 @@ export async function sendPositionUnassignedEmail(params: SendPositionUnassigned
       instrument: params.instrument,
       chairNumber: params.chairNumber,
       totalChairs: params.totalChairs,
+      terms,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,
@@ -534,9 +585,11 @@ interface SendAdminSubRequestParams {
   suggestedSubInstrument: string
   dashboardUrl: string
   performanceDate?: string
+  terms?: TermDictionary
 }
 
 export async function sendAdminSubRequestEmail(params: SendAdminSubRequestParams) {
+  const terms = await resolveEmailTerms(params.terms, undefined)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Sub Request: ${params.musicianName} needs a sub for ${params.projectName}`, params.performanceDate || ''),
@@ -556,6 +609,7 @@ export async function sendAdminSubRequestEmail(params: SendAdminSubRequestParams
       suggestedSubPhone: params.suggestedSubPhone,
       suggestedSubInstrument: params.suggestedSubInstrument,
       dashboardUrl: params.dashboardUrl,
+      terms,
     }),
     replyTo: params.musicianEmail || undefined,
     errorContext: 'admin sub request',
@@ -575,9 +629,11 @@ interface SendSubRequestApprovedParams {
   serviceName: string | null
   suggestedSubName: string
   performanceDate?: string
+  terms?: TermDictionary
 }
 
 export async function sendSubRequestApprovedEmail(params: SendSubRequestApprovedParams) {
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Sub Request Approved: ${params.projectName}`, params.performanceDate || ''),
@@ -590,6 +646,7 @@ export async function sendSubRequestApprovedEmail(params: SendSubRequestApproved
       totalChairs: params.totalChairs,
       serviceName: params.serviceName,
       suggestedSubName: params.suggestedSubName,
+      terms,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,
@@ -612,9 +669,11 @@ interface SendSubRequestDeclinedParams {
   adminNotes: string | null
   gigUrl: string
   performanceDate?: string
+  terms?: TermDictionary
 }
 
 export async function sendSubRequestDeclinedEmail(params: SendSubRequestDeclinedParams) {
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Sub Request Declined: ${params.projectName} - please find another substitute`, params.performanceDate || ''),
@@ -629,6 +688,7 @@ export async function sendSubRequestDeclinedEmail(params: SendSubRequestDeclined
       suggestedSubName: params.suggestedSubName,
       adminNotes: params.adminNotes,
       gigUrl: params.gigUrl,
+      terms,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,
@@ -649,9 +709,11 @@ interface SendMusicianReleasedParams {
   serviceName: string | null
   substituteName: string
   performanceDate?: string
+  terms?: TermDictionary
 }
 
 export async function sendMusicianReleasedEmail(params: SendMusicianReleasedParams) {
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`You've been released: ${params.projectName}`, params.performanceDate || ''),
@@ -664,6 +726,7 @@ export async function sendMusicianReleasedEmail(params: SendMusicianReleasedPara
       totalChairs: params.totalChairs,
       serviceName: params.serviceName,
       substituteName: params.substituteName,
+      terms,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,
@@ -685,9 +748,11 @@ interface SendSubDeclinedFindAnotherParams {
   suggestedSubName: string
   gigUrl: string
   performanceDate?: string
+  terms?: TermDictionary
 }
 
 export async function sendSubDeclinedFindAnotherEmail(params: SendSubDeclinedFindAnotherParams) {
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Your sub declined - ${params.projectName}`, params.performanceDate || ''),
@@ -701,6 +766,7 @@ export async function sendSubDeclinedFindAnotherEmail(params: SendSubDeclinedFin
       serviceName: params.serviceName,
       suggestedSubName: params.suggestedSubName,
       gigUrl: params.gigUrl,
+      terms,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,
@@ -717,9 +783,11 @@ interface SendPortalInvitationParams {
   activationUrl: string
   expiresAt: string
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export async function sendPortalInvitationEmail(params: SendPortalInvitationParams) {
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: `${params.organizationName} has invited you to Podium`,
@@ -729,6 +797,7 @@ export async function sendPortalInvitationEmail(params: SendPortalInvitationPara
       activationUrl: params.activationUrl,
       expiresAt: params.expiresAt,
       branding: params.branding,
+      terms,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,
@@ -742,9 +811,11 @@ interface SendMusicianWelcomeParams {
   musicianName: string
   loginUrl: string
   organizations: string[]
+  terms?: TermDictionary
 }
 
 export async function sendMusicianWelcomeEmail(params: SendMusicianWelcomeParams) {
+  const terms = await resolveEmailTerms(params.terms, undefined)
   return sendTransactional({
     to: params.to,
     subject: 'Welcome to Podium - your musician portal is ready',
@@ -753,6 +824,7 @@ export async function sendMusicianWelcomeEmail(params: SendMusicianWelcomeParams
       email: params.to,
       loginUrl: params.loginUrl,
       organizations: params.organizations,
+      terms,
     }),
     errorContext: 'musician welcome',
   })
@@ -774,9 +846,11 @@ interface SendOfferExpiredParams {
   } | null
   dashboardUrl: string
   performanceDate?: string
+  terms?: TermDictionary
 }
 
 export async function sendOfferExpiredEmail(params: SendOfferExpiredParams) {
+  const terms = await resolveEmailTerms(params.terms, undefined)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Offer Expired: ${params.musicianName} - ${params.projectName}`, params.performanceDate || ''),
@@ -789,6 +863,7 @@ export async function sendOfferExpiredEmail(params: SendOfferExpiredParams) {
       totalChairs: params.totalChairs,
       nextCandidate: params.nextCandidate,
       dashboardUrl: params.dashboardUrl,
+      terms,
     }),
     errorContext: 'offer expired',
   })
@@ -806,9 +881,11 @@ interface SendOfferExpiringSoonParams {
   hoursRemaining: number
   dashboardUrl: string
   performanceDate?: string
+  terms?: TermDictionary
 }
 
 export async function sendOfferExpiringSoonEmail(params: SendOfferExpiringSoonParams) {
+  const terms = await resolveEmailTerms(params.terms, undefined)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Offer expiring soon: ${params.musicianName} hasn't responded - ${params.projectName}`, params.performanceDate || ''),
@@ -821,6 +898,7 @@ export async function sendOfferExpiringSoonEmail(params: SendOfferExpiringSoonPa
       totalChairs: params.totalChairs,
       hoursRemaining: params.hoursRemaining,
       dashboardUrl: params.dashboardUrl,
+      terms,
     }),
     errorContext: 'offer expiring soon',
   })
@@ -873,9 +951,11 @@ interface SendAdminWelcomeParams {
   userName: string
   organizationName: string
   dashboardUrl: string
+  terms?: TermDictionary
 }
 
 export async function sendAdminWelcomeEmail(params: SendAdminWelcomeParams) {
+  const terms = await resolveEmailTerms(params.terms, undefined)
   return sendTransactional({
     to: params.to,
     subject: `Welcome to Podium - ${params.organizationName} is ready`,
@@ -883,6 +963,7 @@ export async function sendAdminWelcomeEmail(params: SendAdminWelcomeParams) {
       userName: params.userName,
       organizationName: params.organizationName,
       dashboardUrl: params.dashboardUrl,
+      terms,
     }),
     errorContext: 'admin welcome',
   })
@@ -921,9 +1002,11 @@ interface SendGigDetailsEmailParams {
   confirmUrl: string
   notes?: string
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export async function sendGigDetailsEmail(params: SendGigDetailsEmailParams) {
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Gig details: ${params.projectName}`, getSubjectDate(params.services)),
@@ -937,6 +1020,7 @@ export async function sendGigDetailsEmail(params: SendGigDetailsEmailParams) {
       confirmUrl: params.confirmUrl,
       notes: params.notes,
       branding: params.branding,
+      terms,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,
@@ -964,9 +1048,11 @@ interface SendGigDetailsReminderEmailParams {
   confirmUrl: string
   originalSentDate: string
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export async function sendGigDetailsReminderEmail(params: SendGigDetailsReminderEmailParams) {
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Reminder: please confirm ${params.projectName}`, getSubjectDate(params.services)),
@@ -978,6 +1064,7 @@ export async function sendGigDetailsReminderEmail(params: SendGigDetailsReminder
       confirmUrl: params.confirmUrl,
       originalSentDate: params.originalSentDate,
       branding: params.branding,
+      terms,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,
@@ -998,9 +1085,11 @@ interface SendMusicUploadedEmailParams {
   contactEmail?: string
   performanceDate?: string
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export async function sendMusicUploadedEmail(params: SendMusicUploadedEmailParams) {
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Music available: ${params.projectName}`, params.performanceDate || ''),
@@ -1013,6 +1102,7 @@ export async function sendMusicUploadedEmail(params: SendMusicUploadedEmailParam
       notes: params.notes,
       contactEmail: params.contactEmail,
       branding: params.branding,
+      terms,
     }),
     fromName: params.organizationName,
     replyTo: params.contactEmail || undefined,
@@ -1033,9 +1123,11 @@ interface SendMusicReminderEmailParams {
   contactEmail?: string
   performanceDate?: string
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export async function sendMusicReminderEmail(params: SendMusicReminderEmailParams) {
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Reminder: download your music for ${params.projectName}`, params.performanceDate || ''),
@@ -1047,6 +1139,7 @@ export async function sendMusicReminderEmail(params: SendMusicReminderEmailParam
       confirmUrl: params.confirmUrl,
       contactEmail: params.contactEmail,
       branding: params.branding,
+      terms,
     }),
     fromName: params.organizationName,
     replyTo: params.contactEmail || undefined,
@@ -1067,9 +1160,11 @@ interface SendPreGigNotificationEmailParams {
   musicSent: boolean
   reviewUrl: string
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export async function sendPreGigNotificationEmail(params: SendPreGigNotificationEmailParams) {
+  const terms = await resolveEmailTerms(params.terms, undefined)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Upcoming: ${params.projectName} is in 2 days - review reminder`, params.gigDate || ''),
@@ -1083,6 +1178,7 @@ export async function sendPreGigNotificationEmail(params: SendPreGigNotification
       musicSent: params.musicSent,
       reviewUrl: params.reviewUrl,
       branding: params.branding,
+      terms,
     }),
     errorContext: 'pre-gig notification',
   })
@@ -1105,9 +1201,11 @@ interface SendStaffingAlertParams {
   }[]
   dashboardUrl: string
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export async function sendStaffingAlertEmail(params: SendStaffingAlertParams) {
+  const terms = await resolveEmailTerms(params.terms, undefined)
   const urgencyLabel =
     params.daysAway <= 3 ? 'Heads up' : params.daysAway <= 7 ? 'Heads up' : 'Heads up'
 
@@ -1125,6 +1223,7 @@ export async function sendStaffingAlertEmail(params: SendStaffingAlertParams) {
       unfilledPositions: params.unfilledPositions,
       dashboardUrl: params.dashboardUrl,
       branding: params.branding,
+      terms,
     }),
     errorContext: 'staffing alert',
   })

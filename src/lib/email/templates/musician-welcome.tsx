@@ -9,12 +9,14 @@ import {
   Preview,
   Button,
 } from '@react-email/components'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface MusicianWelcomeEmailProps {
   musicianName: string
   email: string
   loginUrl: string
   organizations: string[]
+  terms?: TermDictionary
 }
 
 export function MusicianWelcomeEmail({
@@ -22,12 +24,14 @@ export function MusicianWelcomeEmail({
   email,
   loginUrl,
   organizations,
+  terms,
 }: MusicianWelcomeEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   return (
     <Html>
       <Head />
       <Preview>
-        Welcome to Podium - Your musician portal is ready
+        Welcome to Podium - Your {term(t, 'person', { case: 'lower' })} portal is ready
       </Preview>
       <Body style={main}>
         <Container style={container}>
@@ -39,7 +43,7 @@ export function MusicianWelcomeEmail({
             <Text style={greeting}>Hi {musicianName},</Text>
 
             <Text style={paragraph}>
-              Your Podium musician portal account has been created successfully!
+              Your Podium {term(t, 'person', { case: 'lower' })} portal account has been created successfully!
               You can now manage your gigs, view offers, and track your schedule
               all in one place.
             </Text>
@@ -62,7 +66,7 @@ export function MusicianWelcomeEmail({
                 <strong>Offers:</strong> Review and respond to contract offers from your organizations
               </Text>
               <Text style={featureItem}>
-                <strong>Schedule:</strong> View your confirmed services in a calendar or list view
+                <strong>Schedule:</strong> View your confirmed {term(t, 'session', { plural: true, case: 'lower' })} in a calendar or list view
               </Text>
               <Text style={featureItem}>
                 <strong>Profile:</strong> Update your contact info and notification preferences
@@ -87,7 +91,7 @@ export function MusicianWelcomeEmail({
               This email was sent by Podium.
             </Text>
             <Text style={footerTextStyle}>
-              You received this email because you created a musician portal account.
+              You received this email because you created a {term(t, 'person', { case: 'lower' })} portal account.
             </Text>
           </Section>
         </Container>

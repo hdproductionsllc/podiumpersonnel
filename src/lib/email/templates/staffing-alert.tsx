@@ -11,6 +11,7 @@ import {
   Img,
 } from '@react-email/components'
 import { type EmailBranding } from './email-layout'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface UnfilledPosition {
   instrument: string
@@ -29,6 +30,7 @@ interface StaffingAlertEmailProps {
   unfilledPositions: UnfilledPosition[]
   dashboardUrl: string
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export function StaffingAlertEmail({
@@ -42,10 +44,12 @@ export function StaffingAlertEmail({
   unfilledPositions,
   dashboardUrl,
   branding,
+  terms,
 }: StaffingAlertEmailProps) {
   const brandColor = branding?.brandColor || '#1E293B'
   const logoUrl = branding?.logoUrl
   const footerText = branding?.footerText
+  const t = terms ?? DEFAULT_TERMS
 
   const urgencyLabel =
     daysAway <= 3 ? 'Urgent' : daysAway <= 7 ? 'Action Needed' : 'Heads Up'
@@ -115,7 +119,7 @@ export function StaffingAlertEmail({
                   {instrument}: {positions.length} {positions.length === 1 ? 'seat' : 'seats'}{' '}
                   ({positions.map((p) => {
                     const label = p.status === 'offered' ? 'pending response' : p.status
-                    return `Chair ${p.chairNumber} — ${label}`
+                    return `${term(t, 'rank')} ${p.chairNumber} — ${label}`
                   }).join(', ')})
                 </Text>
               ))}
@@ -123,7 +127,7 @@ export function StaffingAlertEmail({
 
             <Section style={buttonContainer}>
               <Button style={{ ...button, backgroundColor: brandColor }} href={dashboardUrl}>
-                View Project &amp; Fill Positions
+                View {term(t, 'work')} &amp; Fill Positions
               </Button>
             </Section>
 

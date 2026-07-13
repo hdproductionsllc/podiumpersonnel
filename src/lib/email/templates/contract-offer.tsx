@@ -11,6 +11,7 @@ import {
   Img,
 } from '@react-email/components'
 import { type EmailBranding } from './email-layout'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface ContractOfferEmailProps {
   musicianName: string
@@ -42,6 +43,7 @@ interface ContractOfferEmailProps {
   personalMessage?: string
   ensembleType?: string | null
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export function ContractOfferEmail({
@@ -62,7 +64,9 @@ export function ContractOfferEmail({
   personalMessage,
   ensembleType,
   branding,
+  terms,
 }: ContractOfferEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
   const brandColor = branding?.brandColor || '#1E293B'
   const logoUrl = branding?.logoUrl
@@ -108,7 +112,7 @@ export function ContractOfferEmail({
                 </Text>
               )}
               <Text style={detailsItem}>
-                <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
+                <strong>Position:</strong> {instrument}{showChair ? `, ${term(t, 'rank')} ${chairNumber}` : ''}
               </Text>
               {payAmount != null && (
                 <Text style={detailsItem}>
@@ -123,7 +127,7 @@ export function ContractOfferEmail({
               )}
             </Section>
 
-            <Text style={sectionTitle}>Services:</Text>
+            <Text style={sectionTitle}>{term(t, 'session', { plural: true })}:</Text>
             <Section style={servicesTable}>
               {services.map((service, index) => (
                 <Section key={index} style={{ ...serviceRow, borderLeftColor: brandColor }}>
@@ -190,10 +194,10 @@ export function ContractOfferEmail({
 
           {/* Musician Guidelines & Policy */}
           <Section style={policySection}>
-            <Text style={policyTitle}>{organizationName} Musician Guidelines</Text>
+            <Text style={policyTitle}>{organizationName} {term(t, 'person')} Guidelines</Text>
 
             <Text style={policyText}>
-              As a {organizationName} musician, your professionalism reflects directly on the group.
+              As a {organizationName} {term(t, 'person', { case: 'lower' })}, your professionalism reflects directly on the group.
               These expectations apply from arrival to departure at every event.
             </Text>
 
@@ -222,14 +226,14 @@ export function ContractOfferEmail({
 
             <Text style={policyHeading}>4. Belongings & Case Safety</Text>
             <Text style={policyText}>
-              Bring only your instrument, music, stand, and water. No large purses or bags (small black purses are okay).
-              All instrument cases must be out of sight and out of the way.
+              Bring only your {term(t, 'skill', { case: 'lower' })}, music, stand, and water. No large purses or bags (small black purses are okay).
+              All {term(t, 'skill', { case: 'lower' })} cases must be out of sight and out of the way.
             </Text>
 
             <Text style={policyHeading}>5. Overtime</Text>
             <Text style={policyText}>
               You will be compensated for all time played beyond the contracted hours. If asked to stay past the
-              contracted period, only agree to do so if you are available. The lead musician must confirm approval
+              contracted period, only agree to do so if you are available. The lead {term(t, 'person', { case: 'lower' })} must confirm approval
               with the client or event coordinator before continuing beyond the contracted time.
             </Text>
 

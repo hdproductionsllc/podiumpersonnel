@@ -1,4 +1,4 @@
-export { VERTICALS, DEFAULT_VERTICAL, resolveVertical } from './registry'
+export { VERTICALS, DEFAULT_VERTICAL, resolveVertical, DEFAULT_TERMS } from './registry'
 export { NAV_ROUTES } from './nav-routes'
 export { term, termCount } from './terms'
 export type { TermKey, TermOpts } from './terms'

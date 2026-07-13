@@ -32,3 +32,10 @@ export function resolveVertical(key: string | null | undefined): VerticalTemplat
   }
   return VERTICALS[DEFAULT_VERTICAL]
 }
+
+/**
+ * Default terminology (the music_contractor dictionary). Server-rendered email
+ * templates take an optional `terms?: TermDictionary` prop and fall back to
+ * this, so a template rendered without terms produces today's exact wording.
+ */
+export const DEFAULT_TERMS = VERTICALS[DEFAULT_VERTICAL].terms

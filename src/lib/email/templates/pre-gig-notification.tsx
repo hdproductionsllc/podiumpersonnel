@@ -11,6 +11,7 @@ import {
   Img,
 } from '@react-email/components'
 import { type EmailBranding } from './email-layout'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface PreGigNotificationEmailProps {
   organizationName: string
@@ -22,6 +23,7 @@ interface PreGigNotificationEmailProps {
   musicSent: boolean
   reviewUrl: string
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export function PreGigNotificationEmail({
@@ -34,16 +36,18 @@ export function PreGigNotificationEmail({
   musicSent,
   reviewUrl,
   branding,
+  terms,
 }: PreGigNotificationEmailProps) {
   const brandColor = branding?.brandColor || '#1E293B'
   const logoUrl = branding?.logoUrl
   const footerText = branding?.footerText
+  const t = terms ?? DEFAULT_TERMS
 
   return (
     <Html>
       <Head />
       <Preview>
-        {projectName} is in 2 days — review the reminder for your musicians
+        {projectName} is in 2 days — review the reminder for your {term(t, 'person', { plural: true, case: 'lower' })}
       </Preview>
       <Body style={main}>
         <Container style={container}>
@@ -64,7 +68,7 @@ export function PreGigNotificationEmail({
             <Text style={greeting}>Upcoming Gig Reminder</Text>
 
             <Text style={paragraph}>
-              <strong>{projectName}</strong> is coming up in 2 days. Review the details and send a reminder to your musicians.
+              <strong>{projectName}</strong> is coming up in 2 days. Review the details and send a reminder to your {term(t, 'person', { plural: true, case: 'lower' })}.
             </Text>
 
             <Section style={detailsBox}>
@@ -77,7 +81,7 @@ export function PreGigNotificationEmail({
                 </Text>
               )}
               <Text style={detailsItem}>
-                <strong>Musicians:</strong> {musicianCount} confirmed
+                <strong>{term(t, 'person', { plural: true })}:</strong> {musicianCount} confirmed
               </Text>
               <Hr style={detailsDivider} />
               <Text style={statusItem}>
@@ -89,7 +93,7 @@ export function PreGigNotificationEmail({
             </Section>
 
             <Text style={paragraph}>
-              You can add last-minute notes (parking changes, schedule updates, etc.) before sending the reminder to your musicians.
+              You can add last-minute notes (parking changes, schedule updates, etc.) before sending the reminder to your {term(t, 'person', { plural: true, case: 'lower' })}.
             </Text>
 
             <Section style={buttonContainer}>

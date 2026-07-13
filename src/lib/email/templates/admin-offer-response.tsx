@@ -9,6 +9,7 @@ import {
   Hr,
   Preview,
 } from '@react-email/components'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface AdminOfferResponseEmailProps {
   adminName?: string
@@ -22,6 +23,7 @@ interface AdminOfferResponseEmailProps {
   status: 'accepted' | 'declined' | 'rescinded'
   responseNotes?: string | null
   dashboardUrl: string
+  terms?: TermDictionary
 }
 
 export function AdminOfferResponseEmail({
@@ -36,7 +38,9 @@ export function AdminOfferResponseEmail({
   status,
   responseNotes,
   dashboardUrl,
+  terms,
 }: AdminOfferResponseEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const isAccepted = status === 'accepted'
   const isRescinded = status === 'rescinded'
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
@@ -81,10 +85,10 @@ export function AdminOfferResponseEmail({
             <Section style={detailsBox}>
               <Text style={detailsTitle}>{projectName}</Text>
               <Text style={detailsItem}>
-                <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
+                <strong>Position:</strong> {instrument}{showChair ? `, ${term(t, 'rank')} ${chairNumber}` : ''}
               </Text>
               <Text style={detailsItem}>
-                <strong>Musician:</strong> {musicianName}
+                <strong>{term(t, 'person')}:</strong> {musicianName}
                 {musicianEmail && ` (${musicianEmail})`}
               </Text>
               <Text style={detailsItem}>
@@ -95,7 +99,7 @@ export function AdminOfferResponseEmail({
 
             {responseNotes && !isRescinded && (
               <>
-                <Text style={sectionTitle}>Notes from musician:</Text>
+                <Text style={sectionTitle}>Notes from {term(t, 'person', { case: 'lower' })}:</Text>
                 <Section style={notesBox}>
                   <Text style={notesText}>{responseNotes}</Text>
                 </Section>
@@ -104,7 +108,7 @@ export function AdminOfferResponseEmail({
 
             {!isAccepted && (
               <Text style={actionText}>
-                The position is now vacant. You may want to send an offer to another musician.
+                The position is now vacant. You may want to send an offer to another {term(t, 'person', { case: 'lower' })}.
               </Text>
             )}
 

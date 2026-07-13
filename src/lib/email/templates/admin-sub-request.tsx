@@ -9,6 +9,7 @@ import {
   Hr,
   Preview,
 } from '@react-email/components'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface AdminSubRequestEmailProps {
   adminName?: string
@@ -26,6 +27,7 @@ interface AdminSubRequestEmailProps {
   suggestedSubPhone: string | null
   suggestedSubInstrument: string
   dashboardUrl: string
+  terms?: TermDictionary
 }
 
 export function AdminSubRequestEmail({
@@ -42,7 +44,9 @@ export function AdminSubRequestEmail({
   suggestedSubPhone,
   suggestedSubInstrument,
   dashboardUrl,
+  terms,
 }: AdminSubRequestEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
   return (
     <Html>
@@ -67,13 +71,13 @@ export function AdminSubRequestEmail({
             <Section style={detailsBox}>
               <Text style={detailsTitle}>Position Details</Text>
               <Text style={detailsItem}>
-                <strong>Project:</strong> {projectName}
+                <strong>{term(t, 'work')}:</strong> {projectName}
               </Text>
               <Text style={detailsItem}>
-                <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
+                <strong>Position:</strong> {instrument}{showChair ? `, ${term(t, 'rank')} ${chairNumber}` : ''}
               </Text>
               <Text style={detailsItem}>
-                <strong>Service:</strong> {serviceName || 'All services'}
+                <strong>{term(t, 'session')}:</strong> {serviceName || `All ${term(t, 'session', { plural: true, case: 'lower' })}`}
               </Text>
               {reason && (
                 <Text style={detailsItem}>
@@ -96,7 +100,7 @@ export function AdminSubRequestEmail({
                 </Text>
               )}
               <Text style={detailsItem}>
-                <strong>Instrument:</strong> {suggestedSubInstrument}
+                <strong>{term(t, 'skill')}:</strong> {suggestedSubInstrument}
               </Text>
             </Section>
 
@@ -107,8 +111,8 @@ export function AdminSubRequestEmail({
             </Section>
 
             <Text style={smallText}>
-              If you approve, the substitute will be added to your musician database and sent a contract offer.
-              If you decline, the musician will be notified to find another substitute.
+              If you approve, the substitute will be added to your {term(t, 'person', { case: 'lower' })} database and sent a contract offer.
+              If you decline, the {term(t, 'person', { case: 'lower' })} will be notified to find another substitute.
             </Text>
           </Section>
 

@@ -11,6 +11,7 @@ import {
   Img,
 } from '@react-email/components'
 import { type EmailBranding } from './email-layout'
+import { type TermDictionary } from '@/lib/verticals'
 
 interface GigDetailsReminderEmailProps {
   musicianName: string
@@ -25,6 +26,7 @@ interface GigDetailsReminderEmailProps {
   confirmUrl: string
   originalSentDate: string
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export function GigDetailsReminderEmail({

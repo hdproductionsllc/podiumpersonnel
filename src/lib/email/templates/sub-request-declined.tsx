@@ -9,6 +9,7 @@ import {
   Hr,
   Preview,
 } from '@react-email/components'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface SubRequestDeclinedEmailProps {
   musicianName: string
@@ -21,6 +22,7 @@ interface SubRequestDeclinedEmailProps {
   suggestedSubName: string
   adminNotes: string | null
   gigUrl: string
+  terms?: TermDictionary
 }
 
 export function SubRequestDeclinedEmail({
@@ -34,7 +36,9 @@ export function SubRequestDeclinedEmail({
   suggestedSubName,
   adminNotes,
   gigUrl,
+  terms,
 }: SubRequestDeclinedEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
   return (
     <Html>
@@ -70,10 +74,10 @@ export function SubRequestDeclinedEmail({
             <Section style={detailsBox}>
               <Text style={detailsTitle}>{projectName}</Text>
               <Text style={detailsItem}>
-                <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
+                <strong>Position:</strong> {instrument}{showChair ? `, ${term(t, 'rank')} ${chairNumber}` : ''}
               </Text>
               <Text style={detailsItem}>
-                <strong>Service:</strong> {serviceName || 'All services'}
+                <strong>{term(t, 'session')}:</strong> {serviceName || `All ${term(t, 'session', { plural: true, case: 'lower' })}`}
               </Text>
             </Section>
 
@@ -82,7 +86,7 @@ export function SubRequestDeclinedEmail({
             </Text>
             <Text style={paragraph}>
               Please find another qualified substitute and submit a new request.
-              Make sure your suggested substitute plays the correct instrument
+              Make sure your suggested substitute plays the correct {term(t, 'skill', { case: 'lower' })}
               and is suitable for this engagement.
             </Text>
 

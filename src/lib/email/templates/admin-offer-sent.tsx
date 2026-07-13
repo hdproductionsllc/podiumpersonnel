@@ -9,6 +9,7 @@ import {
   Hr,
   Preview,
 } from '@react-email/components'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface AdminOfferSentEmailProps {
   adminName?: string
@@ -40,6 +41,7 @@ interface AdminOfferSentEmailProps {
   expiresAt?: string | null
   ensembleType?: string | null
   timezone?: string
+  terms?: TermDictionary
 }
 
 export function AdminOfferSentEmail({
@@ -60,7 +62,9 @@ export function AdminOfferSentEmail({
   expiresAt,
   ensembleType,
   timezone,
+  terms,
 }: AdminOfferSentEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
   return (
     <Html>
@@ -111,7 +115,7 @@ export function AdminOfferSentEmail({
             )}
 
             <Text style={previewParagraph}>
-              You have been called to perform with <strong>{organizationName}</strong> for the following project:
+              You have been called to perform with <strong>{organizationName}</strong> for the following {term(t, 'work', { case: 'lower' })}:
             </Text>
 
             <Section style={detailsBox}>
@@ -122,7 +126,7 @@ export function AdminOfferSentEmail({
                 </Text>
               )}
               <Text style={detailsItem}>
-                <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
+                <strong>Position:</strong> {instrument}{showChair ? `, ${term(t, 'rank')} ${chairNumber}` : ''}
               </Text>
               {payAmount != null && (
                 <Text style={detailsItem}>
@@ -139,7 +143,7 @@ export function AdminOfferSentEmail({
 
             {services.length > 0 && (
               <>
-                <Text style={sectionTitle}>Services:</Text>
+                <Text style={sectionTitle}>{term(t, 'session', { plural: true })}:</Text>
                 <Section style={servicesBox}>
                   {services.map((service, index) => (
                     <Section key={index} style={serviceRow}>
@@ -183,7 +187,7 @@ export function AdminOfferSentEmail({
             )}
 
             <Text style={previewNote}>
-              [The musician&apos;s email also includes a &quot;View &amp; Respond&quot; button and your organization&apos;s musician guidelines]
+              [The {term(t, 'person', { case: 'lower' })}&apos;s email also includes a &quot;View &amp; Respond&quot; button and your organization&apos;s {term(t, 'person', { case: 'lower' })} guidelines]
             </Text>
           </Section>
 
@@ -193,7 +197,7 @@ export function AdminOfferSentEmail({
             <Text style={statusLabel}>Status</Text>
             <Text style={pendingBadge}>AWAITING RESPONSE</Text>
             <Text style={infoText}>
-              You will be notified when the musician responds.
+              You will be notified when the {term(t, 'person', { case: 'lower' })} responds.
             </Text>
           </Section>
 

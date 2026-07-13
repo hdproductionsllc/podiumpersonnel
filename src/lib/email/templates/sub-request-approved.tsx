@@ -8,6 +8,7 @@ import {
   Hr,
   Preview,
 } from '@react-email/components'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface SubRequestApprovedEmailProps {
   musicianName: string
@@ -18,6 +19,7 @@ interface SubRequestApprovedEmailProps {
   totalChairs?: number
   serviceName: string | null
   suggestedSubName: string
+  terms?: TermDictionary
 }
 
 export function SubRequestApprovedEmail({
@@ -29,7 +31,9 @@ export function SubRequestApprovedEmail({
   totalChairs,
   serviceName,
   suggestedSubName,
+  terms,
 }: SubRequestApprovedEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
   return (
     <Html>
@@ -58,10 +62,10 @@ export function SubRequestApprovedEmail({
             <Section style={detailsBox}>
               <Text style={detailsTitle}>{projectName}</Text>
               <Text style={detailsItem}>
-                <strong>Position:</strong> {instrument}{showChair ? `, Chair ${chairNumber}` : ''}
+                <strong>Position:</strong> {instrument}{showChair ? `, ${term(t, 'rank')} ${chairNumber}` : ''}
               </Text>
               <Text style={detailsItem}>
-                <strong>Service:</strong> {serviceName || 'All services'}
+                <strong>{term(t, 'session')}:</strong> {serviceName || `All ${term(t, 'session', { plural: true, case: 'lower' })}`}
               </Text>
               <Text style={detailsItem}>
                 <strong>Suggested Sub:</strong> {suggestedSubName}

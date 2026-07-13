@@ -11,6 +11,7 @@ import {
   Button,
 } from '@react-email/components'
 import { type EmailBranding } from './email-layout'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface PortalInvitationEmailProps {
   musicianName: string
@@ -18,6 +19,7 @@ interface PortalInvitationEmailProps {
   activationUrl: string
   expiresAt: string
   branding?: EmailBranding
+  terms?: TermDictionary
 }
 
 export function PortalInvitationEmail({
@@ -26,7 +28,9 @@ export function PortalInvitationEmail({
   activationUrl,
   expiresAt,
   branding,
+  terms,
 }: PortalInvitationEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const brandColor = branding?.brandColor || '#1E293B'
   const logoUrl = branding?.logoUrl
   const footerText = branding?.footerText
@@ -42,7 +46,7 @@ export function PortalInvitationEmail({
     <Html>
       <Head />
       <Preview>
-        {organizationName} has invited you to join the Podium Musician Portal
+        {organizationName} has invited you to join the Podium {term(t, 'person')} Portal
       </Preview>
       <Body style={main}>
         <Container style={container}>
@@ -61,7 +65,7 @@ export function PortalInvitationEmail({
             <Text style={greeting}>Hi {musicianName},</Text>
 
             <Text style={paragraph}>
-              <strong>{organizationName}</strong> added you to their musician roster on Podium.
+              <strong>{organizationName}</strong> added you to their {term(t, 'person', { case: 'lower' })} roster on Podium.
               You can activate your portal account to view and respond to offers, see your
               schedule, and manage your availability across organizations.
             </Text>
@@ -75,7 +79,7 @@ export function PortalInvitationEmail({
 
             <Text style={paragraph}>
               The link expires on {expirationDate}. If you already have a Podium account,
-              you can link this musician profile to it during activation.
+              you can link this {term(t, 'person', { case: 'lower' })} profile to it during activation.
             </Text>
           </Section>
 

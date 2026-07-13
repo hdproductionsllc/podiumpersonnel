@@ -8,6 +8,7 @@ import {
   Hr,
   Preview,
 } from '@react-email/components'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface OfferDeclinedEmailProps {
   musicianName: string
@@ -17,6 +18,7 @@ interface OfferDeclinedEmailProps {
   chairNumber: number
   totalChairs?: number
   declineReason?: string | null
+  terms?: TermDictionary
 }
 
 export function OfferDeclinedEmail({
@@ -27,7 +29,9 @@ export function OfferDeclinedEmail({
   chairNumber,
   totalChairs,
   declineReason,
+  terms,
 }: OfferDeclinedEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
   return (
     <Html>
@@ -50,7 +54,7 @@ export function OfferDeclinedEmail({
 
             <Text style={paragraph}>
               We understand you are unable to accept the position of{' '}
-              <strong>{instrument}{showChair ? `, Chair ${chairNumber}` : ''}</strong> at this time.
+              <strong>{instrument}{showChair ? `, ${term(t, 'rank')} ${chairNumber}` : ''}</strong> at this time.
             </Text>
 
             {declineReason && (
@@ -61,7 +65,7 @@ export function OfferDeclinedEmail({
             )}
 
             <Text style={paragraph}>
-              We appreciate you letting us know promptly, and we hope to work with you on future projects.
+              We appreciate you letting us know promptly, and we hope to work with you on future {term(t, 'work', { plural: true, case: 'lower' })}.
             </Text>
 
             <Text style={signOff}>
