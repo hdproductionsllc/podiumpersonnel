@@ -109,6 +109,55 @@
     @apply w-2 h-2 bg-brass-400 rounded-full;
   }
 
+  /* Editorial eyebrow label used above section headings */
+  .eyebrow {
+    @apply inline-flex items-center gap-2.5 font-body text-xs font-semibold uppercase
+           tracking-[0.2em] text-brass-600;
+  }
+  .eyebrow::before {
+    content: "";
+    @apply w-6 h-px bg-brass-500/60;
+  }
+
+  /* Spotlight wash — the broad, art-form-neutral evolution of the old staff lines.
+     Warm light spilling from overhead onto a dark "stage" section. */
+  .spotlight-stage {
+    @apply relative overflow-hidden;
+    background-color: theme("colors.curtain.800");
+    background-image: var(--stage-glow, theme("backgroundImage.spotlight"));
+  }
+
+  /* Per-art-form accent theming. A page/section sets --accent (+ optional
+     --accent-glow) once; these utilities read it, so one template themes six
+     verticals without dynamic Tailwind classes. Defaults to brass. */
+  .accent-text {
+    color: var(--accent, theme("colors.brass.600"));
+  }
+  .accent-bg {
+    background-color: var(--accent, theme("colors.brass.500"));
+  }
+  .accent-ring {
+    border-color: var(--accent, theme("colors.brass.400"));
+  }
+  .accent-chip {
+    color: var(--accent, theme("colors.brass.600"));
+    background-color: var(--accent-soft, theme("colors.brass.100"));
+  }
+  .accent-line {
+    background: linear-gradient(
+      to right,
+      var(--accent, theme("colors.brass.500")),
+      transparent
+    );
+  }
+  .btn-accent-dynamic {
+    @apply inline-flex items-center justify-center px-6 py-3 text-white font-body
+           font-medium rounded-lg transition-all duration-300 hover:-translate-y-0.5
+           active:scale-[0.98] active:translate-y-0 focus:outline-none focus:ring-2
+           focus:ring-offset-2;
+    background-color: var(--accent, theme("colors.brass.500"));
+  }
+
   /* Noise overlay */
   .noise-overlay {
     @apply fixed inset-0 pointer-events-none z-50 opacity-[0.015];

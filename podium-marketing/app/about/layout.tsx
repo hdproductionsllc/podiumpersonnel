@@ -3,14 +3,14 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "About",
   description:
-    "Podium Personnel was built by musicians, for musicians. Learn about our mission to simplify ensemble management so you can focus on what matters — the music.",
+    "Podium was built by people who've run the call — managing personnel across the performing arts. Learn about our mission to make staffing orchestras, choirs, theatre, dance, worship, and agencies simple and affordable.",
   alternates: {
     canonical: "/about",
   },
   openGraph: {
     title: "About | Podium Personnel",
     description:
-      "Built by musicians, for musicians. Learn about our mission to simplify ensemble management.",
+      "Built by people who've run the call. Our mission: make staffing the performing arts simple, modern, and affordable — for every organization the enterprise tools ignore.",
     url: "https://www.podiumpersonnel.com/about",
   },
 };

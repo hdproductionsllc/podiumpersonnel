@@ -55,6 +55,12 @@ const config: Config = {
           800: "#7C1D1D",
           900: "#5C1414",
         },
+        // Warm near-black "curtain" tones for dramatic, opening-night dark sections
+        curtain: {
+          700: "#221913",
+          800: "#181109",
+          900: "#0E0A06",
+        },
       },
       fontFamily: {
         display: ["var(--font-fraunces)", "Georgia", "serif"],
@@ -108,6 +114,12 @@ const config: Config = {
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         "noise": "url('/noise.svg')",
+        // Warm overhead "spotlight" wash for dark stage sections
+        "spotlight": "radial-gradient(ellipse 80% 60% at 50% -10%, rgba(212,165,116,0.22), transparent 70%)",
+        "spotlight-accent": "radial-gradient(ellipse 70% 55% at 50% -5%, var(--accent-glow, rgba(212,165,116,0.22)), transparent 70%)",
+      },
+      boxShadow: {
+        "glow": "0 0 60px -12px var(--accent-glow, rgba(196,145,90,0.45))",
       },
     },
   },

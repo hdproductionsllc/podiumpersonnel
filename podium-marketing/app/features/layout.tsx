@@ -3,14 +3,14 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Features",
   description:
-    "Explore Podium Personnel features: roster management, one-click gig offers, payment tracking, musician portal, calendar sync, and more. Everything you need to run your ensemble.",
+    "Explore Podium Personnel features: roster and personnel management, one-click offers, production staffing, payment tracking with W-9s and 1099s, a free performer portal, and substitutions. Everything you need to staff the performing arts.",
   alternates: {
     canonical: "/features",
   },
   openGraph: {
     title: "Features | Podium Personnel",
     description:
-      "Roster management, one-click gig offers, payment tracking, musician portal, and more. Everything you need to run your ensemble.",
+      "Roster and personnel management, one-click offers, production staffing, payment tracking, a free performer portal, and substitutions — everything you need to staff the performing arts.",
     url: "https://www.podiumpersonnel.com/features",
   },
 };

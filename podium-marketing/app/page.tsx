@@ -1,521 +1,207 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import {
   ChevronRight,
-  Mail,
-  FileSpreadsheet,
-  DollarSign,
-  MessageSquare,
   Users,
   Send,
-  Calendar,
-  CreditCard,
-  RefreshCw,
-  CheckCircle2,
+  LayoutGrid,
+  Wallet,
+  Check,
   ArrowRight,
-  Star,
-  Zap,
-  Clock,
-  Shield,
 } from "lucide-react";
+import { VERTICALS } from "@/lib/verticals";
+import { VerticalIcon } from "@/components/VerticalIcon";
 
-// Animation variants
-const fadeInUp = {
-  hidden: { opacity: 0, y: 30 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 24 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } },
 };
 
-const staggerContainer = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.1, delayChildren: 0.2 },
-  },
+const stagger: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.08 } },
 };
 
 export default function HomePage() {
   return (
     <>
-      {/* Hero Section */}
-      <section className="relative pt-32 pb-20 md:pt-44 md:pb-36 overflow-hidden">
-        {/* Background decoration */}
-        <div className="absolute inset-0 -z-10">
-          <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-gradient-radial from-brass-200/30 via-transparent to-transparent opacity-60" />
-          <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-gradient-radial from-cream-300/50 via-transparent to-transparent" />
-          {/* Musical staff lines - subtle */}
-          <div className="absolute top-[35%] left-[10%] w-[30%] flex flex-col gap-2 opacity-[0.04]">
-            {[...Array(5)].map((_, i) => (
-              <div key={`staff-l-${i}`} className="h-px bg-ink-800" />
-            ))}
-          </div>
-          <div className="absolute top-[55%] right-[8%] w-[25%] flex flex-col gap-2 opacity-[0.03]">
-            {[...Array(5)].map((_, i) => (
-              <div key={`staff-r-${i}`} className="h-px bg-ink-800" />
-            ))}
-          </div>
-        </div>
+      {/* ============================ HERO ============================ */}
+      <section className="relative overflow-hidden bg-cream-100 pt-32 pb-20 md:pt-40 md:pb-28">
+        <div className="pointer-events-none absolute inset-0 bg-spotlight opacity-70" aria-hidden />
+        <div className="pointer-events-none absolute -top-24 right-0 h-[36rem] w-[36rem] rounded-full bg-gradient-radial from-brass-200/40 to-transparent blur-2xl" aria-hidden />
 
-        <div className="container-marketing">
-          <div className="max-w-4xl mx-auto text-center">
-            {/* Badge */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-brass-100/80 border border-brass-200 rounded-full mb-8 backdrop-blur-sm"
-            >
-              <span className="w-2 h-2 bg-brass-500 rounded-full animate-pulse-soft" />
-              <span className="text-sm font-body text-brass-700 tracking-wide">
-                Now with free Musician Portal
-              </span>
-            </motion.div>
-
-            {/* Headline */}
-            <motion.h1
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-              className="font-display text-display-lg md:text-display-xl text-ink-900 mb-4"
-            >
-              Stop chasing musicians.
-            </motion.h1>
-            <motion.h1
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
-              className="font-display text-display-lg md:text-display-xl mb-8"
-            >
-              <span className="text-gradient-brass italic">
-                Start making music.
-              </span>
-            </motion.h1>
-
-            {/* Decorative brass line */}
-            <motion.div
-              initial={{ scaleX: 0 }}
-              animate={{ scaleX: 1 }}
-              transition={{ duration: 0.6, delay: 0.5 }}
-              className="w-16 h-0.5 bg-gradient-to-r from-brass-400 to-brass-500 mx-auto mb-8 rounded-full"
-            />
-
-            {/* Subheadline */}
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.4 }}
-              className="font-body text-xl md:text-2xl text-ink-500 mb-10 max-w-2xl mx-auto leading-relaxed"
-            >
-              The simple way to manage your roster, send gig offers, and track
-              payments. Built for quartets, ensembles, and orchestras.
-            </motion.p>
-
-            {/* CTAs */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.5 }}
-              className="flex flex-col sm:flex-row gap-4 justify-center"
-            >
-              <Link href="https://app.podiumpersonnel.com/signup" className="btn-primary text-lg px-8 py-4 group">
-                Start Free Trial
-                <ChevronRight className="ml-2 w-5 h-5 transition-transform group-hover:translate-x-1" />
-              </Link>
-              <Link href="#demo" className="btn-secondary text-lg px-8 py-4">
-                See How It Works
-              </Link>
-            </motion.div>
-
-            {/* Trust indicators */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.6, delay: 0.7 }}
-              className="mt-8 flex items-center justify-center gap-6 text-sm text-ink-400 font-body"
-            >
-              <span className="flex items-center gap-1.5">
-                <Shield className="w-3.5 h-3.5 text-brass-500" />
-                14-day free trial
-              </span>
-              <span className="w-1 h-1 bg-ink-300 rounded-full" />
-              <span>No credit card required</span>
-              <span className="w-1 h-1 bg-ink-300 rounded-full hidden sm:block" />
-              <span className="hidden sm:inline">Set up in 5 minutes</span>
-            </motion.div>
-          </div>
-
-          {/* Hero Image/Dashboard Preview */}
-          <motion.div
-            initial={{ opacity: 0, y: 60, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 1, delay: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            className="mt-16 md:mt-24 relative"
-          >
-            <div className="relative mx-auto max-w-5xl">
-              {/* Glow behind the browser */}
-              <div className="absolute -inset-8 bg-gradient-radial from-brass-300/20 via-transparent to-transparent blur-2xl" />
-
-              {/* Browser frame */}
-              <div className="relative bg-white rounded-2xl shadow-2xl shadow-ink-900/15 border border-cream-200 overflow-hidden">
-                {/* Browser bar */}
-                <div className="flex items-center gap-2 px-4 py-3 bg-cream-50 border-b border-cream-200">
-                  <div className="flex gap-1.5">
-                    <div className="w-3 h-3 rounded-full bg-burgundy-400" />
-                    <div className="w-3 h-3 rounded-full bg-brass-400" />
-                    <div className="w-3 h-3 rounded-full bg-green-400" />
-                  </div>
-                  <div className="flex-1 mx-4">
-                    <div className="bg-cream-200 rounded-md px-3 py-1.5 text-sm text-ink-500 font-body max-w-md mx-auto flex items-center gap-2 justify-center">
-                      <Shield className="w-3 h-3 text-green-500" />
-                      app.podiumpersonnel.com
-                    </div>
-                  </div>
-                </div>
-                {/* Dashboard mockup matching the actual app design */}
-                <div className="flex">
-                  {/* Sidebar mockup - deep navy */}
-                  <div className="hidden md:flex w-56 flex-col bg-ink-800 p-4">
-                    <div className="h-12 w-28 bg-cream-100/10 rounded mx-auto mb-6" />
-                    <div className="space-y-1">
-                      {["Dashboard", "Projects", "Musicians", "Ensembles", "Payments", "Venues", "Schedules"].map((item, i) => (
-                        <div key={item} className={`flex items-center gap-3 px-3 py-2 rounded-md text-xs font-body ${
-                          i === 1 ? "bg-ink-700 border-l-2 border-brass-400 text-brass-400" : "text-cream-400/50"
-                        }`}>
-                          <div className={`w-4 h-4 rounded ${i === 1 ? "bg-brass-400/20" : "bg-ink-600"}`} />
-                          {item}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  {/* Main content area - warm cream */}
-                  <div className="flex-1 bg-cream-100 p-6 md:p-8">
-                    {/* Header bar */}
-                    <div className="flex items-center justify-between mb-6">
-                      <div>
-                        <div className="h-5 w-40 bg-ink-200 rounded mb-1.5" style={{ fontFamily: "serif" }} />
-                        <div className="h-3 w-56 bg-cream-300 rounded" />
-                        <div className="h-0.5 w-10 bg-brass-400/50 rounded mt-2" />
-                      </div>
-                      <div className="flex gap-2">
-                        <div className="h-8 w-8 bg-ink-800 rounded-full" />
-                      </div>
-                    </div>
-                    {/* Stats row */}
-                    <div className="grid grid-cols-4 gap-3 mb-6">
-                      {["3", "24", "5", "8"].map((num, i) => (
-                        <div key={i} className="bg-white rounded-lg border border-cream-200 p-3 shadow-sm">
-                          <div className="h-2 w-12 bg-ink-200/40 rounded mb-2" />
-                          <div className="text-lg font-bold text-ink-800 font-display">{num}</div>
-                          <div className="h-2 w-16 bg-cream-300 rounded mt-1" />
-                        </div>
-                      ))}
-                    </div>
-                    {/* Content */}
-                    <div className="bg-white rounded-lg border border-cream-200 shadow-sm p-4">
-                      <div className="flex items-center gap-4 p-3 bg-brass-50/50 rounded-md mb-3 border border-brass-100">
-                        <div className="w-8 h-8 bg-brass-200 rounded-full" />
-                        <div className="flex-1">
-                          <div className="h-3 w-28 bg-ink-200 rounded mb-1.5" />
-                          <div className="h-2 w-40 bg-cream-300 rounded" />
-                        </div>
-                        <div className="h-6 w-16 bg-green-100 text-green-700 rounded-full text-[10px] flex items-center justify-center font-medium">Accepted</div>
-                      </div>
-                      {[1, 2].map((i) => (
-                        <div key={i} className="flex items-center gap-4 p-3 rounded-md">
-                          <div className="w-8 h-8 bg-cream-200 rounded-full" />
-                          <div className="flex-1">
-                            <div className="h-3 w-24 bg-ink-100 rounded mb-1.5" />
-                            <div className="h-2 w-36 bg-cream-200 rounded" />
-                          </div>
-                          <div className={`h-6 w-16 ${i === 1 ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"} rounded-full text-[10px] flex items-center justify-center font-medium`}>
-                            {i === 1 ? "Pending" : "Viewed"}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Floating elements */}
-              <motion.div
-                animate={{ y: [0, -10, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute -left-4 md:-left-12 top-1/4 bg-white rounded-xl shadow-lg p-4 border border-cream-200"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                    <CheckCircle2 className="w-5 h-5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-ink-800">Offer Accepted</p>
-                    <p className="text-xs text-ink-400">Sarah M. • Just now</p>
-                  </div>
-                </div>
+        <div className="container-marketing relative">
+          <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-12 lg:gap-8 items-center">
+            <motion.div initial="hidden" animate="show" variants={stagger}>
+              <motion.div variants={fadeUp}>
+                <span className="inline-flex items-center gap-2 rounded-full bg-white/70 border border-brass-200/70 px-4 py-1.5 text-sm font-body text-ink-600 backdrop-blur-sm">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brass-400 opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-brass-500" />
+                  </span>
+                  For every performing-arts organization
+                </span>
               </motion.div>
 
-              <motion.div
-                animate={{ y: [0, 10, 0] }}
-                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                className="absolute -right-4 md:-right-8 top-1/3 bg-white rounded-xl shadow-lg p-4 border border-cream-200"
+              <motion.h1
+                variants={fadeUp}
+                className="mt-6 font-display font-semibold text-ink-900 text-[2.75rem] leading-[1.05] sm:text-6xl lg:text-display-lg tracking-tight"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-brass-100 rounded-full flex items-center justify-center">
-                    <Send className="w-5 h-5 text-brass-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-ink-800">4 Offers Sent</p>
-                    <p className="text-xs text-ink-400">Henderson Wedding</p>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-          </motion.div>
-        </div>
-      </section>
+                Stop chasing performers.
+                <br />
+                <span className="italic text-gradient-brass">Start making the art.</span>
+              </motion.h1>
 
-      {/* Pain Points Section */}
-      <section className="section-padding bg-white relative overflow-hidden">
-        {/* Subtle background decoration */}
-        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-cream-300 to-transparent" />
-
-        <div className="container-marketing">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-100px" }}
-            variants={fadeInUp}
-            className="text-center mb-16"
-          >
-            <div className="decorative-line mx-auto mb-6" />
-            <h2 className="font-display text-display-md text-ink-900 mb-4">
-              Sound familiar?
-            </h2>
-            <p className="font-body text-lg text-ink-500 max-w-2xl mx-auto">
-              Managing musicians shouldn&apos;t feel like a second full-time job.
-            </p>
-          </motion.div>
-
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-100px" }}
-            variants={staggerContainer}
-            className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto"
-          >
-            {[
-              {
-                icon: Mail,
-                title: "The Email Spiral",
-                description:
-                  '"Can you play Saturday?" turns into 47 reply-all threads. You\'re CC\'ing people who already declined. Nobody knows who\'s confirmed.',
-                color: "burgundy",
-              },
-              {
-                icon: FileSpreadsheet,
-                title: "The Spreadsheet Nightmare",
-                description:
-                  'Your "master roster" lives in three different Google Sheets, a Notes app, and someone\'s head. Good luck finding who plays viola da gamba.',
-                color: "brass",
-              },
-              {
-                icon: DollarSign,
-                title: "The Payment Chase",
-                description:
-                  '"Did I pay Sarah for the Johnson wedding?" You\'re digging through Venmo history at 11pm trying to figure out who\'s still owed money.',
-                color: "burgundy",
-              },
-              {
-                icon: MessageSquare,
-                title: "The Text Message Avalanche",
-                description:
-                  'Your phone buzzes constantly. "What time Saturday?" "Where do I park?" "Can someone sub for me?" You\'ve become a 24/7 help desk.',
-                color: "brass",
-              },
-            ].map((pain, index) => (
-              <motion.div
-                key={pain.title}
-                variants={fadeInUp}
-                className="relative p-8 rounded-2xl bg-cream-50 border border-cream-200 hover:border-brass-200/60 hover:shadow-lg hover:shadow-ink-900/5 hover:-translate-y-0.5 transition-all duration-300 group"
-              >
-                <div
-                  className={`w-12 h-12 rounded-xl flex items-center justify-center mb-5 ${
-                    pain.color === "burgundy"
-                      ? "bg-burgundy-100 text-burgundy-600"
-                      : "bg-brass-100 text-brass-600"
-                  }`}
-                >
-                  <pain.icon className="w-6 h-6" />
-                </div>
-                <h3 className="font-display text-xl text-ink-800 mb-3">
-                  {pain.title}
-                </h3>
-                <p className="font-body text-ink-500 leading-relaxed">
-                  {pain.description}
+              <motion.div variants={fadeUp} className="mt-6 flex items-center gap-4">
+                <span className="decorative-line" />
+                <p className="max-w-xl font-body text-lg text-ink-500 leading-relaxed">
+                  Podium is the modern way to staff every rehearsal and performance —
+                  build your roster, send offers people answer from their phone, fill
+                  the gaps automatically, and track pay. One platform, every discipline.
                 </p>
               </motion.div>
-            ))}
-          </motion.div>
+
+              <motion.div variants={fadeUp} className="mt-9 flex flex-col sm:flex-row gap-4">
+                <Link href="https://app.podiumpersonnel.com/signup" className="btn-accent group text-base">
+                  Start Free Trial
+                  <ChevronRight className="ml-1 w-5 h-5 transition-transform group-hover:translate-x-0.5" />
+                </Link>
+                <Link href="#art-forms" className="btn-secondary text-base">
+                  Built for your art form
+                </Link>
+              </motion.div>
+
+              <motion.p variants={fadeUp} className="mt-6 font-body text-sm text-ink-400">
+                14-day free trial · No credit card required · Set up in 5 minutes
+              </motion.p>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="relative"
+            >
+              <HeroMockup />
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* ===================== BUILT FOR YOUR ART FORM ===================== */}
+      <section id="art-forms" className="relative section-padding bg-white">
+        <div className="container-marketing">
+          <SectionHeading
+            eyebrow="One platform, every discipline"
+            title="Built for your art form"
+            subtitle="Podium speaks your language — chairs and sections, roles and covers, voice parts and worship teams. Choose your world and see how it fits."
+          />
 
           <motion.div
             initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={fadeInUp}
-            className="text-center mt-16"
+            whileInView="show"
+            viewport={{ once: true, margin: "-80px" }}
+            variants={stagger}
+            className="mt-14 grid sm:grid-cols-2 lg:grid-cols-3 gap-5"
           >
-            <div className="decorative-line mx-auto mb-6" />
-            <p className="font-display text-display-sm text-ink-800 italic">
-              There&apos;s a better way.
-            </p>
+            {VERTICALS.map((v) => (
+              <motion.div key={v.slug} variants={fadeUp}>
+                <Link
+                  href={`/for/${v.slug}`}
+                  className="group block h-full rounded-2xl border border-cream-300/60 bg-cream-50 p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-transparent"
+                  style={{ ["--accent" as string]: v.accent }}
+                >
+                  <span
+                    className="inline-flex h-12 w-12 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-105"
+                    style={{ backgroundColor: v.accentSoft, color: v.accent }}
+                  >
+                    <VerticalIcon name={v.icon} className="h-6 w-6" strokeWidth={1.6} />
+                  </span>
+                  <h3 className="mt-5 font-display text-xl font-semibold text-ink-800">{v.name}</h3>
+                  <p className="mt-2 font-body text-sm text-ink-500 leading-relaxed">{v.blurb}</p>
+                  <span className="mt-5 inline-flex items-center gap-1.5 font-body text-sm font-medium accent-text">
+                    Explore
+                    <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+                  </span>
+                </Link>
+              </motion.div>
+            ))}
           </motion.div>
         </div>
       </section>
 
-      {/* Solution Section */}
-      <section id="demo" className="section-padding bg-cream-100 scroll-mt-20">
+      {/* ============================ PAIN ============================ */}
+      <section className="section-padding bg-cream-100">
         <div className="container-marketing">
+          <SectionHeading
+            eyebrow="Sound familiar?"
+            title="Staffing shouldn't be a second full-time job"
+            subtitle="However you make it, the admin looks the same — and it eats the hours you'd rather spend on the work itself."
+          />
           <motion.div
             initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-100px" }}
-            variants={staggerContainer}
-            className="text-center mb-16"
+            whileInView="show"
+            viewport={{ once: true, margin: "-80px" }}
+            variants={stagger}
+            className="mt-14 grid md:grid-cols-2 gap-5"
           >
-            <motion.div variants={fadeInUp} className="decorative-line mx-auto mb-6" />
-            <motion.h2 variants={fadeInUp} className="font-display text-display-md text-ink-900 mb-4">
-              One place for everything.
-            </motion.h2>
-            <motion.p variants={fadeInUp} className="font-body text-lg text-ink-500 max-w-2xl mx-auto">
-              From first contact to final payment, Podium handles the details so
-              you can focus on the music.
-            </motion.p>
+            {PAINS.map((p) => (
+              <motion.div key={p.title} variants={fadeUp} className="card">
+                <h3 className="font-display text-xl font-semibold text-ink-800">{p.title}</h3>
+                <p className="mt-3 font-body text-ink-500 leading-relaxed">{p.body}</p>
+              </motion.div>
+            ))}
           </motion.div>
+          <motion.p
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="mt-10 text-center font-display text-2xl italic text-brass-600"
+          >
+            There&apos;s a better way.
+          </motion.p>
+        </div>
+      </section>
 
-          <div className="space-y-24">
-            {[
-              {
-                icon: Users,
-                title: "Your Roster, Finally Organized",
-                description:
-                  "Import your musicians in minutes. Track instruments, contact info, payment preferences, and W-9 status. Filter by section, region, or custom tags. Find your first-call cellist in seconds, not hours.",
-                features: [
-                  "Smart profiles with all the details",
-                  "Powerful search and filtering",
-                  "Call order rankings",
-                  "Custom tags and notes",
-                ],
-                align: "left",
-              },
-              {
-                icon: Send,
-                title: "Offers They Actually Respond To",
-                description:
-                  "Send professional contract offers with one click. Musicians see the dates, venue, pay—and accept or decline right from their phone. No more \"did you get my email?\"",
-                features: [
-                  "One-click offer sending",
-                  "Mobile-friendly responses",
-                  "Automatic reminders",
-                  "Full tracking and history",
-                ],
-                align: "right",
-              },
-              {
-                icon: Calendar,
-                title: "Staffing Made Visual",
-                description:
-                  "See who's booked, who's available, who hasn't responded. Drag-and-drop to fill chairs. Save your go-to lineups as presets. Staff a full quartet in under a minute.",
-                features: [
-                  "Visual staffing grid",
-                  "Saved ensemble presets",
-                  "Availability indicators",
-                  "Conflict warnings",
-                ],
-                align: "left",
-              },
-              {
-                icon: CreditCard,
-                title: "Payments You Can Actually Track",
-                description:
-                  "Know exactly who's been paid and who's waiting. Export to QuickBooks. Send payment confirmations automatically. No more \"I think I Zelle'd you?\"",
-                features: [
-                  "Per-service tracking",
-                  "QuickBooks export",
-                  "Payment preferences stored",
-                  "Full audit trail",
-                ],
-                align: "right",
-              },
-            ].map((feature, index) => (
+      {/* ============================ SOLUTION ============================ */}
+      <section className="section-padding bg-white">
+        <div className="container-marketing">
+          <SectionHeading
+            eyebrow="One place for everything"
+            title="From first offer to final payment"
+            subtitle="Podium handles the details of staffing so you can keep your attention on the performance."
+          />
+          <div className="mt-16 space-y-16 lg:space-y-24">
+            {SOLUTIONS.map((s, i) => (
               <motion.div
-                key={feature.title}
-                initial="hidden"
-                whileInView="visible"
+                key={s.title}
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-100px" }}
-                variants={fadeInUp}
-                className={`flex flex-col ${
-                  feature.align === "right" ? "lg:flex-row-reverse" : "lg:flex-row"
-                } items-center gap-12 lg:gap-20`}
+                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                className={`grid lg:grid-cols-2 gap-10 lg:gap-16 items-center ${
+                  i % 2 === 1 ? "lg:[&>*:first-child]:order-2" : ""
+                }`}
               >
-                {/* Content */}
-                <div className="flex-1">
-                  <div className="w-14 h-14 rounded-2xl bg-brass-100 text-brass-600 flex items-center justify-center mb-6">
-                    <feature.icon className="w-7 h-7" />
-                  </div>
-                  <h3 className="font-display text-display-sm text-ink-900 mb-4">
-                    {feature.title}
-                  </h3>
-                  <p className="font-body text-lg text-ink-500 mb-6 leading-relaxed">
-                    {feature.description}
-                  </p>
-                  <ul className="space-y-3">
-                    {feature.features.map((item) => (
-                      <li key={item} className="flex items-center gap-3">
-                        <CheckCircle2 className="w-5 h-5 text-brass-500 flex-shrink-0" />
-                        <span className="font-body text-ink-600">{item}</span>
+                <div>
+                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-brass-100 text-brass-600">
+                    <s.icon className="h-6 w-6" strokeWidth={1.6} />
+                  </span>
+                  <h3 className="mt-5 font-display text-2xl md:text-3xl font-semibold text-ink-800">{s.title}</h3>
+                  <p className="mt-4 font-body text-lg text-ink-500 leading-relaxed">{s.body}</p>
+                  <ul className="mt-6 space-y-3">
+                    {s.points.map((pt) => (
+                      <li key={pt} className="flex items-start gap-3 font-body text-ink-600">
+                        <Check className="mt-1 h-4 w-4 shrink-0 text-brass-500" strokeWidth={2.5} />
+                        {pt}
                       </li>
                     ))}
                   </ul>
                 </div>
-
-                {/* Visual */}
-                <div className="flex-1 w-full">
-                  <div className="relative">
-                    <div className="bg-white rounded-2xl shadow-xl shadow-ink-900/5 border border-cream-200 p-6 md:p-8">
-                      <div className="aspect-[4/3] bg-gradient-to-br from-cream-50 to-cream-100 rounded-xl p-4 md:p-6 flex flex-col">
-                        {/* Mini feature mockup header */}
-                        <div className="flex items-center gap-2 mb-4">
-                          <feature.icon className="w-5 h-5 text-brass-500" />
-                          <div className="h-3 w-24 bg-ink-200 rounded" />
-                          <div className="ml-auto h-2 w-12 bg-cream-300 rounded" />
-                        </div>
-                        {/* Mini mockup rows */}
-                        <div className="space-y-2.5 flex-1">
-                          {[1, 2, 3, 4].map((row) => (
-                            <div key={row} className="flex items-center gap-3 p-2.5 bg-white rounded-lg border border-cream-200/50">
-                              <div className={`w-7 h-7 rounded-full ${row === 1 ? "bg-brass-100" : "bg-cream-200"}`} />
-                              <div className="flex-1">
-                                <div className={`h-2.5 rounded ${row === 1 ? "w-24 bg-ink-200" : row === 2 ? "w-20 bg-ink-100" : row === 3 ? "w-28 bg-ink-100" : "w-16 bg-ink-100"}`} />
-                                <div className="h-2 w-16 bg-cream-300 rounded mt-1" />
-                              </div>
-                              <div className={`h-5 w-14 rounded-full text-[9px] flex items-center justify-center font-medium ${
-                                row === 1 ? "bg-green-100 text-green-700" : row === 2 ? "bg-blue-100 text-blue-700" : row === 3 ? "bg-amber-100 text-amber-700" : "bg-cream-200 text-ink-400"
-                              }`}>
-                                {row === 1 ? "Active" : row === 2 ? "Sent" : row === 3 ? "Pending" : "Draft"}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    {/* Decorative glow */}
-                    <div
-                      className={`absolute -z-10 w-32 h-32 bg-brass-200/50 rounded-full blur-2xl ${
-                        feature.align === "right" ? "-left-8 -bottom-8" : "-right-8 -bottom-8"
-                      }`}
-                    />
-                  </div>
+                <div className="rounded-2xl border border-cream-300/60 bg-cream-50 p-2 shadow-sm">
+                  <div className="rounded-xl bg-white p-6 shadow-inner">{s.visual}</div>
                 </div>
               </motion.div>
             ))}
@@ -523,466 +209,420 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Musician Portal Section */}
-      <section className="section-padding bg-ink-800 text-cream-50 relative overflow-hidden">
-        {/* Background decoration */}
-        <div className="absolute inset-0 -z-10">
-          <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-gradient-radial from-brass-500/10 via-transparent to-transparent" />
-          <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-gradient-radial from-ink-600/50 via-transparent to-transparent" />
-        </div>
-
-        <div className="container-marketing">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: "-100px" }}
-              variants={fadeInUp}
+      {/* ============================ PORTAL ============================ */}
+      <section className="spotlight-stage section-padding text-cream-100">
+        <div className="container-marketing relative grid lg:grid-cols-2 gap-12 items-center">
+          <div>
+            <span className="eyebrow !text-brass-400 before:!bg-brass-400/60">Always free for performers</span>
+            <h2 className="mt-5 font-display text-3xl md:text-display-md font-semibold text-cream-50 tracking-tight">
+              Your performers will thank you
+            </h2>
+            <p className="mt-5 font-body text-lg text-cream-300 leading-relaxed max-w-xl">
+              Every performer gets a free portal — one login to see the work from every
+              group they play, sing, or dance for. Fewer questions in your inbox, faster
+              answers on every offer.
+            </p>
+            <ul className="mt-8 grid sm:grid-cols-2 gap-x-8 gap-y-4">
+              {PORTAL_POINTS.map((pt) => (
+                <li key={pt} className="flex items-start gap-3 font-body text-cream-200">
+                  <Check className="mt-1 h-4 w-4 shrink-0 text-brass-400" strokeWidth={2.5} />
+                  {pt}
+                </li>
+              ))}
+            </ul>
+            <Link
+              href="/features"
+              className="mt-9 inline-flex items-center gap-2 font-body font-medium text-brass-300 hover:text-brass-200 transition-colors"
             >
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-brass-500/20 border border-brass-500/30 rounded-full mb-6">
-                <Zap className="w-4 h-4 text-brass-400" />
-                <span className="text-sm font-body text-brass-300">
-                  Always free for musicians
-                </span>
-              </div>
+              See everything performers get
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <PhoneMockup />
+        </div>
+      </section>
 
-              <h2 className="font-display text-display-md mb-6">
-                Your musicians will thank you.
-              </h2>
-
-              <p className="font-body text-xl text-cream-300 mb-8 leading-relaxed">
-                Every musician gets free access to their own portal. One login to
-                see gigs from every group they work with.
-              </p>
-
-              <ul className="space-y-4 mb-10">
-                {[
-                  "See all upcoming services in one calendar",
-                  "Accept or decline offers instantly",
-                  "Set payment preferences once, use everywhere",
-                  "Sync schedule to Google Calendar or iCal",
-                  "Request subs when conflicts come up",
-                  "Access from any device—phone, tablet, laptop",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-brass-400 flex-shrink-0 mt-0.5" />
-                    <span className="font-body text-cream-200">{item}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <Link
-                href="/features"
-                className="inline-flex items-center gap-2 font-body text-brass-400 hover:text-brass-300 transition-colors group"
+      {/* ============================ PROOF (honest) ============================ */}
+      <section className="section-padding bg-white">
+        <div className="container-marketing">
+          <SectionHeading
+            eyebrow="Built for the whole field"
+            title="The performing arts run on freelancers"
+            subtitle="Podium is built for the thousands of organizations that hire per performance — not the handful that can afford six-figure enterprise software."
+          />
+          <div className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-6">
+            {MARKET_STATS.map((m) => (
+              <motion.div
+                key={m.label}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                className="text-center"
               >
-                Learn more about the Musician Portal
-                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-              </Link>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, x: 40 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6 }}
-              className="relative"
-            >
-              {/* Phone mockup */}
-              <div className="relative mx-auto w-[280px] md:w-[320px]">
-                <div className="bg-ink-900 rounded-[3rem] p-3 shadow-2xl">
-                  <div className="bg-cream-50 rounded-[2.5rem] overflow-hidden">
-                    {/* Phone notch */}
-                    <div className="h-8 bg-cream-50 flex items-center justify-center">
-                      <div className="w-20 h-5 bg-ink-900 rounded-full" />
-                    </div>
-                    {/* Screen content */}
-                    <div className="p-4 pb-8 bg-cream-50">
-                      <div className="mb-6">
-                        <p className="text-xs text-ink-400 mb-1 font-body">
-                          Welcome back,
-                        </p>
-                        <p className="text-lg font-display font-semibold text-ink-800">
-                          Sarah Martinez
-                        </p>
-                      </div>
-
-                      {/* Upcoming section */}
-                      <div className="mb-4">
-                        <p className="text-xs font-medium text-ink-500 mb-3 font-body uppercase tracking-wide">
-                          Upcoming
-                        </p>
-                        <div className="space-y-3">
-                          {[
-                            { date: "Jan 28", title: "Henderson Wedding", group: "Westlake Ensemble" },
-                            { date: "Feb 3", title: "Corporate Event", group: "Meridian Quartet" },
-                            { date: "Feb 14", title: "Valentine's Gala", group: "Westlake Ensemble" },
-                          ].map((gig) => (
-                            <div
-                              key={gig.title}
-                              className="flex items-center gap-3 p-3 bg-white rounded-xl border border-cream-200"
-                            >
-                              <div className="w-12 h-12 bg-brass-100 rounded-lg flex flex-col items-center justify-center">
-                                <span className="text-[10px] text-brass-600 font-medium">
-                                  {gig.date.split(" ")[0]}
-                                </span>
-                                <span className="text-sm font-bold text-brass-700">
-                                  {gig.date.split(" ")[1]}
-                                </span>
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-ink-800 truncate">
-                                  {gig.title}
-                                </p>
-                                <p className="text-xs text-ink-400">{gig.group}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Floating notification */}
-                <motion.div
-                  animate={{ y: [0, -5, 0] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                  className="absolute -right-4 top-1/4 bg-white rounded-xl shadow-lg p-3 border border-cream-200"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                      <CheckCircle2 className="w-4 h-4 text-green-600" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-ink-800">
-                        Synced to Calendar
-                      </p>
-                    </div>
-                  </div>
-                </motion.div>
-              </div>
-            </motion.div>
+                <div className="font-display text-4xl md:text-5xl font-semibold text-gradient-brass">{m.value}</div>
+                <div className="mt-2 font-body text-sm text-ink-500">{m.label}</div>
+              </motion.div>
+            ))}
           </div>
-
-          {/* Testimonial */}
           <motion.div
             initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={fadeInUp}
-            className="mt-20 pt-16 border-t border-ink-700"
+            whileInView="show"
+            viewport={{ once: true, margin: "-80px" }}
+            variants={stagger}
+            className="mt-16 grid md:grid-cols-3 gap-5"
           >
-            <blockquote className="max-w-3xl mx-auto text-center">
-              <p className="font-display text-2xl md:text-3xl text-cream-100 italic leading-relaxed mb-6">
-                &ldquo;I used to get texts from 6 different contractors asking the
-                same questions. Now I just check Podium and everything&apos;s
-                there.&rdquo;
-              </p>
-              <footer className="flex items-center justify-center gap-4">
-                <div className="w-12 h-12 bg-brass-500/30 rounded-full flex items-center justify-center">
-                  <span className="font-display text-lg text-brass-300">S</span>
-                </div>
-                <div className="text-left">
-                  <cite className="font-body text-cream-200 not-italic font-medium">
-                    Sarah M.
-                  </cite>
-                  <p className="text-sm text-cream-400">Freelance Violinist</p>
-                </div>
-              </footer>
-            </blockquote>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Social Proof Section */}
-      <section className="section-padding bg-white relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-cream-300 to-transparent" />
-        <div className="container-marketing">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-100px" }}
-            variants={staggerContainer}
-            className="text-center mb-16"
-          >
-            <motion.div variants={fadeInUp} className="decorative-line mx-auto mb-6" />
-            <motion.h2 variants={fadeInUp} className="font-display text-display-md text-ink-900 mb-4">
-              Trusted by ensembles who&apos;d rather play than administrate.
-            </motion.h2>
-          </motion.div>
-
-          {/* Stats */}
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={staggerContainer}
-            className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8 mb-16"
-          >
-            {[
-              { value: "2,400+", label: "Musicians managed" },
-              { value: "15,000+", label: "Offers sent" },
-              { value: "94%", label: "Response rate" },
-              { value: "4.9/5", label: "Average rating" },
-            ].map((stat) => (
-              <motion.div key={stat.label} variants={fadeInUp} className="text-center p-6 rounded-2xl bg-cream-50 border border-cream-200">
-                <p className="font-display text-display-sm md:text-display-md text-gradient-brass mb-2">
-                  {stat.value}
-                </p>
-                <p className="font-body text-sm text-ink-500 uppercase tracking-wider">{stat.label}</p>
-              </motion.div>
-            ))}
-          </motion.div>
-
-          {/* Testimonials */}
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={staggerContainer}
-            className="grid md:grid-cols-3 gap-8"
-          >
-            {[
-              {
-                quote:
-                  "We went from spending 10 hours a week on admin to about 2. Podium paid for itself in the first month.",
-                author: "Chamber ensemble director",
-                location: "Los Angeles",
-              },
-              {
-                quote:
-                  "I can staff an entire concert series from my phone while waiting for soundcheck. Game changer.",
-                author: "Quartet manager",
-                location: "Chicago",
-              },
-              {
-                quote:
-                  "Our musicians actually respond to offers now. The portal makes it so easy they have no excuse.",
-                author: "Regional orchestra personnel",
-                location: "Minneapolis",
-              },
-            ].map((testimonial, index) => (
-              <motion.div key={index} variants={fadeInUp} className="card">
-                <div className="flex gap-1 mb-4">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-5 h-5 fill-brass-400 text-brass-400" />
-                  ))}
-                </div>
-                <blockquote className="font-body text-ink-600 mb-6 leading-relaxed">
-                  &ldquo;{testimonial.quote}&rdquo;
+            {TESTIMONIALS.map((t) => (
+              <motion.figure
+                key={t.name}
+                variants={fadeUp}
+                className="flex flex-col rounded-2xl border border-cream-300/60 bg-cream-50 p-7"
+              >
+                <div className="text-brass-400 font-display text-4xl leading-none">&ldquo;</div>
+                <blockquote className="mt-2 flex-1 font-body text-ink-600 leading-relaxed">
+                  {t.quote}
                 </blockquote>
-                <footer>
-                  <p className="font-body font-medium text-ink-800">
-                    {testimonial.author}
-                  </p>
-                  <p className="text-sm text-ink-400">{testimonial.location}</p>
-                </footer>
-              </motion.div>
+                <figcaption className="mt-5 border-t border-cream-300/70 pt-4 font-body text-sm">
+                  <span className="font-semibold text-ink-800">{t.name}</span>
+                  {t.org && <span className="text-ink-400"> · {t.org}</span>}
+                </figcaption>
+              </motion.figure>
             ))}
           </motion.div>
         </div>
       </section>
 
-      {/* Pricing Preview Section */}
+      {/* ============================ PRICING PREVIEW ============================ */}
       <section className="section-padding bg-cream-100">
         <div className="container-marketing">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-100px" }}
-            variants={staggerContainer}
-            className="text-center mb-16"
-          >
-            <motion.div variants={fadeInUp} className="decorative-line mx-auto mb-6" />
-            <motion.h2 variants={fadeInUp} className="font-display text-display-md text-ink-900 mb-4">
-              Simple pricing. No surprises.
-            </motion.h2>
-            <motion.p variants={fadeInUp} className="font-body text-lg text-ink-500 max-w-2xl mx-auto">
-              Start free, upgrade when you&apos;re ready. Musicians always free.
-            </motion.p>
-          </motion.div>
-
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={staggerContainer}
-            className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto"
-          >
-            {/* Free Plan */}
-            <motion.div
-              variants={fadeInUp}
-              className="relative rounded-2xl p-8 bg-white border border-cream-200 hover:border-brass-200/60 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
-            >
-              <h3 className="font-display text-xl text-ink-800 mb-2">Free</h3>
-              <div className="mb-4">
-                <span className="font-display text-display-sm text-ink-900">$0</span>
-                <span className="text-ink-400">/month</span>
-              </div>
-              <p className="font-body text-sm text-ink-500 mb-6">
-                Everything you need to start managing your roster and sending offers.
-              </p>
-
-              <ul className="space-y-3 mb-8">
-                {[
-                  "Up to 25 musicians",
-                  "3 active projects",
-                  "Contract offers & tracking",
-                  "Payment tracking",
-                  "Musician portal access",
-                  "Email support",
-                ].map((feature) => (
-                  <li key={feature} className="flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-brass-500" />
-                    <span className="font-body text-sm text-ink-600">{feature}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <Link
-                href="https://app.podiumpersonnel.com/signup"
-                className="btn-secondary w-full justify-center"
+          <SectionHeading
+            eyebrow="Simple pricing"
+            title="Start free. Grow into it."
+            subtitle="Performers are always free. Every new account gets a 14-day trial of a paid plan — no credit card required."
+          />
+          <div className="mt-14 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {PRICING_TIERS.map((t) => (
+              <div
+                key={t.name}
+                className={`relative flex flex-col rounded-2xl border p-6 ${
+                  t.popular ? "border-brass-300 bg-white shadow-xl ring-2 ring-brass-300" : "border-cream-300/60 bg-cream-50"
+                }`}
               >
-                Get Started Free
-              </Link>
-            </motion.div>
-
-            {/* Pro Plan */}
-            <motion.div
-              variants={fadeInUp}
-              className="relative rounded-2xl p-8 bg-ink-800 text-cream-50 shadow-xl shadow-ink-900/20 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300"
-            >
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-brass-500 text-white text-sm font-body font-medium rounded-full">
-                14-Day Free Trial
+                {t.popular && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-brass-500 px-3 py-1 text-[11px] font-body font-semibold uppercase tracking-wider text-white">
+                    Most popular
+                  </span>
+                )}
+                <h3 className="font-display text-xl font-semibold text-ink-800">{t.name}</h3>
+                <div className="mt-3 font-display text-3xl font-semibold text-ink-900">
+                  {t.price}
+                  {t.price !== "$0" && <span className="text-base font-body text-ink-400">/mo</span>}
+                </div>
+                <p className="mt-2 font-body text-sm text-ink-500 leading-snug">{t.tagline}</p>
+                <p className="mt-4 font-body text-sm text-ink-600">{t.headline}</p>
+                <Link
+                  href="https://app.podiumpersonnel.com/signup"
+                  className={`mt-6 w-full justify-center ${t.popular ? "btn-accent" : "btn-secondary"}`}
+                >
+                  {t.price === "$0" ? "Start free" : "Start trial"}
+                </Link>
               </div>
-
-              <h3 className="font-display text-xl text-cream-50 mb-2">Pro</h3>
-              <div className="mb-4">
-                <span className="font-display text-display-sm text-cream-50">$29</span>
-                <span className="text-cream-300">/month</span>
-              </div>
-              <p className="font-body text-sm text-cream-300 mb-6">
-                Unlimited everything. For busy contractors and growing ensembles.
-              </p>
-
-              <ul className="space-y-3 mb-8">
-                {[
-                  "Unlimited musicians",
-                  "Unlimited projects",
-                  "Unlimited admin seats",
-                  "Bulk roster import",
-                  "Saved ensemble presets",
-                  "Gig details & group messaging",
-                  "Portal invites & W-9 requests",
-                ].map((feature) => (
-                  <li key={feature} className="flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-brass-400" />
-                    <span className="font-body text-sm text-cream-200">{feature}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <Link
-                href="https://app.podiumpersonnel.com/signup"
-                className="btn-accent w-full justify-center"
-              >
-                Start Free Trial
-                <ChevronRight className="ml-1 w-4 h-4" />
-              </Link>
-            </motion.div>
-          </motion.div>
-
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={fadeInUp}
-            className="text-center mt-8 text-sm text-ink-400 font-body"
-          >
-            14-day Pro trial on every new account. No credit card required.
-          </motion.div>
-
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={fadeInUp}
-            className="text-center mt-6"
-          >
-            <Link
-              href="/pricing"
-              className="inline-flex items-center gap-2 font-body text-ink-600 hover:text-ink-800 transition-colors group"
-            >
-              Compare all features
-              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-            </Link>
-          </motion.div>
+            ))}
+          </div>
+          <p className="mt-8 text-center font-body text-sm text-ink-400">
+            <Link href="/pricing" className="text-brass-600 hover:text-brass-700 underline underline-offset-4">Compare all plans in detail →</Link>
+          </p>
         </div>
       </section>
 
-      {/* Final CTA Section */}
-      <section className="section-padding bg-gradient-to-br from-ink-800 via-ink-800 to-ink-900 text-cream-50 relative overflow-hidden">
-        {/* Background decoration */}
-        <div className="absolute inset-0">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-radial from-brass-500/10 via-transparent to-transparent" />
-          {/* Musical staff lines */}
-          <div className="absolute top-[30%] left-[5%] w-[20%] flex flex-col gap-2 opacity-[0.04]">
-            {[...Array(5)].map((_, i) => (
-              <div key={`cta-staff-l-${i}`} className="h-px bg-cream-100" />
-            ))}
-          </div>
-          <div className="absolute bottom-[25%] right-[5%] w-[20%] flex flex-col gap-2 opacity-[0.04]">
-            {[...Array(5)].map((_, i) => (
-              <div key={`cta-staff-r-${i}`} className="h-px bg-cream-100" />
-            ))}
-          </div>
-        </div>
-
+      {/* ============================ FINAL CTA ============================ */}
+      <section className="spotlight-stage section-padding text-center text-cream-100">
         <div className="container-marketing relative">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={staggerContainer}
-            className="max-w-3xl mx-auto text-center"
-          >
-            {/* Decorative brass line */}
-            <motion.div
-              variants={fadeInUp}
-              className="w-16 h-0.5 bg-gradient-to-r from-brass-400 to-brass-500 mx-auto mb-8 rounded-full"
-            />
-
-            <motion.h2 variants={fadeInUp} className="font-display text-display-md md:text-display-lg mb-6">
-              Ready to get your time back?
-            </motion.h2>
-            <motion.p variants={fadeInUp} className="font-body text-xl text-cream-300 mb-10 leading-relaxed">
-              Start your 14-day free trial. No credit card required. Set up in
-              under 5 minutes.
-            </motion.p>
-
-            <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row gap-4 justify-center mb-10">
-              <Link href="https://app.podiumpersonnel.com/signup" className="btn-accent text-lg px-8 py-4 group">
-                Start Free Trial
-                <ChevronRight className="ml-2 w-5 h-5 transition-transform group-hover:translate-x-1" />
-              </Link>
-            </motion.div>
-
-            {/* Trust badges - glass cards */}
-            <motion.div variants={fadeInUp} className="flex flex-wrap items-center justify-center gap-4">
-              {[
-                { icon: Shield, text: "Bank-level security" },
-                { icon: Clock, text: "Cancel anytime" },
-                { icon: Zap, text: "5-minute setup" },
-              ].map((badge) => (
-                <div key={badge.text} className="flex items-center gap-2 px-4 py-2 bg-cream-50/5 border border-cream-100/10 rounded-full backdrop-blur-sm">
-                  <badge.icon className="w-4 h-4 text-brass-400" />
-                  <span className="text-sm font-body text-cream-300">{badge.text}</span>
-                </div>
-              ))}
-            </motion.div>
-          </motion.div>
+          <span className="eyebrow !text-brass-400 before:!bg-brass-400/60 justify-center">Ready when you are</span>
+          <h2 className="mx-auto mt-5 max-w-2xl font-display text-3xl md:text-display-md font-semibold text-cream-50 tracking-tight">
+            Get your time back
+          </h2>
+          <p className="mx-auto mt-5 max-w-xl font-body text-lg text-cream-300 leading-relaxed">
+            Start your 14-day free trial. No credit card required. Set up in under five minutes.
+          </p>
+          <div className="mt-9 flex justify-center">
+            <Link href="https://app.podiumpersonnel.com/signup" className="btn-accent group text-base">
+              Start Free Trial
+              <ChevronRight className="ml-1 w-5 h-5 transition-transform group-hover:translate-x-0.5" />
+            </Link>
+          </div>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            {["Bank-level security", "Cancel anytime", "5-minute setup"].map((b) => (
+              <span key={b} className="glass-badge text-sm text-cream-300">
+                <Check className="h-3.5 w-3.5 text-brass-400" strokeWidth={2.5} />
+                {b}
+              </span>
+            ))}
+          </div>
         </div>
       </section>
     </>
   );
 }
+
+/* ------------------------------ helpers ------------------------------ */
+
+function SectionHeading({ eyebrow, title, subtitle }: { eyebrow: string; title: string; subtitle?: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      className="mx-auto max-w-2xl text-center"
+    >
+      <span className="eyebrow justify-center">{eyebrow}</span>
+      <h2 className="mt-4 font-display text-3xl md:text-display-md font-semibold text-ink-800 tracking-tight text-balance">
+        {title}
+      </h2>
+      {subtitle && <p className="mt-4 font-body text-lg text-ink-500 leading-relaxed text-balance">{subtitle}</p>}
+    </motion.div>
+  );
+}
+
+function HeroMockup() {
+  return (
+    <div className="relative">
+      <div className="rounded-2xl border border-cream-300/70 bg-white shadow-2xl shadow-ink-900/10 overflow-hidden">
+        <div className="flex items-center gap-1.5 border-b border-cream-200 bg-cream-100 px-4 py-3">
+          <span className="h-2.5 w-2.5 rounded-full bg-burgundy-300" />
+          <span className="h-2.5 w-2.5 rounded-full bg-brass-300" />
+          <span className="h-2.5 w-2.5 rounded-full bg-ink-200" />
+        </div>
+        <div className="flex">
+          <div className="hidden sm:block w-36 shrink-0 bg-curtain-800 p-3">
+            {["Dashboard", "Projects", "Roster", "Offers", "Payments", "Venues"].map((n, i) => (
+              <div
+                key={n}
+                className={`rounded-md px-2.5 py-2 text-[11px] font-body ${
+                  i === 3 ? "bg-brass-500/20 text-brass-300" : "text-cream-400"
+                }`}
+              >
+                {n}
+              </div>
+            ))}
+          </div>
+          <div className="flex-1 p-4">
+            <div className="grid grid-cols-3 gap-2">
+              {[["Active", "6"], ["Roster", "38"], ["Confirmed", "22"]].map(([l, v]) => (
+                <div key={l} className="rounded-lg border border-cream-200 p-2.5">
+                  <div className="text-[10px] font-body uppercase tracking-wide text-ink-300">{l}</div>
+                  <div className="font-display text-xl font-semibold text-ink-800">{v}</div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 space-y-2">
+              {[
+                ["Priya N.", "Principal Cello", "Accepted", "text-green-600 bg-green-50"],
+                ["Marcus T.", "Lead Vocalist", "Pending", "text-amber-600 bg-amber-50"],
+                ["Devon R.", "Stage Manager", "Viewed", "text-blue-600 bg-blue-50"],
+              ].map(([name, role, status, cls]) => (
+                <div key={name} className="flex items-center justify-between rounded-lg border border-cream-200 px-3 py-2">
+                  <div>
+                    <div className="text-xs font-body font-medium text-ink-700">{name}</div>
+                    <div className="text-[10px] font-body text-ink-400">{role}</div>
+                  </div>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-body font-medium ${cls}`}>{status}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <motion.div
+        animate={{ y: [0, -10, 0] }}
+        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute -left-4 sm:-left-8 top-16 rounded-xl border border-cream-200 bg-white px-4 py-3 shadow-xl"
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-green-600">
+            <Check className="h-4 w-4" strokeWidth={3} />
+          </span>
+          <div>
+            <div className="text-xs font-body font-semibold text-ink-700">Offer accepted</div>
+            <div className="text-[10px] font-body text-ink-400">Priya N. · just now</div>
+          </div>
+        </div>
+      </motion.div>
+      <motion.div
+        animate={{ y: [0, 10, 0] }}
+        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+        className="absolute -right-3 sm:-right-6 bottom-10 rounded-xl border border-cream-200 bg-white px-4 py-3 shadow-xl"
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brass-100 text-brass-600">
+            <Send className="h-4 w-4" strokeWidth={2} />
+          </span>
+          <div>
+            <div className="text-xs font-body font-semibold text-ink-700">6 offers sent</div>
+            <div className="text-[10px] font-body text-ink-400">Spring Gala</div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function PhoneMockup() {
+  return (
+    <div className="relative mx-auto w-full max-w-[18rem]">
+      <div className="rounded-[2.5rem] border-[6px] border-curtain-700 bg-curtain-900 p-3 shadow-2xl">
+        <div className="rounded-[1.9rem] bg-cream-50 p-5">
+          <div className="text-xs font-body text-ink-400">Welcome back,</div>
+          <div className="font-display text-lg font-semibold text-ink-800">Sarah Martinez</div>
+          <div className="mt-4 text-[11px] font-body font-semibold uppercase tracking-wide text-ink-300">Upcoming</div>
+          <div className="mt-2 space-y-2.5">
+            {[
+              ["Spring Gala", "Meridian Ensemble", "#A9791F"],
+              ["Messiah — Dress", "City Chorale", "#9B2D3A"],
+              ["Corporate Event", "Bright Lights Agency", "#1F7A70"],
+            ].map(([title, org, color]) => (
+              <div key={title} className="rounded-xl border border-cream-200 bg-white p-3">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+                  <div className="text-xs font-body font-semibold text-ink-700">{title}</div>
+                </div>
+                <div className="mt-0.5 pl-4 text-[10px] font-body text-ink-400">{org}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex gap-2">
+            <div className="flex-1 rounded-lg bg-brass-500 py-2 text-center text-[11px] font-body font-semibold text-white">Accept</div>
+            <div className="flex-1 rounded-lg border border-cream-300 py-2 text-center text-[11px] font-body text-ink-500">Decline</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------ content ------------------------------ */
+
+const PAINS = [
+  { title: "The email spiral", body: "“Can you play Saturday?” becomes forty reply-all threads. You’re CC’ing people who already declined, and nobody’s sure who’s confirmed." },
+  { title: "The spreadsheet maze", body: "Your master roster lives in three spreadsheets, a notes app, and someone’s memory. Finding the right person for an open seat takes longer than the seat is worth." },
+  { title: "The payment chase", body: "“Did I pay them for the last one?” You’re digging through a payment app at 11pm trying to reconstruct who’s still owed." },
+  { title: "The text avalanche", body: "“What time?” “Where do I park?” “Can someone sub for me?” Your phone never stops, and you’ve become a 24/7 help desk." },
+];
+
+const SOLUTIONS = [
+  {
+    title: "Your roster, finally organized",
+    body: "Import your people in minutes. Track skills, contact info, pay preferences, and W-9 status. Filter by section, role, region, or your own tags — and find the right person in seconds.",
+    icon: Users,
+    points: ["Import from a spreadsheet in minutes", "Custom tags: first-call, section leaders, subs", "Skills, sections, and roles that fit your art form", "W-9 and pay preferences on file"],
+    visual: (
+      <div className="space-y-2">
+        {[["Priya N.", "Principal Cello"], ["Marcus T.", "Lead Vocalist"], ["Ana G.", "Soprano · Section Leader"], ["Devon R.", "Stage Manager"]].map(([n, r]) => (
+          <div key={n} className="flex items-center justify-between rounded-lg bg-cream-50 px-3 py-2">
+            <span className="text-sm font-body text-ink-700">{n}</span>
+            <span className="text-xs font-body text-ink-400">{r}</span>
+          </div>
+        ))}
+      </div>
+    ),
+  },
+  {
+    title: "Offers they actually answer",
+    body: "Send a professional offer in one click. People see the dates, the place, and the pay — and accept or decline right from their phone. No app, no login, no “did you get my email?”",
+    icon: Send,
+    points: ["One-click offers with dates, venue, and pay", "Accept or decline in a tap from any phone", "Expiration dates and automatic reminders", "Cascade to the next person when someone passes"],
+    visual: (
+      <div className="rounded-xl border border-cream-200 p-4">
+        <div className="text-xs font-body font-semibold uppercase tracking-wide text-ink-300">Offer</div>
+        <div className="mt-1 font-display text-lg font-semibold text-ink-800">Spring Gala — Meridian Ensemble</div>
+        <div className="mt-2 space-y-1 text-sm font-body text-ink-500">
+          <div>Sat, May 17 · The Riverside Ballroom</div>
+          <div>Position: Principal Cello · Pay: $350</div>
+        </div>
+        <div className="mt-4 flex gap-2">
+          <div className="flex-1 rounded-lg bg-brass-500 py-2 text-center text-xs font-body font-semibold text-white">Accept</div>
+          <div className="flex-1 rounded-lg border border-cream-300 py-2 text-center text-xs font-body text-ink-500">Decline</div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    title: "Staffing you can see",
+    body: "See who’s confirmed, who’s pending, and who hasn’t answered. Fill open seats, save your go-to lineups as presets, and staff a whole project in a single pass.",
+    icon: LayoutGrid,
+    points: ["Confirmed, pending, and open at a glance", "Save go-to lineups as reusable presets", "Cascade offers down your call order", "Conflict warnings before you double-book"],
+    visual: (
+      <div className="space-y-2">
+        {[["Violin I", "Confirmed", "bg-green-50 text-green-600"], ["Viola", "Pending", "bg-amber-50 text-amber-600"], ["Cello", "Confirmed", "bg-green-50 text-green-600"], ["Bass", "Open", "bg-ink-50 text-ink-400"]].map(([seat, status, cls]) => (
+          <div key={seat} className="flex items-center justify-between rounded-lg border border-cream-200 px-3 py-2">
+            <span className="text-sm font-body text-ink-700">{seat}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-body font-medium ${cls}`}>{status}</span>
+          </div>
+        ))}
+      </div>
+    ),
+  },
+  {
+    title: "Payments you can actually track",
+    body: "Know exactly who’s been paid and who’s waiting. Track pay per service, collect W-9s, send confirmations, and export at tax time — no second system, no shoebox.",
+    icon: Wallet,
+    points: ["Per-service pay and leader fees", "W-9 collection and 1099 export", "Automatic pay confirmations", "A full, exportable audit trail"],
+    visual: (
+      <div className="space-y-2">
+        {[["Priya N.", "$350", "Paid", "text-green-600"], ["Marcus T.", "$250", "Paid", "text-green-600"], ["Ana G.", "$300", "Due", "text-amber-600"]].map(([n, amt, status, cls]) => (
+          <div key={n} className="flex items-center justify-between rounded-lg bg-cream-50 px-3 py-2">
+            <span className="text-sm font-body text-ink-700">{n}</span>
+            <span className="flex items-center gap-3">
+              <span className="text-sm font-body text-ink-500">{amt}</span>
+              <span className={`text-xs font-body font-medium ${cls}`}>{status}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    ),
+  },
+];
+
+const PORTAL_POINTS = [
+  "One calendar across every group",
+  "Accept or decline in a tap",
+  "Sync to Google, Apple, or Outlook",
+  "Set pay preferences and W-9",
+  "Request a sub when life happens",
+  "Works on any device",
+];
+
+const MARKET_STATS = [
+  { value: "2,200+", label: "U.S. orchestras" },
+  { value: "250+", label: "Dance companies" },
+  { value: "170+", label: "Pro opera companies" },
+  { value: "1,000s", label: "Choirs & churches with paid players" },
+];
+
+const PRICING_TIERS = [
+  { name: "Free", price: "$0", tagline: "To get organized", headline: "Up to 25 performers, 3 projects", popular: false },
+  { name: "Ensemble", price: "$29", tagline: "Small groups & single ensembles", headline: "Up to 60 performers, unlimited projects", popular: false },
+  { name: "Orchestra", price: "$79", tagline: "Growing organizations", headline: "Up to 250 performers, subs & priority support", popular: true },
+  { name: "Symphony", price: "$199", tagline: "Institutions", headline: "Unlimited everything, dedicated onboarding", popular: false },
+];
+
+const TESTIMONIALS = [
+  {
+    quote:
+      "Staffing a full program used to take me most of an afternoon between emails, texts, and updating the spreadsheet. With Podium, I sent the entire call in under 15 minutes and could immediately see which chairs were filled.",
+    name: "Rebecca C.",
+    org: "Subito Strings",
+  },
+  {
+    quote:
+      "I expected to spend the first week explaining a new system to everyone. Instead, performers opened the offer on their phones and accepted or declined without creating an account. Almost everyone responded the same day.",
+    name: "Kristen K.",
+    org: "",
+  },
+  {
+    quote:
+      "Before Podium, our roster lived in a spreadsheet, old email threads, and three people's memories. Now I can see who was called, who declined, who's confirmed, and what still needs to be filled — without asking anyone for an update.",
+    name: "David P.",
+    org: "",
+  },
+];

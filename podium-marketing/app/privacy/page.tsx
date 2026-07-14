@@ -78,9 +78,9 @@ export default function PrivacyPage() {
                     timezone, and related details during onboarding.
                   </li>
                   <li>
-                    <strong>Musician data:</strong> names, contact information,
-                    instruments, payment preferences, and other details you enter
-                    about musicians in your roster.
+                    <strong>Performer data:</strong> names, contact information,
+                    skills and roles, payment preferences, and other details you
+                    enter about performers in your roster.
                   </li>
                   <li>
                     <strong>Payment information:</strong> billing details
@@ -129,7 +129,7 @@ export default function PrivacyPage() {
                   <li>Provide, maintain, and improve the Service.</li>
                   <li>
                     Process transactions and send related notifications (e.g.,
-                    gig offers, payment confirmations).
+                    offers, payment confirmations).
                   </li>
                   <li>
                     Send administrative messages, including security alerts and
@@ -165,13 +165,13 @@ export default function PrivacyPage() {
                   </li>
                   <li>
                     <strong>Within your organization:</strong> information you
-                    enter about musicians is visible to other authorized members
+                    enter about performers is visible to other authorized members
                     of your organization on Podium.
                   </li>
                   <li>
-                    <strong>Musician Portal:</strong> when you send gig offers,
+                    <strong>Performer Portal:</strong> when you send offers,
                     the relevant details (dates, venue, compensation) are shared
-                    with the musician via their portal.
+                    with the performer via their portal.
                   </li>
                   <li>
                     <strong>Legal requirements:</strong> if required by law,
