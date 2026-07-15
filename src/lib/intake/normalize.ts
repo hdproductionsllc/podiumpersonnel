@@ -50,3 +50,25 @@ export function normTitle(title: string): string {
   t = t.replace(/\s+/g, ' ').trim()
   return t
 }
+
+/**
+ * MATCH-TIME normalization — a looser fold used ONLY while matching, never
+ * stored. The proven Mac system (`normalize_for_search`) applied a handful of
+ * client-friendly folds at search time and compared BOTH sides folded the same
+ * way. We do the same: apply the extra folds to the incoming query AND to each
+ * candidate's raw title, so a client's spelling can reach the library's stored
+ * spelling WITHOUT altering the Phase A `norm_title` index.
+ *
+ * The old rule listed four folds: '&' → 'and', '/' → ' ', '.' → ' ', and an
+ * apostrophe-stripped pass. Our base normTitle already collapses '/', '.', and
+ * apostrophes, so the only NET-new bridge here is the ampersand: it is injected
+ * as the word "and" BEFORE normTitle collapses it to a space, so "Love & Marriage"
+ * and "Love and Marriage" converge (they otherwise fold to "love marriage" vs
+ * "love and marriage" and miss — "and" is not a matcher stopword).
+ *
+ * Idempotent on already-normalized text and on titles without an ampersand:
+ * normTitleLoose(x) === normTitle(x) whenever x contains no '&'.
+ */
+export function normTitleLoose(title: string): string {
+  return normTitle(title.replace(/&/g, ' and '))
+}

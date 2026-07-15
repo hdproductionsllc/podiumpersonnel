@@ -14,7 +14,15 @@
 import { requireOrgAdmin, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
 import { createServiceClient } from '@/lib/supabase/server'
 import { parseIntake } from '@/lib/intake/parser'
-import { matchSong, capCandidates, type RepertoireRow, type AliasRow, type MatchResult } from '@/lib/intake/matcher'
+import {
+  matchSong,
+  capCandidates,
+  canonicalEnsemble,
+  type RepertoireRow,
+  type AliasRow,
+  type MatchResult,
+  type PartAvailability,
+} from '@/lib/intake/matcher'
 
 export interface ProposedSong {
   section: string
@@ -31,7 +39,7 @@ export async function POST(request: Request) {
 
   const orgId = membership.organization_id
 
-  let body: { rawText?: unknown }
+  let body: { rawText?: unknown; gigEnsemble?: unknown }
   try {
     body = await request.json()
   } catch {
@@ -43,37 +51,91 @@ export async function POST(request: Request) {
     return apiError('Paste the questionnaire text to parse (rawText is required).', 400)
   }
 
+  // Optional ranking hint: the project's ensemble. Folded to the repertoire
+  // canon; anything unrecognized is undefined (neutral ranking). Purely a hint —
+  // never a gate, never trusted for anything security-sensitive.
+  const gigEnsemble = canonicalEnsemble(
+    typeof (body as { gigEnsemble?: unknown })?.gigEnsemble === 'string'
+      ? (body as { gigEnsemble?: string }).gigEnsemble
+      : undefined
+  )
+
   // 1. Parse (pure; never trusts anything downstream — proposal only).
   const parsed = parseIntake(rawText)
 
   // 2. Load THIS org's repertoire + aliases (service client, org-scoped).
+  //    ALL of these reads paginate: PostgREST caps responses at 1,000 rows, and
+  //    this org already has 3,558 parts — an unpaginated read silently truncates
+  //    and produces confidently-wrong gap badges (adversarial review finding).
   const service = createServiceClient()
 
-  const { data: repRows, error: repErr } = await service
-    .from('repertoire')
-    .select('id,title,artist,ensemble,norm_title')
-    .eq('organization_id', orgId)
-    .eq('is_active', true)
+  async function selectAll<T>(table: string, columns: string): Promise<{ rows: T[]; error: unknown }> {
+    const PAGE = 1000
+    const rows: T[] = []
+    for (let from = 0; ; from += PAGE) {
+      let q = service.from(table).select(columns).eq('organization_id', orgId).range(from, from + PAGE - 1)
+      if (table === 'repertoire') q = q.eq('is_active', true)
+      const { data, error } = await q
+      if (error) return { rows, error }
+      const page = (data ?? []) as T[]
+      rows.push(...page)
+      if (page.length < PAGE) break
+    }
+    return { rows, error: null }
+  }
 
-  if (repErr) return serverError('intake/parse: load repertoire', repErr)
+  const rep = await selectAll<RepertoireRow>('repertoire', 'id,title,artist,ensemble,norm_title')
+  if (rep.error) return serverError('intake/parse: load repertoire', rep.error)
+  const repRows = rep.rows
 
-  const { data: aliasRows, error: aliasErr } = await service
-    .from('title_aliases')
-    .select('alias_norm,repertoire_id')
-    .eq('organization_id', orgId)
+  const alias = await selectAll<AliasRow>('title_aliases', 'alias_norm,repertoire_id')
+  if (alias.error) return serverError('intake/parse: load aliases', alias.error)
+  const aliasRows = alias.rows
 
-  if (aliasErr) return serverError('intake/parse: load aliases', aliasErr)
+  // Part availability per work, so the review UI can show a gap badge
+  // ("matched — missing vla"). One extra org-scoped query, aggregated here.
+  const parts = await selectAll<{ repertoire_id: string; part: string; substitute: boolean; played_on: string | null }>(
+    'repertoire_parts',
+    'repertoire_id,part,substitute,played_on'
+  )
+  if (parts.error) return serverError('intake/parse: load repertoire parts', parts.error)
+  const partRows = parts.rows
+
+  const partsByRep = new Map<string, PartAvailability>()
+  for (const p of (partRows ?? []) as Array<{ repertoire_id: string; part: string; substitute: boolean; played_on: string | null }>) {
+    let pa = partsByRep.get(p.repertoire_id)
+    if (!pa) {
+      pa = { available: [], substitutes: [] }
+      partsByRep.set(p.repertoire_id, pa)
+    }
+    if (p.substitute) {
+      if (p.played_on) pa.substitutes.push({ part: p.part, playedOn: p.played_on })
+    } else if (!pa.available.includes(p.part)) {
+      pa.available.push(p.part)
+    }
+  }
 
   const index = {
     repertoire: (repRows ?? []) as RepertoireRow[],
     aliases: (aliasRows ?? []) as AliasRow[],
   }
 
+  // Decorate a match's candidates with each work's part availability (in place).
+  const decorate = (match: MatchResult): MatchResult => {
+    for (const c of match.candidates) {
+      const pa = partsByRep.get(c.repertoireId)
+      if (pa) c.parts = pa
+    }
+    return match
+  }
+
   // 3. Match every parsed song. The parser already returns an ordered, flat
   //    list (section carried on each row) so the review UI can render + reorder.
   const songs: ProposedSong[] = []
   for (const s of parsed.songs) {
-    const match = capCandidates(matchSong({ titleRaw: s.titleRaw, artistRaw: s.artistRaw }, index))
+    const match = decorate(
+      capCandidates(matchSong({ titleRaw: s.titleRaw, artistRaw: s.artistRaw }, index, gigEnsemble))
+    )
     songs.push({
       section: s.section,
       role: s.role,

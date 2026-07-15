@@ -46,6 +46,7 @@ import {
 } from './intake-song-row'
 import type { ProposedSong } from '@/app/api/intake/parse/route'
 import type { IntakeRecord, IntakeSong } from '@/lib/intake/types'
+import { canonicalEnsemble, type MatchCandidate } from '@/lib/intake/matcher'
 
 // --- section vocabulary (matches migration 069's CHECK set) ------------------
 
@@ -102,8 +103,8 @@ type Phase = 'empty' | 'review' | 'confirmed'
 
 // --- proposal / saved → SongRow ---------------------------------------------
 
-function candidateOf(c: { repertoireId: string; title: string; artist: string | null; ensemble: string }): RepCandidate {
-  return { repertoireId: c.repertoireId, title: c.title, artist: c.artist, ensemble: c.ensemble }
+function candidateOf(c: MatchCandidate): RepCandidate {
+  return { repertoireId: c.repertoireId, title: c.title, artist: c.artist, ensemble: c.ensemble, parts: c.parts }
 }
 
 function rowFromProposed(p: ProposedSong): SongRow {
@@ -114,6 +115,7 @@ function rowFromProposed(p: ProposedSong): SongRow {
     titleRaw: p.titleRaw,
     artistRaw: p.artistRaw ?? '',
     notes: p.notes ?? null,
+    rememberAlias: false,
   }
   if (p.match.status === 'matched') {
     const chosen = p.match.candidates.find((c) => !c.artistMismatch) ?? p.match.candidates[0]
@@ -122,6 +124,7 @@ function rowFromProposed(p: ProposedSong): SongRow {
       matchStatus: 'matched',
       matchedRepertoireId: chosen?.repertoireId ?? null,
       matchedLabel: chosen ? workLabel(chosen.title, chosen.artist) : null,
+      matchedParts: chosen?.parts ?? null,
       candidates: [],
       warning: null,
     }
@@ -132,16 +135,19 @@ function rowFromProposed(p: ProposedSong): SongRow {
       matchStatus: 'ambiguous',
       matchedRepertoireId: null,
       matchedLabel: null,
+      matchedParts: null,
       candidates: p.match.candidates.map(candidateOf),
       warning: p.match.warning ?? null,
     }
   }
+  // Missing — carry any similarity best-guesses as "did you mean" suggestions.
   return {
     ...base,
     matchStatus: 'missing',
     matchedRepertoireId: null,
     matchedLabel: null,
-    candidates: [],
+    matchedParts: null,
+    candidates: p.match.candidates.map(candidateOf),
     warning: null,
   }
 }
@@ -162,8 +168,10 @@ function rowFromSaved(s: SavedSong): SongRow {
     matchStatus: s.match_status as RowMatchStatus,
     matchedRepertoireId: s.matched_repertoire_id,
     matchedLabel: rep ? workLabel(rep.title, rep.artist) : null,
+    matchedParts: null,
     candidates: [],
     warning: null,
+    rememberAlias: false,
   }
 }
 
@@ -187,9 +195,14 @@ function isResolved(r: SongRow): boolean {
 
 interface IntakePanelProps {
   projectId: string
+  /** The project's ensemble label ("String Quartet", …) if known — used to rank
+   *  matches toward the right arrangement and to badge part gaps. Optional. */
+  ensembleType?: string | null
 }
 
-export function IntakePanel({ projectId }: IntakePanelProps) {
+export function IntakePanel({ projectId, ensembleType }: IntakePanelProps) {
+  // Fold the project's free-text ensemble label to the repertoire canon once.
+  const gigEnsemble = canonicalEnsemble(ensembleType)
   const [open, setOpen] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -277,7 +290,7 @@ export function IntakePanel({ projectId }: IntakePanelProps) {
       const res = await fetch('/api/intake/parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rawText: trimmed }),
+        body: JSON.stringify({ rawText: trimmed, gigEnsemble }),
       })
       const data = await res.json()
       if (res.status === 503) {
@@ -357,10 +370,44 @@ export function IntakePanel({ projectId }: IntakePanelProps) {
       if (which === 'draft') toast.success('Draft saved.')
       else if (which === 'confirmed') { toast.success('Client selections confirmed.'); setPhase('confirmed') }
       else { toast.success('Reopened as draft.'); setPhase('review') }
+      // Learning loop: teach the library every remembered correction. Best-effort
+      // and idempotent — it runs after the save succeeds and never blocks it.
+      void teachAliases()
     } catch {
       toast.error('Save failed. Please try again.')
     } finally {
       setSaving(null)
+    }
+  }
+
+  /** POST each "remember this match" row to /api/intake/alias, then clear its
+   *  flag so re-saves don't re-teach. Failures are swallowed (learning is a
+   *  bonus, not part of the save contract). */
+  async function teachAliases() {
+    const toTeach = songs.filter(
+      (r) => r.rememberAlias && r.matchStatus === 'manual' && r.matchedRepertoireId && r.titleRaw.trim()
+    )
+    if (toTeach.length === 0) return
+    let taught = 0
+    await Promise.all(
+      toTeach.map(async (r) => {
+        try {
+          const res = await fetch('/api/intake/alias', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ aliasText: r.titleRaw, repertoireId: r.matchedRepertoireId }),
+          })
+          if (res.ok) taught++
+        } catch {
+          /* best-effort */
+        }
+      })
+    )
+    // Clear the flag on the rows we just taught so a later save won't repeat them.
+    const taughtUids = new Set(toTeach.map((r) => r.uid))
+    setSongs((prev) => prev.map((r) => (taughtUids.has(r.uid) ? { ...r, rememberAlias: false } : r)))
+    if (taught > 0) {
+      toast.success(`Remembered ${taught} title${taught === 1 ? '' : 's'} for next time.`)
     }
   }
 
@@ -396,8 +443,10 @@ export function IntakePanel({ projectId }: IntakePanelProps) {
       matchStatus: 'missing',
       matchedRepertoireId: null,
       matchedLabel: null,
+      matchedParts: null,
       candidates: [],
       warning: null,
+      rememberAlias: false,
     }
     setSongs((prev) => groupedOrder([...prev, row]))
   }
@@ -561,6 +610,7 @@ export function IntakePanel({ projectId }: IntakePanelProps) {
                             key={row.uid}
                             song={row}
                             positionLabel={i + 1}
+                            gigEnsemble={gigEnsemble}
                             canMoveUp={i > 0}
                             canMoveDown={i < sectionRows.length - 1}
                             onChange={(patch) => patchRow(row.uid, patch)}

@@ -21,7 +21,17 @@
  * because most questionnaire songs give no artist at all.
  */
 
-import { normTitle } from './normalize'
+import { normTitle, normTitleLoose } from './normalize'
+
+/** The repertoire `ensemble` canon (matches migration 068's CHECK set). */
+export type EnsembleCanon =
+  | 'quartet'
+  | 'quintet'
+  | 'trio'
+  | 'viola-trio'
+  | 'duo'
+  | 'solo'
+  | 'other'
 
 export interface RepertoireRow {
   id: string
@@ -29,6 +39,18 @@ export interface RepertoireRow {
   artist: string | null
   ensemble: string
   norm_title: string
+}
+
+/**
+ * The playable parts a matched work actually has, aggregated from
+ * repertoire_parts. `available` is the set of real (non-substitute) part roles
+ * present; `substitutes` are cover parts (a file named for one instrument that
+ * plays another's line) with the line each one covers. Used purely to show the
+ * reviewer a gap badge — it never gates a match.
+ */
+export interface PartAvailability {
+  available: string[]
+  substitutes: Array<{ part: string; playedOn: string }>
 }
 
 export interface AliasRow {
@@ -48,16 +70,24 @@ export interface SongInput {
 
 export type MatchStatus = 'matched' | 'ambiguous' | 'missing'
 
+/** How a candidate was reached, best tier first. */
+export type MatchVia = 'exact' | 'alias' | 'loose' | 'keyword' | 'similarity'
+
 export interface MatchCandidate {
   repertoireId: string
   title: string
   artist: string | null
   ensemble: string
   score: number
-  /** 'exact' | 'alias' | 'keyword' — how this candidate was reached. */
-  via: 'exact' | 'alias' | 'keyword'
+  via: MatchVia
   /** True when a questionnaire artist was given and it disagrees with this row. */
   artistMismatch: boolean
+  /**
+   * The work's part availability, when the caller decorated candidates with it
+   * (the parse route does). Absent from the pure matcher output; the review UI
+   * uses it to show a "missing vla (…)" gap note. Never affects matching.
+   */
+  parts?: PartAvailability
 }
 
 export interface MatchResult {
@@ -72,9 +102,76 @@ export interface MatchResult {
 // words, so "Air on the G String" still keys on air/g/string.
 const STOPWORDS = new Set(['the', 'a', 'of'])
 
-const SCORE = { exact: 100, alias: 85, keyword: 60 } as const
+// `similarity` is a placeholder (0) — those candidates get a Dice-derived score
+// assigned after build; the base map only needs the real tiers.
+const SCORE = { exact: 100, alias: 85, loose: 80, keyword: 60, similarity: 0 } as const
 const ARTIST_AGREE_BOOST = 15
 const MAX_KEYWORD_CANDIDATES = 10
+
+// Best-guess (similarity) tier: only ever populated when NO real tier hit, so a
+// 'missing' row still carries "did you mean…" candidates for the reviewer. Kept
+// strictly below the keyword tier's score and gated by a floor so red rows get
+// plausible guesses, not noise.
+const MAX_SIMILARITY_CANDIDATES = 5
+const SIMILARITY_FLOOR = 0.34
+
+// Core part roles a gig ensemble needs, by repertoire ensemble canon. Solo/other
+// have no fixed requirement, so no gap is ever reported for them.
+const REQUIRED_PARTS: Partial<Record<EnsembleCanon, string[]>> = {
+  quartet: ['vln1', 'vln2', 'vla', 'vc'],
+  quintet: ['vln1', 'vln2', 'vla', 'vc'],
+  trio: ['vln1', 'vln2', 'vc'],
+  'viola-trio': ['vln1', 'vla', 'vc'],
+  duo: ['vln1', 'vc'],
+}
+
+const ENSEMBLE_CANON: ReadonlySet<EnsembleCanon> = new Set([
+  'quartet', 'quintet', 'trio', 'viola-trio', 'duo', 'solo', 'other',
+])
+
+/**
+ * Map a project's free-text `ensemble_type` label ("String Quartet", "Piano
+ * Trio", …) to the repertoire ensemble canon, for ensemble-aware ranking and
+ * gap badges. Returns undefined for anything unrecognized (neutral ranking) —
+ * this is only a hint, never a gate. Idempotent on canon values.
+ */
+export function canonicalEnsemble(raw: string | null | undefined): EnsembleCanon | undefined {
+  if (!raw) return undefined
+  const s = raw.toLowerCase().trim()
+  if (ENSEMBLE_CANON.has(s as EnsembleCanon)) return s as EnsembleCanon
+  // Viola trio (vln/vla/vc) is a distinct arrangement family from the vln/vln/vc
+  // string trio — only tag it when the label actually names a viola trio.
+  if (s.includes('viola') && s.includes('trio')) return 'viola-trio'
+  if (s.includes('quartet')) return 'quartet'
+  if (s.includes('quintet')) return 'quintet'
+  if (s.includes('trio')) return 'trio'
+  if (s.includes('duo') || s.includes('duet')) return 'duo'
+  if (s.includes('solo')) return 'solo'
+  return undefined
+}
+
+/**
+ * Which required parts a matched work is missing for a gig ensemble, and whether
+ * a substitute file covers each gap. Pure — the UI renders the amber note from
+ * this. `subBy` names the covering instrument (e.g. a vln2 file playing the vla
+ * line → { part: 'vla', subBy: 'vln2' }); null when nothing covers it.
+ */
+export function partGap(
+  parts: PartAvailability | undefined,
+  ensemble: EnsembleCanon | undefined
+): Array<{ part: string; subBy: string | null }> {
+  if (!parts || !ensemble) return []
+  const required = REQUIRED_PARTS[ensemble]
+  if (!required) return []
+  const have = new Set(parts.available)
+  const gaps: Array<{ part: string; subBy: string | null }> = []
+  for (const req of required) {
+    if (have.has(req)) continue
+    const sub = parts.substitutes.find((s) => s.playedOn === req)
+    gaps.push({ part: req, subBy: sub ? sub.part : null })
+  }
+  return gaps
+}
 
 /** Normalize an artist for agreement testing (lowercase, punctuation → space). */
 function normArtist(a: string | null | undefined): string {
@@ -105,20 +202,45 @@ function keywordsOf(nt: string): string[] {
   return nt.split(' ').filter((w) => w && !STOPWORDS.has(w))
 }
 
+/** Sørensen–Dice coefficient over the two titles' token sets (0..1). Pure,
+ *  order-independent, and cheap — used only to rank best-guesses for red rows. */
+function tokenDice(a: string, b: string): number {
+  const sa = new Set(a.split(' ').filter(Boolean))
+  const sb = new Set(b.split(' ').filter(Boolean))
+  if (sa.size === 0 || sb.size === 0) return 0
+  let inter = 0
+  for (const t of sa) if (sb.has(t)) inter++
+  return (2 * inter) / (sa.size + sb.size)
+}
+
+/** Rank for ensemble-aware ordering: a work whose ensemble equals the gig's sorts
+ *  ahead (0) of one that doesn't (1). Neutral when no gig ensemble given. */
+function ensembleRank(ensemble: string, gig: EnsembleCanon | undefined): number {
+  return gig && ensemble === gig ? 0 : 1
+}
+
 /**
- * Deterministic ordering: score desc, then title asc, then repertoireId asc.
+ * Deterministic ordering: score desc, then (gig ensemble first), then title asc,
+ * then repertoireId asc. Ensemble is only ever a TIEBREAKER among equal-score
+ * candidates — it never lets a weaker match outrank a stronger one (the owner's
+ * "trio gigs prefer trio arrangements", without over-automating).
  * Never rely on input array order — the DB may return rows in any order.
  */
-function sortCandidates(cands: MatchCandidate[]): MatchCandidate[] {
+function sortCandidates(cands: MatchCandidate[], gig?: EnsembleCanon): MatchCandidate[] {
   return cands.sort(
     (x, y) =>
       y.score - x.score ||
+      ensembleRank(x.ensemble, gig) - ensembleRank(y.ensemble, gig) ||
       x.title.localeCompare(y.title) ||
       x.repertoireId.localeCompare(y.repertoireId)
   )
 }
 
-export function matchSong(song: SongInput, index: MatchIndex): MatchResult {
+export function matchSong(
+  song: SongInput,
+  index: MatchIndex,
+  gigEnsemble?: EnsembleCanon
+): MatchResult {
   const nt = normTitle(song.titleRaw || '')
   const artistQ = normArtist(song.artistRaw)
 
@@ -162,7 +284,22 @@ export function matchSong(song: SongInput, index: MatchIndex): MatchResult {
     }
   }
 
-  // --- Tier 3: keyword fallback (only if alias found nothing) ---
+  // --- Tier 3: match-time loose fold (only if alias found nothing) ---
+  // Bridges client spellings the base norm can't (e.g. "Love & Marriage" vs
+  // "Love and Marriage") by folding BOTH the query and each row's raw title the
+  // looser way. For ampersand-free text the loose fold reduces to the base norm,
+  // so this can only ADD matches the exact tier missed — never re-find what it
+  // already had (it runs only after exact returned nothing over the same rows).
+  if (candidates.length === 0) {
+    const ntLoose = normTitleLoose(song.titleRaw || '')
+    if (ntLoose) {
+      candidates = repertoire
+        .filter((r) => normTitleLoose(r.title) === ntLoose)
+        .map((r) => build(r, 'loose'))
+    }
+  }
+
+  // --- Tier 4: keyword fallback (only if loose found nothing) ---
   if (candidates.length === 0) {
     const keywords = keywordsOf(nt)
     if (keywords.length > 0) {
@@ -175,10 +312,30 @@ export function matchSong(song: SongInput, index: MatchIndex): MatchResult {
     }
   }
 
-  candidates = sortCandidates(candidates)
+  candidates = sortCandidates(candidates, gigEnsemble)
 
+  // --- Tier 5: similarity best-guesses (only when nothing else matched) ---
+  // A 'missing' row should never be a dead end: attach the top Dice-ranked works
+  // so the reviewer gets "did you mean…" instead of an empty search box. These
+  // are guesses, not matches — the row stays 'missing' and unresolved.
   if (candidates.length === 0) {
-    return { status: 'missing', candidates }
+    const guesses = repertoire
+      .map((r) => ({ r, sim: tokenDice(nt, r.norm_title) }))
+      .filter((x) => x.sim >= SIMILARITY_FLOOR)
+      .sort(
+        (a, b) =>
+          b.sim - a.sim ||
+          ensembleRank(a.r.ensemble, gigEnsemble) - ensembleRank(b.r.ensemble, gigEnsemble) ||
+          a.r.title.localeCompare(b.r.title) ||
+          a.r.id.localeCompare(b.r.id)
+      )
+      .slice(0, MAX_SIMILARITY_CANDIDATES)
+      .map((x) => {
+        const c = build(x.r, 'similarity')
+        c.score = Math.round(x.sim * 50) // strictly below the keyword tier
+        return c
+      })
+    return { status: 'missing', candidates: guesses }
   }
 
   // Auto-matchable = candidates whose artist does NOT contradict the questionnaire.

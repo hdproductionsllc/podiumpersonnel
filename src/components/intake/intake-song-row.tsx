@@ -20,6 +20,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { RepertoireSearchResult } from '@/app/api/intake/repertoire/route'
+import { normTitle } from '@/lib/intake/normalize'
+import { partGap, type PartAvailability, type EnsembleCanon } from '@/lib/intake/matcher'
 
 export type IntakeSectionKey =
   | 'prelude'
@@ -37,6 +39,8 @@ export interface RepCandidate {
   title: string
   artist: string | null
   ensemble: string
+  /** The work's part availability, for the gap badge. Absent for search picks. */
+  parts?: PartAvailability
 }
 
 export interface SongRow {
@@ -51,10 +55,16 @@ export interface SongRow {
   matchedRepertoireId: string | null
   /** Display label for the currently matched/selected work ("Title — Artist"). */
   matchedLabel: string | null
-  /** Candidate works for an ambiguous match (empty once resolved or on reload). */
+  /** Candidate works for an ambiguous match, or "did you mean" guesses for a
+   *  missing one (empty once resolved or on reload). */
   candidates: RepCandidate[]
   /** Matcher note surfaced to the human (e.g. an artist disagreement). */
   warning: string | null
+  /** Parts of the currently matched work, for the gap badge (null when unknown). */
+  matchedParts: PartAvailability | null
+  /** When true, saving teaches the library this titleRaw → matched work alias.
+   *  Defaults ON when the typed title's norm differs from the matched work's. */
+  rememberAlias: boolean
 }
 
 export function workLabel(title: string, artist: string | null): string {
@@ -63,6 +73,27 @@ export function workLabel(title: string, artist: string | null): string {
 
 function candidateLabel(c: RepCandidate): string {
   return workLabel(c.title, c.artist)
+}
+
+/**
+ * Human-readable part-gap note for a matched work at a gig ensemble, or null when
+ * complete / unknown. e.g. "missing vla (vln2 sub available)" or "missing vln2".
+ * Informational only — it never blocks confirming.
+ */
+function partGapNote(parts: PartAvailability | null, gig: EnsembleCanon | undefined): string | null {
+  if (!parts || !gig) return null
+  const gaps = partGap(parts, gig)
+  if (gaps.length === 0) return null
+  const phrases = gaps.map((g) => (g.subBy ? `${g.part} (${g.subBy} sub available)` : g.part))
+  return `missing ${phrases.join(', ')}`
+}
+
+/** Whether teaching an alias makes sense: a real work is matched and the typed
+ *  title folds differently from the work's title (so it wouldn't match on its own). */
+function aliasWouldHelp(titleRaw: string, workTitle: string): boolean {
+  const a = normTitle(titleRaw)
+  const b = normTitle(workTitle)
+  return !!a && a !== b
 }
 
 // --- library search (backs the "Not in library" / "Change match" box) --------
@@ -155,6 +186,8 @@ interface IntakeSongRowProps {
   readOnly?: boolean
   canMoveUp: boolean
   canMoveDown: boolean
+  /** The gig's ensemble (repertoire canon), for the part-gap badge. */
+  gigEnsemble?: EnsembleCanon
   onChange: (patch: Partial<SongRow>) => void
   onRemove: () => void
   onMoveUp: () => void
@@ -167,6 +200,7 @@ export function IntakeSongRow({
   readOnly = false,
   canMoveUp,
   canMoveDown,
+  gigEnsemble,
   onChange,
   onRemove,
   onMoveUp,
@@ -175,12 +209,15 @@ export function IntakeSongRow({
   const [changing, setChanging] = useState(false)
   const resolved = song.matchStatus === 'matched' || song.matchStatus === 'manual'
   const isCeremony = song.section === 'ceremony'
+  const gapNote = partGapNote(song.matchedParts, gigEnsemble)
 
   function pickCandidate(c: RepCandidate) {
     onChange({
       matchStatus: 'manual',
       matchedRepertoireId: c.repertoireId,
       matchedLabel: candidateLabel(c),
+      matchedParts: c.parts ?? null,
+      rememberAlias: aliasWouldHelp(song.titleRaw, c.title),
       warning: null,
     })
     setChanging(false)
@@ -191,6 +228,8 @@ export function IntakeSongRow({
       matchStatus: 'manual',
       matchedRepertoireId: r.id,
       matchedLabel: workLabel(r.title, r.artist),
+      matchedParts: null,
+      rememberAlias: aliasWouldHelp(song.titleRaw, r.title),
       warning: null,
     })
     setChanging(false)
@@ -201,6 +240,8 @@ export function IntakeSongRow({
       matchStatus: 'manual',
       matchedRepertoireId: null,
       matchedLabel: null,
+      matchedParts: null,
+      rememberAlias: false,
       warning: null,
     })
     setChanging(false)
@@ -274,19 +315,39 @@ export function IntakeSongRow({
           <div className="space-y-1.5">
             {/* Resolved */}
             {resolved && !changing && (
-              <div className="flex flex-wrap items-center gap-2">
-                {song.matchStatus === 'matched' && (
-                  <Badge variant="success" className="text-xs">Matched: {song.matchedLabel}</Badge>
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  {song.matchStatus === 'matched' && (
+                    <Badge variant="success" className="text-xs">Matched: {song.matchedLabel}</Badge>
+                  )}
+                  {song.matchStatus === 'manual' && song.matchedRepertoireId && (
+                    <Badge variant="success" className="text-xs">Set: {song.matchedLabel}</Badge>
+                  )}
+                  {song.matchStatus === 'manual' && !song.matchedRepertoireId && (
+                    <Badge variant="secondary" className="text-xs">Using “{song.titleRaw}” as typed</Badge>
+                  )}
+                  <Button type="button" variant="ghost" size="xs" onClick={() => setChanging(true)}>
+                    Change
+                  </Button>
+                </div>
+                {/* Part-gap badge — informational, never blocks confirm. */}
+                {gapNote && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    Arrangement {gapNote} for this ensemble.
+                  </p>
                 )}
+                {/* Learning loop: teach this correction as a permanent alias. */}
                 {song.matchStatus === 'manual' && song.matchedRepertoireId && (
-                  <Badge variant="success" className="text-xs">Set: {song.matchedLabel}</Badge>
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={song.rememberAlias}
+                      onChange={(e) => onChange({ rememberAlias: e.target.checked })}
+                      className="h-3.5 w-3.5"
+                    />
+                    Remember “{song.titleRaw}” → this work for next time
+                  </label>
                 )}
-                {song.matchStatus === 'manual' && !song.matchedRepertoireId && (
-                  <Badge variant="secondary" className="text-xs">Using “{song.titleRaw}” as typed</Badge>
-                )}
-                <Button type="button" variant="ghost" size="xs" onClick={() => setChanging(true)}>
-                  Change
-                </Button>
               </div>
             )}
 
@@ -327,6 +388,27 @@ export function IntakeSongRow({
             {song.matchStatus === 'missing' && !changing && (
               <div className="space-y-1.5">
                 <Badge variant="destructive" className="text-xs">Not in library</Badge>
+                {/* Best-guess suggestions so a red row is never a dead end. */}
+                {song.candidates.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Did you mean…</p>
+                    <ul className="rounded-md border bg-background divide-y">
+                      {song.candidates.map((c) => (
+                        <li key={c.repertoireId}>
+                          <button
+                            type="button"
+                            onClick={() => pickCandidate(c)}
+                            className="w-full text-left px-2.5 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+                          >
+                            <span className="font-medium">{c.title}</span>
+                            {c.artist && <span className="text-muted-foreground"> — {c.artist}</span>}
+                            <span className="ml-1 text-xs text-muted-foreground capitalize">({c.ensemble})</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <RepertoireSearch onPick={pickSearch} />
                 <Button type="button" variant="ghost" size="xs" onClick={useAsTyped}>
                   Use “{song.titleRaw}” as typed
