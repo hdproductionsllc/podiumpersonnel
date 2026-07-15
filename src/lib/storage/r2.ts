@@ -139,6 +139,8 @@ export interface R2Client {
   getRange(key: string, length: number): Promise<Uint8Array>
   /** Presigned GET URL valid for `expiresSeconds`. */
   getSignedUrl(key: string, expiresSeconds: number): Promise<string>
+  /** Presigned PUT URL valid for `expiresSeconds` (browser-direct upload). */
+  getSignedPutUrl(key: string, expiresSeconds: number): Promise<string>
   /** DELETE an object (idempotent — a missing object is not an error). */
   deleteObject(key: string): Promise<void>
   /** Create the bucket if it does not already exist. Returns whether it was created. */
@@ -252,6 +254,17 @@ export function makeR2Client(config: R2Config): R2Client {
     return signed.url
   }
 
+  async function getSignedPutUrl(key: string, expiresSeconds: number): Promise<string> {
+    // Browser-direct upload: bytes go straight to R2, never through a serverless
+    // route (the 4.5MB Vercel body cap lesson). Signed query, UNSIGNED-PAYLOAD.
+    const url = `${objectUrl(key)}?X-Amz-Expires=${encodeURIComponent(String(expiresSeconds))}`
+    const signed = await aws.sign(url, {
+      method: 'PUT',
+      aws: { signQuery: true },
+    })
+    return signed.url
+  }
+
   async function deleteObject(key: string): Promise<void> {
     const res = await aws.fetch(objectUrl(key), { method: 'DELETE' })
     // S3/R2 return 204 on delete; 404 is fine (idempotent).
@@ -281,6 +294,7 @@ export function makeR2Client(config: R2Config): R2Client {
     headObject,
     getRange,
     getSignedUrl,
+    getSignedPutUrl,
     deleteObject,
     createBucketIfMissing,
   }

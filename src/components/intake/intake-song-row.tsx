@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input'
 import type { RepertoireSearchResult } from '@/app/api/intake/repertoire/route'
 import { normTitle } from '@/lib/intake/normalize'
 import { partGap, type PartAvailability, type EnsembleCanon } from '@/lib/intake/matcher'
+import { AddWorkDialog, type CreatedWork } from './add-work-dialog'
 
 export type IntakeSectionKey =
   | 'prelude'
@@ -213,6 +214,7 @@ export function IntakeSongRow({
   onMoveDown,
 }: IntakeSongRowProps) {
   const [changing, setChanging] = useState(false)
+  const [addingWork, setAddingWork] = useState(false)
   const resolved = song.matchStatus === 'matched' || song.matchStatus === 'manual'
   const isCeremony = song.section === 'ceremony'
   const gapNote = partGapNote(song.matchedParts, gigEnsemble)
@@ -264,6 +266,20 @@ export function IntakeSongRow({
       matchedLabel: null,
       matchedParts: null,
       rememberAlias: false,
+      specialRequest: false,
+      warning: null,
+    })
+    setChanging(false)
+  }
+
+  /** A work was just uploaded to the library (B4) — link this row to it. */
+  function workCreated(w: CreatedWork) {
+    onChange({
+      matchStatus: 'manual',
+      matchedRepertoireId: w.id,
+      matchedLabel: workLabel(w.title, w.artist),
+      matchedParts: null,
+      rememberAlias: aliasWouldHelp(song.titleRaw, w.title),
       specialRequest: false,
       warning: null,
     })
@@ -469,6 +485,9 @@ export function IntakeSongRow({
                 )}
                 <RepertoireSearch onPick={pickSearch} />
                 <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" size="xs" onClick={() => setAddingWork(true)}>
+                    Add to library…
+                  </Button>
                   <Button type="button" variant="ghost" size="xs" onClick={useAsTyped}>
                     Use “{song.titleRaw}” as typed
                   </Button>
@@ -490,6 +509,9 @@ export function IntakeSongRow({
                 <p className="text-xs text-muted-foreground">Pick a different library work, or keep it as typed.</p>
                 <RepertoireSearch onPick={pickSearch} autoFocus />
                 <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" size="xs" onClick={() => setAddingWork(true)}>
+                    Add to library…
+                  </Button>
                   <Button type="button" variant="ghost" size="xs" onClick={useAsTyped}>
                     Use as typed
                   </Button>
@@ -542,6 +564,19 @@ export function IntakeSongRow({
           </Button>
         </div>
       </div>
+
+      {/* B4: upload part PDFs for a work the library doesn't have. Mounted on
+          demand so the dialog always opens pre-filled with the CURRENT row. */}
+      {addingWork && (
+        <AddWorkDialog
+          open={addingWork}
+          onOpenChange={setAddingWork}
+          defaultTitle={song.titleRaw}
+          defaultArtist={song.artistRaw}
+          gigEnsemble={gigEnsemble}
+          onCreated={workCreated}
+        />
+      )}
     </div>
   )
 }

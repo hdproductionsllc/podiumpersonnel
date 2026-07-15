@@ -430,9 +430,37 @@ marker, flag the song, and prompt "mark as special request".
       isMissingTableError covers 42703 (070 unapplied → 503); IntakeSong type updated
 - [x] Tests: 18 new (6 parser incl. the exact "Goodness of God" line, 12 matcher bands +
       auto-resolve); 300/300 green; tsc + production build green
-- [ ] **David: run 070** → Claude verifies live → push → Vercel deploy → re-test real
-      questionnaire (expect: quartet/trio auto-picked, top-guess rows green/amber, special
-      request prompted)
+- [x] **070 run by David** → verified live (column exists, 0 rows flipped) → pushed 42626745
+      → Vercel Ready, app.podiumpersonnel.com aliased. SHIPPED 2026-07-15.
+- [x] David re-tested → 4 more real misparses found + fixed + SHIPPED same day (93c1ea98):
+      numbered prefixes ("4. Stand", "20. September"), dash-beats-"by" ("Stand by Me -
+      Ben E. King"), non-answers ("N/a"/"None"/"TBD") skipped, 1-char keyword junk killed.
+      Plus: "Not a song — remove" action on rows; Confirm no longer hard-blocked — warning
+      step + explicit allowUnresolved override (server still rejects plain unresolved confirm).
+      309/309 tests. Deployed + aliased.
+- [ ] David: re-parse again after this deploy — "20. September" should now auto-match
+      (library has it; the "20." prefix was the whole problem)
+- [ ] Known data-quality note: some library titles show mojibake in candidate lists
+      ("SchoÌˆn Rosmarin") — Mac NFD filenames imported as decomposed unicode. Candidate
+      fix: NFC-normalize titles at import/display. Not yet scheduled.
+
+### Phase B4 — Add-to-library from intake ✅ BUILT + SHIPPED 2026-07-15 (David approved;
+"work is also avail in future" = permanent library entries, matched by all future intakes)
+- [x] r2.ts: getSignedPutUrl (presigned PUT, browser-direct — 4.5MB Vercel cap lesson)
+- [x] Bucket CORS set via scripts/r2-set-cors.js (app domain + *.vercel.app + localhost);
+      idempotent, re-run to change origins
+- [x] R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY added to Vercel prod+preview
+- [x] POST /api/repertoire/upload-url — content-addressed key repertoire/<org>/<sha256>.pdf
+      (Phase A scheme); already-stored bytes skip upload entirely
+- [x] POST /api/repertoire/add-work — server re-downloads + re-hashes EVERY object (fidelity
+      gate; corrupt upload deleted + rejected); dedupes on 068 identity key (existing work →
+      parts appended, dupes skipped, never overwritten); paths server-derived (cross-tenant)
+- [x] AddWorkDialog: files + guessed part dropdowns (part-guess.ts from Phase A naming),
+      WebCrypto sha256, per-file status; wired to missing rows + Change panel; on create the
+      intake row auto-links (manual match + alias-teach when the fold differs)
+- [x] Live presign test against the real bucket: PUT/HEAD/re-hash/delete all PASS
+- [x] 315/315 tests (6 new part-guess); tsc + build green
+- [ ] David: real-world test — upload the parts for one actually-missing work from an intake row
 
 ### Task 4 — Review UI (done 2026-07-15)
 - [x] 1. `GET /api/intake/repertoire?q=` — org-scoped repertoire search for the "Not in library" box.
