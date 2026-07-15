@@ -44,6 +44,7 @@ import {
   type RepCandidate,
   type RowMatchStatus,
 } from './intake-song-row'
+import { BookDownload } from './book-download'
 import type { ProposedSong } from '@/app/api/intake/parse/route'
 import type { IntakeRecord, IntakeSong } from '@/lib/intake/types'
 import { canonicalEnsemble, type MatchCandidate } from '@/lib/intake/matcher'
@@ -853,6 +854,9 @@ export function IntakePanel({ projectId, ensembleType }: IntakePanelProps) {
                   <p className="text-sm italic text-muted-foreground">“{header.recessionalCue}”</p>
                 </div>
               )}
+
+              {/* Phase C: assemble + download the per-musician books. */}
+              <BookDownload projectId={projectId} />
 
               <div className="border-t pt-4">
                 <Button variant="outline" onClick={() => save('draft', 'reopen')} disabled={saving !== null}>
