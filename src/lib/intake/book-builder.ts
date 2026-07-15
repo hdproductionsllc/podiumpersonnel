@@ -261,6 +261,47 @@ function truncate(text: string, font: PDFFont, size: number, maxWidth: number): 
   return t.trimEnd() + '...'
 }
 
+// --- part → project instrument mapping -------------------------------------------
+
+export interface InstrumentRef {
+  id: string
+  name: string
+}
+
+// Name candidates per part, most-specific first. Matching is exact on the
+// normalized name — a wrong guess here would put the cello book on a viola
+// stand, so nothing fuzzy.
+const INSTRUMENT_NAMES: Record<string, string[]> = {
+  vln1: ['violin 1', 'violin i', '1st violin', 'first violin'],
+  vln2: ['violin 2', 'violin ii', '2nd violin', 'second violin'],
+  vla: ['viola'],
+  vc: ['cello', 'violoncello'],
+  bass: ['bass', 'double bass', 'contrabass', 'upright bass', 'string bass'],
+}
+
+/**
+ * Find the project instrument a book part should be assigned to, by name.
+ * A bare "Violin" instrument counts as vln1 ONLY when the project has no
+ * numbered second violin (duo / viola-trio / solo lineups). Returns null when
+ * nothing matches — the caller skips that book and tells the admin.
+ */
+export function matchInstrumentForPart(part: string, instruments: InstrumentRef[]): InstrumentRef | null {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  const candidates = INSTRUMENT_NAMES[part] ?? []
+  for (const want of candidates) {
+    const hit = instruments.find((i) => norm(i.name) === want)
+    if (hit) return hit
+  }
+  if (part === 'vln1') {
+    const hasSecond = instruments.some((i) => /violin\s*(2|ii)\b|2nd violin|second violin/.test(norm(i.name)))
+    if (!hasSecond) {
+      const bare = instruments.find((i) => norm(i.name) === 'violin')
+      if (bare) return bare
+    }
+  }
+  return null
+}
+
 // --- combined-book merge --------------------------------------------------------
 
 export interface MergeSource {

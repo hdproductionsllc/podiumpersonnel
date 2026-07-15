@@ -21,11 +21,14 @@ import { useState } from 'react'
 import { zipSync, type Zippable } from 'fflate'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import { createClient } from '@/lib/supabase/client'
 import {
   buildPlaylistPdf,
+  matchInstrumentForPart,
   mergePdfs,
   normalizeForFilename,
   type BookPart,
+  type InstrumentRef,
   type MergeSource,
   type PlaylistHeader,
 } from '@/lib/intake/book-builder'
@@ -59,7 +62,14 @@ function saveBlob(bytes: Uint8Array, filename: string, type: string) {
   URL.revokeObjectURL(url)
 }
 
-export function BookDownload({ projectId }: { projectId: string }) {
+interface BookDownloadProps {
+  projectId: string
+  /** The project's position instruments, for routing each book to the right
+   *  chair when publishing to Music / Parts. */
+  instruments?: InstrumentRef[]
+}
+
+export function BookDownload({ projectId, instruments = [] }: BookDownloadProps) {
   const [manifest, setManifest] = useState<Manifest | null>(null)
   const [loading, setLoading] = useState(false)
   const [building, setBuilding] = useState<string | null>(null) // part or 'all'
@@ -203,6 +213,83 @@ export function BookDownload({ projectId }: { projectId: string }) {
     }
   }
 
+  /**
+   * Publish the combined books into the project's Music / Parts section, one
+   * file per instrument, assigned to the matching chair — the existing Send
+   * Music flow handles delivery to musicians from there. Rides the exact rails
+   * of a manual upload: signed upload to Supabase Storage, then the metadata
+   * call with scope 'assigned'.
+   */
+  async function publishToMusicParts() {
+    const m = await loadManifest()
+    if (!m) return
+    setBuilding('publish')
+    try {
+      const bytesByUrl = await fetchFiles(m, m.parts)
+      const supabase = createClient()
+      const client = normalizeForFilename(m.header.client)
+      const skipped: string[] = []
+      let published = 0
+      for (const bp of m.parts) {
+        const inst = matchInstrumentForPart(bp.part, instruments)
+        if (!inst) {
+          skipped.push(bp.label)
+          continue
+        }
+        setProgress(`Combining ${bp.label}…`)
+        const pdf = await mergePdfs(await bookSources(m, bp, bytesByUrl))
+        const fileName = `${client} - ${bp.label} Book.pdf`
+
+        setProgress(`Uploading ${bp.label}…`)
+        const urlRes = await fetch(`/api/projects/${projectId}/files/upload-url`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName, fileSize: pdf.length, mimeType: 'application/pdf' }),
+        })
+        const urlData = await urlRes.json()
+        if (!urlRes.ok) throw new Error(urlData.error || `Could not start the upload for ${bp.label}.`)
+
+        const up = await supabase.storage
+          .from('project-files')
+          .uploadToSignedUrl(urlData.path, urlData.token, new Blob([pdf as BlobPart], { type: 'application/pdf' }))
+        if (up.error) throw new Error(`Upload failed for ${bp.label}: ${up.error.message}`)
+
+        const metaRes = await fetch(`/api/projects/${projectId}/files`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            storagePath: urlData.path,
+            fileName,
+            scope: 'assigned',
+            instrumentIds: [inst.id],
+            notes: 'Book from confirmed client selections — playlist first, songs in performance order.',
+          }),
+        })
+        if (!metaRes.ok) {
+          const metaData = await metaRes.json().catch(() => ({}))
+          throw new Error(metaData.error || `Could not record ${bp.label} in Music / Parts.`)
+        }
+        published += 1
+      }
+      if (published > 0) {
+        toast.success(
+          `${published} book${published === 1 ? '' : 's'} added to Music / Parts` +
+            (skipped.length > 0 ? ` (no matching instrument on this project for ${skipped.join(', ')})` : '') +
+            ' — use Send Music there to email the musicians.'
+        )
+      } else {
+        toast.error(
+          `No books published — this project has no positions matching ${skipped.join(', ')}. Add the positions first.`
+        )
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Publishing failed.')
+    } finally {
+      setBuilding(null)
+      setProgress('')
+    }
+  }
+
   return (
     <div className="rounded-md border bg-background p-3 space-y-2">
       <div className="flex items-center gap-2">
@@ -244,7 +331,14 @@ export function BookDownload({ projectId }: { projectId: string }) {
             {loading ? 'Checking…' : 'Show per-musician downloads'}
           </Button>
         )}
+        <Button size="sm" variant="secondary" onClick={publishToMusicParts} disabled={building !== null || loading}>
+          {building === 'publish' ? 'Publishing…' : 'Send to Music / Parts'}
+        </Button>
       </div>
+      <p className="text-[11px] text-muted-foreground">
+        “Send to Music / Parts” adds each combined book to this project&apos;s files, assigned to its
+        instrument — then use <span className="font-medium">Send Music</span> there to email the musicians.
+      </p>
       {manifest && manifest.warnings.length > 0 && (
         <div className="rounded-md border border-amber-300 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 p-2">
           <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-0.5">

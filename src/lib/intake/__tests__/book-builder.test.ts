@@ -15,6 +15,7 @@ import {
   sanitizePdfText,
   buildPlaylistPdf,
   mergePdfs,
+  matchInstrumentForPart,
   type PartFileRow,
   type PlaylistHeader,
 } from '../book-builder'
@@ -122,6 +123,30 @@ describe('sanitizePdfText', () => {
     expect(sanitizePdfText('“Schön” – Isn’t…')).toBe('"Schön" - Isn\'t...')
     // NFD "Scho" + combining diaeresis + "n" (Mac filenames) — mark dropped, no crash.
     expect(sanitizePdfText('Schön Rosmarin')).toBe('Schön Rosmarin')
+  })
+})
+
+describe('matchInstrumentForPart', () => {
+  const inst = (name: string) => ({ id: `i-${name}`, name })
+
+  it('maps book parts to quartet position instruments by exact name', () => {
+    const roster = [inst('Violin 1'), inst('Violin 2'), inst('Viola'), inst('Cello')]
+    expect(matchInstrumentForPart('vln1', roster)?.name).toBe('Violin 1')
+    expect(matchInstrumentForPart('vln2', roster)?.name).toBe('Violin 2')
+    expect(matchInstrumentForPart('vla', roster)?.name).toBe('Viola')
+    expect(matchInstrumentForPart('vc', roster)?.name).toBe('Cello')
+  })
+
+  it('a bare "Violin" counts as vln1 only when there is no second violin', () => {
+    expect(matchInstrumentForPart('vln1', [inst('Violin'), inst('Viola'), inst('Cello')])?.name).toBe('Violin')
+    expect(matchInstrumentForPart('vln1', [inst('Violin'), inst('Violin 2')])).toBeNull()
+  })
+
+  it('never matches across chairs — no instrument, no book', () => {
+    const roster = [inst('Violin 1'), inst('Cello')]
+    expect(matchInstrumentForPart('vla', roster)).toBeNull()
+    expect(matchInstrumentForPart('bass', roster)).toBeNull()
+    expect(matchInstrumentForPart('vc', roster)?.name).toBe('Cello')
   })
 })
 

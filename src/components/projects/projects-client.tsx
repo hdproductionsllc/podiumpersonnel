@@ -994,7 +994,17 @@ export function ProjectsClient({
                           )}
                           {/* Client Selections (intake import + review) */}
                           {canManage && (
-                            <IntakePanel projectId={project.id} ensembleType={project.ensemble_type} />
+                            <IntakePanel
+                              projectId={project.id}
+                              ensembleType={project.ensemble_type}
+                              instruments={Array.from(
+                                new Map(
+                                  project.project_positions
+                                    .filter((p) => p.instrument)
+                                    .map((p) => [p.instrument!.id, { id: p.instrument!.id, name: p.instrument!.name }])
+                                ).values()
+                              )}
+                            />
                           )}
                           {/* Send Gig Details + Group Text (gated behind all positions confirmed) */}
                           {canManage && project.project_positions.length > 0 && project.project_positions.every((p) => p.status === 'confirmed') && (

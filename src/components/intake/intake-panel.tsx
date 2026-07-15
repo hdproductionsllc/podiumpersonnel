@@ -204,9 +204,12 @@ interface IntakePanelProps {
   /** The project's ensemble label ("String Quartet", …) if known — used to rank
    *  matches toward the right arrangement and to badge part gaps. Optional. */
   ensembleType?: string | null
+  /** The project's position instruments — lets "Send to Music / Parts" assign
+   *  each book to the right chair. Optional. */
+  instruments?: Array<{ id: string; name: string }>
 }
 
-export function IntakePanel({ projectId, ensembleType }: IntakePanelProps) {
+export function IntakePanel({ projectId, ensembleType, instruments }: IntakePanelProps) {
   // Fold the project's free-text ensemble label to the repertoire canon once.
   const gigEnsemble = canonicalEnsemble(ensembleType)
   const [open, setOpen] = useState(false)
@@ -856,7 +859,7 @@ export function IntakePanel({ projectId, ensembleType }: IntakePanelProps) {
               )}
 
               {/* Phase C: assemble + download the per-musician books. */}
-              <BookDownload projectId={projectId} />
+              <BookDownload projectId={projectId} instruments={instruments} />
 
               <div className="border-t pt-4">
                 <Button variant="outline" onClick={() => save('draft', 'reopen')} disabled={saving !== null}>
