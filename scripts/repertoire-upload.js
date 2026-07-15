@@ -160,7 +160,8 @@ function loadConfidentEntries(indexPath) {
   }
   const confident = []
   for (const raw of files) {
-    if (raw && raw.classification === 'confident') confident.push(normalizeEntry(raw, libraryRoot))
+    const wanted = new Set((process.env.UPLOAD_CLASSIFICATIONS || 'confident').split(','))
+    if (raw && wanted.has(raw.classification)) confident.push(normalizeEntry(raw, libraryRoot))
   }
   return confident
 }
