@@ -122,44 +122,35 @@ export async function getConnection(orgId: string): Promise<SpotifyConnection | 
   return { spotify_user_id: conn.spotify_user_id, display_name: conn.display_name, accessToken: refreshed.access_token }
 }
 
-export interface TrackCandidate {
-  uri: string
-  name: string
-  artists: string
-  album: string
-  imageUrl: string | null
-  durationMs: number
-}
+export type { TrackCandidate } from '@/lib/spotify-ranking'
+import { rankTracks, type RawTrack, type TrackCandidate as Candidate } from '@/lib/spotify-ranking'
 
-/** Search tracks for one song; top results become PROPOSALS for the review UI. */
+/**
+ * Search tracks for one song; top results become PROPOSALS for the review UI.
+ * Tries a precise field-filtered search (track:"…" artist:"…") first, falls
+ * back to a loose search, then ranks everything by original-ness (the owner's
+ * "no weird cover versions" rule — see spotify-ranking.ts).
+ */
 export async function searchTracks(
   accessToken: string,
   title: string,
   artist: string | null,
   limit = 5
-): Promise<TrackCandidate[]> {
-  const q = artist ? `${title} artist:${artist}` : title
-  const params = new URLSearchParams({ q, type: 'track', limit: String(limit), market: 'US' })
-  const res = await fetch(`${API}/search?${params}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  })
-  const data = await res.json()
-  if (!res.ok) throw new Error(`Spotify search failed: ${data.error?.message || res.status}`)
-  interface RawTrack {
-    uri: string
-    name: string
-    duration_ms: number
-    artists: Array<{ name: string }>
-    album: { name: string; images: Array<{ url: string }> }
+): Promise<Candidate[]> {
+  const run = async (q: string): Promise<RawTrack[]> => {
+    const params = new URLSearchParams({ q, type: 'track', limit: '10', market: 'US' })
+    const res = await fetch(`${API}/search?${params}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(`Spotify search failed: ${data.error?.message || res.status}`)
+    return (data.tracks?.items ?? []) as RawTrack[]
   }
-  return ((data.tracks?.items ?? []) as RawTrack[]).map((t) => ({
-    uri: t.uri,
-    name: t.name,
-    artists: t.artists.map((a) => a.name).join(', '),
-    album: t.album.name,
-    imageUrl: t.album.images.length > 0 ? t.album.images[t.album.images.length - 1].url : null,
-    durationMs: t.duration_ms,
-  }))
+
+  let items = artist ? await run(`track:"${title}" artist:"${artist}"`) : []
+  if (items.length === 0) items = await run(artist ? `${title} ${artist}` : title)
+
+  return rankTracks(items, artist, limit)
 }
 
 /** Create a playlist and add tracks (in order). Returns the public URL. */

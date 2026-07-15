@@ -87,6 +87,10 @@ interface PublishRow {
   instrumentId: string
 }
 
+/** Marker on published book files — how re-publishing recognizes (and
+ *  replaces) the previous version for an instrument. Keep stable. */
+const BOOK_NOTES = 'Book from confirmed client selections — playlist first, songs in performance order.'
+
 export function BookDownload({
   projectId,
   instruments = [],
@@ -310,7 +314,27 @@ export function BookDownload({
       const bytesByUrl = await fetchFiles(m, activeParts)
       const supabase = createClient()
       const client = normalizeForFilename(m.header.client)
+
+      // Auto-versioning: find the PREVIOUS book per instrument (recognized by
+      // the BOOK_NOTES marker + assignment) so it can be replaced, not stacked.
+      interface ExistingFile {
+        id: string
+        notes: string | null
+        project_file_instruments: Array<{ instrument_id: string }>
+      }
+      let existingBooks: ExistingFile[] = []
+      try {
+        const listRes = await fetch(`/api/projects/${projectId}/files`)
+        const listData = await listRes.json()
+        if (listRes.ok && Array.isArray(listData.files)) {
+          existingBooks = (listData.files as ExistingFile[]).filter((f) => f.notes === BOOK_NOTES)
+        }
+      } catch {
+        /* listing failure just means no replacement this round */
+      }
+
       let published = 0
+      let replaced = 0
       for (const bp of activeParts) {
         const inst = instruments.find((i) => i.id === active.find((r) => r.part === bp.part)!.instrumentId)
         if (!inst) continue
@@ -340,7 +364,7 @@ export function BookDownload({
             fileName,
             scope: 'assigned',
             instrumentIds: [inst.id],
-            notes: 'Book from confirmed client selections — playlist first, songs in performance order.',
+            notes: BOOK_NOTES,
           }),
         })
         if (!metaRes.ok) {
@@ -348,9 +372,25 @@ export function BookDownload({
           throw new Error(metaData.error || `Could not record ${bp.label} in Music / Parts.`)
         }
         published += 1
+
+        // New version is safely in place — retire the previous book for this
+        // instrument (delete AFTER insert so a failure never leaves zero books).
+        const stale = existingBooks.filter((f) =>
+          f.project_file_instruments.some((fi) => fi.instrument_id === inst.id)
+        )
+        for (const f of stale) {
+          try {
+            const del = await fetch(`/api/projects/${projectId}/files/${f.id}`, { method: 'DELETE' })
+            if (del.ok) replaced += 1
+          } catch {
+            /* stale copy remains; harmless, admin can delete by hand */
+          }
+        }
       }
       toast.success(
-        `${published} book${published === 1 ? '' : 's'} added to Music / Parts — use Send Music there to email the musicians.`
+        `${published} book${published === 1 ? '' : 's'} added to Music / Parts` +
+          (replaced > 0 ? ` (${replaced} previous version${replaced === 1 ? '' : 's'} replaced)` : '') +
+          ' — use Send Music there to email the musicians.'
       )
       setPublishPlan(null)
     } catch (e) {
