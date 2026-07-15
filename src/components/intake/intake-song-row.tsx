@@ -434,6 +434,9 @@ export function IntakeSongRow({
                       Mark as special request
                     </Button>
                   )}
+                  <Button type="button" variant="ghost" size="xs" className="text-destructive hover:text-destructive" onClick={onRemove}>
+                    Not a song — remove
+                  </Button>
                 </div>
               </div>
             )}
@@ -474,6 +477,9 @@ export function IntakeSongRow({
                       Mark as special request
                     </Button>
                   )}
+                  <Button type="button" variant="ghost" size="xs" className="text-destructive hover:text-destructive" onClick={onRemove}>
+                    Not a song — remove
+                  </Button>
                 </div>
               </div>
             )}

@@ -226,6 +226,9 @@ export function IntakePanel({ projectId, ensembleType }: IntakePanelProps) {
   const [warnings, setWarnings] = useState<string[]>([])
   const [warningsAck, setWarningsAck] = useState(false)
   const [addSection, setAddSection] = useState<IntakeSectionKey>('ceremony')
+  // The confirm-anyway warning step: first Confirm click with unresolved items
+  // shows the warning; only the explicit "Confirm anyway" sends the override.
+  const [confirmOverride, setConfirmOverride] = useState(false)
 
   async function handleOpen() {
     const next = !open
@@ -359,13 +362,19 @@ export function IntakePanel({ projectId, ensembleType }: IntakePanelProps) {
     }
   }
 
-  async function save(status: 'draft' | 'confirmed', which: 'draft' | 'confirmed' | 'reopen') {
+  async function save(
+    status: 'draft' | 'confirmed',
+    which: 'draft' | 'confirmed' | 'reopen',
+    allowUnresolved = false
+  ) {
     setSaving(which)
     try {
       const res = await fetch(`/api/intake/${projectId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPayload(status)),
+        // allowUnresolved is only ever sent after the admin acknowledged the
+        // unresolved-items warning — the server rejects a plain confirm.
+        body: JSON.stringify({ ...buildPayload(status), ...(allowUnresolved ? { allowUnresolved: true } : {}) }),
       })
       const data = await res.json()
       if (res.status === 503) {
@@ -377,7 +386,7 @@ export function IntakePanel({ projectId, ensembleType }: IntakePanelProps) {
         return
       }
       if (which === 'draft') toast.success('Draft saved.')
-      else if (which === 'confirmed') { toast.success('Client selections confirmed.'); setPhase('confirmed') }
+      else if (which === 'confirmed') { toast.success('Client selections confirmed.'); setPhase('confirmed'); setConfirmOverride(false) }
       else { toast.success('Reopened as draft.'); setPhase('review') }
       // Learning loop: teach the library every remembered correction. Best-effort
       // and idempotent — it runs after the save succeeds and never blocks it.
@@ -486,6 +495,28 @@ export function IntakePanel({ projectId, ensembleType }: IntakePanelProps) {
   const matchedCount = songs.filter((r) => r.matchStatus === 'matched').length
   const specialCount = songs.filter((r) => r.specialRequest).length
   const readOnly = phase === 'confirmed'
+
+  // What still stands between this draft and a clean confirm. Confirm is never
+  // hard-blocked by these — they surface as an explicit warning step instead.
+  const confirmBlockers: string[] = []
+  if (unresolvedCount > 0) {
+    confirmBlockers.push(
+      `${unresolvedCount} song${unresolvedCount === 1 ? ' is' : 's are'} not matched to the library (red/amber rows)`
+    )
+  }
+  if (warnings.length > 0 && !warningsAck) {
+    confirmBlockers.push(
+      `${warnings.length} unplaced questionnaire line${warnings.length === 1 ? '' : 's'} (top of this panel) not yet reviewed`
+    )
+  }
+
+  function handleConfirmClick() {
+    if (confirmBlockers.length > 0 && !confirmOverride) {
+      setConfirmOverride(true)
+      return
+    }
+    void save('confirmed', 'confirmed', confirmBlockers.length > 0)
+  }
 
   // Sections that currently have songs, in canonical order.
   const activeSections = SECTION_ORDER.filter((sec) => songs.some((r) => r.section === sec))
@@ -717,27 +748,42 @@ export function IntakePanel({ projectId, ensembleType }: IntakePanelProps) {
                 <Button variant="outline" onClick={() => save('draft', 'draft')} disabled={saving !== null}>
                   {saving === 'draft' ? 'Saving…' : 'Save Draft'}
                 </Button>
-                <Button
-                  onClick={() => save('confirmed', 'confirmed')}
-                  disabled={saving !== null || unresolvedCount > 0 || songs.length === 0 || (warnings.length > 0 && !warningsAck)}
-                  title={
-                    unresolvedCount > 0
-                      ? `${unresolvedCount} song${unresolvedCount === 1 ? '' : 's'} still need a match`
-                      : warnings.length > 0 && !warningsAck
-                        ? 'Acknowledge the unplaced-line warnings above first'
-                        : undefined
-                  }
-                >
+                <Button onClick={handleConfirmClick} disabled={saving !== null || songs.length === 0}>
                   {saving === 'confirmed' ? 'Confirming…' : 'Confirm Selections'}
                 </Button>
                 {songs.length > 0 && (
                   <span className="text-xs text-muted-foreground">
                     {unresolvedCount > 0
-                      ? `${unresolvedCount} of ${songs.length} still need a match before you can confirm`
+                      ? `${unresolvedCount} of ${songs.length} unmatched — you can still confirm; you'll get a warning`
                       : `All ${songs.length} song${songs.length === 1 ? '' : 's'} resolved`}
                   </span>
                 )}
               </div>
+
+              {/* Confirm-anyway warning step */}
+              {confirmOverride && confirmBlockers.length > 0 && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 p-3 space-y-2">
+                  <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                    Confirm with unresolved items?
+                  </p>
+                  <ul className="list-disc pl-5 space-y-0.5">
+                    {confirmBlockers.map((b, i) => (
+                      <li key={i} className="text-xs text-amber-800 dark:text-amber-300">{b}</li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-amber-800 dark:text-amber-300">
+                    Everything is saved exactly as it stands — you can reopen the draft and fix these any time.
+                  </p>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button size="sm" onClick={() => save('confirmed', 'confirmed', true)} disabled={saving !== null}>
+                      {saving === 'confirmed' ? 'Confirming…' : 'Confirm anyway'}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setConfirmOverride(false)} disabled={saving !== null}>
+                      Keep reviewing
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

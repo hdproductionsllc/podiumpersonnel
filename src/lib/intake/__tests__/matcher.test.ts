@@ -332,3 +332,22 @@ describe('matchSong — similarity confidence bands', () => {
     expect(res.candidates.length).toBeGreaterThan(0)
   })
 })
+
+// --- B3 round 2: junk tokens can't drive matches ------------------------------
+
+describe('matchSong — single-character tokens are not keywords', () => {
+  it('"N/a" matches nothing, even against titles containing an "n" token', () => {
+    // Real misparse fallout: "N/a" folds to "n a"; the stray "n" keyword matched
+    // "Patience Guns n Roses 2024" and a decomposed "Scho n Rosmarin".
+    const rows = [work('Patience Guns n Roses 2024', "Guns N' Roses", 'trio'), work('Canon in D', 'Pachelbel')]
+    const res = matchSong({ titleRaw: 'N/a' }, index(rows))
+    expect(res.status).toBe('missing')
+    expect(res.candidates).toHaveLength(0)
+  })
+
+  it('real one-letter title words still match at the exact tier', () => {
+    // The keyword filter only affects the keyword tier — exact folds are intact.
+    const rows = [work('Air on the G String', 'Bach')]
+    expect(matchSong({ titleRaw: 'Air on the G String' }, index(rows)).status).toBe('matched')
+  })
+})

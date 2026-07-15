@@ -221,14 +221,25 @@ function parseCeremonyOther(line: string): [string, string] {
   return ['', smartTitleCase(line.trim())]
 }
 
-/** Extract (title, artist) from "Title by Artist" / "Title - Artist" / "Title". */
+/** Extract (title, artist) from "Title - Artist" / "Title by Artist" / "Title". */
 function extractTitleAndArtist(line: string): [string, string] {
   line = line.trim()
   if (!line) return ['', '']
   line = stripQuotes(line)
   if (!line) return ['', '']
 
-  // 1. "by" separator, using the LAST occurrence ("Stand by me by Ben E. King").
+  // 1. dash separator with at least one space on one side. Checked BEFORE "by":
+  //    when both are present the dash is the deliberate separator and the "by"
+  //    is part of the title ("Stand by Me - Ben E. King" — real misparse: the
+  //    by-split yielded title "Stand", artist "Me - Ben E. King").
+  const dashMatch = /\s*[-–—]\s+|\s+[-–—]\s*/.exec(line)
+  if (dashMatch) {
+    const title = line.slice(0, dashMatch.index).trim()
+    const artist = line.slice(dashMatch.index + dashMatch[0].length).trim()
+    if (title && artist) return [title, artist]
+  }
+
+  // 2. "by" separator, using the LAST occurrence ("Stand by me by Ben E. King").
   const byIdx = line.toLowerCase().lastIndexOf(' by ')
   if (byIdx > 0) {
     const title = line.slice(0, byIdx).trim()
@@ -239,7 +250,7 @@ function extractTitleAndArtist(line: string): [string, string] {
     }
   }
 
-  // 1.5 colon separator (show/musical: song title) — only for a short prefix.
+  // 2.5 colon separator (show/musical: song title) — only for a short prefix.
   const colonMatch = /:\s*/.exec(line)
   if (colonMatch) {
     const before = line.slice(0, colonMatch.index).trim()
@@ -247,14 +258,6 @@ function extractTitleAndArtist(line: string): [string, string] {
     if (before && after && before.split(/\s+/).length <= 3 && /[a-zA-Z]/.test(before)) {
       return [after, before]
     }
-  }
-
-  // 2. dash separator with at least one space on one side.
-  const dashMatch = /\s*[-–—]\s+|\s+[-–—]\s*/.exec(line)
-  if (dashMatch) {
-    const title = line.slice(0, dashMatch.index).trim()
-    const artist = line.slice(dashMatch.index + dashMatch[0].length).trim()
-    if (title && artist) return [title, artist]
   }
 
   // 3. no-space dash as a last resort (exactly one in the line).
@@ -279,6 +282,15 @@ function stripSongPrefix(line: string): string {
   const m = /^song\s*\d*\s*:\s*/i.exec(line)
   return m ? line.slice(m[0].length).trim() : line
 }
+
+// Numbered-list prefix on a song line ("4. Stand by Me", "20. September").
+// Requires the trailing space so numeric TITLES ("1812 Overture") are safe.
+// Real misparse: "20. September" searched the library for "20 september".
+const NUMBERED_PREFIX_RE = /^\d{1,2}[.)]\s+/
+
+// A non-answer where the questionnaire asked for a song ("N/a", "none", "TBD").
+// These are answers, not songs — skip them instead of manufacturing a song row.
+const NON_ANSWER_RE = /^[\s\-–—]*(n\/?a|n\.a\.?|none|no|tbd|to be determined|no preference|not sure)[\s.!]*$/i
 
 // --- main questionnaire parser ------------------------------------------------
 
@@ -641,7 +653,11 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
       let songRole = currentRole
 
       let songLine = stripSongPrefix(line)
+      songLine = songLine.replace(NUMBERED_PREFIX_RE, '')
       songLine = songLine.replace(/\s*\((?:CONFIRMED|confirmed)\)\s*$/, '')
+
+      // "N/a" / "none" / "TBD" answers are boilerplate, never songs.
+      if (NON_ANSWER_RE.test(songLine)) { disp[i] = 'skip'; i += 1; continue }
 
       const isInstruction = INSTRUCTION_MARKERS.some((m) => lower.includes(m))
 

@@ -359,3 +359,57 @@ describe('special request markers', () => {
     expect(r.songs[1]).toMatchObject({ titleRaw: 'Goodness Of God', artistRaw: 'Bethel Music', specialRequest: true })
   })
 })
+
+// ---------------------------------------------------------------------------
+// B3 round 2: real misparses from David's live questionnaires
+// ---------------------------------------------------------------------------
+
+describe('numbered song lines', () => {
+  it('strips the "4." list prefix so the title matches ("4. Stand by Me")', () => {
+    const traced = parseQuestionnaireTraced(['Prelude Requests', '4. Stand by Me - Ben E. King'].join('\n'))
+    expect(traced.songs).toHaveLength(1)
+    expect(traced.songs[0]).toMatchObject({ titleRaw: 'Stand By Me', artistRaw: 'Ben E. King' })
+  })
+
+  it('strips two-digit prefixes too ("20. September")', () => {
+    const traced = parseQuestionnaireTraced(['Prelude Requests', '20. September - Earth, Wind & Fire'].join('\n'))
+    expect(traced.songs[0]).toMatchObject({ titleRaw: 'September', artistRaw: 'Earth, Wind & Fire' })
+  })
+
+  it('never touches numeric TITLES ("1812 Overture" has no dot+space)', () => {
+    const traced = parseQuestionnaireTraced(['Prelude Requests', '1812 Overture - Tchaikovsky'].join('\n'))
+    expect(traced.songs[0]).toMatchObject({ titleRaw: '1812 Overture', artistRaw: 'Tchaikovsky' })
+  })
+})
+
+describe('dash beats "by" when both are present', () => {
+  it('"Stand by Me - Ben E. King" keeps the by inside the title', () => {
+    // Real misparse: the by-split produced title "Stand", artist "Me - Ben E. King".
+    const traced = parseQuestionnaireTraced(['Prelude Requests', 'Stand by Me - Ben E. King'].join('\n'))
+    expect(traced.songs[0]).toMatchObject({ titleRaw: 'Stand By Me', artistRaw: 'Ben E. King' })
+  })
+
+  it('"Title by Artist" with no dash still splits on by', () => {
+    const traced = parseQuestionnaireTraced(['Prelude Requests', 'Clocks by Coldplay'].join('\n'))
+    expect(traced.songs[0]).toMatchObject({ titleRaw: 'Clocks', artistRaw: 'Coldplay' })
+  })
+})
+
+describe('non-answers are never songs', () => {
+  it('skips N/a, None, and TBD answers without warning', () => {
+    const text = ['Prelude Requests', 'N/a', 'Postlude Requests', 'None', 'Cocktail Hour', 'TBD'].join('\n')
+    const traced = parseQuestionnaireTraced(text)
+    assertEveryLineAccountedFor(text, traced)
+    expect(traced.songs).toHaveLength(0)
+    expect(traced.warnings).toHaveLength(0)
+    expect(traced.lineDispositions[1]).toBe('skip')
+    expect(traced.lineDispositions[3]).toBe('skip')
+    expect(traced.lineDispositions[5]).toBe('skip')
+  })
+
+  it('a real song after a non-answer still parses', () => {
+    const traced = parseQuestionnaireTraced(['Prelude Requests', 'n/a', 'Canon in D - Pachelbel'].join('\n'))
+    expect(traced.songs).toHaveLength(1)
+    expect(traced.songs[0].titleRaw).toBe('Canon In D')
+  })
+})

@@ -187,6 +187,7 @@ export async function PUT(
     recessionalCue?: unknown
     processionalOrder?: unknown
     songs?: unknown
+    allowUnresolved?: unknown
   }
   try {
     body = await request.json()
@@ -244,15 +245,19 @@ export async function PUT(
   }
 
   // The confirm gate lives HERE, not in the browser: a confirmed intake may only
-  // contain resolved songs (matched with a verified work, or explicitly manual).
-  if (wantsConfirm) {
+  // contain resolved songs (matched with a verified work, or explicitly manual) —
+  // UNLESS the caller explicitly overrides with allowUnresolved (the review UI
+  // sends it only after the admin has acknowledged an in-your-face warning).
+  // The override is a deliberate flag, never a default, so a plain confirm can
+  // still never slip unresolved songs through silently.
+  if (wantsConfirm && body.allowUnresolved !== true) {
     const unresolved = rows.filter(
       (r) =>
         !(r.match_status === 'manual' || (r.match_status === 'matched' && r.matched_repertoire_id))
     )
     if (unresolved.length > 0) {
       return apiError(
-        `Cannot confirm: ${unresolved.length} song(s) are not resolved (matched or manual). Resolve them and try again.`,
+        `Cannot confirm: ${unresolved.length} song(s) are not resolved (matched or manual). Resolve them, or confirm with the unresolved-songs warning.`,
         400
       )
     }

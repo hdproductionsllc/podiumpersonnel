@@ -206,7 +206,10 @@ function artistsAgree(a: string, b: string): boolean {
 }
 
 function keywordsOf(nt: string): string[] {
-  return nt.split(' ').filter((w) => w && !STOPWORDS.has(w))
+  // Single-character tokens are junk keys: "N/a" folds to "n a", and the stray
+  // "n" matched any title containing an "n" token ("Guns n Roses"). Dropping
+  // them only loosens the subset test — a real word still has to hit.
+  return nt.split(' ').filter((w) => w.length > 1 && !STOPWORDS.has(w))
 }
 
 /** Sørensen–Dice coefficient over the two titles' token sets (0..1). Pure,
