@@ -283,6 +283,20 @@ function stripSongPrefix(line: string): string {
   return m ? line.slice(m[0].length).trim() : line
 }
 
+/**
+ * Split a run-together numbered list ("1. Officiant2. Family (2 pairs)3. Groom")
+ * into its items. Splits only where a 1-2 digit number + "."/")" + space + letter
+ * begins (lookbehind stops mid-number splits like the "0." inside "20."); returns
+ * the input untouched when it isn't a multi-item run.
+ */
+function splitNumberedRun(text: string): string[] {
+  const pieces = text
+    .split(/(?<!\d)(?=\d{1,2}[.)]\s+[A-Za-z])/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  return pieces.length >= 2 ? pieces : [text]
+}
+
 // Numbered-list prefix on a song line ("4. Stand by Me", "20. September").
 // Requires the trailing space so numeric TITLES ("1812 Overture") are safe.
 // Real misparse: "20. September" searched the library for "20 september".
@@ -417,7 +431,13 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
 
     // --- processional walking order ---
     if (lower.includes('processional walking order')) {
-      const hasExample = lower.includes('example')
+      const exampleIdx = lower.indexOf('example')
+      // 17hats variant (real questionnaire, 2026-07): the example rides INLINE on
+      // the label line ("… - Example: 1. Officiant 2. Groom …"). The numbered
+      // lines that follow are then the client's REAL answer — they must be
+      // collected, not skipped as example items.
+      const inlineExample = exampleIdx >= 0 && /\d{1,2}\s*[.)]/.test(lower.slice(exampleIdx))
+      const hasExample = exampleIdx >= 0 && !inlineExample
       let j = i + 1
       const orderLines: string[] = []
 
@@ -452,8 +472,12 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
           const lowerC = candidate.toLowerCase()
           if (sectionMatches(lowerC)) break
           if (hasSkipMarker(lowerC)) break
-          const numbered = /^\d+\.\s*(.*)/.exec(candidate)
-          orderLines.push(numbered ? numbered[1].trim() : candidate)
+          // A line may carry several run-together items ("1. Officiant2. Family").
+          for (const piece of splitNumberedRun(candidate)) {
+            const numbered = /^\d+[.)]\s*(.*)/.exec(piece)
+            const item = (numbered ? numbered[1] : piece).trim()
+            if (item) orderLines.push(item)
+          }
           disp[j] = 'meta'; j += 1
         }
       }

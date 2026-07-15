@@ -413,3 +413,46 @@ describe('non-answers are never songs', () => {
     expect(traced.songs[0].titleRaw).toBe('Canon In D')
   })
 })
+
+describe('processional walking order — inline example variant', () => {
+  it("collects the client's numbered answer when the example rides ON the label line", () => {
+    // Exact lines from a real 2026-07 questionnaire: the old logic assumed
+    // "Example" meant the example items were on FOLLOWING lines and skipped the
+    // client's real 1.–6. answer as boilerplate → walking order came out empty.
+    const text = [
+      'Processional Walking Order - Example: 1. Officiant 2. Groom 3. Family (6) 4. Bridesmaids (3 pairs) 5. Bride',
+      '1. Officiant',
+      '2. Family (2 pairs)',
+      '3. Groom',
+      '4. Bridesmaids (5 pairs)',
+      '5. Flower Girl',
+      '6. Bride',
+      'Music Selections',
+    ].join('\n')
+    const traced = parseQuestionnaireTraced(text)
+    expect(traced.processionalOrder).toEqual([
+      'Officiant',
+      'Family (2 pairs)',
+      'Groom',
+      'Bridesmaids (5 pairs)',
+      'Flower Girl',
+      'Bride',
+    ])
+    expect(traced.warnings).toHaveLength(0)
+  })
+
+  it('splits a run-together numbered answer line into items', () => {
+    const text = [
+      'Processional Walking Order',
+      '1. Officiant2. Family (2 pairs)3. Groom4. Bride',
+    ].join('\n')
+    const traced = parseQuestionnaireTraced(text)
+    expect(traced.processionalOrder).toEqual(['Officiant', 'Family (2 pairs)', 'Groom', 'Bride'])
+  })
+
+  it('does not split two-digit numbering mid-number', () => {
+    const text = ['Processional Walking Order', '9. Grandparents10. Officiant11. Bride'].join('\n')
+    const traced = parseQuestionnaireTraced(text)
+    expect(traced.processionalOrder).toEqual(['Grandparents', 'Officiant', 'Bride'])
+  })
+})

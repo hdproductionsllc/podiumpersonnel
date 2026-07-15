@@ -492,7 +492,10 @@ export function IntakePanel({ projectId, ensembleType }: IntakePanelProps) {
   }
 
   const unresolvedCount = songs.filter((r) => !isResolved(r)).length
-  const matchedCount = songs.filter((r) => r.matchStatus === 'matched').length
+  // "Matched to the library" = LINKED to a real work, whether the matcher found
+  // it or the admin picked it by hand — the human pick counts just as much.
+  const linkedCount = songs.filter((r) => !!r.matchedRepertoireId).length
+  const asTypedCount = songs.filter((r) => isResolved(r) && !r.matchedRepertoireId && !r.specialRequest).length
   const specialCount = songs.filter((r) => r.specialRequest).length
   const readOnly = phase === 'confirmed'
 
@@ -793,7 +796,8 @@ export function IntakePanel({ projectId, ensembleType }: IntakePanelProps) {
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="success">Confirmed</Badge>
                 <span className="text-sm text-muted-foreground">
-                  {songs.length} song{songs.length === 1 ? '' : 's'} · {matchedCount} matched to the library
+                  {songs.length} song{songs.length === 1 ? '' : 's'} · {linkedCount} matched to the library
+                  {asTypedCount > 0 && <> · {asTypedCount} as typed</>}
                   {specialCount > 0 && <> · {specialCount} special request{specialCount === 1 ? '' : 's'}</>}
                 </span>
               </div>
