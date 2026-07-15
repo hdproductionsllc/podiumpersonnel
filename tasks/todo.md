@@ -359,7 +359,8 @@ upload, original filename preserved, PDFs NEVER renamed/rewritten. READ-ONLY sou
       - `title_aliases` (alias_norm → repertoire_id) manual remap dictionary, unique `(org, alias_norm)`
       - RLS: members SELECT via is_org_member, admins ALL via is_org_admin, service role bypasses (importer key)
       - No storage.buckets row — R2 is external, not Supabase Storage; -- verify queries at bottom
-- [ ] **David: backup, then run 068** (after review) → migration-first before any import code deploys
+- [x] **David: backup, then run 068** — applied (library fully imported in Phase A2; re-confirmed
+      live 2026-07-15 when the 069 verify probe inserted/deleted a repertoire row)
 
 ### Still ahead in Phase A
 - [ ] Filename parser: 2,754 canonical "Title - Artist - part.pdf" + 401 SCORE + 395 messy-detectable
@@ -392,14 +393,18 @@ same normalization as scripts/repertoire-index.js or alias/repertoire lookups mi
         (matches siblings 013/053/054), service role bypasses (parser/import key); -- verify block
 - [x] TS types `src/lib/intake/types.ts` — IntakeRecord/IntakeSong + Source/Status/Section/MatchStatus
       unions (manual types; database.ts is hand-maintained and doesn't carry the Book Builder tables)
-- [ ] **David: backup, then run 069** (after review) → migration-first before any intake code deploys
+- [x] **David: backup, then run 069** — applied 2026-07-15; verified live via 21/21 REST round-trip
+      probes (tables+columns, all CHECKs, both UNIQUEs, FK SET NULL, CASCADE, updated_at triggers,
+      defaults, JSONB round-trip). Self-cleaning — no probe rows left behind. 068 confirmed applied
+      too (repertoire table accepted the FK-test row).
 
-### Still ahead in Phase B
-- [ ] Port the proven parser logic from Music Compiler/web/parser.py (state machine, SECTION_PATTERNS,
-      SKIP_MARKERS, smart-quote handling, "role- song" ceremony lines, expect_single_song, title-case)
-- [ ] Extract normTitle from scripts/repertoire-index.js EXACTLY; match songs → repertoire + title_aliases
-- [ ] Paste + parse API (requireOrgAdmin, org derived from membership) → writes draft intake + songs
-- [ ] Review screen: sections/songs, per-song match state, easy confirm/fix, then status → 'confirmed'
+### Still ahead in Phase B — ✅ ALL SHIPPED (8e77af76 + cf57abb2 + wiring commit 2026-07-15)
+- [x] Parser ported from Music Compiler/web/parser.py → src/lib/intake/parser.ts (parity tested)
+- [x] normTitle extracted EXACTLY (normalize.ts + 468-line parity guard); matcher w/ alias +
+      loose-fold + similarity best-guess + ensemble tiebreak tiers (matcher.ts)
+- [x] Paste + parse API (/api/intake/parse, [projectId], alias, repertoire) — requireOrgAdmin
+- [x] Review screen (intake-panel + intake-song-row) wired into projects-client expanded row
+- [x] 069 applied + verified live (21/21 probes); 282/282 tests; tsc + build green; DEPLOYED
 
 ### Task 4 — Review UI (done 2026-07-15)
 - [x] 1. `GET /api/intake/repertoire?q=` — org-scoped repertoire search for the "Not in library" box.

@@ -20,6 +20,7 @@ import { SendGigDetailsDialog } from './send-gig-details-dialog'
 import { GroupTextDialog } from './group-text-dialog'
 import { ApproveReminderDialog } from './approve-reminder-dialog'
 import { ProjectFilesSection } from './project-files-section'
+import { IntakePanel } from '@/components/intake/intake-panel'
 import { detectConflicts } from './project-positions'
 import type { PositionJoined, BookForImport } from './project-positions'
 import type { MusicianForOffer } from './send-offer-dialog'
@@ -990,6 +991,10 @@ export function ProjectsClient({
                               timezone={timezone}
                               musicSends={(project as any).music_sends as any[] | undefined}
                             />
+                          )}
+                          {/* Client Selections (intake import + review) */}
+                          {canManage && (
+                            <IntakePanel projectId={project.id} ensembleType={project.ensemble_type} />
                           )}
                           {/* Send Gig Details + Group Text (gated behind all positions confirmed) */}
                           {canManage && project.project_positions.length > 0 && project.project_positions.every((p) => p.status === 'confirmed') && (
