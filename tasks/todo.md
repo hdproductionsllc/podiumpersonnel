@@ -45,8 +45,15 @@ Additive-only migrations; backup before each; David applies SQL before dependent
 - [x] Deleted dead `formatChairPosition`. Guarded by existing reference-equality
       + title-matrix tests. 184 green, build clean, pushed.
 
-## Phase 4 — String sweep: dashboard pages (~130)
-## Phase 5 — String sweep: components (hotspots, then long tail by folder)
+## Phase 4 — String sweep: dashboard pages  ✅ SHIPPED (c3282f96)
+- [x] getServerVertical() (React cache) for server components
+- [x] Dashboard home swept (person/work nouns; offers left universal). Other
+      dashboard pages had no user-facing nouns (render client components).
+
+## Phase 5 — String sweep: components (hotspots, then long tail by folder)  ← BIG
+   ~70 client component files. Pattern established: useTerms() + term().
+   Hotspots: musicians-client (315), project-positions (217), send-offer-dialog (151),
+   book-form-dialog (139). Candidate for a dedicated subagent grind, folder by folder.
 ## Phase 6 — String sweep: emails (EmailTerms, render-identity tests, self-send diff)
 
 ## Phase 7 — Go live for new signups
@@ -334,3 +341,31 @@ Full analysis: `tasks/ship-readiness-review.md`. Status: 🔴 RED — do not tes
 - [x] `rescinded`/`released` in OFFER_STATUS labels (Phase 2); Clear All now uses the app Dialog with a count
 - [x] Dashboard redirects to /onboarding instead of crashing on a null org
 - [x] 6 regression tests in `reliability.test.ts`; suite 128/128 green; `next build` clean
+
+## Book Builder Phase A — Repertoire import (started 2026-07-15)
+Import David's sheet-music library (3,637 PDFs, ~969MB) into Podium: file BYTES → Cloudflare R2
+(external, S3-compatible), METADATA → Postgres. Owner has been burned before — HARD fidelity rules:
+byte-identical uploads (stream raw bytes, no base64/re-encode), sha256 at index + re-verify after
+upload, original filename preserved, PDFs NEVER renamed/rewritten. READ-ONLY source library.
+
+### Schema (this task)
+- [x] `068_repertoire.sql` written — DO NOT APPLY YET. Three additive org-scoped tables:
+      - `repertoire` (title/artist/ensemble/norm_title/tags) — identity key
+        `(org, norm_title, coalesce(artist,''), ensemble)`; same title+artist in quartet AND trio = 2 rows
+      - `repertoire_parts` (part taxonomy vln1|vln2|vla|vc|bass|voice|organ|other|score, substitute,
+        played_on, storage_path, original_filename, bytes, sha256) — role key
+        `(repertoire_id, part, substitute, coalesce(played_on,''))` dedups the 64 cross-folder repeats;
+        storage_path/bytes/sha256 nullable so importer can index metadata BEFORE R2 creds arrive
+      - `title_aliases` (alias_norm → repertoire_id) manual remap dictionary, unique `(org, alias_norm)`
+      - RLS: members SELECT via is_org_member, admins ALL via is_org_admin, service role bypasses (importer key)
+      - No storage.buckets row — R2 is external, not Supabase Storage; -- verify queries at bottom
+- [ ] **David: backup, then run 068** (after review) → migration-first before any import code deploys
+
+### Still ahead in Phase A
+- [ ] Filename parser: 2,754 canonical "Title - Artist - part.pdf" + 401 SCORE + 395 messy-detectable
+      (Naughtin suffixes, "(1)" dupes, "db"/Bass/Organ/Voice) + 81 no-part + 6 substitute ("vla for vc")
+- [ ] Normalization fn (unicode-fold curly quotes/U+F028 for MATCHING; PRESERVE original names as metadata)
+- [ ] Junk exclusion: `._*` AppleDouble, .DS_Store, *.zip, _report.txt
+- [ ] Indexer: walk library, compute sha256, write repertoire + parts rows (storage_path NULL)
+- [ ] **BLOCKED: R2 credentials not yet available** — uploader (stream bytes → R2, re-verify sha256, set storage_path)
+- [ ] Dry-run report: 36 quartet titles missing parts (e.g. Arioso missing vln1), collision/conflict list

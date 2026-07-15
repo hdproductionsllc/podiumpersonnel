@@ -61,6 +61,9 @@ bravura-master/
 # local database backups (large, contain PII)
 scripts/backups/
 
+# repertoire import indexer output (regenerated from the local music library)
+scripts/repertoire-out/
+
 # marketing site build artifacts (source IS tracked — Vercel builds from GitHub)
 podium-marketing/node_modules/
 podium-marketing/.next/
