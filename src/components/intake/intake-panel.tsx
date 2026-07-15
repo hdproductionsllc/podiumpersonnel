@@ -45,6 +45,7 @@ import {
   type RowMatchStatus,
 } from './intake-song-row'
 import { BookDownload } from './book-download'
+import { SpotifyPlaylistBuilder } from './spotify-playlist-builder'
 import type { ProposedSong } from '@/app/api/intake/parse/route'
 import type { IntakeRecord, IntakeSong } from '@/lib/intake/types'
 import { canonicalEnsemble, type MatchCandidate } from '@/lib/intake/matcher'
@@ -863,6 +864,13 @@ export function IntakePanel({ projectId, ensembleType, instruments }: IntakePane
                   <p className="text-sm italic text-muted-foreground">“{header.recessionalCue}”</p>
                 </div>
               )}
+
+              {/* Spotify: build the listening playlist from the confirmed list. */}
+              <SpotifyPlaylistBuilder
+                projectId={projectId}
+                currentUrl={header.spotifyUrl || null}
+                onCreated={(url) => setHeader((h) => ({ ...h, spotifyUrl: url }))}
+              />
 
               {/* Phase C: assemble + download the per-musician books. */}
               <BookDownload
