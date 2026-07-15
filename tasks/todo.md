@@ -369,3 +369,44 @@ upload, original filename preserved, PDFs NEVER renamed/rewritten. READ-ONLY sou
 - [ ] Indexer: walk library, compute sha256, write repertoire + parts rows (storage_path NULL)
 - [ ] **BLOCKED: R2 credentials not yet available** — uploader (stream bytes → R2, re-verify sha256, set storage_path)
 - [ ] Dry-run report: 36 quartet titles missing parts (e.g. Arioso missing vln1), collision/conflict list
+
+## Book Builder Phase B — Intake import (started 2026-07-15)
+Admin pastes a client's 17hats wedding questionnaire (free text) onto a project. Podium PARSES it
+into sections/songs, MATCHES each song against the org's repertoire library (Phase A / 068), and
+shows a REVIEW screen where the admin confirms/fixes everything before it's saved. FOOLPROOF = the
+human-confirm gate: the parser only PROPOSES (status stays 'draft'); nothing is trusted until an
+admin confirms. Misparses must be easy to see and fix, never silent. Matching MUST reuse the exact
+same normalization as scripts/repertoire-index.js or alias/repertoire lookups miss.
+
+### Schema (this task)
+- [x] `069_intakes.sql` written — DO NOT APPLY YET. Two additive org-scoped tables, depends on 068:
+      - `intakes` — one per project (`project_id` UNIQUE). source (17hats|manual|client-form),
+        status (draft|confirmed) + confirmed_at, `raw_text` kept VERBATIM (re-parse/audit),
+        contact_name/phone, venue_note, spotify_url, `processional_order` JSONB string[],
+        `recessional_cue` stored word-for-word (never reworded), notes
+      - `intake_songs` — one proposed song per row. section (prelude|ceremony|recessional|postlude|
+        cocktail_hour|reception|other), position, title_raw/artist_raw, role, `matched_repertoire_id`
+        → repertoire(id) ON DELETE SET NULL, `match_status` (matched|ambiguous|missing|manual,
+        default missing); unique `(intake_id, section, position)`; org_id denormalized for RLS
+      - RLS: members SELECT via is_org_member, admins ALL via is_org_admin **with explicit WITH CHECK**
+        (matches siblings 013/053/054), service role bypasses (parser/import key); -- verify block
+- [x] TS types `src/lib/intake/types.ts` — IntakeRecord/IntakeSong + Source/Status/Section/MatchStatus
+      unions (manual types; database.ts is hand-maintained and doesn't carry the Book Builder tables)
+- [ ] **David: backup, then run 069** (after review) → migration-first before any intake code deploys
+
+### Still ahead in Phase B
+- [ ] Port the proven parser logic from Music Compiler/web/parser.py (state machine, SECTION_PATTERNS,
+      SKIP_MARKERS, smart-quote handling, "role- song" ceremony lines, expect_single_song, title-case)
+- [ ] Extract normTitle from scripts/repertoire-index.js EXACTLY; match songs → repertoire + title_aliases
+- [ ] Paste + parse API (requireOrgAdmin, org derived from membership) → writes draft intake + songs
+- [ ] Review screen: sections/songs, per-song match state, easy confirm/fix, then status → 'confirmed'
+
+### Task 4 — Review UI (done 2026-07-15)
+- [x] 1. `GET /api/intake/repertoire?q=` — org-scoped repertoire search for the "Not in library" box.
+- [x] 2. Enhance `GET /api/intake/[projectId]` to attach matched repertoire (title/artist/ensemble) per saved song.
+- [x] 3. `src/components/intake/intake-panel.tsx` (+ `intake-song-row.tsx`) — EMPTY / REVIEW / CONFIRMED states.
+- [x] 4. Wire "Client Selections" collapsible section into projects-client expanded row (canManage only).
+- [x] 5. tsc clean + 250/250 tests + production build green.
+  Decisions: fold parser sections → IntakeSection enum at parse (see == save == reload); resolved =
+  matchStatus in (matched|manual); human pick → 'manual', auto hit → 'matched'; lazy fetch on first open;
+  503 (069 unapplied) degrades to a muted note; skip project-card chip (invasive server join).
