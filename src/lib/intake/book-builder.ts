@@ -261,6 +261,42 @@ function truncate(text: string, font: PDFFont, size: number, maxWidth: number): 
   return t.trimEnd() + '...'
 }
 
+// --- combined-book merge --------------------------------------------------------
+
+export interface MergeSource {
+  /** Human name for error messages ("03 - My Girl - vln1.pdf"). */
+  name: string
+  bytes: Uint8Array
+}
+
+/**
+ * Merge PDFs into one document, in order — the Acrobat "combine by number"
+ * step, automated. STRUCTURAL merge only: pages are copied as objects with
+ * their fonts, vector content, and image streams verbatim; nothing is
+ * re-rendered, rasterized, or recompressed, so the music renders identically
+ * to the source files (the artifacting the owner hit before came from tools
+ * that re-render pages — this never decodes them).
+ *
+ * Throws with the offending file's name if a source can't be parsed, so a
+ * musician can never silently receive a book with a missing song.
+ */
+export async function mergePdfs(sources: MergeSource[]): Promise<Uint8Array> {
+  const out = await PDFDocument.create()
+  for (const src of sources) {
+    try {
+      const doc = await PDFDocument.load(src.bytes, { ignoreEncryption: true })
+      const pages = await out.copyPages(doc, doc.getPageIndices())
+      for (const p of pages) out.addPage(p)
+    } catch (e) {
+      throw new Error(
+        `Could not merge "${src.name}" — the file may be damaged. ` +
+          `Download the zip instead, or replace this PDF in the library. (${e instanceof Error ? e.message : e})`
+      )
+    }
+  }
+  return out.save()
+}
+
 /**
  * Build the one-page playlist PDF. `partLabel` prints in green under the
  * header for a musician's book; null for the instrument-agnostic printable.

@@ -3,16 +3,18 @@
 /**
  * Book downloads (Book Builder Phase C) — shown on a CONFIRMED intake.
  *
- * Per musician: one zip with "00 - Playlist.pdf" + every song's part PDF named
- * "NN - Title - Artist - part.pdf", so sorting by filename IS the performance
- * order (the owner combines them in Acrobat by number). "All books" bundles a
- * folder per instrument plus the instrument-agnostic printable playlist —
- * the exact layout the Mac gig_compiler produced.
+ * Two modes, per musician:
+ *   COMBINED (default) — one merged PDF per book: playlist page first, then
+ *     every song's part in performance order. A STRUCTURAL merge (pdf-lib
+ *     copyPages): pages, fonts, vectors and image streams are copied verbatim,
+ *     never re-rendered or recompressed — no artifacting. The Acrobat
+ *     combine-by-number step, automated.
+ *   ZIP — "00 - Playlist.pdf" + every song as "NN - Title - Artist - part.pdf"
+ *     (byte-identical originals, STORE), for combining by hand.
  *
  * Assembly happens entirely in the browser: the manifest API returns presigned
- * R2 URLs; bytes are fetched straight from R2 (byte-identical — the fidelity
- * rule), the playlist PDF is generated locally, and fflate zips it all up
- * (STORE, no recompression). No file bytes ever pass through a serverless route.
+ * R2 URLs; bytes are fetched straight from R2; nothing passes through a
+ * serverless route.
  */
 
 import { useState } from 'react'
@@ -21,8 +23,10 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import {
   buildPlaylistPdf,
+  mergePdfs,
   normalizeForFilename,
   type BookPart,
+  type MergeSource,
   type PlaylistHeader,
 } from '@/lib/intake/book-builder'
 
@@ -45,8 +49,8 @@ interface Manifest {
   warnings: string[]
 }
 
-function saveBlob(bytes: Uint8Array, filename: string) {
-  const blob = new Blob([bytes as BlobPart], { type: 'application/zip' })
+function saveBlob(bytes: Uint8Array, filename: string, type: string) {
+  const blob = new Blob([bytes as BlobPart], { type })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -60,6 +64,7 @@ export function BookDownload({ projectId }: { projectId: string }) {
   const [loading, setLoading] = useState(false)
   const [building, setBuilding] = useState<string | null>(null) // part or 'all'
   const [progress, setProgress] = useState('')
+  const [combined, setCombined] = useState(true)
 
   async function loadManifest(): Promise<Manifest | null> {
     if (manifest) return manifest
@@ -109,6 +114,24 @@ export function BookDownload({ projectId }: { projectId: string }) {
     return bytesByUrl
   }
 
+  /** The merge inputs for one instrument's book: playlist first, then songs in order. */
+  async function bookSources(
+    m: Manifest,
+    bp: BookPart,
+    bytesByUrl: Map<string, Uint8Array>
+  ): Promise<MergeSource[]> {
+    const sources: MergeSource[] = [
+      { name: '00 - Playlist.pdf', bytes: await buildPlaylistPdf(m.header, m.songs, bp.label) },
+    ]
+    for (const song of m.songs) {
+      const f = song.files[bp.part]
+      if (!f) continue
+      const bytes = bytesByUrl.get(f.url)
+      if (bytes) sources.push({ name: f.zipName, bytes })
+    }
+    return sources
+  }
+
   /** Zip entries for one instrument's book (flat: 00 playlist + numbered parts). */
   async function bookEntries(
     m: Manifest,
@@ -116,13 +139,8 @@ export function BookDownload({ projectId }: { projectId: string }) {
     bytesByUrl: Map<string, Uint8Array>
   ): Promise<Zippable> {
     const entries: Zippable = {}
-    const playlist = await buildPlaylistPdf(m.header, m.songs, bp.label)
-    entries['00 - Playlist.pdf'] = [playlist, { level: 0 }]
-    for (const song of m.songs) {
-      const f = song.files[bp.part]
-      if (!f) continue
-      const bytes = bytesByUrl.get(f.url)
-      if (bytes) entries[f.zipName] = [bytes, { level: 0 }] // byte-identical, STORE
+    for (const src of await bookSources(m, bp, bytesByUrl)) {
+      entries[src.name] = [src.bytes, { level: 0 }] // byte-identical, STORE
     }
     return entries
   }
@@ -133,9 +151,16 @@ export function BookDownload({ projectId }: { projectId: string }) {
     setBuilding(bp.part)
     try {
       const bytesByUrl = await fetchFiles(m, [bp])
-      setProgress('Building the book…')
-      const zip = zipSync(await bookEntries(m, bp, bytesByUrl) as Parameters<typeof zipSync>[0])
-      saveBlob(zip, `${normalizeForFilename(m.header.client)} - ${bp.label}.zip`)
+      const client = normalizeForFilename(m.header.client)
+      if (combined) {
+        setProgress('Combining the book…')
+        const pdf = await mergePdfs(await bookSources(m, bp, bytesByUrl))
+        saveBlob(pdf, `${client} - ${bp.label}.pdf`, 'application/pdf')
+      } else {
+        setProgress('Building the zip…')
+        const zip = zipSync((await bookEntries(m, bp, bytesByUrl)) as Parameters<typeof zipSync>[0])
+        saveBlob(zip, `${client} - ${bp.label}.zip`, 'application/zip')
+      }
       toast.success(`${bp.label} book downloaded.`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Book build failed.')
@@ -151,18 +176,24 @@ export function BookDownload({ projectId }: { projectId: string }) {
     setBuilding('all')
     try {
       const bytesByUrl = await fetchFiles(m, m.parts)
-      setProgress('Building the books…')
+      const client = normalizeForFilename(m.header.client)
       const root: Zippable = {}
-      for (const bp of m.parts) {
-        root[bp.folder] = await bookEntries(m, bp, bytesByUrl)
+      if (combined) {
+        for (const bp of m.parts) {
+          setProgress(`Combining ${bp.label}…`)
+          const pdf = await mergePdfs(await bookSources(m, bp, bytesByUrl))
+          root[`${client} - ${bp.label}.pdf`] = [pdf, { level: 0 }]
+        }
+      } else {
+        setProgress('Building the zip…')
+        for (const bp of m.parts) {
+          root[bp.folder] = await bookEntries(m, bp, bytesByUrl)
+        }
       }
       // Instrument-agnostic printable playlist at the top level (Mac layout).
-      root[`00 - ${normalizeForFilename(m.header.client)} Playlist.pdf`] = [
-        await buildPlaylistPdf(m.header, m.songs, null),
-        { level: 0 },
-      ]
+      root[`00 - ${client} Playlist.pdf`] = [await buildPlaylistPdf(m.header, m.songs, null), { level: 0 }]
       const zip = zipSync(root as Parameters<typeof zipSync>[0])
-      saveBlob(zip, `${normalizeForFilename(m.header.client)} - Books.zip`)
+      saveBlob(zip, `${client} - Books.zip`, 'application/zip')
       toast.success('All books downloaded.')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Book build failed.')
@@ -178,10 +209,20 @@ export function BookDownload({ projectId }: { projectId: string }) {
         <h5 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Books</h5>
         {progress && <span className="text-xs text-muted-foreground">{progress}</span>}
       </div>
+      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+        <input
+          type="checkbox"
+          checked={combined}
+          onChange={(e) => setCombined(e.target.checked)}
+          className="h-3.5 w-3.5"
+          disabled={building !== null}
+        />
+        Combine each book into one PDF (playlist first, songs in order — no re-rendering, pages copied exactly)
+      </label>
       <p className="text-xs text-muted-foreground">
-        Each book is a zip: <span className="font-mono">00 - Playlist.pdf</span> plus every song as{' '}
-        <span className="font-mono">NN - Title - Artist - part.pdf</span> — sort by filename and the
-        performance order is the combine order.
+        {combined
+          ? 'Each musician gets a single ready-to-play PDF.'
+          : 'Each book is a zip: 00 - Playlist.pdf plus every song as "NN - Title - Artist - part.pdf" — sort by filename to combine by number.'}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={downloadAll} disabled={building !== null || loading}>

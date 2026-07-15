@@ -14,6 +14,7 @@ import {
   pickFileForPart,
   sanitizePdfText,
   buildPlaylistPdf,
+  mergePdfs,
   type PartFileRow,
   type PlaylistHeader,
 } from '../book-builder'
@@ -121,6 +122,40 @@ describe('sanitizePdfText', () => {
     expect(sanitizePdfText('“Schön” – Isn’t…')).toBe('"Schön" - Isn\'t...')
     // NFD "Scho" + combining diaeresis + "n" (Mac filenames) — mark dropped, no crash.
     expect(sanitizePdfText('Schön Rosmarin')).toBe('Schön Rosmarin')
+  })
+})
+
+describe('mergePdfs', () => {
+  async function tinyPdf(text: string): Promise<Uint8Array> {
+    const { PDFDocument, StandardFonts } = await import('pdf-lib')
+    const doc = await PDFDocument.create()
+    const page = doc.addPage([612, 792])
+    page.drawText(text, { x: 50, y: 700, size: 12, font: await doc.embedFont(StandardFonts.Helvetica) })
+    return doc.save()
+  }
+
+  it('concatenates pages in order without re-rendering', async () => {
+    const { PDFDocument } = await import('pdf-lib')
+    const a = await tinyPdf('first')
+    const b = await tinyPdf('second')
+    const merged = await mergePdfs([
+      { name: 'a.pdf', bytes: a },
+      { name: 'b.pdf', bytes: b },
+    ])
+    expect(String.fromCharCode(...merged.slice(0, 5))).toBe('%PDF-')
+    const doc = await PDFDocument.load(merged)
+    expect(doc.getPageCount()).toBe(2)
+  })
+
+  it('names the offending file when a source is damaged — never a silent gap', async () => {
+    const good = await tinyPdf('ok')
+    const garbage = new Uint8Array([1, 2, 3, 4, 5])
+    await expect(
+      mergePdfs([
+        { name: 'good.pdf', bytes: good },
+        { name: '07 - My Girl - vln1.pdf', bytes: garbage },
+      ])
+    ).rejects.toThrow(/07 - My Girl - vln1\.pdf/)
   })
 })
 
