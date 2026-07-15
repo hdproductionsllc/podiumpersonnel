@@ -172,6 +172,22 @@ describe('mergePdfs', () => {
     expect(doc.getPageCount()).toBe(2)
   })
 
+  it('adds a bookmark per source so musicians can jump to any song', async () => {
+    const { PDFDocument, PDFName } = await import('pdf-lib')
+    const merged = await mergePdfs([
+      { name: '00 - Playlist.pdf', bytes: await tinyPdf('playlist') },
+      { name: '01 - September - Earth, Wind & Fire - vln1.pdf', bytes: await tinyPdf('sept') },
+      { name: '02 - My Girl - The Temptations - vln1.pdf', bytes: await tinyPdf('mygirl') },
+    ])
+    const doc = await PDFDocument.load(merged)
+    const outlinesRef = doc.catalog.get(PDFName.of('Outlines'))
+    expect(outlinesRef).toBeDefined()
+    const outlines = doc.context.lookup(outlinesRef) as import('pdf-lib').PDFDict
+    expect(outlines.get(PDFName.of('Count'))?.toString()).toBe('3')
+    const first = doc.context.lookup(outlines.get(PDFName.of('First'))!) as import('pdf-lib').PDFDict
+    expect(first.get(PDFName.of('Title'))?.toString()).toContain('00 - Playlist')
+  })
+
   it('names the offending file when a source is damaged — never a silent gap', async () => {
     const good = await tinyPdf('ok')
     const garbage = new Uint8Array([1, 2, 3, 4, 5])
@@ -211,6 +227,30 @@ describe('buildPlaylistPdf', () => {
       // %PDF magic
       expect(String.fromCharCode(...bytes.slice(0, 5))).toBe('%PDF-')
     }
+  })
+
+  it('the Spotify text is a real clickable link (URI annotation), like the Mac playlist', async () => {
+    const { PDFDocument, PDFName } = await import('pdf-lib')
+    const bytes = await buildPlaylistPdf(header, songs, 'VIOLIN 1')
+    const doc = await PDFDocument.load(bytes)
+    const annots = doc.getPage(0).node.Annots()
+    expect(annots).toBeDefined()
+    expect(annots!.size()).toBe(1)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const annot: any = doc.context.lookup(annots!.get(0))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const action: any = annot.get(PDFName.of('A'))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const uri: any = action.get(PDFName.of('URI'))
+    expect(uri.decodeText()).toBe('https://open.spotify.com/playlist/x')
+  })
+
+  it('no Spotify url → no link annotation, contact line still drawn', async () => {
+    const { PDFDocument } = await import('pdf-lib')
+    const bytes = await buildPlaylistPdf({ ...header, spotifyUrl: null }, songs, 'VIOLIN 1')
+    const doc = await PDFDocument.load(bytes)
+    const annots = doc.getPage(0).node.Annots()
+    expect(!annots || annots.size() === 0).toBe(true)
   })
 
   it('handles curly quotes and a big song list without throwing', async () => {

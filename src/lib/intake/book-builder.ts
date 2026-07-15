@@ -22,7 +22,7 @@
  * and tests. The zip assembly and downloads live in the component.
  */
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
+import { PDFDocument, PDFName, PDFString, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
 import type { EnsembleCanon } from './matcher'
 
 // --- ordering -----------------------------------------------------------------
@@ -318,16 +318,25 @@ export interface MergeSource {
  * to the source files (the artifacting the owner hit before came from tools
  * that re-render pages — this never decodes them).
  *
+ * Each source also becomes a BOOKMARK (PDF outline entry) at its first page —
+ * "01 - September - Earth, Wind & Fire" — so a musician can jump to any song
+ * on a tablet. Outlines are pure document METADATA: they sit beside the pages
+ * and never touch page content, so fidelity is unaffected.
+ *
  * Throws with the offending file's name if a source can't be parsed, so a
  * musician can never silently receive a book with a missing song.
  */
 export async function mergePdfs(sources: MergeSource[]): Promise<Uint8Array> {
   const out = await PDFDocument.create()
+  const marks: Array<{ title: string; pageIndex: number }> = []
+  let pageIndex = 0
   for (const src of sources) {
     try {
       const doc = await PDFDocument.load(src.bytes, { ignoreEncryption: true })
       const pages = await out.copyPages(doc, doc.getPageIndices())
       for (const p of pages) out.addPage(p)
+      marks.push({ title: src.name.replace(/\.pdf$/i, ''), pageIndex })
+      pageIndex += pages.length
     } catch (e) {
       throw new Error(
         `Could not merge "${src.name}" — the file may be damaged. ` +
@@ -335,6 +344,36 @@ export async function mergePdfs(sources: MergeSource[]): Promise<Uint8Array> {
       )
     }
   }
+
+  // --- bookmarks (outline tree): one flat entry per source, first page. ---
+  if (marks.length > 0) {
+    const ctx = out.context
+    const outlinesRef = ctx.nextRef()
+    const itemRefs = marks.map(() => ctx.nextRef())
+    marks.forEach((mark, i) => {
+      ctx.assign(
+        itemRefs[i],
+        ctx.obj({
+          Title: PDFString.of(sanitizePdfText(mark.title)),
+          Parent: outlinesRef,
+          Dest: [out.getPage(mark.pageIndex).ref, PDFName.of('Fit')],
+          ...(i > 0 ? { Prev: itemRefs[i - 1] } : {}),
+          ...(i < marks.length - 1 ? { Next: itemRefs[i + 1] } : {}),
+        })
+      )
+    })
+    ctx.assign(
+      outlinesRef,
+      ctx.obj({
+        Type: 'Outlines',
+        First: itemRefs[0],
+        Last: itemRefs[itemRefs.length - 1],
+        Count: marks.length,
+      })
+    )
+    out.catalog.set(PDFName.of('Outlines'), outlinesRef)
+  }
+
   return out.save()
 }
 
@@ -383,11 +422,32 @@ export async function buildPlaylistPdf(
     drawCentered(s(partLabel), bold, 12, GREEN)
     y -= 13
   }
-  const infoBits: string[] = []
-  if (header.contact) infoBits.push(`Contact: ${header.contact}`)
-  if (header.spotifyUrl) infoBits.push('Spotify playlist on the gig page')
-  if (infoBits.length > 0) {
-    drawCentered(s(infoBits.join('  |  ')), helv, 8.5, GRAY)
+  // Spotify link + contact — "Spotify Playlist" is green AND clickable (a URI
+  // link annotation over the text), exactly like the Mac playlist. The
+  // annotation is metadata layered on this generated page; it never touches
+  // any music page.
+  const contactText = header.contact ? `Contact: ${s(header.contact)}` : ''
+  if (header.spotifyUrl) {
+    const size = 8.5
+    const linkText = 'Spotify Playlist'
+    const extra = contactText ? `  |  ${contactText}` : ''
+    const linkW = helv.widthOfTextAtSize(linkText, size)
+    const startX = (612 - (linkW + helv.widthOfTextAtSize(extra, size))) / 2
+    page.drawText(linkText, { x: startX, y, size, font: helv, color: GREEN })
+    if (extra) page.drawText(extra, { x: startX + linkW, y, size, font: helv, color: GRAY })
+    const link = doc.context.register(
+      doc.context.obj({
+        Type: 'Annot',
+        Subtype: 'Link',
+        Rect: [startX - 1, y - 2.5, startX + linkW + 1, y + 9.5],
+        Border: [0, 0, 0],
+        A: { Type: 'Action', S: 'URI', URI: PDFString.of(header.spotifyUrl) },
+      })
+    )
+    page.node.set(PDFName.of('Annots'), doc.context.obj([link]))
+    y -= 10
+  } else if (contactText) {
+    drawCentered(contactText, helv, 8.5, GRAY)
     y -= 10
   }
   page.drawLine({ start: { x: left, y }, end: { x: right, y }, thickness: 0.7, color: RULE })
