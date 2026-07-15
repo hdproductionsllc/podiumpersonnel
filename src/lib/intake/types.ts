@@ -44,6 +44,9 @@ export interface IntakeRecord {
   recessional_cue: string | null
   notes: string | null
   confirmed_at: string | null
+  /** Owner signed off that the assembled books look good and may be sent
+   *  (071). Cleared by every save — approval covers one exact list. */
+  books_approved_at: string | null
   created_at: string
   updated_at: string
 }

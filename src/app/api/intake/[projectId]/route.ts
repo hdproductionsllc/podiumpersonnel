@@ -39,7 +39,7 @@ function isMissingTableError(err: SupabaseError): boolean {
   )
 }
 
-const TABLES_NOT_READY = 'Intake tables not ready — run migrations 069 + 070'
+const TABLES_NOT_READY = 'Intake tables not ready — run migrations 069–071'
 
 // 069 CHECK constraints — fold any client value into the allowed set so a write
 // can never bounce off a constraint (the review screen is the human gate, but
@@ -280,6 +280,9 @@ export async function PUT(
     recessional_cue: typeof body.recessionalCue === 'string' ? body.recessionalCue : null,
     processional_order: Array.isArray(body.processionalOrder) ? body.processionalOrder : [],
     confirmed_at: null,
+    // Books approval blesses ONE exact list — any save invalidates it and the
+    // assembled books must be reviewed and approved again (071).
+    books_approved_at: null,
   }
 
   const { data: intake, error: upsertErr } = await service

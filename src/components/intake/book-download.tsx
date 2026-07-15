@@ -20,6 +20,13 @@
 import { useState } from 'react'
 import { zipSync, type Zippable } from 'fflate'
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -67,14 +74,32 @@ interface BookDownloadProps {
   /** The project's position instruments, for routing each book to the right
    *  chair when publishing to Music / Parts. */
   instruments?: InstrumentRef[]
+  /** Owner's sign-off timestamp that the books are ready to send (071);
+   *  null = not approved. Gates the publish step. */
+  booksApprovedAt: string | null
+  onApprovalChange: (ts: string | null) => void
 }
 
-export function BookDownload({ projectId, instruments = [] }: BookDownloadProps) {
+interface PublishRow {
+  part: string
+  label: string
+  /** Target instrument id, or 'skip' for "Don't send". */
+  instrumentId: string
+}
+
+export function BookDownload({
+  projectId,
+  instruments = [],
+  booksApprovedAt,
+  onApprovalChange,
+}: BookDownloadProps) {
   const [manifest, setManifest] = useState<Manifest | null>(null)
   const [loading, setLoading] = useState(false)
   const [building, setBuilding] = useState<string | null>(null) // part or 'all'
   const [progress, setProgress] = useState('')
   const [combined, setCombined] = useState(true)
+  // The publish confirmation step: book → instrument routing awaiting approval.
+  const [publishPlan, setPublishPlan] = useState<PublishRow[] | null>(null)
 
   async function loadManifest(): Promise<Manifest | null> {
     if (manifest) return manifest
@@ -213,29 +238,82 @@ export function BookDownload({ projectId, instruments = [] }: BookDownloadProps)
     }
   }
 
+  /** Record (or revoke) the owner's sign-off that the books are ready to send. */
+  async function approveBooks(approved: boolean) {
+    setBuilding('approve')
+    try {
+      const res = await fetch(`/api/intake/${projectId}/approve-books`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Could not update the approval.')
+        return
+      }
+      onApprovalChange(data.booksApprovedAt ?? null)
+      toast.success(approved ? 'Books approved — ready to send.' : 'Approval revoked.')
+    } catch {
+      toast.error('Could not update the approval.')
+    } finally {
+      setBuilding(null)
+    }
+  }
+
   /**
-   * Publish the combined books into the project's Music / Parts section, one
-   * file per instrument, assigned to the matching chair — the existing Send
-   * Music flow handles delivery to musicians from there. Rides the exact rails
-   * of a manual upload: signed upload to Supabase Storage, then the metadata
-   * call with scope 'assigned'.
+   * NOTHING publishes without the admin confirming the routing: clicking
+   * "Send to Music / Parts" builds a PLAN (book → instrument, pre-filled by
+   * exact-name matching), the admin reviews/fixes each dropdown, and only
+   * "Publish" executes it. An unmatched book defaults to "Don't send".
    */
-  async function publishToMusicParts() {
+  function openPublishPlan() {
+    void (async () => {
+      const m = await loadManifest()
+      if (!m) return
+      if (instruments.length === 0) {
+        toast.error('This project has no positions yet — add positions before sending books.')
+        return
+      }
+      setPublishPlan(
+        m.parts.map((bp) => ({
+          part: bp.part,
+          label: bp.label,
+          instrumentId: matchInstrumentForPart(bp.part, instruments)?.id ?? 'skip',
+        }))
+      )
+    })()
+  }
+
+  /**
+   * Publish the combined books into the project's Music / Parts section per
+   * the confirmed plan — the existing Send Music flow handles delivery to
+   * musicians from there. Rides the exact rails of a manual upload: signed
+   * upload to Supabase Storage, then the metadata call with scope 'assigned'.
+   */
+  async function publishToMusicParts(plan: PublishRow[]) {
     const m = await loadManifest()
     if (!m) return
+    const active = plan.filter((r) => r.instrumentId !== 'skip')
+    if (active.length === 0) {
+      toast.error('Every book is set to "Don\'t send" — pick at least one instrument.')
+      return
+    }
+    const chosen = active.map((r) => r.instrumentId)
+    if (new Set(chosen).size !== chosen.length) {
+      toast.error('Two books are routed to the same instrument — fix the dropdowns.')
+      return
+    }
     setBuilding('publish')
     try {
-      const bytesByUrl = await fetchFiles(m, m.parts)
+      const activeParts = m.parts.filter((bp) => active.some((r) => r.part === bp.part))
+      const bytesByUrl = await fetchFiles(m, activeParts)
       const supabase = createClient()
       const client = normalizeForFilename(m.header.client)
-      const skipped: string[] = []
       let published = 0
-      for (const bp of m.parts) {
-        const inst = matchInstrumentForPart(bp.part, instruments)
-        if (!inst) {
-          skipped.push(bp.label)
-          continue
-        }
+      for (const bp of activeParts) {
+        const inst = instruments.find((i) => i.id === active.find((r) => r.part === bp.part)!.instrumentId)
+        if (!inst) continue
         setProgress(`Combining ${bp.label}…`)
         const pdf = await mergePdfs(await bookSources(m, bp, bytesByUrl))
         const fileName = `${client} - ${bp.label} Book.pdf`
@@ -271,17 +349,10 @@ export function BookDownload({ projectId, instruments = [] }: BookDownloadProps)
         }
         published += 1
       }
-      if (published > 0) {
-        toast.success(
-          `${published} book${published === 1 ? '' : 's'} added to Music / Parts` +
-            (skipped.length > 0 ? ` (no matching instrument on this project for ${skipped.join(', ')})` : '') +
-            ' — use Send Music there to email the musicians.'
-        )
-      } else {
-        toast.error(
-          `No books published — this project has no positions matching ${skipped.join(', ')}. Add the positions first.`
-        )
-      }
+      toast.success(
+        `${published} book${published === 1 ? '' : 's'} added to Music / Parts — use Send Music there to email the musicians.`
+      )
+      setPublishPlan(null)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Publishing failed.')
     } finally {
@@ -311,7 +382,9 @@ export function BookDownload({ projectId, instruments = [] }: BookDownloadProps)
           ? 'Each musician gets a single ready-to-play PDF.'
           : 'Each book is a zip: 00 - Playlist.pdf plus every song as "NN - Title - Artist - part.pdf" — sort by filename to combine by number.'}
       </p>
+      {/* Step 1 — assemble + download for review */}
       <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold text-muted-foreground w-4">1.</span>
         <Button size="sm" onClick={downloadAll} disabled={building !== null || loading}>
           {building === 'all' ? 'Building…' : 'Download all books'}
         </Button>
@@ -331,14 +404,90 @@ export function BookDownload({ projectId, instruments = [] }: BookDownloadProps)
             {loading ? 'Checking…' : 'Show per-musician downloads'}
           </Button>
         )}
-        <Button size="sm" variant="secondary" onClick={publishToMusicParts} disabled={building !== null || loading}>
-          {building === 'publish' ? 'Publishing…' : 'Send to Music / Parts'}
-        </Button>
       </div>
-      <p className="text-[11px] text-muted-foreground">
-        “Send to Music / Parts” adds each combined book to this project&apos;s files, assigned to its
-        instrument — then use <span className="font-medium">Send Music</span> there to email the musicians.
-      </p>
+
+      {/* Step 2 — the owner's sign-off gate */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold text-muted-foreground w-4">2.</span>
+        {booksApprovedAt ? (
+          <>
+            <span className="inline-flex items-center rounded-md border border-green-300 bg-green-50 dark:border-green-900/60 dark:bg-green-950/30 px-2 py-0.5 text-xs font-medium text-green-800 dark:text-green-300">
+              ✓ Books approved {new Date(booksApprovedAt).toLocaleString()}
+            </span>
+            <Button size="sm" variant="ghost" onClick={() => void approveBooks(false)} disabled={building !== null}>
+              Revoke
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button size="sm" variant="outline" onClick={() => void approveBooks(true)} disabled={building !== null}>
+              {building === 'approve' ? 'Saving…' : 'Approve books — they look good'}
+            </Button>
+            <span className="text-xs text-muted-foreground">Download and review them first.</span>
+          </>
+        )}
+      </div>
+
+      {/* Step 3 — route to musicians (gated on approval) */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold text-muted-foreground w-4">3.</span>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={openPublishPlan}
+          disabled={building !== null || loading || !booksApprovedAt || publishPlan !== null}
+          title={booksApprovedAt ? undefined : 'Approve the books first (step 2)'}
+        >
+          Send to Music / Parts
+        </Button>
+        <span className="text-[11px] text-muted-foreground">
+          Adds each book to this project&apos;s files, assigned to its instrument — then use{' '}
+          <span className="font-medium">Send Music</span> there to email the musicians.
+        </span>
+      </div>
+
+      {/* Routing confirmation — nothing publishes until this is approved */}
+      {publishPlan && (
+        <div className="rounded-md border border-dashed p-3 space-y-2">
+          <p className="text-xs font-semibold">Confirm where each book goes:</p>
+          <ul className="space-y-1.5">
+            {publishPlan.map((row) => (
+              <li key={row.part} className="flex items-center gap-2">
+                <span className="text-sm w-24 shrink-0">{row.label}</span>
+                <span className="text-xs text-muted-foreground">→</span>
+                <Select
+                  value={row.instrumentId}
+                  onValueChange={(v) =>
+                    setPublishPlan((prev) =>
+                      prev ? prev.map((r) => (r.part === row.part ? { ...r, instrumentId: v } : r)) : prev
+                    )
+                  }
+                  disabled={building !== null}
+                >
+                  <SelectTrigger className="h-8 w-52 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {instruments.map((i) => (
+                      <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>
+                    ))}
+                    <SelectItem value="skip">Don&apos;t send</SelectItem>
+                  </SelectContent>
+                </Select>
+                {row.instrumentId === 'skip' && (
+                  <span className="text-xs text-amber-700 dark:text-amber-400">no match — pick one or leave out</span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <div className="flex items-center gap-2 pt-1">
+            <Button size="sm" onClick={() => void publishToMusicParts(publishPlan)} disabled={building !== null}>
+              {building === 'publish' ? 'Publishing…' : 'Publish books'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setPublishPlan(null)} disabled={building !== null}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
       {manifest && manifest.warnings.length > 0 && (
         <div className="rounded-md border border-amber-300 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 p-2">
           <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-0.5">

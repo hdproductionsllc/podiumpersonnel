@@ -233,6 +233,9 @@ export function IntakePanel({ projectId, ensembleType, instruments }: IntakePane
   // The confirm-anyway warning step: first Confirm click with unresolved items
   // shows the warning; only the explicit "Confirm anyway" sends the override.
   const [confirmOverride, setConfirmOverride] = useState(false)
+  // Owner's sign-off that the assembled books are ready to send (071). Any
+  // save clears it server-side; mirrored here.
+  const [booksApprovedAt, setBooksApprovedAt] = useState<string | null>(null)
 
   async function handleOpen() {
     const next = !open
@@ -284,6 +287,7 @@ export function IntakePanel({ projectId, ensembleType, instruments }: IntakePane
       recessionalCue: intake.recessional_cue ?? '',
       processionalOrder: Array.isArray(intake.processional_order) ? intake.processional_order : [],
     })
+    setBooksApprovedAt(intake.books_approved_at ?? null)
     setSongs(groupedOrder(savedSongs.map(rowFromSaved)))
     // Warnings are DERIVED from the immutable raw_text (pure client-side parse),
     // so unplaced-line signals survive reloads instead of vanishing (review F5).
@@ -389,6 +393,8 @@ export function IntakePanel({ projectId, ensembleType, instruments }: IntakePane
         toast.error(data.error || 'Save failed.')
         return
       }
+      // Every save invalidates the books approval (the list may have changed).
+      setBooksApprovedAt(null)
       if (which === 'draft') toast.success('Draft saved.')
       else if (which === 'confirmed') { toast.success('Client selections confirmed.'); setPhase('confirmed'); setConfirmOverride(false) }
       else { toast.success('Reopened as draft.'); setPhase('review') }
@@ -859,7 +865,12 @@ export function IntakePanel({ projectId, ensembleType, instruments }: IntakePane
               )}
 
               {/* Phase C: assemble + download the per-musician books. */}
-              <BookDownload projectId={projectId} instruments={instruments} />
+              <BookDownload
+                projectId={projectId}
+                instruments={instruments}
+                booksApprovedAt={booksApprovedAt}
+                onApprovalChange={setBooksApprovedAt}
+              />
 
               <div className="border-t pt-4">
                 <Button variant="outline" onClick={() => save('draft', 'reopen')} disabled={saving !== null}>
