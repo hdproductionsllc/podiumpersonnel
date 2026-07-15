@@ -108,12 +108,19 @@ const SCORE = { exact: 100, alias: 85, loose: 80, keyword: 60, similarity: 0 } a
 const ARTIST_AGREE_BOOST = 15
 const MAX_KEYWORD_CANDIDATES = 10
 
-// Best-guess (similarity) tier: only ever populated when NO real tier hit, so a
-// 'missing' row still carries "did you mean…" candidates for the reviewer. Kept
+// Best-guess (similarity) tier: only ever populated when NO real tier hit. Kept
 // strictly below the keyword tier's score and gated by a floor so red rows get
-// plausible guesses, not noise.
+// plausible guesses, not noise. Three confidence bands (real-usage feedback:
+// "nearly all the not-in-library flags had the right work as top choice"):
+//   confident + clear lead → PROPOSED as matched (the human still reviews)
+//   suggestive             → 'ambiguous' (amber, one-click pick)
+//   below                  → 'missing' with "did you mean…" guesses
 const MAX_SIMILARITY_CANDIDATES = 5
 const SIMILARITY_FLOOR = 0.34
+const SIMILARITY_CONFIDENT = 0.8
+const SIMILARITY_CONFIDENT_WITH_ARTIST = 0.7 // an agreeing artist is extra evidence
+const SIMILARITY_SUGGEST = 0.5
+const SIMILARITY_LEAD = 0.12 // top guess must beat the best OTHER work by this much
 
 // Core part roles a gig ensemble needs, by repertoire ensemble canon. Solo/other
 // have no fixed requirement, so no gap is ever reported for them.
@@ -220,6 +227,20 @@ function ensembleRank(ensemble: string, gig: EnsembleCanon | undefined): number 
 }
 
 /**
+ * Are all of these candidates the SAME WORK — identical folded title AND
+ * identical normalized artist — differing only by arrangement (ensemble)?
+ * The title check matters for the keyword tier, where candidates can be
+ * different works ("Canon in D" vs "Canon in C") that share keywords.
+ */
+function sameWorkFamily(cands: MatchCandidate[]): boolean {
+  if (cands.length < 2) return false
+  const titles = new Set(cands.map((c) => normTitle(c.title)))
+  if (titles.size !== 1) return false
+  const artists = new Set(cands.map((c) => normArtist(c.artist)))
+  return artists.size === 1
+}
+
+/**
  * Deterministic ordering: score desc, then (gig ensemble first), then title asc,
  * then repertoireId asc. Ensemble is only ever a TIEBREAKER among equal-score
  * candidates — it never lets a weaker match outrank a stronger one (the owner's
@@ -314,12 +335,16 @@ export function matchSong(
 
   candidates = sortCandidates(candidates, gigEnsemble)
 
-  // --- Tier 5: similarity best-guesses (only when nothing else matched) ---
-  // A 'missing' row should never be a dead end: attach the top Dice-ranked works
-  // so the reviewer gets "did you mean…" instead of an empty search box. These
-  // are guesses, not matches — the row stays 'missing' and unresolved.
+  // --- Tier 5: similarity (only when nothing else matched) ---
+  // Never a dead end: attach the top Dice-ranked works. Confidence decides how
+  // far to take the top guess (real-usage: the top guess is nearly always the
+  // intended work, so don't make the human do the obvious):
+  //   confident + clear lead over every OTHER work → propose as matched
+  //   suggestive → 'ambiguous' (amber, one-click)
+  //   weak → 'missing' with "did you mean…" guesses
+  // A contradicted artist can never auto-match (owner's "never guess the artist").
   if (candidates.length === 0) {
-    const guesses = repertoire
+    const scored = repertoire
       .map((r) => ({ r, sim: tokenDice(nt, r.norm_title) }))
       .filter((x) => x.sim >= SIMILARITY_FLOOR)
       .sort(
@@ -329,12 +354,48 @@ export function matchSong(
           a.r.title.localeCompare(b.r.title) ||
           a.r.id.localeCompare(b.r.id)
       )
-      .slice(0, MAX_SIMILARITY_CANDIDATES)
-      .map((x) => {
-        const c = build(x.r, 'similarity')
-        c.score = Math.round(x.sim * 50) // strictly below the keyword tier
-        return c
-      })
+    const guesses = scored.slice(0, MAX_SIMILARITY_CANDIDATES).map((x) => {
+      const c = build(x.r, 'similarity')
+      c.score = Math.round(x.sim * 50) // strictly below the keyword tier
+      return c
+    })
+    if (guesses.length === 0) return { status: 'missing', candidates: [] }
+
+    const top = scored[0]
+    const topCand = guesses[0]
+    // The top guess's work-family: same folded title + artist, any arrangement.
+    const topTitleNorm = top.r.norm_title
+    const topArtistNorm = normArtist(top.r.artist)
+    const inFamily = (r: RepertoireRow) =>
+      r.norm_title === topTitleNorm && normArtist(r.artist) === topArtistNorm
+    const family = scored.filter((x) => inFamily(x.r))
+    const bestRival = scored.find((x) => !inFamily(x.r))
+
+    const artistAgrees = !!artistQ && !!topArtistNorm && artistsAgree(artistQ, topArtistNorm)
+    const threshold = artistAgrees ? SIMILARITY_CONFIDENT_WITH_ARTIST : SIMILARITY_CONFIDENT
+    const clearLead = !bestRival || top.sim - bestRival.sim >= SIMILARITY_LEAD
+
+    if (!topCand.artistMismatch && top.sim >= threshold && clearLead) {
+      const gigHits = family.filter((x) => x.r.ensemble === gigEnsemble)
+      if (family.length === 1 || (gigEnsemble && gigHits.length === 1)) {
+        return { status: 'matched', candidates: guesses }
+      }
+      // Right work, but several arrangements and no ensemble to decide — amber.
+      return {
+        status: 'ambiguous',
+        candidates: guesses,
+        warning: `Close match for "${song.titleRaw}" — pick the arrangement.`,
+      }
+    }
+
+    if (top.sim >= SIMILARITY_SUGGEST) {
+      return {
+        status: 'ambiguous',
+        candidates: guesses,
+        warning: `No exact title match for "${song.titleRaw}" — the closest library works are shown. Pick one, search, or keep as typed.`,
+      }
+    }
+
     return { status: 'missing', candidates: guesses }
   }
 
@@ -353,6 +414,18 @@ export function matchSong(
       status: 'ambiguous',
       candidates,
       warning: `Questionnaire artist "${song.artistRaw}" doesn't match the library artist "${top.artist ?? ''}" for "${top.title}". Confirm before using.`,
+    }
+  }
+
+  // Ensemble auto-resolve: when every plausible candidate is the SAME work and
+  // they differ only by arrangement, the gig's ensemble decides — a quartet gig
+  // auto-picks the quartet arrangement (owner's rule: the project context
+  // already answers this question; don't ask the human). The sort has already
+  // placed the gig-ensemble candidate first among its equal-score family.
+  if (gigEnsemble && sameWorkFamily(autoMatchable)) {
+    const gigHits = autoMatchable.filter((c) => c.ensemble === gigEnsemble)
+    if (gigHits.length === 1) {
+      return { status: 'matched', candidates }
     }
   }
 

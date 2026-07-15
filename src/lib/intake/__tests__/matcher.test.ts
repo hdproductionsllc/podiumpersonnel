@@ -221,3 +221,114 @@ describe('matchSong — artist disagreement is never auto-matched', () => {
     expect(res.candidates[0].score).toBe(115) // 100 exact + 15 artist agree
   })
 })
+
+// --- B3: ensemble auto-resolve (same work, several arrangements) -------------
+// Owner's rule from real usage: a quartet gig with quartet AND trio arrangements
+// of the same work should never ask — the project context answers the question.
+
+describe('matchSong — ensemble auto-resolve', () => {
+  const arrangements = () => [
+    work('Slipping Through My Fingers', 'ABBA', 'quartet'),
+    work('Slipping Through My Fingers', 'ABBA', 'trio'),
+  ]
+
+  it('the gig ensemble picks among arrangements of the same work', () => {
+    const res = matchSong(
+      { titleRaw: 'Slipping Through My Fingers', artistRaw: 'ABBA' },
+      index(arrangements()),
+      'quartet'
+    )
+    expect(res.status).toBe('matched')
+    // The auto-pick (first non-mismatch candidate) is the gig's arrangement.
+    expect(res.candidates.find((c) => !c.artistMismatch)?.ensemble).toBe('quartet')
+  })
+
+  it('works without a questionnaire artist too (family still unambiguous)', () => {
+    const res = matchSong({ titleRaw: 'Slipping Through My Fingers' }, index(arrangements()), 'trio')
+    expect(res.status).toBe('matched')
+    expect(res.candidates.find((c) => !c.artistMismatch)?.ensemble).toBe('trio')
+  })
+
+  it('stays ambiguous when no gig ensemble is known', () => {
+    expect(matchSong({ titleRaw: 'Slipping Through My Fingers' }, index(arrangements())).status).toBe('ambiguous')
+  })
+
+  it('never crosses works: same title by DIFFERENT artists stays ambiguous', () => {
+    const rows = [work('Hallelujah', 'Leonard Cohen', 'quartet'), work('Hallelujah', 'Handel', 'trio')]
+    expect(matchSong({ titleRaw: 'Hallelujah' }, index(rows), 'quartet').status).toBe('ambiguous')
+  })
+
+  it('stays ambiguous when the gig ensemble matches more than one row', () => {
+    const rows = [work('Canon in D', 'Pachelbel', 'quartet'), work('Canon in D', 'Pachelbel', 'quartet')]
+    expect(matchSong({ titleRaw: 'Canon in D' }, index(rows), 'quartet').status).toBe('ambiguous')
+  })
+
+  it('stays ambiguous when NO arrangement matches the gig ensemble', () => {
+    const rows = [work('Canon in D', 'Pachelbel', 'trio'), work('Canon in D', 'Pachelbel', 'duo')]
+    expect(matchSong({ titleRaw: 'Canon in D' }, index(rows), 'quartet').status).toBe('ambiguous')
+  })
+})
+
+// --- B3: similarity confidence bands ------------------------------------------
+// Real-usage feedback: "nearly all the not-in-library flags had the right work
+// as the top choice". Confident + clear-lead guesses are PROPOSED as matched
+// (the review gate still shows them); suggestive ones become amber one-clicks;
+// only weak resemblance stays red.
+
+describe('matchSong — similarity confidence bands', () => {
+  it('a confident unique best-guess is proposed as matched', () => {
+    // "canon in d major" vs "canon in d": Dice 2·3/(4+3) ≈ 0.857 ≥ 0.8, and the
+    // only rival shares no tokens — clear lead.
+    const rows = [work('Canon in D', 'Pachelbel'), work('Salut d’Amour', 'Elgar')]
+    const res = matchSong({ titleRaw: 'Canon in D Major' }, index(rows))
+    expect(res.status).toBe('matched')
+    expect(res.candidates[0].via).toBe('similarity')
+    expect(res.candidates[0].title).toBe('Canon in D')
+  })
+
+  it('an agreeing artist lowers the confidence bar', () => {
+    // "clair de lune debussy arrangement" vs "clair de lune": Dice 6/8 = 0.75 —
+    // below the 0.8 bar alone, above the 0.7 with-artist bar.
+    const rows = [work('Clair de Lune', 'Debussy')]
+    const withArtist = matchSong({ titleRaw: 'Clair de Lune Debussy Arrangement', artistRaw: 'Debussy' }, index(rows))
+    expect(withArtist.status).toBe('matched')
+    const withoutArtist = matchSong({ titleRaw: 'Clair de Lune Debussy Arrangement' }, index(rows))
+    expect(withoutArtist.status).toBe('ambiguous') // still one click, never silent
+  })
+
+  it('a contradicted artist never auto-matches, however similar', () => {
+    const rows = [work('Canon in D', 'Pachelbel')]
+    const res = matchSong({ titleRaw: 'Canon in D Major', artistRaw: 'Mozart' }, index(rows))
+    expect(res.status).not.toBe('matched')
+  })
+
+  it('equal resemblance to two different works stays a human choice', () => {
+    // "swan lake waltz" resembles both works equally (Dice 0.667 each) — no
+    // clear lead, so no auto-match; suggestive band → ambiguous one-click.
+    const rows = [work('The Swan Lake', 'Tchaikovsky'), work('Swan Lake Theme', 'Tchaikovsky')]
+    const res = matchSong({ titleRaw: 'Swan Lake Waltz' }, index(rows))
+    expect(res.status).toBe('ambiguous')
+    expect(res.candidates.every((c) => c.via === 'similarity')).toBe(true)
+  })
+
+  it('confident guesses resolve arrangement by gig ensemble like exact ones', () => {
+    const rows = [
+      work('Canon in D', 'Pachelbel', 'quartet'),
+      work('Canon in D', 'Pachelbel', 'trio'),
+    ]
+    const withGig = matchSong({ titleRaw: 'Canon in D Major' }, index(rows), 'trio')
+    expect(withGig.status).toBe('matched')
+    expect(withGig.candidates[0].ensemble).toBe('trio')
+    // Without a gig ensemble the arrangement question remains — amber, not silent.
+    expect(matchSong({ titleRaw: 'Canon in D Major' }, index(rows)).status).toBe('ambiguous')
+  })
+
+  it('weak resemblance stays missing, with did-you-mean guesses attached', () => {
+    // "blue moon" vs "moon river theme": Dice 2/5 = 0.4 — above the floor
+    // (guesses attach) but below the suggest band (row stays red).
+    const rows = [work('Moon River Theme', 'Mancini')]
+    const res = matchSong({ titleRaw: 'Blue Moon' }, index(rows))
+    expect(res.status).toBe('missing')
+    expect(res.candidates.length).toBeGreaterThan(0)
+  })
+})

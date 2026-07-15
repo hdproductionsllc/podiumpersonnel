@@ -63,6 +63,9 @@ export interface IntakeSong {
   matched_repertoire_id: string | null
   match_status: IntakeMatchStatus
   notes: string | null
+  /** Client explicitly requested a work outside the library ("(*special
+   *  request*)" in the questionnaire, or the admin marked it). Added in 070. */
+  special_request: boolean
   created_at: string
   updated_at: string
 }

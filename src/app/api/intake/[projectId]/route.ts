@@ -26,11 +26,11 @@ import { createServiceClient } from '@/lib/supabase/server'
 
 type SupabaseError = { code?: string; message?: string } | null
 
-/** A "table not created yet" error from PostgREST/Postgres (069 unapplied). */
+/** A "table/column not created yet" error from PostgREST/Postgres (069/070 unapplied). */
 function isMissingTableError(err: SupabaseError): boolean {
   if (!err) return false
   const code = err.code ?? ''
-  if (code === '42P01' || code === 'PGRST205' || code === 'PGRST202') return true
+  if (code === '42P01' || code === '42703' || code === 'PGRST205' || code === 'PGRST202') return true
   const msg = (err.message ?? '').toLowerCase()
   return (
     msg.includes('schema cache') ||
@@ -39,7 +39,7 @@ function isMissingTableError(err: SupabaseError): boolean {
   )
 }
 
-const TABLES_NOT_READY = 'Intake tables not ready — run migration 069'
+const TABLES_NOT_READY = 'Intake tables not ready — run migrations 069 + 070'
 
 // 069 CHECK constraints — fold any client value into the allowed set so a write
 // can never bounce off a constraint (the review screen is the human gate, but
@@ -64,6 +64,7 @@ interface IncomingSong {
   notes?: string | null
   matchedRepertoireId?: string | null
   matchStatus?: string | null
+  specialRequest?: boolean
 }
 
 /** Confirm the project exists AND belongs to the admin's org. Never trust the
@@ -219,6 +220,7 @@ export async function PUT(
     matched_repertoire_id: typeof s.matchedRepertoireId === 'string' ? s.matchedRepertoireId : null,
     match_status: normalizeMatchStatus(s.matchStatus),
     notes: typeof s.notes === 'string' ? s.notes : null,
+    special_request: s.specialRequest === true,
   }))
 
   // Never trust caller-supplied repertoire ids (house rule; two past cross-tenant

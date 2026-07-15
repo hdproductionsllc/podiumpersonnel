@@ -65,6 +65,12 @@ export interface SongRow {
   /** When true, saving teaches the library this titleRaw → matched work alias.
    *  Defaults ON when the typed title's norm differs from the matched work's. */
   rememberAlias: boolean
+  /** Admin decision: this song is a special request — a work the client knows
+   *  is outside the library. Saved to intake_songs.special_request (070). */
+  specialRequest: boolean
+  /** The parser saw "(*special request*)" on this line — prompt the admin to
+   *  mark it (never auto-decided; UI-only, not persisted). */
+  suggestedSpecial: boolean
 }
 
 export function workLabel(title: string, artist: string | null): string {
@@ -210,6 +216,20 @@ export function IntakeSongRow({
   const resolved = song.matchStatus === 'matched' || song.matchStatus === 'manual'
   const isCeremony = song.section === 'ceremony'
   const gapNote = partGapNote(song.matchedParts, gigEnsemble)
+  // The parser saw "(*special request*)" on this line and the admin hasn't
+  // acted on it yet — show the highlighted prompt instead of the low-key button.
+  const showSpecialPrompt = song.suggestedSpecial && !song.specialRequest && !resolved
+
+  const specialPrompt = showSpecialPrompt ? (
+    <div className="rounded-md border border-violet-300 bg-violet-50 dark:border-violet-900/60 dark:bg-violet-950/30 px-2.5 py-2 space-y-1.5">
+      <p className="text-xs text-violet-800 dark:text-violet-300">
+        The questionnaire marks this <span className="font-semibold">*special request*</span> — a piece the client knows isn’t in your library.
+      </p>
+      <Button type="button" size="xs" variant="outline" onClick={markSpecial}>
+        Mark as special request
+      </Button>
+    </div>
+  ) : null
 
   function pickCandidate(c: RepCandidate) {
     onChange({
@@ -218,6 +238,7 @@ export function IntakeSongRow({
       matchedLabel: candidateLabel(c),
       matchedParts: c.parts ?? null,
       rememberAlias: aliasWouldHelp(song.titleRaw, c.title),
+      specialRequest: false,
       warning: null,
     })
     setChanging(false)
@@ -230,6 +251,7 @@ export function IntakeSongRow({
       matchedLabel: workLabel(r.title, r.artist),
       matchedParts: null,
       rememberAlias: aliasWouldHelp(song.titleRaw, r.title),
+      specialRequest: false,
       warning: null,
     })
     setChanging(false)
@@ -242,6 +264,22 @@ export function IntakeSongRow({
       matchedLabel: null,
       matchedParts: null,
       rememberAlias: false,
+      specialRequest: false,
+      warning: null,
+    })
+    setChanging(false)
+  }
+
+  /** Resolve the row as a SPECIAL REQUEST: no library work, explicitly human-
+   *  decided (manual), flagged for downstream (sourcing/arranging, book build). */
+  function markSpecial() {
+    onChange({
+      matchStatus: 'manual',
+      matchedRepertoireId: null,
+      matchedLabel: null,
+      matchedParts: null,
+      rememberAlias: false,
+      specialRequest: true,
       warning: null,
     })
     setChanging(false)
@@ -262,7 +300,10 @@ export function IntakeSongRow({
           {song.matchStatus === 'manual' && song.matchedRepertoireId && (
             <Badge variant="success" className="text-xs">Set: {song.matchedLabel}</Badge>
           )}
-          {song.matchStatus === 'manual' && !song.matchedRepertoireId && (
+          {song.matchStatus === 'manual' && !song.matchedRepertoireId && song.specialRequest && (
+            <Badge variant="outline" className="text-xs border-violet-400 text-violet-700 dark:border-violet-700 dark:text-violet-300">Special request</Badge>
+          )}
+          {song.matchStatus === 'manual' && !song.matchedRepertoireId && !song.specialRequest && (
             <Badge variant="secondary" className="text-xs">As typed</Badge>
           )}
         </span>
@@ -323,7 +364,12 @@ export function IntakeSongRow({
                   {song.matchStatus === 'manual' && song.matchedRepertoireId && (
                     <Badge variant="success" className="text-xs">Set: {song.matchedLabel}</Badge>
                   )}
-                  {song.matchStatus === 'manual' && !song.matchedRepertoireId && (
+                  {song.matchStatus === 'manual' && !song.matchedRepertoireId && song.specialRequest && (
+                    <Badge variant="outline" className="text-xs border-violet-400 text-violet-700 dark:border-violet-700 dark:text-violet-300">
+                      Special request: “{song.titleRaw}”
+                    </Badge>
+                  )}
+                  {song.matchStatus === 'manual' && !song.matchedRepertoireId && !song.specialRequest && (
                     <Badge variant="secondary" className="text-xs">Using “{song.titleRaw}” as typed</Badge>
                   )}
                   <Button type="button" variant="ghost" size="xs" onClick={() => setChanging(true)}>
@@ -360,6 +406,7 @@ export function IntakeSongRow({
                   </Badge>
                 </div>
                 {song.warning && <p className="text-xs text-amber-700 dark:text-amber-400">{song.warning}</p>}
+                {specialPrompt}
                 {song.candidates.length > 0 && (
                   <ul className="rounded-md border bg-background divide-y">
                     {song.candidates.map((c) => (
@@ -378,9 +425,16 @@ export function IntakeSongRow({
                   </ul>
                 )}
                 <RepertoireSearch onPick={pickSearch} />
-                <Button type="button" variant="ghost" size="xs" onClick={useAsTyped}>
-                  Use “{song.titleRaw}” as typed
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="ghost" size="xs" onClick={useAsTyped}>
+                    Use “{song.titleRaw}” as typed
+                  </Button>
+                  {!showSpecialPrompt && (
+                    <Button type="button" variant="ghost" size="xs" onClick={markSpecial}>
+                      Mark as special request
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -388,6 +442,7 @@ export function IntakeSongRow({
             {song.matchStatus === 'missing' && !changing && (
               <div className="space-y-1.5">
                 <Badge variant="destructive" className="text-xs">Not in library</Badge>
+                {specialPrompt}
                 {/* Best-guess suggestions so a red row is never a dead end. */}
                 {song.candidates.length > 0 && (
                   <div className="space-y-1">
@@ -410,9 +465,16 @@ export function IntakeSongRow({
                   </div>
                 )}
                 <RepertoireSearch onPick={pickSearch} />
-                <Button type="button" variant="ghost" size="xs" onClick={useAsTyped}>
-                  Use “{song.titleRaw}” as typed
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="ghost" size="xs" onClick={useAsTyped}>
+                    Use “{song.titleRaw}” as typed
+                  </Button>
+                  {!showSpecialPrompt && (
+                    <Button type="button" variant="ghost" size="xs" onClick={markSpecial}>
+                      Mark as special request
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -421,9 +483,12 @@ export function IntakeSongRow({
               <div className="space-y-1.5 rounded-md border border-dashed p-2">
                 <p className="text-xs text-muted-foreground">Pick a different library work, or keep it as typed.</p>
                 <RepertoireSearch onPick={pickSearch} autoFocus />
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Button type="button" variant="ghost" size="xs" onClick={useAsTyped}>
                     Use as typed
+                  </Button>
+                  <Button type="button" variant="ghost" size="xs" onClick={markSpecial}>
+                    Mark as special request
                   </Button>
                   <Button type="button" variant="ghost" size="xs" onClick={() => setChanging(false)}>
                     Cancel

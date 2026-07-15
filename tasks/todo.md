@@ -406,6 +406,34 @@ same normalization as scripts/repertoire-index.js or alias/repertoire lookups mi
 - [x] Review screen (intake-panel + intake-song-row) wired into projects-client expanded row
 - [x] 069 applied + verified live (21/21 probes); 282/282 tests; tsc + build green; DEPLOYED
 
+### Phase B3 — Real-usage feedback round 1 (started 2026-07-15, David's live test)
+David's findings: (1) quartet-vs-trio "needs a choice" should auto-pick the gig's ensemble;
+(2) "not in library" rows almost always show the right work as top guess — matcher too literal,
+and every human direction should teach the system; (3) "(*special request*)" inline marker:
+parser currently treats those words as a SECTION HEADER (song swallowed!) — must strip the
+marker, flag the song, and prompt "mark as special request".
+- [x] Migration 070 written: intake_songs.special_request BOOLEAN NOT NULL DEFAULT false (additive)
+- [x] Parser: strip inline (*special request*)/(special request) markers BEFORE section
+      detection (fixes the header-hijack bug — the song was being swallowed as a phantom
+      'special' section header); ParsedSong.specialRequest flag threaded to every addSong
+- [x] Matcher: same-work ensemble auto-resolve (sameWorkFamily = identical folded title +
+      artist; exactly one candidate matches gig ensemble → matched, not ambiguous)
+- [x] Matcher: similarity confidence bands — ≥0.8 (0.7 with agreeing artist) + clear lead
+      (≥0.12 over best OTHER work) → proposed matched; ≥0.5 → amber one-click 'ambiguous';
+      below → red 'missing' with guesses. Contradicted artist NEVER auto-matches.
+- [x] Learning: alias auto-teach on save already fires (checkbox defaults ON when the fold
+      differs); ensemble picks need no alias — auto-resolve covers them deterministically
+- [x] UI: violet "Mark as special request" prompt when parser flagged the line; low-key
+      button on all unresolved rows + Change panel; violet badge (review, confirmed,
+      read-only); library pick / as-typed clears the flag; toast counts special requests
+- [x] API: parse route carries specialRequest + stats.special; PUT persists special_request;
+      isMissingTableError covers 42703 (070 unapplied → 503); IntakeSong type updated
+- [x] Tests: 18 new (6 parser incl. the exact "Goodness of God" line, 12 matcher bands +
+      auto-resolve); 300/300 green; tsc + production build green
+- [ ] **David: run 070** → Claude verifies live → push → Vercel deploy → re-test real
+      questionnaire (expect: quartet/trio auto-picked, top-guess rows green/amber, special
+      request prompted)
+
 ### Task 4 — Review UI (done 2026-07-15)
 - [x] 1. `GET /api/intake/repertoire?q=` — org-scoped repertoire search for the "Not in library" box.
 - [x] 2. Enhance `GET /api/intake/[projectId]` to attach matched repertoire (title/artist/ensemble) per saved song.

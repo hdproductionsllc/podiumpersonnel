@@ -289,3 +289,73 @@ describe('looksLikeQuestionnaire / parseSongList / parseIntake', () => {
     expect(r.warnings[0]).toMatch(/No text/i)
   })
 })
+
+// ---------------------------------------------------------------------------
+// B3: inline "(*special request*)" markers (real-usage bug + feature)
+// ---------------------------------------------------------------------------
+// The marker phrase contains "special request", which SECTION_PATTERNS matches —
+// unstripped, a song line like "Goodness of God - Bethel Music (*special
+// request*)" became a phantom 'special' SECTION HEADER and the song vanished.
+// The marker must be stripped before section detection and carried as a flag.
+
+describe('special request markers', () => {
+  it("parses the real-world line: song + (*special request*) under a bride's entrance header", () => {
+    const text = [
+      "Processional - Bride's Entrance (select one piece)",
+      'Goodness of God - Bethel Music (*special request*)',
+    ].join('\n')
+    const traced = parseQuestionnaireTraced(text)
+    assertEveryLineAccountedFor(text, traced)
+    expect(traced.songs).toHaveLength(1)
+    expect(traced.songs[0]).toMatchObject({
+      section: 'ceremony',
+      role: 'Bride Entrance',
+      titleRaw: 'Goodness Of God',
+      artistRaw: 'Bethel Music',
+      specialRequest: true,
+    })
+    expect(traced.lineDispositions[1]).toBe('song') // NOT 'section'
+    expect(traced.warnings).toHaveLength(0)
+  })
+
+  it('a plain "Special Requests" section header is still a header, never stripped', () => {
+    const text = ['Special Requests', 'Fly Me to the Moon - Sinatra'].join('\n')
+    const traced = parseQuestionnaireTraced(text)
+    expect(traced.lineDispositions[0]).toBe('section')
+    expect(traced.songs).toHaveLength(1)
+    expect(traced.songs[0]).toMatchObject({ section: 'special', specialRequest: false })
+  })
+
+  it('recognizes the paren and bare-asterisk variants', () => {
+    const text = [
+      'Prelude Requests',
+      'My Heart Will Go On - Celine Dion (special request)',
+      'A Sky Full of Stars *special request*',
+    ].join('\n')
+    const traced = parseQuestionnaireTraced(text)
+    expect(traced.songs).toHaveLength(2)
+    expect(traced.songs[0]).toMatchObject({ titleRaw: 'My Heart Will Go On', artistRaw: 'Celine Dion', specialRequest: true })
+    expect(traced.songs[1]).toMatchObject({ titleRaw: 'A Sky Full Of Stars', specialRequest: true })
+  })
+
+  it('a marker-only line is boilerplate — skipped, never warned, never a song', () => {
+    const text = ['Prelude Requests', '(*special request*)', 'Canon in D - Pachelbel'].join('\n')
+    const traced = parseQuestionnaireTraced(text)
+    expect(traced.lineDispositions[1]).toBe('skip')
+    expect(traced.songs).toHaveLength(1)
+    expect(traced.songs[0]).toMatchObject({ titleRaw: 'Canon In D', specialRequest: false })
+    expect(traced.warnings).toHaveLength(0)
+  })
+
+  it('unmarked songs never carry the flag', () => {
+    const traced = parseQuestionnaireTraced(['Prelude Requests', 'Yellow - Coldplay'].join('\n'))
+    expect(traced.songs[0].specialRequest).toBe(false)
+  })
+
+  it('song-list mode carries the flag too', () => {
+    const r = parseSongList('Clocks - Coldplay\nGoodness of God - Bethel Music (*special request*)')
+    expect(r.songs).toHaveLength(2)
+    expect(r.songs[0].specialRequest).toBe(false)
+    expect(r.songs[1]).toMatchObject({ titleRaw: 'Goodness Of God', artistRaw: 'Bethel Music', specialRequest: true })
+  })
+})

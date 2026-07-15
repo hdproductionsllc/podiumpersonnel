@@ -50,6 +50,13 @@ export interface ParsedSong {
   artistRaw: string | null
   /** Ceremony role (e.g. "Processional", "Bride Entrance", "Unity Soil Pour") or null. */
   role: string | null
+  /**
+   * True when the line carried an inline special-request marker — the client
+   * wrote "(*special request*)" (or a close variant) next to the song, meaning
+   * "we know it's not in your library". The review screen prompts the admin to
+   * mark the row as a special request; the parser only FLAGS, never decides.
+   */
+  specialRequest: boolean
 }
 
 export interface ParsedQuestionnaire {
@@ -137,6 +144,24 @@ const INSTRUCTION_MARKERS = ['select', 'please', 'example', 'optional']
 
 // Match a Spotify link anywhere in a line.
 const SPOTIFY_RE = /https?:\/\/open\.spotify\.com\/\S+/i
+
+// Inline special-request marker on a SONG line: "(*special request*)",
+// "(special request)", "*special request*". The phrase must be wrapped in
+// parens or asterisks — a bare section header like "Special Requests" never
+// matches. MUST be stripped before section detection: SECTION_PATTERNS contains
+// /special\s+requests?/, so an unstripped marker turns the whole song line into
+// a phantom section header and the song is silently swallowed (found in real
+// usage: "Goodness of God - Bethel Music (*special request*)").
+const SPECIAL_REQUEST_MARKER_RE =
+  /\(\s*\*{0,2}\s*special\s+requests?\s*\*{0,2}\s*\)|\*{1,2}\s*special\s+requests?\s*\*{1,2}/gi
+
+/** Strip inline special-request markers; report whether any were present. */
+function extractSpecialRequestMarker(line: string): { line: string; special: boolean } {
+  SPECIAL_REQUEST_MARKER_RE.lastIndex = 0
+  if (!SPECIAL_REQUEST_MARKER_RE.test(line)) return { line, special: false }
+  const stripped = line.replace(SPECIAL_REQUEST_MARKER_RE, ' ').replace(/\s{2,}/g, ' ').trim()
+  return { line: stripped, special: true }
+}
 
 const sectionMatches = (lower: string): boolean => SECTION_PATTERNS.some((p) => p.re.test(lower))
 const hasSkipMarker = (lower: string): boolean => SKIP_MARKERS.some((m) => lower.includes(m))
@@ -272,9 +297,10 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
   let spotifyUrl: string | null = null
   let officiant: string | null = null // consumed for line-accounting; not persisted / not in output
 
-  const addSong = (section: string, titleRaw: string, artistRaw: string, role: string | null) => {
+  // `special` = the current line carried an inline special-request marker.
+  const addSong = (section: string, titleRaw: string, artistRaw: string, role: string | null, special = false) => {
     const pos = sectionCounts.get(section) ?? 0
-    songs.push({ section, position: pos, titleRaw, artistRaw: artistRaw || null, role })
+    songs.push({ section, position: pos, titleRaw, artistRaw: artistRaw || null, role, specialRequest: special })
     sectionCounts.set(section, pos + 1)
   }
 
@@ -289,10 +315,19 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
   let i = 0
 
   while (i < lines.length) {
-    const line = lines[i]
+    // Strip any inline special-request marker FIRST — before section detection —
+    // so "(*special request*)" on a song line can't hijack the section machine
+    // (SECTION_PATTERNS matches "special request" anywhere in a line). The flag
+    // rides along to addSong for whatever song this line yields.
+    const { line, special: lineSpecial } = extractSpecialRequestMarker(lines[i])
     const lower = line.toLowerCase().trim()
 
-    if (!line) { disp[i] = 'empty'; i += 1; continue }
+    if (!line) {
+      // A line that was ONLY the marker (nothing else on it) is boilerplate.
+      disp[i] = lineSpecial ? 'skip' : 'empty'
+      i += 1
+      continue
+    }
 
     // --- Spotify playlist URL (anywhere) ---
     if (spotifyUrl === null) {
@@ -488,7 +523,7 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
           const rawSong = songOnLine[1].trim().replace(/\s*\((?:CONFIRMED|confirmed)\)\s*$/, '')
           const [st0, sa] = extractTitleAndArtist(rawSong)
           if (st0) {
-            addSong(currentSection, cleanSongTitle(st0), sa, currentRole)
+            addSong(currentSection, cleanSongTitle(st0), sa, currentRole, lineSpecial)
             if (expectSingleSong) expectSingleSong = false
           }
         } else {
@@ -530,7 +565,7 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
           if (rawSong) {
             const [st0, sa] = extractTitleAndArtist(rawSong)
             if (st0) {
-              addSong(currentSection, cleanSongTitle(st0), sa, currentRole)
+              addSong(currentSection, cleanSongTitle(st0), sa, currentRole, lineSpecial)
               if (expectSingleSong) expectSingleSong = false
             }
           }
@@ -584,7 +619,7 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
           if (after && after.length >= 2 && after.length < 120) {
             const [st0, sa] = extractTitleAndArtist(after)
             if (st0) {
-              addSong(currentSection, cleanSongTitle(st0), sa, currentRole)
+              addSong(currentSection, cleanSongTitle(st0), sa, currentRole, lineSpecial)
               disp[i] = 'song'; i += 1; continue
             }
           }
@@ -636,7 +671,7 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
       }
 
       if (songTitle) {
-        addSong(currentSection, songTitle, songArtist, songRole)
+        addSong(currentSection, songTitle, songArtist, songRole, lineSpecial)
         // Reset a custom ceremony role after use.
         if (currentSection === 'ceremony' && songRole && !['Processional', 'Bride Entrance', 'Recessional'].includes(songRole)) {
           currentRole = null
@@ -733,15 +768,17 @@ export function parseSongList(rawText: string): ParsedQuestionnaire {
   let currentSet = 1
   let currentSetHasSongs = false
 
-  const push = (section: string, titleRaw: string, artistRaw: string) => {
+  const push = (section: string, titleRaw: string, artistRaw: string, special = false) => {
     const pos = sectionCounts.get(section) ?? 0
-    result.songs.push({ section, position: pos, titleRaw, artistRaw: artistRaw || null, role: null })
+    result.songs.push({ section, position: pos, titleRaw, artistRaw: artistRaw || null, role: null, specialRequest: special })
     sectionCounts.set(section, pos + 1)
   }
 
   lines.forEach((raw, idx) => {
-    let line = raw.trim()
+    const marker = extractSpecialRequestMarker(raw.trim())
+    let line = marker.line
     if (!line) {
+      if (marker.special) return // marker-only line: boilerplate, not a set break
       if (currentSetHasSongs) { currentSet += 1; currentSetHasSongs = false }
       return
     }
@@ -759,7 +796,7 @@ export function parseSongList(rawText: string): ParsedQuestionnaire {
     }
     const [title, artist] = extractTitleAndArtist(line)
     if (title) {
-      push(`set_${currentSet}`, cleanSongTitle(title), artist)
+      push(`set_${currentSet}`, cleanSongTitle(title), artist, marker.special)
       currentSetHasSongs = true
     } else {
       result.warnings.push(`Line ${idx + 1}: could not parse a song from: "${raw.trim()}"`)

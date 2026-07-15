@@ -116,6 +116,9 @@ function rowFromProposed(p: ProposedSong): SongRow {
     artistRaw: p.artistRaw ?? '',
     notes: p.notes ?? null,
     rememberAlias: false,
+    // The parser only SUGGESTS special requests; the admin decides on the row.
+    specialRequest: false,
+    suggestedSpecial: p.specialRequest === true,
   }
   if (p.match.status === 'matched') {
     const chosen = p.match.candidates.find((c) => !c.artistMismatch) ?? p.match.candidates[0]
@@ -172,6 +175,8 @@ function rowFromSaved(s: SavedSong): SongRow {
     candidates: [],
     warning: null,
     rememberAlias: false,
+    specialRequest: s.special_request === true,
+    suggestedSpecial: false,
   }
 }
 
@@ -317,7 +322,10 @@ export function IntakePanel({ projectId, ensembleType }: IntakePanelProps) {
       setReparsing(false)
       const stats = data.stats
       if (stats) {
-        toast.success(`Parsed ${stats.total} song${stats.total === 1 ? '' : 's'} — ${stats.matched} matched, ${stats.ambiguous + stats.missing} to review.`)
+        const specialNote = stats.special > 0
+          ? ` ${stats.special} special request${stats.special === 1 ? '' : 's'} flagged.`
+          : ''
+        toast.success(`Parsed ${stats.total} song${stats.total === 1 ? '' : 's'} — ${stats.matched} matched, ${stats.ambiguous + stats.missing} to review.${specialNote}`)
       }
     } catch {
       toast.error('Parsing failed. Please try again.')
@@ -346,6 +354,7 @@ export function IntakePanel({ projectId, ensembleType }: IntakePanelProps) {
         notes: r.notes,
         matchedRepertoireId: r.matchedRepertoireId,
         matchStatus: r.matchStatus,
+        specialRequest: r.specialRequest,
       })),
     }
   }
@@ -447,6 +456,8 @@ export function IntakePanel({ projectId, ensembleType }: IntakePanelProps) {
       candidates: [],
       warning: null,
       rememberAlias: false,
+      specialRequest: false,
+      suggestedSpecial: false,
     }
     setSongs((prev) => groupedOrder([...prev, row]))
   }
@@ -473,6 +484,7 @@ export function IntakePanel({ projectId, ensembleType }: IntakePanelProps) {
 
   const unresolvedCount = songs.filter((r) => !isResolved(r)).length
   const matchedCount = songs.filter((r) => r.matchStatus === 'matched').length
+  const specialCount = songs.filter((r) => r.specialRequest).length
   const readOnly = phase === 'confirmed'
 
   // Sections that currently have songs, in canonical order.
@@ -736,6 +748,7 @@ export function IntakePanel({ projectId, ensembleType }: IntakePanelProps) {
                 <Badge variant="success">Confirmed</Badge>
                 <span className="text-sm text-muted-foreground">
                   {songs.length} song{songs.length === 1 ? '' : 's'} · {matchedCount} matched to the library
+                  {specialCount > 0 && <> · {specialCount} special request{specialCount === 1 ? '' : 's'}</>}
                 </span>
               </div>
 

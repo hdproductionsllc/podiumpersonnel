@@ -30,6 +30,9 @@ export interface ProposedSong {
   titleRaw: string
   artistRaw: string
   notes: string | null
+  /** The questionnaire marked this line "(*special request*)" — the review UI
+   *  prompts the admin to mark the row as a special request. */
+  specialRequest: boolean
   match: MatchResult
 }
 
@@ -142,6 +145,7 @@ export async function POST(request: Request) {
       titleRaw: s.titleRaw,
       artistRaw: s.artistRaw ?? '',
       notes: null,
+      specialRequest: s.specialRequest,
       match,
     })
   }
@@ -162,6 +166,7 @@ export async function POST(request: Request) {
       matched: songs.filter((s) => s.match.status === 'matched').length,
       ambiguous: songs.filter((s) => s.match.status === 'ambiguous').length,
       missing: songs.filter((s) => s.match.status === 'missing').length,
+      special: songs.filter((s) => s.specialRequest).length,
     },
   })
 }

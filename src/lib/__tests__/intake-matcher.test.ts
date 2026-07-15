@@ -108,12 +108,16 @@ describe('matchSong — keyword fallback', () => {
     expect(r.candidates[0].score).toBe(60)
   })
 
-  it('does not keyword-match when a keyword is absent (best-guesses stay non-matching)', () => {
-    // "waltz" is absent from every row, so the keyword tier misses and the row is
-    // 'missing'. It may still carry similarity best-guesses ("did you mean…") —
-    // those are guesses, never keyword/exact matches, and never resolve the row.
+  it('does not keyword-match when a keyword is absent (falls to the similarity tier)', () => {
+    // "waltz" is absent from every row, so the keyword tier misses. The
+    // similarity tier takes over: a suggestive-but-not-confident resemblance is
+    // surfaced as 'ambiguous' (amber, one-click pick) — never a silent 'matched',
+    // and the candidates are guesses, not keyword/exact hits. The row still
+    // requires a human to resolve it.
     const r = matchSong({ titleRaw: 'G String Waltz' }, index)
-    expect(r.status).toBe('missing')
+    expect(r.status).not.toBe('matched')
+    expect(['ambiguous', 'missing']).toContain(r.status)
+    expect(r.candidates.length).toBeGreaterThan(0)
     expect(r.candidates.every((c) => c.via === 'similarity')).toBe(true)
   })
 })
