@@ -34,7 +34,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import { useTerms } from '@/components/providers/vertical-provider'
+import { useVertical } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
 import type { ProjectWithServices } from './projects-client'
 
@@ -104,7 +104,13 @@ export function ProjectFormDialog({
   isFirstProject,
   onSuccess,
 }: ProjectFormDialogProps) {
-  const terms = useTerms()
+  const vertical = useVertical()
+  const terms = vertical.terms
+  // The quick-start templates are instrumentation-specific (String Quartet,
+  // Orchestra Concert...). Only music verticals see the picker; other verticals
+  // go straight to the blank form (audit finding: choir admins were greeted
+  // with "String Quartet Gig" as the first screen of the core workflow).
+  const hasMusicTemplates = vertical.features.useTitleInference
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showTemplatePicker, setShowTemplatePicker] = useState(false)
@@ -206,9 +212,9 @@ export function ProjectFormDialog({
           coordinator_email: '',
           coordinator_phone: '',
         })
-        // Always show template picker for new projects
-        setShowTemplatePicker(true)
-        setSelectedTemplate(null)
+        // Template picker for new projects — music verticals only
+        setShowTemplatePicker(hasMusicTemplates)
+        setSelectedTemplate(hasMusicTemplates ? null : 'custom')
         setIsSingleDay(false)
         setBookingOpen(false)
         setCallTime('18:30')

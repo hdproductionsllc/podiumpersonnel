@@ -161,3 +161,28 @@ describe('API route billing gates', () => {
     })
   })
 })
+
+// Every plan-resolving org SELECT must include is_comped — omitting it makes
+// resolveOrgPlan treat comped (founding) orgs as free (audit finding: comped
+// orgs couldn't add team members because members/route.ts dropped the column).
+import { describe as describeComped, it as itComped, expect as expectComped } from 'vitest'
+import { readFileSync as readComped } from 'fs'
+import { join as joinComped } from 'path'
+
+describeComped('is_comped is selected wherever the plan is resolved', () => {
+  const files = [
+    'src/app/api/settings/members/route.ts',
+    'src/lib/api-helpers.ts',
+    'src/app/dashboard/layout.tsx',
+  ]
+  for (const f of files) {
+    itComped(`${f} selects is_comped alongside billing columns`, () => {
+      const src = readComped(joinComped(process.cwd(), f), 'utf8')
+      const billingSelects = src.match(/select\(\s*'[^']*plan_tier[^']*'/g) || []
+      expectComped(billingSelects.length).toBeGreaterThan(0)
+      for (const sel of billingSelects) {
+        expectComped(sel).toContain('is_comped')
+      }
+    })
+  }
+})

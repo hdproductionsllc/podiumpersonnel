@@ -10,9 +10,10 @@ import { InstrumentFormDialog } from './instrument-form-dialog'
 import { DeleteInstrumentDialog } from './delete-instrument-dialog'
 import { PrepopulateButton } from './prepopulate-button'
 import { AddMissingButton } from './add-missing-button'
+import { SeedVerticalButton } from './seed-vertical-button'
 import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
 import type { Instrument } from '@/types'
-import { useTerms } from '@/components/providers/vertical-provider'
+import { useVertical } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
 
 export type MusicianInfo = {
@@ -42,7 +43,12 @@ export function InstrumentsClient({
   userRole,
 }: InstrumentsClientProps) {
   const router = useRouter()
-  const terms = useTerms()
+  const vertical = useVertical()
+  const terms = vertical.terms
+  // The standard-orchestra buttons only make sense for music verticals; other
+  // verticals seed/re-seed their own taxonomy via the seed-skills route
+  // (audit finding: a choir was offered "Add Missing (73)" orchestra instruments).
+  const isMusicVertical = vertical.skillSeeds === 'sql'
   const [formOpen, setFormOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [editingInstrument, setEditingInstrument] = useState<Instrument | null>(null)
@@ -101,19 +107,23 @@ export function InstrumentsClient({
         <div className="page-header">
           <h2 className="text-3xl font-bold tracking-tight">{term(terms, 'skill', { plural: true })}</h2>
           <p className="text-muted-foreground mt-1">
-            Manage the {term(terms, 'skill', { plural: true, case: 'lower' })} in your orchestra.
+            Manage the {term(terms, 'skill', { plural: true, case: 'lower' })} in your {isMusicVertical ? 'orchestra' : 'organization'}.
           </p>
           <div className="mt-3 w-12 h-px bg-gold/50" />
         </div>
         {canManage && (
           <div className="flex items-center gap-2">
             {instruments.length === 0 && (
-              <PrepopulateButton
-                organizationId={organizationId}
-                onSuccess={handleSuccess}
-              />
+              isMusicVertical ? (
+                <PrepopulateButton
+                  organizationId={organizationId}
+                  onSuccess={handleSuccess}
+                />
+              ) : (
+                <SeedVerticalButton onSuccess={handleSuccess} />
+              )
             )}
-            {instruments.length > 0 && (
+            {instruments.length > 0 && isMusicVertical && (
               <AddMissingButton
                 organizationId={organizationId}
                 existingNames={instruments.map(i => i.name)}
@@ -171,7 +181,11 @@ export function InstrumentsClient({
           title={`No ${term(terms, 'skill', { plural: true, case: 'lower' })} yet`}
           description={`Set up your ${term(terms, 'skill', { case: 'lower' })} library to assign ${term(terms, 'person', { plural: true, case: 'lower' })} and build positions.`}
           action={canManage ? (
-            <PrepopulateButton organizationId={organizationId} onSuccess={handleSuccess} />
+            isMusicVertical ? (
+              <PrepopulateButton organizationId={organizationId} onSuccess={handleSuccess} />
+            ) : (
+              <SeedVerticalButton onSuccess={handleSuccess} />
+            )
           ) : undefined}
         />
       ) : filteredInstruments.length === 0 ? (

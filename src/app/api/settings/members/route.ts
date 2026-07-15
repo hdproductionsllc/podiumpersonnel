@@ -82,7 +82,7 @@ export async function POST(request: Request) {
   const adminClientForPlan = createAdminClient()
   const { data: org } = await adminClientForPlan
     .from('organizations')
-    .select('plan_tier, trial_ends_at, stripe_customer_id, stripe_subscription_id, subscription_status')
+    .select('plan_tier, trial_ends_at, stripe_customer_id, stripe_subscription_id, subscription_status, is_comped')
     .eq('id', membership.organization_id)
     .single()
 
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
 
     if (!canAddMember(plan, count ?? 0)) {
       return NextResponse.json(
-        { error: 'Free plan is limited to 1 admin seat. Upgrade to Pro to add team members.' },
+        { error: 'Your current plan has reached its admin seat limit. Upgrade to add more team members.' },
         { status: 403 }
       )
     }

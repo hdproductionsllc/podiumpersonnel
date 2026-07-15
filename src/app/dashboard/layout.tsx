@@ -23,12 +23,16 @@ export default async function DashboardLayout({
     redirect('/login')
   }
 
-  // Fetch membership — always query organization_id first (guaranteed to exist)
+  // Fetch membership — always query organization_id first (guaranteed to exist).
+  // limit(1) + maybeSingle instead of single(): if a user ever ends up with two
+  // membership rows (e.g. a double org creation), single() errors and locks them
+  // into a redirect loop; picking the first membership keeps the dashboard usable.
   const { data: membership } = await supabase
     .from('organization_members')
     .select('organization_id')
     .eq('user_id', user.id)
-    .single()
+    .limit(1)
+    .maybeSingle()
 
   if (!membership) {
     redirect('/onboarding')
