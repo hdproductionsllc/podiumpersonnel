@@ -16,7 +16,7 @@
  * (normTitle), so a search folds identically to how the library was indexed.
  */
 
-import { requireOrgAdmin, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
+import { requireIntakeEnabled, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
 import { createServiceClient } from '@/lib/supabase/server'
 import { normTitle } from '@/lib/intake/normalize'
 
@@ -35,7 +35,7 @@ function escapeLike(s: string): string {
 }
 
 export async function GET(request: Request) {
-  const { membership, error } = await requireOrgAdmin()
+  const { membership, error } = await requireIntakeEnabled()
   if (error || !membership) return error!
 
   const orgId = membership.organization_id

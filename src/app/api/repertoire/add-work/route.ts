@@ -19,7 +19,7 @@
  */
 
 import { createHash } from 'crypto'
-import { requireOrgAdmin, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
+import { requireIntakeEnabled, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getR2Client, isR2Configured } from '@/lib/storage/r2'
 import { normTitle } from '@/lib/intake/normalize'
@@ -36,7 +36,7 @@ interface IncomingPart {
 }
 
 export async function POST(request: Request) {
-  const { membership, error } = await requireOrgAdmin()
+  const { membership, error } = await requireIntakeEnabled()
   if (error || !membership) return error!
   const orgId = membership.organization_id
 

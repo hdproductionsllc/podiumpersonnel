@@ -8,7 +8,7 @@
  * PDFs and the gig page from then on.
  */
 
-import { requireOrgAdmin, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
+import { requireIntakeEnabled, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
 import { createServiceClient } from '@/lib/supabase/server'
 import { createPlaylistWithTracks, getConnection, isSpotifyConfigured } from '@/lib/spotify'
 
@@ -19,7 +19,7 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params
-  const { membership, error } = await requireOrgAdmin()
+  const { membership, error } = await requireIntakeEnabled()
   if (error || !membership) return error!
   const orgId = membership.organization_id
 

@@ -20,7 +20,7 @@
  * rule; two past cross-tenant leaks came from trusting caller-supplied ids).
  */
 
-import { requireOrgAdmin, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
+import { requireIntakeEnabled, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
 import { createServiceClient } from '@/lib/supabase/server'
 import { normTitle } from '@/lib/intake/normalize'
 
@@ -36,7 +36,7 @@ function isMissingTableError(err: SupabaseError): boolean {
 }
 
 export async function POST(request: Request) {
-  const { membership, error } = await requireOrgAdmin()
+  const { membership, error } = await requireIntakeEnabled()
   if (error || !membership) return error!
   const orgId = membership.organization_id
 

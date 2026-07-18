@@ -11,7 +11,7 @@
  * Security: org from the admin's membership; project verified to belong to it.
  */
 
-import { requireOrgAdmin, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
+import { requireIntakeEnabled, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
 import { createServiceClient } from '@/lib/supabase/server'
 
 export async function POST(
@@ -19,7 +19,7 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params
-  const { membership, error } = await requireOrgAdmin()
+  const { membership, error } = await requireIntakeEnabled()
   if (error || !membership) return error!
   const orgId = membership.organization_id
 

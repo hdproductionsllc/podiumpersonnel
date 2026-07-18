@@ -8,7 +8,7 @@
  * candidates each; a song with no results simply has an empty list.
  */
 
-import { requireOrgAdmin, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
+import { requireIntakeEnabled, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getConnection, isSpotifyConfigured, searchTracks, type TrackCandidate } from '@/lib/spotify'
 import { orderForBook, stripListNumber } from '@/lib/intake/book-builder'
@@ -18,7 +18,7 @@ export async function GET(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params
-  const { membership, error } = await requireOrgAdmin()
+  const { membership, error } = await requireIntakeEnabled()
   if (error || !membership) return error!
   const orgId = membership.organization_id
 

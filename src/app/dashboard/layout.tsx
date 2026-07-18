@@ -4,6 +4,7 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { PlanProvider } from '@/components/providers/plan-provider'
 import { VerticalProvider } from '@/components/providers/vertical-provider'
+import { OrgFlagsProvider } from '@/components/providers/org-flags-provider'
 import { TrialBanner } from '@/components/billing/trial-banner'
 import { resolveOrgPlan } from '@/lib/plan'
 import type { OrgBilling } from '@/lib/plan'
@@ -76,8 +77,23 @@ export default async function DashboardLayout({
     // Column doesn't exist yet — default template
   }
 
+  // Fetch the intake feature flag separately so a missing column (migration 073
+  // not yet applied) can't disturb the queries above. Fails closed to false.
+  let intakeEnabled = false
+  try {
+    const { data: flagData } = await supabase
+      .from('organizations')
+      .select('intake_enabled')
+      .eq('id', membership.organization_id)
+      .single()
+    intakeEnabled = (flagData as { intake_enabled?: boolean } | null)?.intake_enabled === true
+  } catch {
+    // Column doesn't exist yet — feature stays hidden
+  }
+
   return (
     <VerticalProvider verticalKey={verticalKey}>
+    <OrgFlagsProvider flags={{ intakeEnabled }}>
     <PlanProvider plan={plan}>
       <div className="flex h-screen bg-background">
         <Sidebar />
@@ -90,6 +106,7 @@ export default async function DashboardLayout({
         </div>
       </div>
     </PlanProvider>
+    </OrgFlagsProvider>
     </VerticalProvider>
   )
 }

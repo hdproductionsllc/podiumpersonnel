@@ -14,14 +14,14 @@
  * server-side from that org — the client never chooses where bytes land.
  */
 
-import { requireOrgAdmin, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
+import { requireIntakeEnabled, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
 import { getR2Client, isR2Configured } from '@/lib/storage/r2'
 
 const MAX_PDF_BYTES = 100 * 1024 * 1024 // 100MB — far above any real part/score
 const UPLOAD_URL_TTL_SECONDS = 600
 
 export async function POST(request: Request) {
-  const { membership, error } = await requireOrgAdmin()
+  const { membership, error } = await requireIntakeEnabled()
   if (error || !membership) return error!
   const orgId = membership.organization_id
 

@@ -71,6 +71,48 @@ CREATE TABLE IF NOT EXISTS stripe_events (
 );
 ALTER TABLE stripe_events ENABLE ROW LEVEL SECURITY;
 
+-- ---------- 073_intake_flag ----------
+-- Internal-only intake / Book Builder feature flag. Additive, defaulted false;
+-- the gated code fails closed until an org's flag is flipped on by hand.
+ALTER TABLE organizations
+  ADD COLUMN IF NOT EXISTS intake_enabled BOOLEAN NOT NULL DEFAULT false;
+
+-- ---------- 074_harden_link_musician_rpc ----------
+-- Caller may only link musician rows matching their OWN verified email
+-- (service role exempt); anon execute revoked.
+CREATE OR REPLACE FUNCTION link_musician_records_to_user(p_user_id UUID, p_email TEXT)
+RETURNS INTEGER AS $$
+DECLARE
+    updated_count INTEGER;
+    caller_email TEXT;
+BEGIN
+    IF (auth.jwt() ->> 'role') IS DISTINCT FROM 'service_role' THEN
+        IF auth.uid() IS NULL OR p_user_id <> auth.uid() THEN
+            RETURN 0;
+        END IF;
+        SELECT email INTO caller_email
+        FROM auth.users
+        WHERE id = auth.uid() AND email_confirmed_at IS NOT NULL;
+        IF caller_email IS NULL OR LOWER(caller_email) <> LOWER(p_email) THEN
+            RETURN 0;
+        END IF;
+    END IF;
+
+    UPDATE musicians
+    SET user_id = p_user_id,
+        portal_invite_token = NULL,
+        portal_invite_sent_at = NULL,
+        portal_invite_expires_at = NULL
+    WHERE LOWER(email) = LOWER(p_email)
+    AND user_id IS NULL;
+
+    GET DIAGNOSTICS updated_count = ROW_COUNT;
+    RETURN updated_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+REVOKE EXECUTE ON FUNCTION link_musician_records_to_user(UUID, TEXT) FROM anon;
+
 -- ---------- Verification (prints results; all should say OK) ----------
 SELECT
   (SELECT CASE WHEN COUNT(*) = 0 THEN 'WARN: some public tables lack RLS' ELSE 'OK: RLS enabled everywhere' END

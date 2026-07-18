@@ -81,6 +81,30 @@ export async function requireOrgPlan() {
 }
 
 /**
+ * Gate for the internal-only intake / Book Builder feature. Fails CLOSED with a
+ * 404 (never 403) when the org's flag is off — the feature isn't advertised.
+ */
+export async function requireIntakeEnabled() {
+  const { supabase, user, membership, error } = await requireOrgAdmin()
+  if (error || !user || !membership) {
+    return { supabase, user: null, membership: null, error: error! }
+  }
+
+  const adminClient = createAdminClient()
+  const { data: org, error: orgError } = await adminClient
+    .from('organizations')
+    .select('intake_enabled')
+    .eq('id', membership.organization_id)
+    .single()
+
+  if (orgError || !org?.intake_enabled) {
+    return { supabase, user, membership: null, error: apiError('Not found', 404) }
+  }
+
+  return { supabase, user, membership, error: null }
+}
+
+/**
  * Lightweight plan check for routes that do their own auth.
  * Pass the user's org ID. Returns resolved plan or null on error.
  */

@@ -39,6 +39,7 @@ import {
   type PaymentStatus,
 } from '@/lib/validations/projects'
 import { usePlan } from '@/components/providers/plan-provider'
+import { useOrgFlags } from '@/components/providers/org-flags-provider'
 import { useTerms } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
 import { canCreateProject, canUseEmailFeatures, PLAN_LIMITS } from '@/lib/plan'
@@ -256,6 +257,7 @@ export function ProjectsClient({
 }: ProjectsClientProps) {
   const router = useRouter()
   const plan = usePlan()
+  const { intakeEnabled } = useOrgFlags()
   const terms = useTerms()
 
   // Project dialog state
@@ -993,7 +995,7 @@ export function ProjectsClient({
                             />
                           )}
                           {/* Client Selections (intake import + review) */}
-                          {canManage && (
+                          {canManage && intakeEnabled && (
                             <IntakePanel
                               projectId={project.id}
                               ensembleType={project.ensemble_type}
