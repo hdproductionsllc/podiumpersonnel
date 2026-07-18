@@ -462,6 +462,71 @@ marker, flag the song, and prompt "mark as special request".
 - [x] 315/315 tests (6 new part-guess); tsc + build green
 - [ ] David: real-world test — upload the parts for one actually-missing work from an intake row
 
+### Phase C — Book builder ✅ BUILT + SHIPPED 2026-07-15 (3a8c6272)
+Per-musician books from a confirmed intake, Mac gig_compiler conventions ported exactly:
+- [x] book-builder.ts: section ordering, "NN - Title - Artist - part.pdf" naming, folder
+      layouts per ensemble (01_Violin_1…), exact→substitute→vln2-as-vla file picking,
+      one-page playlist PDF (pdf-lib, WinAnsi-safe w/ NFC recomposition)
+- [x] GET /api/intake/[projectId]/book — manifest w/ presigned R2 GET URLs (confirmed only);
+      strips stale client list-numbers from titles
+- [x] BookDownload UI in confirmed panel: per-part zips + "all books" zip (folders per part +
+      printable playlist); browser-side assembly (fflate, STORE — bytes never re-encoded,
+      never through serverless); missing-file heads-up list
+- [x] 333/333 tests; end-to-end proof on the REAL confirmed intake (40 songs, 39 vln1 files,
+      1 gap = the special request, real part fetched byte-identical)
+- [ ] David: download a book, spot-check the playlist + page fidelity
+- Note: playlist Spotify link is text-only ("on the gig page") — clickable link = v2 polish
+
+### Phase C2 — Combined single-PDF books ✅ SHIPPED 2026-07-15 (9d1b2a12)
+- [x] mergePdfs(): STRUCTURAL merge (pdf-lib copyPages) — pages/fonts/vectors/images copied
+      verbatim, never re-rendered/recompressed (the old artifacting = re-rendering pipelines).
+      PROVEN on 2 real library PDFs: every source page's content stream byte-identical in the
+      merged doc. Damaged source names itself + aborts (no silent missing songs).
+- [x] "Combine each book into one PDF" checkbox (default ON): per-part buttons → single
+      "<Client> - VIOLIN 1.pdf" (playlist first, songs in order); "all books" → zip of merged
+      PDFs + printable playlist. Unchecked = original numbered-files zip. 335/335 tests.
+
+### Phase C3 — Books → Music / Parts ✅ SHIPPED 2026-07-15 (fb5bbdf1)
+- [x] "Send to Music / Parts" publishes each combined book as a project file assigned to its
+      instrument (exact-name matching, no fuzz; unmatched part = skipped + reported). Rides the
+      existing signed-upload + metadata rails; existing Send Music flow emails musicians.
+- [x] IntakePanel gets position instruments from projects-client. 338/338 tests.
+- [ ] David: publish books on the real project, then Send Music; note re-publishing creates a
+      new file each time (delete old ones in Music / Parts if you iterate)
+
+### Phase C4 — Books approval gate + routing confirm ✅ SHIPPED 2026-07-15 (f571f59b)
+Owner's pipeline made explicit: confirm → assemble+download → APPROVE books → confirm
+routing → publish to Music / Parts → Send Music.
+- [x] 071 intakes.books_approved_at (David ran; verified live, 0 pre-approved). EVERY intake
+      save clears it — approval covers one exact list.
+- [x] POST approve-books (stamp/revoke, confirmed-only). Books UI = numbered 3 steps;
+      Send to Music/Parts disabled until approved (timestamped badge, revocable).
+- [x] Publish shows routing table first (book → instrument dropdowns, exact-name prefill,
+      ambiguous → "Don't send", dup-chair rejected). 338/338 tests. DEPLOYED.
+
+### Phase C5–C7 — Spotify + polish ✅ SHIPPED 2026-07-15 (4729b685, 95ac00b0, fc73459c)
+- [x] C5: clickable "Spotify Playlist" link on playlist PDFs (URI annotation, Mac behavior) +
+      per-song BOOKMARKS in combined books (outline metadata; fidelity re-proven byte-identical)
+- [x] C6: Spotify auto-playlists — 072 spotify_connections (RLS locked, verified: anon sees 0
+      rows), OAuth connect/callback/status, per-song track PROPOSALS (review screen, skip
+      supported), create playlist in performance order → URL saved onto intake. Creds in
+      .env.local + Vercel prod/preview. David added redirect URI to his Spotify app.
+- [x] C7: "no weird covers" ranking (named-artist +60, popularity, karaoke/tribute -100,
+      covers -50, instrumental/quartet -25, live -10) — proven live: Temptations, Righteous
+      Brothers, ABBA, Glenn Miller Orchestra all originals. Pure src/lib/spotify-ranking.ts.
+- [x] C7: book auto-versioning — re-publish replaces the previous book per instrument
+      (BOOK_NOTES marker; delete only AFTER the new version lands). 347/347 tests.
+- [ ] David: Connect Spotify on the confirmed wedding → Build playlist → review picks →
+      Create → check the link lands on the intake + playlist PDF
+
+### B3 round 3 ✅ SHIPPED 2026-07-15 (580199f6)
+- [x] Walking order empty on the real questionnaire: 17hats puts the EXAMPLE inline on the
+      label line; old (Mac-faithful) logic ate the client's real numbered answer as example
+      boilerplate. Inline-example detected; run-together "1. Officiant2. Family" lines split
+      (two-digit-safe). Verified against the live intake raw_text: 6/6 steps, 40 songs, 0 warnings.
+- [x] Confirmed summary counted only AUTO-matches (27) — now counts every library-linked song
+      (auto + hand-picked = 39) with an "as typed" segment. 318/318 tests.
+
 ### Task 4 — Review UI (done 2026-07-15)
 - [x] 1. `GET /api/intake/repertoire?q=` — org-scoped repertoire search for the "Not in library" box.
 - [x] 2. Enhance `GET /api/intake/[projectId]` to attach matched repertoire (title/artist/ensemble) per saved song.
@@ -471,3 +536,57 @@ marker, flag the song, and prompt "mark as special request".
   Decisions: fold parser sections → IntakeSection enum at parse (see == save == reload); resolved =
   matchStatus in (matched|manual); human pick → 'manual', auto hit → 'matched'; lazy fetch on first open;
   503 (069 unapplied) degrades to a muted note; skip project-card chip (invasive server join).
+
+---
+
+# LAUNCH PREP (2026-07-17) — plan: ~/.claude/plans/virtual-juggling-goose.md
+
+## Phase B+C — Musician self-signup unblock + claim-email prefill (loop-killer)
+- [x] B1 register-form.tsx: delete roster pre-check, soften info box
+- [x] B2 OAuth callback: stop signing out no-roster users (REQUIRED pair with B1)
+- [x] B3 portal pages: stop redirecting empty rosters (page/profile return null; offers/[id] → /musician)
+- [x] B4 layout empty state: post-signup copy + "create an organization" CTA
+- [x] B5 tests: open signup + callback branches
+- [x] C1 email prefill: gig page → CTA ?email= → register page → form default
+
+## Phase A — Intake/Book Builder internal-only gate
+- [x] A1 migration 073_intake_flag.sql + append to launch-pending-migrations.sql
+- [x] A2 requireIntakeEnabled() in api-helpers.ts (fail closed 404)
+- [x] A3 swap guard in 11 intake/repertoire route handlers
+- [x] A4 OrgFlagsProvider + dashboard layout fetch + projects-client gate
+- [x] A5 tests: false→404, error→404, enabled→pass
+
+## Phase D — Linked "via Podium" footer
+- [x] D1 podium-footer.tsx shared component + PODIUM_FOOTER_URL
+- [x] D2 adopt in email-layout + 18 templates + raw-HTML unassign + 2 previews
+
+## Phase E — Coupon + waitlist
+- [x] E1 checkout: allow_promotion_codes: true
+- [x] E2 marketing site: hosted waitlist form embed (Tally)
+
+## Ops (David)
+- [ ] Confirm/apply migrations 064, 065, 066, 068–072 in prod
+- [ ] Apply 073 → UPDATE intake_enabled=true for internal org(s) → THEN deploy (this order, zero downtime)
+- [ ] Vercel prod env: EMAIL_SAFE_MODE=false, NEXT_PUBLIC_BILLING_ENABLED=true, CRON_ENABLED=true
+- [ ] Stripe live: create founding-member coupon + promo code
+- [ ] Create Tally (or similar) waitlist form, embed goes live with marketing push
+
+## Security remediation (post-review, 2026-07-17)
+- [x] Migration 074_harden_link_musician_rpc.sql: RPC now links only the caller's
+      own VERIFIED email (auth.users.email_confirmed_at required), p_user_id must
+      equal auth.uid(), anon execute revoked, service_role exempt. Also appended
+      to launch-pending-migrations.sql.
+- [x] register-form.tsx: removed the client-side link RPC call entirely — linking
+      happens only in the auth callback with the session-verified email.
+- [ ] **David ops: confirm "Confirm email" is ON in Supabase Auth settings** —
+      the email_confirmed_at guard assumes signups aren't auto-confirmed.
+
+## Verification log (2026-07-17)
+- Phases A–E implemented via 15-agent workflow (all done, 0 errors); build passed,
+  vitest 362/362 green both after implementation and again after the security fix.
+- Adversarial review: plan-compliance 0 findings, correctness 0 findings,
+  security 1 major (unverified-email linking) → fixed above (074 + form change).
+- New tests: require-intake-enabled (5 cases incl. fail-closed 404s),
+  musician-auth-callback-behavior (org-admin/linked/no-roster branches).
+- NOT YET DEPLOYED: nothing committed/pushed; prod order is
+  073+074 SQL → intake_enabled UPDATE → push to master.

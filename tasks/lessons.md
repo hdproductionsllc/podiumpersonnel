@@ -49,3 +49,15 @@
 **Root cause:** URLs were generated from just the venue name (`query=Our+Lady+of+Solitude+Church`) without address context or place_id. Multiple places had fallback code generating name-only URLs.
 **Fix:** All Maps URLs now use the official format: `https://www.google.com/maps/search/?api=1&query=NAME,+ADDRESS,+CITY,+STATE,+ZIP&query_place_id=PLACE_ID`. The `query` text provides a human-readable fallback; the `query_place_id` provides precision.
 **Rule:** Never generate a Google Maps URL from just a place name. Always include the full address in the `query` param, and `query_place_id` when available. The old format (`/maps/place/?q=place_id:XXXX`) is undocumented — use the official Maps URLs API format.
+
+## Feature-flag columns: flip the data BEFORE deploying the code that reads it
+**Date:** 2026-07-17
+**Bug (process):** Launch plan for the `intake_enabled` gate proposed apply-migration → deploy → then UPDATE the flag for internal orgs — leaving a window where the owner's own org lost the feature. David caught it in review.
+**Root cause:** Defaulted to "migrate, deploy, backfill" without noticing the additive column is invisible to old code, so there's no reason to sequence the UPDATE after deploy.
+**Rule:** For an additive flag column with a fail-closed default, the zero-downtime order is: apply migration → immediately set the flag for the orgs that need it → then deploy the code that reads it. Nothing reads the column until the new code ships, so flipping early is always safe. Never accept an avoidable downtime window in a deploy plan.
+
+## "Sole consumer" claims need a runtime path trace, not just an import grep
+**Date:** 2026-07-17
+**Bug (process):** Plan justified gating `/api/repertoire/upload-url` + `add-work` on "only the intake dialog imports them" from a grep. David required tracing the actual admin upload-a-PDF flow before approving, since a miss would silently break music distribution for every customer org.
+**Root cause:** A grep finds imports; it doesn't prove the user-visible flows that matter route elsewhere.
+**Rule:** Before gating/removing an endpoint because it "has one consumer," manually trace the adjacent user flows that could plausibly hit it (here: admin gig-file upload → `/api/projects/[projectId]/files/upload-url`, musician music → `send-music`/`musician/files`) and record the trace in the plan. Grep is evidence, not proof.
