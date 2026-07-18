@@ -590,3 +590,12 @@ routing → publish to Music / Parts → Send Music.
   musician-auth-callback-behavior (org-admin/linked/no-roster branches).
 - NOT YET DEPLOYED: nothing committed/pushed; prod order is
   073+074 SQL → intake_enabled UPDATE → push to master.
+
+## DEPLOYED LIVE 2026-07-18
+- App (app.podiumpersonnel.com): new code verified serving (open-signup register copy).
+- DB: 073+074 applied by David; 4 internal orgs flagged; anon RPC probe links 0 rows.
+- Marketing (podiumpersonnel.com): /waitlist live w/ Tally embed + pricing link
+  (required commit 633b000e — Vercel skips marketing builds unless push HEAD
+  touches podium-marketing/; see lessons + memory).
+- Still David: Vercel env flips (then redeploy), Supabase "Confirm email" check,
+  Stripe promo code, Tally form ID, optional PUBLIC-grant revoke SQL.
