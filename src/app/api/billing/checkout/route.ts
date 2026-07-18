@@ -49,6 +49,7 @@ export async function POST(request: Request) {
   const session = await getStripe().checkout.sessions.create({
     customer: customerId,
     mode: 'subscription',
+    allow_promotion_codes: true,
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?billing=success`,
     cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?billing=cancel`,

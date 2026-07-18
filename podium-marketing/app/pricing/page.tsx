@@ -309,6 +309,20 @@ export default function PricingPage() {
             after your trial, your account drops to Free with all your data retained.
             Performers are always free, and registered 501(c)(3) nonprofits get 25% off.
           </motion.p>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="mt-4 text-center font-body text-sm text-ink-500"
+          >
+            <Link
+              href="/waitlist"
+              className="font-medium text-brass-600 underline-offset-4 hover:underline"
+            >
+              Early? Join the founding-member waitlist →
+            </Link>
+          </motion.p>
         </div>
       </section>
 
