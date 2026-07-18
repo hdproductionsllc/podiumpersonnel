@@ -49,7 +49,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-REVOKE EXECUTE ON FUNCTION link_musician_records_to_user(UUID, TEXT) FROM anon;
+REVOKE ALL ON FUNCTION link_musician_records_to_user(UUID, TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION link_musician_records_to_user(UUID, TEXT) TO authenticated, service_role;
 
 -- ---------- Verification (should print 4 flagged orgs + OK) ----------
 SELECT name, intake_enabled FROM organizations ORDER BY intake_enabled DESC, name;

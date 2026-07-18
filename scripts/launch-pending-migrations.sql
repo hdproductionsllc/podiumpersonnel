@@ -111,7 +111,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-REVOKE EXECUTE ON FUNCTION link_musician_records_to_user(UUID, TEXT) FROM anon;
+REVOKE ALL ON FUNCTION link_musician_records_to_user(UUID, TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION link_musician_records_to_user(UUID, TEXT) TO authenticated, service_role;
 
 -- ---------- Verification (prints results; all should say OK) ----------
 SELECT

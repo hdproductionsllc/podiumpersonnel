@@ -40,7 +40,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-REVOKE EXECUTE ON FUNCTION link_musician_records_to_user(UUID, TEXT) FROM anon;
+-- Functions get an implicit PUBLIC execute grant — revoking only `anon`
+-- leaves it reachable, so strip PUBLIC and grant back the two real callers.
+-- (Harmless either way: the in-function guard already no-ops for anon.)
+REVOKE ALL ON FUNCTION link_musician_records_to_user(UUID, TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION link_musician_records_to_user(UUID, TEXT) TO authenticated, service_role;
 
 -- verify:
 -- SELECT proname, proacl FROM pg_proc WHERE proname = 'link_musician_records_to_user';
