@@ -48,8 +48,7 @@ export async function GET(request: Request) {
           return NextResponse.redirect(`${origin}/dashboard`)
         }
 
-        await supabase.auth.signOut()
-        return NextResponse.redirect(`${origin}/musician/login?error=no_musician_records`)
+        return NextResponse.redirect(`${origin}${next}`)
       }
 
       const isFirstLogin = musicians && musicians.length > 0 &&

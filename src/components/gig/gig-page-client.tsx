@@ -66,6 +66,7 @@ interface GigPageClientProps {
   instruments: Instrument[]
   existingSubRequest: SubRequest | null
   musicianHasAccount: boolean
+  musicianEmail: string | null
   subsEnabled?: boolean
 }
 
@@ -90,6 +91,7 @@ export function GigPageClient({
   instruments,
   existingSubRequest,
   musicianHasAccount,
+  musicianEmail,
   subsEnabled = true,
 }: GigPageClientProps) {
   const [showSubRequestForm, setShowSubRequestForm] = useState(false)
@@ -462,7 +464,7 @@ export function GigPageClient({
                         Create a free Podium account to view upcoming services, manage your schedule, respond to future calls faster, and request substitutes if needed.
                       </p>
                       <a
-                        href="/musician/register"
+                        href={`/musician/register${musicianEmail ? `?email=${encodeURIComponent(musicianEmail)}` : ''}`}
                         className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
                       >
                         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">

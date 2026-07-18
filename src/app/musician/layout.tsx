@@ -74,18 +74,18 @@ export default async function MusicianLayout({
       return (
         <div className="flex min-h-screen items-center justify-center px-4 bg-gradient-to-b from-background to-muted/20">
           <div className="w-full max-w-md rounded-lg border bg-card p-8 text-center space-y-4">
-            <h2 className="text-xl font-semibold">No Musician Account Found</h2>
+            <h2 className="text-xl font-semibold">You&apos;re all set</h2>
             <p className="text-sm text-muted-foreground">
-              Your login doesn&apos;t have a musician profile linked to it. If you were invited to perform, try registering with the email your organization has on file.
+              Your account is ready. When a contractor books you or adds you to their roster using {user.email}, your gigs, schedule, and music will appear here automatically.
             </p>
             <div className="flex flex-col gap-2">
-              <a
-                href="/musician/register"
-                className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                Register as a Musician
-              </a>
               <MusicianSignOutButton />
+              <a
+                href="/signup"
+                className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+              >
+                Organize your own ensemble? Create an organization &rarr;
+              </a>
             </div>
           </div>
         </div>

@@ -21,8 +21,12 @@ async function DashboardContent({ impersonateId }: { impersonateId?: string }) {
     supabase, user.id, impersonateId
   )
 
-  if (resolveError || musicianIds.length === 0) {
+  if (impersonateId && resolveError) {
     redirect('/musician/login?error=no_musician_records')
+  }
+
+  if (musicianIds.length === 0) {
+    return null
   }
 
   // Get primary musician name
@@ -35,7 +39,7 @@ async function DashboardContent({ impersonateId }: { impersonateId?: string }) {
     .single()
 
   if (!primaryMusician) {
-    redirect('/musician/login?error=no_musician_records')
+    return null
   }
 
   // Parallel data fetching

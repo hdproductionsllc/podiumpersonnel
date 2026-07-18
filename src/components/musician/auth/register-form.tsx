@@ -20,7 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import Link from 'next/link'
 import { Music } from 'lucide-react'
 
-export function MusicianRegisterForm() {
+export function MusicianRegisterForm({ initialEmail }: { initialEmail?: string }) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
@@ -40,7 +40,7 @@ export function MusicianRegisterForm() {
   const form = useForm<MusicianSignupInput>({
     resolver: zodResolver(musicianSignupSchema),
     defaultValues: {
-      email: typeof window !== 'undefined' ? localStorage.getItem('musician_email') || '' : '',
+      email: initialEmail || (typeof window !== 'undefined' ? localStorage.getItem('musician_email') || '' : ''),
       password: '',
       confirmPassword: '',
     },
@@ -52,27 +52,8 @@ export function MusicianRegisterForm() {
 
     const supabase = createClient()
 
-    // First check if there are any musician records with this email
-    const { data: existingMusicians, error: checkError } = await supabase
-      .from('musicians')
-      .select('id')
-      .eq('email', data.email)
-      .limit(1)
-
-    if (checkError) {
-      setError('An error occurred. Please try again.')
-      setIsLoading(false)
-      return
-    }
-
-    if (!existingMusicians || existingMusicians.length === 0) {
-      setError('No musician records found for this email. Please contact your organization to get added to their roster first.')
-      setIsLoading(false)
-      return
-    }
-
     // Create the account
-    const { data: authData, error: signUpError } = await supabase.auth.signUp({
+    const { error: signUpError } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
       options: {
@@ -86,13 +67,8 @@ export function MusicianRegisterForm() {
       return
     }
 
-    if (authData.user) {
-      // Link musician records to this user
-      await supabase.rpc('link_musician_records_to_user', {
-        p_user_id: authData.user.id,
-        p_email: data.email,
-      })
-    }
+    // Roster linking happens in the auth callback after the email is verified —
+    // never here, where the typed email is unverified.
 
     // Redirect to login with success message
     router.push('/musician/login?message=account_created')
@@ -120,7 +96,7 @@ export function MusicianRegisterForm() {
               </div>
             )}
             <div className="rounded-md bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-3 text-sm text-blue-800 dark:text-blue-200">
-              Use the same email address that your organization has on file for you.
+              If an organization invited you, use the email they have on file so your gigs link automatically. Otherwise, any email works.
             </div>
             <FormField
               control={form.control}

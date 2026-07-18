@@ -29,7 +29,7 @@ export default async function MusicianOfferDetailPage({ params, searchParams }: 
   )
 
   if (resolveError || musicianIds.length === 0) {
-    redirect('/musician/login?error=no_musician_records')
+    redirect('/musician')
   }
 
   // Fetch the offer

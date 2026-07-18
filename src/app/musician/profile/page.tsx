@@ -20,8 +20,12 @@ async function ProfileContent({ impersonateId }: { impersonateId?: string }) {
     supabase, user.id, impersonateId
   )
 
-  if (resolveError || musicianIds.length === 0) {
+  if (impersonateId && resolveError) {
     redirect('/musician/login?error=no_musician_records')
+  }
+
+  if (musicianIds.length === 0) {
+    return null
   }
 
   // Get full musician data for resolved IDs
@@ -49,7 +53,7 @@ async function ProfileContent({ impersonateId }: { impersonateId?: string }) {
     .eq('is_active', true)
 
   if (error || !musicians || musicians.length === 0) {
-    redirect('/musician/login?error=no_musician_records')
+    return null
   }
 
   // Get notification preferences for the primary musician
