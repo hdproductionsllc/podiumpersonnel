@@ -36,9 +36,12 @@ function isMissingTableError(err: SupabaseError): boolean {
 }
 
 export async function POST(request: Request) {
-  const { membership, error } = await requireIntakeEnabled()
-  if (error || !membership) return error!
-  const orgId = membership.organization_id
+  const { membership, libraryOrgId, error } = await requireIntakeEnabled()
+  if (error || !membership || !libraryOrgId) return error ?? apiError('Not found', 404)
+  // A learned synonym belongs to the (possibly SHARED) library it teaches, so
+  // every brand sharing that library benefits from the correction. Verify + write
+  // against libraryOrgId.
+  const orgId = libraryOrgId
 
   let body: { aliasText?: unknown; repertoireId?: unknown }
   try {

@@ -94,8 +94,8 @@ export async function GET(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params
-  const { membership, error } = await requireIntakeEnabled()
-  if (error || !membership) return error!
+  const { membership, libraryOrgId, error } = await requireIntakeEnabled()
+  if (error || !membership || !libraryOrgId) return error ?? apiError('Not found', 404)
   const orgId = membership.organization_id
 
   const service = createServiceClient()
@@ -148,10 +148,12 @@ export async function GET(
 
   let repById = new Map<string, { id: string; title: string; artist: string | null; ensemble: string }>()
   if (matchedIds.length > 0) {
+    // Matched works live in the (possibly shared) library, not necessarily the
+    // caller's own org — scope this read to libraryOrgId.
     const { data: repRows, error: repErr } = await service
       .from('repertoire')
       .select('id,title,artist,ensemble')
-      .eq('organization_id', orgId)
+      .eq('organization_id', libraryOrgId)
       .in('id', matchedIds)
 
     if (repErr) return serverError('intake: load matched repertoire', repErr)
@@ -171,8 +173,8 @@ export async function PUT(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params
-  const { membership, error } = await requireIntakeEnabled()
-  if (error || !membership) return error!
+  const { membership, libraryOrgId, error } = await requireIntakeEnabled()
+  if (error || !membership || !libraryOrgId) return error ?? apiError('Not found', 404)
   const orgId = membership.organization_id
 
   let body: {
@@ -225,13 +227,15 @@ export async function PUT(
   }))
 
   // Never trust caller-supplied repertoire ids (house rule; two past cross-tenant
-  // leaks): every matched_repertoire_id must belong to THIS org's repertoire.
+  // leaks): every matched_repertoire_id must belong to the caller's library —
+  // which may be a SHARED library owned by another of the user's brands, so the
+  // ownership check scopes to libraryOrgId (not the caller's own org).
   const claimedIds = [...new Set(rows.map((r) => r.matched_repertoire_id).filter((v): v is string => !!v))]
   if (claimedIds.length > 0) {
     const { data: owned, error: ownErr } = await service
       .from('repertoire')
       .select('id')
-      .eq('organization_id', orgId)
+      .eq('organization_id', libraryOrgId)
       .in('id', claimedIds)
     if (ownErr) return serverError('intake: verify repertoire ownership', ownErr)
     const ownedSet = new Set((owned ?? []).map((r) => r.id as string))

@@ -36,9 +36,12 @@ interface IncomingPart {
 }
 
 export async function POST(request: Request) {
-  const { membership, error } = await requireIntakeEnabled()
-  if (error || !membership) return error!
-  const orgId = membership.organization_id
+  const { membership, libraryOrgId, error } = await requireIntakeEnabled()
+  if (error || !membership || !libraryOrgId) return error ?? apiError('Not found', 404)
+  // Adding a work writes into the (possibly SHARED) library. When a brand shares
+  // another org's library, the work lands there — so it's instantly available to
+  // every brand that shares it, with one copy of the row and one copy of the file.
+  const orgId = libraryOrgId
 
   if (!isR2Configured()) {
     return apiError('File storage is not configured on this server.', 503)

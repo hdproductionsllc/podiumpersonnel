@@ -21,9 +21,13 @@ const MAX_PDF_BYTES = 100 * 1024 * 1024 // 100MB — far above any real part/sco
 const UPLOAD_URL_TTL_SECONDS = 600
 
 export async function POST(request: Request) {
-  const { membership, error } = await requireIntakeEnabled()
-  if (error || !membership) return error!
-  const orgId = membership.organization_id
+  const { membership, libraryOrgId, error } = await requireIntakeEnabled()
+  if (error || !membership || !libraryOrgId) return error ?? apiError('Not found', 404)
+  // Part bytes are content-addressed under the LIBRARY org's prefix
+  // (repertoire/<libraryOrgId>/<sha>.pdf) so a brand sharing another org's
+  // library uploads into that library's own storage namespace — matching where
+  // add-work will look and keeping one physical copy per unique file.
+  const orgId = libraryOrgId
 
   if (!isR2Configured()) {
     return apiError('File storage is not configured on this server.', 503)

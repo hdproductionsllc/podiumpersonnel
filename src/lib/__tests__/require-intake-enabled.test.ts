@@ -25,6 +25,7 @@ const state = vi.hoisted(() => ({
   authUser: undefined as any,
   membership: undefined as { data: any } | undefined,
   orgRead: undefined as { data: any; error: any } | undefined,
+  libraryRead: undefined as { data: any; error: any } | undefined,
   adminFromCalls: [] as string[],
 }))
 
@@ -37,11 +38,15 @@ function serverChain(result: { data: any }) {
   return chain
 }
 
-function adminChain(result: { data: any; error: any }) {
+// The gate reads organizations.intake_enabled via .single(); resolveLibraryOrgId
+// reads organizations.library_org_id via .maybeSingle(). Distinguishing the two
+// by terminal method lets each test drive them independently.
+function adminChain(single: { data: any; error: any }, maybe: { data: any; error: any }) {
   const chain: any = {
     select: () => chain,
     eq: () => chain,
-    single: async () => result,
+    single: async () => single,
+    maybeSingle: async () => maybe,
   }
   return chain
 }
@@ -65,7 +70,10 @@ vi.mock('@/lib/supabase/admin', () => ({
     from: (table: string) => {
       state.adminFromCalls.push(table)
       if (table === 'organizations') {
-        return adminChain(state.orgRead ?? { data: null, error: null })
+        return adminChain(
+          state.orgRead ?? { data: null, error: null },
+          state.libraryRead ?? { data: null, error: null }
+        )
       }
       throw new Error(`unexpected admin table ${table}`)
     },
@@ -81,6 +89,8 @@ beforeEach(() => {
   state.authUser = USER
   state.membership = { data: MEMBERSHIP }
   state.orgRead = { data: { intake_enabled: true }, error: null }
+  // Default: no shared library → resolveLibraryOrgId falls back to the own org.
+  state.libraryRead = { data: { library_org_id: null }, error: null }
   state.adminFromCalls = []
 })
 
@@ -120,6 +130,37 @@ describe('requireIntakeEnabled', () => {
     expect(user).toEqual(USER)
     expect(membership).toEqual(MEMBERSHIP)
     expect(state.adminFromCalls).toContain('organizations')
+  })
+
+  it('resolves libraryOrgId to the OWN org when no shared library is set', async () => {
+    const { libraryOrgId, error } = await requireIntakeEnabled()
+
+    expect(error).toBeNull()
+    expect(libraryOrgId).toBe('org-1')
+  })
+
+  it('resolves libraryOrgId to the POINTER when the org shares another org’s library', async () => {
+    state.libraryRead = { data: { library_org_id: 'library-owner-org' }, error: null }
+
+    const { membership, libraryOrgId, error } = await requireIntakeEnabled()
+
+    expect(error).toBeNull()
+    // Own-org data stays scoped to the caller; only the library is redirected.
+    expect(membership).toEqual(MEMBERSHIP)
+    expect(libraryOrgId).toBe('library-owner-org')
+  })
+
+  it('fails OPEN to the own org when the library lookup errors (e.g. column not migrated)', async () => {
+    state.libraryRead = {
+      data: null,
+      error: { message: 'column organizations.library_org_id does not exist', code: '42703' },
+    }
+
+    const { libraryOrgId, error } = await requireIntakeEnabled()
+
+    // A missing pointer/column must never break the feature — use the own library.
+    expect(error).toBeNull()
+    expect(libraryOrgId).toBe('org-1')
   })
 
   it('propagates an upstream requireOrgAdmin failure unchanged and skips the org read', async () => {

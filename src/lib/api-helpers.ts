@@ -83,11 +83,19 @@ export async function requireOrgPlan() {
 /**
  * Gate for the internal-only intake / Book Builder feature. Fails CLOSED with a
  * 404 (never 403) when the org's flag is off — the feature isn't advertised.
+ *
+ * On success it also returns `libraryOrgId`: the org whose music library this
+ * caller reads and writes. Usually that's the caller's own org, but a brand can
+ * SHARE another org's library (organizations.library_org_id) — see
+ * resolveLibraryOrgId. Library queries (repertoire / repertoire_parts /
+ * title_aliases and the R2 part-file key prefix) MUST scope to `libraryOrgId`;
+ * everything else (projects, intakes, client selections, the book's cover name)
+ * stays scoped to `membership.organization_id`.
  */
 export async function requireIntakeEnabled() {
   const { supabase, user, membership, error } = await requireOrgAdmin()
   if (error || !user || !membership) {
-    return { supabase, user: null, membership: null, error: error! }
+    return { supabase, user: null, membership: null, libraryOrgId: null, error: error! }
   }
 
   const adminClient = createAdminClient()
@@ -98,10 +106,40 @@ export async function requireIntakeEnabled() {
     .single()
 
   if (orgError || !org?.intake_enabled) {
-    return { supabase, user, membership: null, error: apiError('Not found', 404) }
+    return { supabase, user, membership: null, libraryOrgId: null, error: apiError('Not found', 404) }
   }
 
-  return { supabase, user, membership, error: null }
+  const libraryOrgId = await resolveLibraryOrgId(membership.organization_id)
+
+  return { supabase, user, membership, libraryOrgId, error: null }
+}
+
+/**
+ * Resolve which org owns the library a given org reads and writes. The music
+ * library can be SHARED across a user's brands: an org may source its repertoire
+ * from another org via `organizations.library_org_id`. One master library, one
+ * copy of every file — the pointer means several brands see the SAME shelf, so a
+ * change in one is a change for all, with no duplication.
+ *
+ * Fails OPEN to the caller's own org: a NULL pointer, a lookup error, or the
+ * column not being migrated yet all resolve to "use your own library" (today's
+ * behavior) — never a broken feature. This is what lets the code ship before
+ * migration 075 is applied, and keeps any org that isn't explicitly wired
+ * (e.g. a future real customer) fully walled off.
+ */
+export async function resolveLibraryOrgId(organizationId: string): Promise<string> {
+  try {
+    const adminClient = createAdminClient()
+    const { data, error } = await adminClient
+      .from('organizations')
+      .select('library_org_id')
+      .eq('id', organizationId)
+      .maybeSingle()
+    if (error || !data) return organizationId
+    return (data.library_org_id as string | null) ?? organizationId
+  } catch {
+    return organizationId
+  }
 }
 
 /**

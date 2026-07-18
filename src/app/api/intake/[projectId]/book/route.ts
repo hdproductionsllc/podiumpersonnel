@@ -34,8 +34,8 @@ export async function GET(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params
-  const { membership, error } = await requireIntakeEnabled()
-  if (error || !membership) return error!
+  const { membership, libraryOrgId, error } = await requireIntakeEnabled()
+  if (error || !membership || !libraryOrgId) return error ?? apiError('Not found', 404)
   const orgId = membership.organization_id
 
   if (!isR2Configured()) {
@@ -77,14 +77,18 @@ export async function GET(
 
   const ordered = orderForBook(songRows ?? [])
 
-  // Load matched works + their part files (org-scoped).
+  // Load matched works + their part files. These live in the (possibly SHARED)
+  // library — scope to libraryOrgId. The presigned R2 URLs are still minted only
+  // for storage_paths recorded on the library's own repertoire_parts rows, and
+  // libraryOrgId is resolved server-side from the org row (never caller-supplied),
+  // so the tenant boundary holds: a brand only ever reaches its own owner's library.
   const workIds = [...new Set(ordered.map((r) => r.matched_repertoire_id).filter((v): v is string => !!v))]
   const partsByWork = new Map<string, PartFileRow[]>()
   if (workIds.length > 0) {
     const { data: partRows, error: partsErr } = await service
       .from('repertoire_parts')
       .select('repertoire_id, part, substitute, played_on, storage_path, original_filename')
-      .eq('organization_id', orgId)
+      .eq('organization_id', libraryOrgId)
       .in('repertoire_id', workIds)
     if (partsErr) return serverError('book: load part files', partsErr)
     for (const p of partRows ?? []) {

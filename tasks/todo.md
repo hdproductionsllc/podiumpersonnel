@@ -1,3 +1,74 @@
+# Shared Music Library Across Your Brands (2026-07-18) — CODE DONE, NEEDS DAVID: RUN 075
+
+## STATUS
+- [x] Approach approved by David (shared library, not copy). Brands to wire: Subito Strings,
+      Meridian, Lonestar. (Duplicate PSQ + orphan Subito String Quartet intentionally left alone.)
+- [x] Code complete: resolver + 7 routes + migration 075 + wire script + tests.
+- [x] tsc clean · 365/365 tests (3 new) · production build green · wire-script guard verified live.
+- [ ] **David: run `supabase/migrations/075_org_shared_library.sql` in Supabase SQL editor.**
+- [ ] Then: `node scripts/wire-shared-library.js --apply` (I run it, prints proof each brand → 996 songs).
+- [ ] Then: verify by logging into Subito → build a book → songs match. Then push to master (deploy).
+
+
+
+## The goal (plain English)
+Today each brand (Project String Quartet, Subito, Meridian, Lonestar...) has its OWN walled-off
+music library. Only PSQ's has anything — 996 songs / 3,558 PDFs. Logging into another brand shows
+an empty library, so every song reads "not in library" (this is what happened on the other machine).
+You want ONE master library all brands share: edit once → changed everywhere, no copies, no extra
+storage.
+
+## The design — one source of truth, ZERO duplication
+Each brand gets a POINTER to "the org whose library I use." All your brands point at PSQ.
+- Still ONE set of song records + ONE copy of each PDF (all owned by PSQ). Storage does not grow.
+- Every brand reads/writes THOSE same records → change one, changes all, automatically.
+- New column `organizations.library_org_id` (nullable). NULL = use own library (today's behavior,
+  unchanged → safe for any future real customer). Set = resolve to the pointed-at org.
+- Central resolver: `libraryOrgId = org.library_org_id ?? own org id`. Everything else swaps the
+  org id it filters the library by, from "my org" to "my library org." Projects/intakes/client
+  selections stay scoped to the caller's OWN brand — only the music library is shared.
+
+## Why this is right (first principles, not a bolt-on)
+"An org can source its library from another org" becomes an explicit, first-class property.
+Backwards compatible. No data copied. Future brands opt in with one field. Any future real
+customer org stays NULL → the per-org wall still protects them, nothing leaks.
+
+## Implementation steps
+### 1. DB — add the pointer (migration 075, SCHEMA ONLY, no prod IDs baked in)
+- [ ] `075_org_shared_library.sql`: `library_org_id UUID NULL REFERENCES organizations(id)`
+      + `CHECK (library_org_id IS NULL OR library_org_id <> id)` (no self-point; single hop, no chains)
+### 2. Central resolver (`src/lib/api-helpers.ts`)
+- [ ] `requireIntakeEnabled()` also reads `library_org_id`, returns `libraryOrgId` alongside the
+      caller's `organization_id`. One place decides "which library" so it can't drift.
+### 3. Point the 7 library touch-points at `libraryOrgId` (traced by research agent)
+- [ ] READ  `api/intake/parse/route.ts` — the match that produces "not in library"
+- [ ] READ  `api/intake/repertoire/route.ts` — review-screen search box
+- [ ] READ  `api/intake/[projectId]/route.ts` — matched-title resolve (GET) + ownership check (PUT)
+- [ ] READ  `api/intake/[projectId]/book/route.ts` — load parts + mint PDF download links
+- [ ] WRITE `api/repertoire/add-work/route.ts` — add/extend song + parts
+- [ ] WRITE `api/repertoire/upload-url/route.ts` — PDF key prefix `repertoire/<libraryOrgId>/...`
+- [ ] WRITE `api/intake/alias/route.ts` — "also known as" learning
+### 4. Wire your brands to PSQ (prod DATA — kept OUT of the migration on purpose)
+- [ ] Service-role script sets `library_org_id = <PSQ 6edbf230>` on the brand orgs you confirm;
+      re-query + print proof each brand now resolves to PSQ's 996 songs. (Flag data before code.)
+### 5. Verify by driving it (runtime, not greps)
+- [ ] Log into a brand (e.g. Subito) → open Book Builder → parse → songs MATCH (no "not in library")
+      → build a book → PDFs download. Confirm R2 object count UNCHANGED. Write verification log.
+### 6. Deploy
+- [ ] migration + code → master; confirm Vercel deploy lands ("fixed" only when live).
+
+## Decisions to confirm with David
+1. Which brand orgs point at PSQ? Proposed: Subito Strings, Subito String Quartet, Meridian,
+   Lonestar. Also the DUPLICATE empty PSQ (rebeccachungviolin@gmail.com) + orphan "Subito String
+   Quartet" (no owner) — wire them or leave for cleanup?
+2. Future brands: set the pointer per new org (deliberately NOT auto-default, so a future real
+   customer never inherits your library). Admin toggle = V2.
+
+## Out of scope (V2)
+- Admin UI to set a brand's library source; clean up duplicate/empty orgs; multi-brand under one login.
+
+---
+
 # V2.0: Vertical Template Architecture (started 2026-07-11)
 
 Full plan: `~/.claude/plans/glistening-forging-thimble.md` · Strategy: `tasks/v2-strategy.md`

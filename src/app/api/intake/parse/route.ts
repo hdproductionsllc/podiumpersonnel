@@ -37,10 +37,8 @@ export interface ProposedSong {
 }
 
 export async function POST(request: Request) {
-  const { membership, error } = await requireIntakeEnabled()
-  if (error || !membership) return error!
-
-  const orgId = membership.organization_id
+  const { membership, libraryOrgId, error } = await requireIntakeEnabled()
+  if (error || !membership || !libraryOrgId) return error ?? apiError('Not found', 404)
 
   let body: { rawText?: unknown; gigEnsemble?: unknown }
   try {
@@ -66,17 +64,19 @@ export async function POST(request: Request) {
   // 1. Parse (pure; never trusts anything downstream — proposal only).
   const parsed = parseIntake(rawText)
 
-  // 2. Load THIS org's repertoire + aliases (service client, org-scoped).
+  // 2. Load the caller's (possibly SHARED) library repertoire + aliases (service
+  //    client, scoped to libraryOrgId — the org that owns the library, which may
+  //    be a different brand of the same owner).
   //    ALL of these reads paginate: PostgREST caps responses at 1,000 rows, and
-  //    this org already has 3,558 parts — an unpaginated read silently truncates
-  //    and produces confidently-wrong gap badges (adversarial review finding).
+  //    this library already has 3,558 parts — an unpaginated read silently
+  //    truncates and produces confidently-wrong gap badges (adversarial finding).
   const service = createServiceClient()
 
   async function selectAll<T>(table: string, columns: string): Promise<{ rows: T[]; error: unknown }> {
     const PAGE = 1000
     const rows: T[] = []
     for (let from = 0; ; from += PAGE) {
-      let q = service.from(table).select(columns).eq('organization_id', orgId).range(from, from + PAGE - 1)
+      let q = service.from(table).select(columns).eq('organization_id', libraryOrgId).range(from, from + PAGE - 1)
       if (table === 'repertoire') q = q.eq('is_active', true)
       const { data, error } = await q
       if (error) return { rows, error }

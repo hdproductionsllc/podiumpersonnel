@@ -35,10 +35,8 @@ function escapeLike(s: string): string {
 }
 
 export async function GET(request: Request) {
-  const { membership, error } = await requireIntakeEnabled()
-  if (error || !membership) return error!
-
-  const orgId = membership.organization_id
+  const { membership, libraryOrgId, error } = await requireIntakeEnabled()
+  if (error || !membership || !libraryOrgId) return error ?? apiError('Not found', 404)
 
   const url = new URL(request.url)
   const q = (url.searchParams.get('q') ?? '').trim()
@@ -60,7 +58,7 @@ export async function GET(request: Request) {
   const { data, error: repErr } = await service
     .from('repertoire')
     .select('id,title,artist,ensemble')
-    .eq('organization_id', orgId)
+    .eq('organization_id', libraryOrgId)
     .eq('is_active', true)
     .or(orFilters)
     .order('title', { ascending: true })
