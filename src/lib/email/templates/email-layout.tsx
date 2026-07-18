@@ -5,10 +5,10 @@ import {
   Container,
   Section,
   Text,
-  Hr,
   Img,
 } from '@react-email/components'
 import * as React from 'react'
+import { PodiumFooter } from './podium-footer'
 
 export interface EmailBranding {
   logoUrl?: string | null
@@ -53,19 +53,10 @@ export function EmailLayout({
 
           {children}
 
-          <Hr style={hr} />
-
-          <Section style={footer}>
-            {footerText && (
-              <Text style={footerText as React.CSSProperties}>{footerText}</Text>
-            )}
-            <Text style={footerTextStyle}>
-              This email was sent by {organizationName} via Podium.
-            </Text>
-            <Text style={footerTextStyle}>
-              If you have questions, please contact the organization directly.
-            </Text>
-          </Section>
+          <PodiumFooter
+            organizationName={organizationName}
+            footerText={footerText}
+          />
         </Container>
       </Body>
     </Html>
@@ -169,23 +160,6 @@ const heading = {
   fontWeight: 'bold',
   margin: '0',
   textAlign: 'center' as const,
-}
-
-const hr = {
-  borderColor: '#e6ebf1',
-  margin: '20px 0',
-}
-
-const footer = {
-  padding: '0 24px',
-}
-
-const footerTextStyle = {
-  color: '#8898aa',
-  fontSize: '12px',
-  lineHeight: '16px',
-  textAlign: 'center' as const,
-  marginBottom: '4px',
 }
 
 // Helper function to create button style with brand color

@@ -5,10 +5,10 @@ import {
   Container,
   Section,
   Text,
-  Hr,
   Preview,
 } from '@react-email/components'
 import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
+import { PodiumFooter } from './podium-footer'
 
 interface SubRequestApprovedEmailProps {
   musicianName: string
@@ -87,13 +87,7 @@ export function SubRequestApprovedEmail({
             </Text>
           </Section>
 
-          <Hr style={hr} />
-
-          <Section style={footer}>
-            <Text style={footerText}>
-              This email was sent by {organizationName} via Podium.
-            </Text>
-          </Section>
+          <PodiumFooter organizationName={organizationName} />
         </Container>
       </Body>
     </Html>
@@ -185,23 +179,6 @@ const smallText = {
   color: '#8898aa',
   textAlign: 'center' as const,
   fontStyle: 'italic',
-}
-
-const hr = {
-  borderColor: '#e6ebf1',
-  margin: '20px 0',
-}
-
-const footer = {
-  padding: '0 24px',
-}
-
-const footerText = {
-  color: '#8898aa',
-  fontSize: '12px',
-  lineHeight: '16px',
-  textAlign: 'center' as const,
-  marginBottom: '4px',
 }
 
 export default SubRequestApprovedEmail

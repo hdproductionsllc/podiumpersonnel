@@ -6,9 +6,9 @@ import {
   Section,
   Text,
   Button,
-  Hr,
   Preview,
 } from '@react-email/components'
+import { PodiumFooter } from './podium-footer'
 import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface OfferAcceptedEmailProps {
@@ -118,13 +118,10 @@ export function OfferAcceptedEmail({
             </Text>
           </Section>
 
-          <Hr style={hr} />
-
-          <Section style={footer}>
-            <Text style={footerText}>
-              This confirmation was sent by {organizationName} via Podium.
-            </Text>
-          </Section>
+          <PodiumFooter
+            organizationName={organizationName}
+            verb="confirmation"
+          />
         </Container>
       </Body>
     </Html>
@@ -318,23 +315,6 @@ const thankYou = {
   color: '#166534',
   textAlign: 'center' as const,
   marginTop: '24px',
-}
-
-const hr = {
-  borderColor: '#e6ebf1',
-  margin: '20px 0',
-}
-
-const footer = {
-  padding: '0 24px',
-}
-
-const footerText = {
-  color: '#8898aa',
-  fontSize: '12px',
-  lineHeight: '16px',
-  textAlign: 'center' as const,
-  marginBottom: '4px',
 }
 
 export default OfferAcceptedEmail

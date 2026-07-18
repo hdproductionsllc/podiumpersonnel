@@ -6,11 +6,11 @@ import {
   Section,
   Text,
   Button,
-  Hr,
   Preview,
   Img,
 } from '@react-email/components'
 import { type EmailBranding } from './email-layout'
+import { PodiumFooter } from './podium-footer'
 import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface OfferReminderEmailProps {
@@ -100,19 +100,10 @@ export function OfferReminderEmail({
             </Text>
           </Section>
 
-          <Hr style={hr} />
-
-          <Section style={footer}>
-            {footerText && (
-              <Text style={footerTextStyle}>{footerText}</Text>
-            )}
-            <Text style={footerTextStyle}>
-              This email was sent by {organizationName} via Podium.
-            </Text>
-            <Text style={footerTextStyle}>
-              If you have questions, please contact the organization directly.
-            </Text>
-          </Section>
+          <PodiumFooter
+            organizationName={organizationName}
+            footerText={footerText}
+          />
         </Container>
       </Body>
     </Html>
@@ -221,23 +212,6 @@ const smallText = {
   fontSize: '12px',
   color: '#8898aa',
   textAlign: 'center' as const,
-}
-
-const hr = {
-  borderColor: '#e6ebf1',
-  margin: '20px 0',
-}
-
-const footer = {
-  padding: '0 24px',
-}
-
-const footerTextStyle = {
-  color: '#8898aa',
-  fontSize: '12px',
-  lineHeight: '16px',
-  textAlign: 'center' as const,
-  marginBottom: '4px',
 }
 
 export default OfferReminderEmail

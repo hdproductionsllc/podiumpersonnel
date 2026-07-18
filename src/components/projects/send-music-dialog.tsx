@@ -135,7 +135,14 @@ function EmailPreview({
       {/* Footer */}
       <div className="border-t px-4 py-2 text-center bg-white">
         <p className="text-xs text-muted-foreground">
-          This email was sent by {organizationName} via Podium.
+          This email was sent by {organizationName} via{' '}
+          <a
+            href="https://www.podiumpersonnel.com/?utm_source=transactional_email&utm_medium=footer&utm_campaign=recipient_referral"
+            className="underline"
+          >
+            Podium
+          </a>
+          .
         </p>
       </div>
     </div>

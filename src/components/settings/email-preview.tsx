@@ -86,7 +86,14 @@ export function EmailPreview({
             <p className="text-gray-600 text-xs text-center mb-2">{footerText}</p>
           )}
           <p className="text-gray-400 text-xs text-center">
-            This email was sent by {organizationName} via Podium.
+            This email was sent by {organizationName} via{' '}
+            <a
+              href="https://www.podiumpersonnel.com/?utm_source=transactional_email&utm_medium=footer&utm_campaign=recipient_referral"
+              className="underline"
+            >
+              Podium
+            </a>
+            .
           </p>
           <p className="text-gray-400 text-xs text-center">
             If you have questions, please contact the organization directly.

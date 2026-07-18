@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendPositionUnassignedEmail, sendEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
+import { PODIUM_FOOTER_URL } from '@/lib/email/templates/podium-footer'
 
 export async function POST(
   request: NextRequest,
@@ -140,7 +141,7 @@ export async function POST(
               <p><strong>Musician:</strong> ${musician?.first_name} ${musician?.last_name}</p>
               <p><strong>Unassigned by:</strong> ${user.email}</p>
             </div>
-            <p style="color: #666; font-size: 12px;">This notification was sent via Podium.</p>
+            <p style="color: #666; font-size: 12px;">This notification was sent via <a href="${PODIUM_FOOTER_URL}" style="color:#666;text-decoration:underline;">Podium</a>.</p>
           </div>
         `
         emailPromises.push(

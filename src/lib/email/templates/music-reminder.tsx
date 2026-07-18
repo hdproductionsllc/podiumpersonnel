@@ -12,6 +12,7 @@ import {
   Img,
 } from '@react-email/components'
 import { type EmailBranding } from './email-layout'
+import { PodiumFooter } from './podium-footer'
 import { type TermDictionary } from '@/lib/verticals'
 
 interface MusicReminderEmailProps {
@@ -104,16 +105,10 @@ export function MusicReminderEmail({
             </Text>
           </Section>
 
-          <Hr style={hr} />
-
-          <Section style={footer}>
-            {footerText && (
-              <Text style={footerTextStyle}>{footerText}</Text>
-            )}
-            <Text style={footerTextStyle}>
-              This email was sent by {organizationName} via Podium.
-            </Text>
-          </Section>
+          <PodiumFooter
+            organizationName={organizationName}
+            footerText={footerText}
+          />
         </Container>
       </Body>
     </Html>
@@ -215,23 +210,6 @@ const smallText = {
   fontSize: '12px',
   color: '#8898aa',
   textAlign: 'center' as const,
-}
-
-const hr = {
-  borderColor: '#e6ebf1',
-  margin: '20px 0',
-}
-
-const footer = {
-  padding: '0 24px',
-}
-
-const footerTextStyle = {
-  color: '#8898aa',
-  fontSize: '12px',
-  lineHeight: '16px',
-  textAlign: 'center' as const,
-  marginBottom: '4px',
 }
 
 export default MusicReminderEmail
