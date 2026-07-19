@@ -442,14 +442,23 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
       const orderLines: string[] = []
 
       if (hasExample) {
-        // Skip numbered example items; the last may have the response appended.
+        // Skip the numbered EXAMPLE items, then collect the client's real answer.
+        // The example and the answer are often BOTH numbered lists back-to-back
+        // (example 1..5, then the real order RESTARTS at 1). A number that does not
+        // increase (a reset, e.g. 5 → 1) marks where the example ends and the
+        // client's actual answer begins — stop skipping there. (An example whose
+        // last item has the response run onto it is still handled via the concat.)
         let lastNumberedRemainder = ''
+        let prevNum = 0
         while (j < lines.length) {
           const candidate = lines[j].trim().replace(/^[-•*]\s*/, '').trim()
           if (!candidate) { disp[j] = 'empty'; j += 1; continue }
-          const numM = /^\d+\.\s*(.*)/.exec(candidate)
+          const numM = /^(\d+)\.\s*(.*)/.exec(candidate)
           if (numM) {
-            const exampleText = numM[1].trim()
+            const num = parseInt(numM[1], 10)
+            if (prevNum > 0 && num <= prevNum) break // numbering reset → real answer starts here
+            prevNum = num
+            const exampleText = numM[2].trim()
             const concat = /[a-z]([A-Z])/.exec(exampleText)
             if (concat) lastNumberedRemainder = exampleText.slice(concat.index + 1)
             disp[j] = 'meta'; j += 1; continue
@@ -463,7 +472,10 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
           const lowerC = candidate.toLowerCase()
           if (sectionMatches(lowerC)) break
           if (hasSkipMarker(lowerC)) break
-          orderLines.push(candidate); disp[j] = 'meta'; j += 1
+          // Strip a leading "N." so items read "Officiant", not "1. Officiant".
+          const numbered = /^\d+[.)]\s*(.*)/.exec(candidate)
+          orderLines.push((numbered ? numbered[1] : candidate).trim())
+          disp[j] = 'meta'; j += 1
         }
       } else {
         while (j < lines.length) {
