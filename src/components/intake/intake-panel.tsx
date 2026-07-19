@@ -643,8 +643,8 @@ export function IntakePanel({ projectId, ensembleType, instruments }: IntakePane
                     <Input value={header.venueNote} onChange={(e) => setHeader({ ...header, venueNote: e.target.value })} className="h-8 text-sm" />
                   </div>
                   <div>
-                    <label className="text-[11px] font-medium text-muted-foreground block mb-0.5">Spotify playlist</label>
-                    <Input value={header.spotifyUrl} onChange={(e) => setHeader({ ...header, spotifyUrl: e.target.value })} placeholder="https://open.spotify.com/…" className="h-8 text-sm" />
+                    <label className="text-[11px] font-medium text-muted-foreground block mb-0.5">Spotify link <span className="font-normal text-muted-foreground/70">(optional — auto-created after you Confirm)</span></label>
+                    <Input value={header.spotifyUrl} onChange={(e) => setHeader({ ...header, spotifyUrl: e.target.value })} placeholder="Leave blank — built automatically from your song list" className="h-8 text-sm" />
                   </div>
                 </div>
               </div>
