@@ -428,24 +428,28 @@ export async function buildPlaylistPdf(
   // any music page.
   const contactText = header.contact ? `Contact: ${s(header.contact)}` : ''
   if (header.spotifyUrl) {
-    const size = 8.5
-    const linkText = 'Spotify Playlist'
-    const extra = contactText ? `  |  ${contactText}` : ''
-    const linkW = helv.widthOfTextAtSize(linkText, size)
-    const startX = (612 - (linkW + helv.widthOfTextAtSize(extra, size))) / 2
+    // Show the FULL playlist URL, green and clickable (a URI link annotation over
+    // the text). Shrinks to fit the page width for long URLs; contact goes on its
+    // own line below. The annotation is metadata on this generated page only.
+    let size = 8.5
+    const linkText = header.spotifyUrl
+    const maxW = 612 - 80
+    let linkW = helv.widthOfTextAtSize(linkText, size)
+    while (linkW > maxW && size > 6) { size -= 0.5; linkW = helv.widthOfTextAtSize(linkText, size) }
+    const startX = (612 - linkW) / 2
     page.drawText(linkText, { x: startX, y, size, font: helv, color: GREEN })
-    if (extra) page.drawText(extra, { x: startX + linkW, y, size, font: helv, color: GRAY })
     const link = doc.context.register(
       doc.context.obj({
         Type: 'Annot',
         Subtype: 'Link',
-        Rect: [startX - 1, y - 2.5, startX + linkW + 1, y + 9.5],
+        Rect: [startX - 1, y - 2.5, startX + linkW + 1, y + size + 1],
         Border: [0, 0, 0],
         A: { Type: 'Action', S: 'URI', URI: PDFString.of(header.spotifyUrl) },
       })
     )
     page.node.set(PDFName.of('Annots'), doc.context.obj([link]))
-    y -= 10
+    y -= 12
+    if (contactText) { drawCentered(contactText, helv, 8.5, GRAY); y -= 10 }
   } else if (contactText) {
     drawCentered(contactText, helv, 8.5, GRAY)
     y -= 10
