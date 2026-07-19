@@ -60,6 +60,14 @@ function fmtDuration(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
+/** Open the freshly-created playlist in a new tab (the Spotify web player, which
+ *  offers "Open in app"). Returns false if a popup blocker stopped it. */
+function openPlaylist(url: string): boolean {
+  if (typeof window === 'undefined' || !url) return false
+  const w = window.open(url, '_blank', 'noopener,noreferrer')
+  return !!w
+}
+
 export function SpotifyPlaylistBuilder({ projectId, currentUrl, onCreated, autoSignal }: SpotifyPlaylistBuilderProps) {
   const [status, setStatus] = useState<Status | null>(null)
   const [proposals, setProposals] = useState<Proposal[] | null>(null)
@@ -137,9 +145,10 @@ export function SpotifyPlaylistBuilder({ projectId, currentUrl, onCreated, autoS
       }
       onCreated(data.url as string)
       setProposals(null)
+      openPlaylist(data.url as string) // open it right away (within the click → not popup-blocked)
       toast.success(
         data.saved
-          ? `Playlist created with ${trackUris.length} track${trackUris.length === 1 ? '' : 's'} — the link is saved on this intake.`
+          ? `Playlist created with ${trackUris.length} track${trackUris.length === 1 ? '' : 's'} — opening it now.`
           : 'Playlist created, but saving the link failed — copy it from the field below.'
       )
     } catch {
@@ -172,7 +181,10 @@ export function SpotifyPlaylistBuilder({ projectId, currentUrl, onCreated, autoS
       const cd = await cr.json()
       if (cr.ok) {
         onCreated(cd.url as string)
-        toast.success(`Spotify playlist auto-created (${trackUris.length} tracks). Rebuild to swap any track.`)
+        // Auto-create runs off a Confirm effect, so a popup blocker may stop the
+        // new tab — fall back to the prominent link/button below.
+        const opened = openPlaylist(cd.url as string)
+        toast.success(`Spotify playlist auto-created (${trackUris.length} tracks).${opened ? ' Opening it now.' : ' Click “Open playlist” to view it.'} Rebuild to swap any track.`)
       } else if (cr.status !== 409) {
         toast.error(cd.error || 'Auto-create failed — use Build to try again.')
       }
@@ -198,14 +210,19 @@ export function SpotifyPlaylistBuilder({ projectId, currentUrl, onCreated, autoS
       <div className="flex flex-wrap items-center gap-2">
         <h5 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Spotify playlist</h5>
         {currentUrl && (
-          <a
-            href={currentUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-primary underline-offset-4 hover:underline break-all"
-          >
-            {currentUrl}
-          </a>
+          <>
+            <Button size="sm" variant="default" className="h-7" onClick={() => openPlaylist(currentUrl)}>
+              Open playlist ↗
+            </Button>
+            <a
+              href={currentUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-primary underline-offset-4 hover:underline break-all"
+            >
+              {currentUrl}
+            </a>
+          </>
         )}
       </div>
 
