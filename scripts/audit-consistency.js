@@ -79,9 +79,26 @@ async function main() {
     if (readable.length >= 2) {
       shared = readable[0].words.filter((tok) => readable.every((p) => p.words.includes(tok)))
     }
-    const flagged = readable.length >= 2 && shared.length === 0
-    const reason = flagged ? 'parts share NO common title word' : unreadable ? `${unreadable} part(s) unreadable` : ''
-    console.log(JSON.stringify({ id, title: w.title, ensemble: w.ensemble, nparts: parts.length, readable: readable.length, shared, flagged, reason, parts: partInfo }))
+    // Composer-mashup check: two different composers named across the parts' own
+    // filenames ("Title - Composer - part.pdf") means one entry holds two different
+    // pieces that merely share a title (e.g. Ave Maria: Schubert vs Bach/Gounod).
+    // This catches same-title mashups even when every part OCRs the same title word.
+    const composers = [...new Set(
+      parts.map((p) => {
+        const segs = String(p.original_filename || '').replace(/\.pdf$/i, '').split(' - ')
+        return segs.length >= 3 ? segs[segs.length - 2].toLowerCase().replace(/[^a-z0-9 ]/g, '').trim() : ''
+      }).filter(Boolean),
+    )]
+    // Collapse names that are substrings of each other (handel ≈ g f handel), then
+    // a mashup is 2+ genuinely-distinct composers.
+    const distinctComposers = []
+    for (const c of composers) if (!distinctComposers.some((d) => d.includes(c) || c.includes(d))) distinctComposers.push(c)
+    const composerMashup = distinctComposers.length >= 2
+    const flagged = (readable.length >= 2 && shared.length === 0) || composerMashup
+    const reason = composerMashup ? `parts name different composers: ${composers.join(' vs ')}`
+      : (readable.length >= 2 && shared.length === 0) ? 'parts share NO common title word'
+      : unreadable ? `${unreadable} part(s) unreadable` : ''
+    console.log(JSON.stringify({ id, title: w.title, ensemble: w.ensemble, nparts: parts.length, readable: readable.length, shared, flagged, composerMashup, composers, reason, parts: partInfo }))
   }
 }
 main().catch((e) => { console.error('FATAL', e.message); process.exit(1) })

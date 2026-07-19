@@ -102,7 +102,10 @@ async function main() {
     for (const id of map.archived) {
       await api(`repertoire?id=eq.${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: true }) })
     }
-    console.log(`✓ undone: ${map.moves.length} parts moved back, ${map.archived.length} stubs reactivated.`)
+    for (const a of map.aliasRepoints || []) {
+      await api(`title_aliases?organization_id=eq.${ORG}&alias_norm=eq.${encodeURIComponent(a.alias_norm)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repertoire_id: a.fromRep }) })
+    }
+    console.log(`✓ undone: ${map.moves.length} parts moved back, ${map.archived.length} stubs reactivated, ${(map.aliasRepoints || []).length} aliases restored.`)
     return
   }
 
@@ -133,7 +136,7 @@ async function main() {
     if (a !== 'y' && a !== 'yes') { console.log('No changes made.'); return }
   }
 
-  const undo = { moves: [], archived: [], at: 'run' }
+  const undo = { moves: [], archived: [], aliasRepoints: [], at: 'run' }
   let merged = 0, guarded = 0
   for (const p of plan) {
     // safety: never archive a stub that a confirmed book points at
@@ -145,6 +148,15 @@ async function main() {
     }
     await api(`repertoire?id=eq.${p.frag.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: false }) })
     undo.archived.push(p.frag.id)
+    // Repoint any aliases from the archived stub to the merged target, so no alias
+    // is ever orphaned onto an archived work (the class of bug that broke book
+    // building). Recorded for undo.
+    const stubAliases = await get(`title_aliases?organization_id=eq.${ORG}&repertoire_id=eq.${p.frag.id}&select=alias_norm`)
+    if (Array.isArray(stubAliases) && stubAliases.length) {
+      await api(`title_aliases?organization_id=eq.${ORG}&repertoire_id=eq.${p.frag.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repertoire_id: p.comp.id }) })
+      for (const a of stubAliases) undo.aliasRepoints.push({ alias_norm: a.alias_norm, fromRep: p.frag.id })
+      console.log(`    ↦ repointed ${stubAliases.length} alias(es) → ${p.comp.title}`)
+    }
     merged++
   }
   const undoPath = path.join(ROOT, 'scripts', 'repertoire-out', 'merge-undo.json')
