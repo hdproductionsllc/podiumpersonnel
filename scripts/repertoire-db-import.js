@@ -114,6 +114,7 @@ function parseArgs(argv) {
     org: process.env.PODIUM_ORG_ID || '',
     aliases: process.env.REPERTOIRE_ALIASES || DEFAULT_ALIASES,
     dryRun: false,
+    report: '', // explicit path: when set, the report is always written (dry-run too)
   }
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i]
@@ -122,6 +123,7 @@ function parseArgs(argv) {
       case '--org': opts.org = argv[++i]; break
       case '--aliases': opts.aliases = argv[++i]; break
       case '--dry-run': opts.dryRun = true; break
+      case '--report': opts.report = argv[++i]; break
       case '--help': case '-h': printHelpAndExit(); break
       default:
         console.error(`Unknown option: ${a}`)
@@ -134,7 +136,8 @@ function parseArgs(argv) {
 function printHelpAndExit(code = 0) {
   console.log(
     'Usage: PODIUM_ORG_ID=<uuid> node scripts/repertoire-db-import.js\n' +
-      '  [--index <path>] [--org <uuid>] [--aliases <path>] [--dry-run]',
+      '  [--index <path>] [--org <uuid>] [--aliases <path>] [--dry-run] [--report <path>]\n' +
+      '  --report <path>  Always write the JSON plan/report to <path> (dry-run included).',
   )
   throw new ExitSignal(code)
 }
@@ -572,6 +575,7 @@ async function runImport(plan, opts, rest) {
 
   // --- existing rows (idempotency probe) ---
   let existingWorks = new Map() // identity -> id
+  const existingShas = new Set() // lowercased sha256 of every PDF already in the library
   let existingParts = new Set() // `${repertoire_id}\0role`
   let existingAliases = new Set() // alias_norm
   let tablesMissing = false
@@ -586,10 +590,13 @@ async function runImport(plan, opts, rest) {
     const partRows = await restSelectAll(
       rest,
       'repertoire_parts',
-      `organization_id=eq.${opts.org}&select=repertoire_id,part,substitute,played_on`,
+      `organization_id=eq.${opts.org}&select=repertoire_id,part,substitute,played_on,sha256`,
     )
     for (const p of partRows) {
       existingParts.add(`${p.repertoire_id} ${roleKey(p.part, p.substitute, p.played_on)}`)
+    }
+    for (const p of partRows) {
+      if (p.sha256) existingShas.add(String(p.sha256).toLowerCase())
     }
     const aliasRows = await restSelectAll(
       rest,
@@ -620,13 +627,23 @@ async function runImport(plan, opts, rest) {
   // --- repertoire ---
   const worksToInsert = []
   for (const w of plan.works) {
-    if (existingWorks.has(w.identityKey)) {
+    // Content-presence check: a work is already in the library if EVERY one of its
+    // part PDFs (by sha256) is already stored — true even when the existing DB row
+    // carries a richer artist than this filename scan produced (e.g. DB "The Beatles"
+    // vs a blank-artist rescan). Without this, an artist mismatch makes the identity
+    // key differ and the importer would insert a phantom duplicate work.
+    w._allPartsPresent =
+      w.parts.length > 0 &&
+      w.parts.every((p) => p.sha256 && existingShas.has(p.sha256.toLowerCase()))
+    if (existingWorks.has(w.identityKey) || w._allPartsPresent) {
       report.skipped.repertoire++
     } else {
       worksToInsert.push(w)
     }
   }
   report.inserted.repertoire = worksToInsert.length
+  // The specific works that are NEW (for the update-library preview / review gate).
+  report.newWorks = worksToInsert.map(summarizeWork)
 
   if (!opts.dryRun && worksToInsert.length) {
     const payload = worksToInsert.map((w) => ({
@@ -651,6 +668,13 @@ async function runImport(plan, opts, rest) {
   // --- repertoire_parts ---
   const partsToInsert = []
   for (const w of plan.works) {
+    // Fully content-present work (all part bytes already stored): nothing to add.
+    // In a live run it was deliberately not inserted, so it has no id — skip its
+    // parts quietly instead of logging a false "parent not inserted" error.
+    if (w._allPartsPresent && !existingWorks.has(w.identityKey)) {
+      report.skipped.parts += w.parts.length
+      continue
+    }
     // Real run: a work whose repertoire insert failed has no id — its parts can't
     // be written. Record one error and skip them (a re-run fixes it once the
     // parent inserts).
@@ -661,6 +685,12 @@ async function runImport(plan, opts, rest) {
       continue
     }
     for (const p of w.parts) {
+      // Content dedup: if these exact bytes are already stored anywhere in the
+      // library, never re-add them (keeps re-runs and artist-drift safe).
+      if (p.sha256 && existingShas.has(p.sha256.toLowerCase())) {
+        report.skipped.parts++
+        continue
+      }
       const repId = w.repertoireId
       const roleId = repId
         ? `${repId} ${roleKey(p.part, p.substitute, p.played_on)}`
@@ -749,6 +779,18 @@ async function runImport(plan, opts, rest) {
 // ---------------------------------------------------------------------------
 // output
 // ---------------------------------------------------------------------------
+
+/** Compact, machine-readable summary of one work for the report's newWorks list. */
+function summarizeWork(w) {
+  return {
+    title: w.title,
+    artist: w.artist || null,
+    ensemble: w.ensemble,
+    tags: w.tagsArr || [...(w.tags || [])].sort(),
+    parts: (w.parts || []).map((p) => p.part),
+    filenames: (w.files || []).map((f) => f.originalFilename),
+  }
+}
 
 function printSamples(plan) {
   console.log('\n--- sample repertoire rows (up to 10) ---')
@@ -855,11 +897,17 @@ async function main() {
   )
   console.log(`  errors              : ${report.errors.length}`)
 
-  if (!opts.dryRun) {
+  // Write the JSON report on any live run, and on ANY run (dry-run included) when
+  // an explicit --report path is given. This lets update-library.js read the plan
+  // (report.newWorks) before deciding whether to commit.
+  const reportTargets = []
+  if (!opts.dryRun) reportTargets.push(REPORT_PATH)
+  if (opts.report && opts.report !== REPORT_PATH) reportTargets.push(opts.report)
+  for (const target of reportTargets) {
     try {
-      fs.mkdirSync(path.dirname(REPORT_PATH), { recursive: true })
-      fs.writeFileSync(REPORT_PATH, JSON.stringify(report, null, 2))
-      console.log(`  report written      : ${REPORT_PATH}`)
+      fs.mkdirSync(path.dirname(target), { recursive: true })
+      fs.writeFileSync(target, JSON.stringify(report, null, 2))
+      console.log(`  report written      : ${target}`)
     } catch (e) {
       console.warn(`  (could not write report: ${e.message})`)
     }
@@ -916,6 +964,8 @@ function buildEmptyDbReport(plan, opts) {
     report.aliasesSeeded++
   }
   report.inserted.aliases = report.aliasesSeeded
+  // No DB to diff against, so every planned work is "new".
+  report.newWorks = plan.works.map(summarizeWork)
   return report
 }
 

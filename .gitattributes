@@ -1,0 +1,2 @@
+# Mac double-click launcher must keep Unix line endings or macOS rejects the shebang.
+*.command text eol=lf
