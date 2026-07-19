@@ -234,6 +234,8 @@ export function IntakePanel({ projectId, ensembleType, instruments }: IntakePane
   // The confirm-anyway warning step: first Confirm click with unresolved items
   // shows the warning; only the explicit "Confirm anyway" sends the override.
   const [confirmOverride, setConfirmOverride] = useState(false)
+  // Bumped on each successful Confirm → tells the Spotify builder to auto-create.
+  const [spotifyAutoSignal, setSpotifyAutoSignal] = useState(0)
   // Owner's sign-off that the assembled books are ready to send (071). Any
   // save clears it server-side; mirrored here.
   const [booksApprovedAt, setBooksApprovedAt] = useState<string | null>(null)
@@ -397,7 +399,7 @@ export function IntakePanel({ projectId, ensembleType, instruments }: IntakePane
       // Every save invalidates the books approval (the list may have changed).
       setBooksApprovedAt(null)
       if (which === 'draft') toast.success('Draft saved.')
-      else if (which === 'confirmed') { toast.success('Client selections confirmed.'); setPhase('confirmed'); setConfirmOverride(false) }
+      else if (which === 'confirmed') { toast.success('Client selections confirmed.'); setPhase('confirmed'); setConfirmOverride(false); setSpotifyAutoSignal((n) => n + 1) }
       else { toast.success('Reopened as draft.'); setPhase('review') }
       // Learning loop: teach the library every remembered correction. Best-effort
       // and idempotent — it runs after the save succeeds and never blocks it.
@@ -870,6 +872,7 @@ export function IntakePanel({ projectId, ensembleType, instruments }: IntakePane
                 projectId={projectId}
                 currentUrl={header.spotifyUrl || null}
                 onCreated={(url) => setHeader((h) => ({ ...h, spotifyUrl: url }))}
+                autoSignal={spotifyAutoSignal}
               />
 
               {/* Phase C: assemble + download the per-musician books. */}

@@ -10,7 +10,7 @@
  *   the playlist PDFs (clickable link) and the gig page.
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -48,6 +48,11 @@ interface SpotifyPlaylistBuilderProps {
   /** The intake's current Spotify URL (client-provided or previously built). */
   currentUrl: string | null
   onCreated: (url: string) => void
+  /** Increments each time the intake is freshly Confirmed. On change, if there's
+   *  no URL yet and Spotify is connected, the playlist is auto-created from the
+   *  top track per song — no clicks. Fires on the Confirm action only (not on
+   *  viewing old intakes). */
+  autoSignal?: number
 }
 
 function fmtDuration(ms: number): string {
@@ -55,11 +60,12 @@ function fmtDuration(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
-export function SpotifyPlaylistBuilder({ projectId, currentUrl, onCreated }: SpotifyPlaylistBuilderProps) {
+export function SpotifyPlaylistBuilder({ projectId, currentUrl, onCreated, autoSignal }: SpotifyPlaylistBuilderProps) {
   const [status, setStatus] = useState<Status | null>(null)
   const [proposals, setProposals] = useState<Proposal[] | null>(null)
   const [picks, setPicks] = useState<Record<number, string>>({}) // num -> uri | 'skip'
   const [busy, setBusy] = useState<null | 'status' | 'proposals' | 'create'>(null)
+  const autoDone = useRef<number>(0)
 
   async function loadStatus(): Promise<Status | null> {
     if (status) return status
@@ -142,6 +148,48 @@ export function SpotifyPlaylistBuilder({ projectId, currentUrl, onCreated }: Spo
       setBusy(null)
     }
   }
+
+  // Auto-create on Confirm: fetch proposals and immediately create from the top
+  // hit per song (no review). Silent no-op if not connected. Rebuild lets the
+  // admin swap a wrong classical recording afterward.
+  async function autoCreate() {
+    const s = await loadStatus()
+    if (!s || !s.configured || !s.connected) return
+    setBusy('proposals')
+    try {
+      const pr = await fetch(`/api/intake/${projectId}/spotify-proposals`)
+      const pd = await pr.json()
+      if (!pr.ok) return
+      const props = (pd.proposals as Proposal[]) || []
+      const trackUris = props.map((p) => p.candidates[0]?.uri).filter((u): u is string => !!u)
+      if (trackUris.length === 0) return
+      setBusy('create')
+      const cr = await fetch(`/api/intake/${projectId}/spotify-playlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackUris }),
+      })
+      const cd = await cr.json()
+      if (cr.ok) {
+        onCreated(cd.url as string)
+        toast.success(`Spotify playlist auto-created (${trackUris.length} tracks). Rebuild to swap any track.`)
+      } else if (cr.status !== 409) {
+        toast.error(cd.error || 'Auto-create failed — use Build to try again.')
+      }
+    } catch {
+      /* silent — the manual Build button remains available */
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  useEffect(() => {
+    if (!autoSignal || autoSignal === autoDone.current) return
+    autoDone.current = autoSignal
+    if (currentUrl || busy) return // already has a link, or busy
+    void autoCreate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSignal])
 
   const skippedCount = proposals ? proposals.filter((p) => picks[p.num] === 'skip').length : 0
 
