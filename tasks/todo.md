@@ -199,3 +199,54 @@ nothing to play. Reinstating per David's call, but it needs real parts sourced.
 - STILL TRUE: Harry's Wondrous World has no Violin II staff. The book now builds
   and every player gets the score, but a 2nd violinist still has nothing to read.
   Real parts should be sourced. Documented in the runbook caveat.
+
+---
+
+# Catalog data repair (2026-07-20) — live
+
+Found by diffing our catalog against what's live on the brand sites.
+
+## THE SAFETY RULE David set
+"I don't want the issue where we type in a song we used to have and now the system
+says missing and doesn't compile either."
+
+Matching runs on `norm_title` + `title_aliases`, NEVER on the display title. So
+renames changed ONLY `title`/`artist` and left `norm_title` untouched — every old
+spelling keeps working — and an ALIAS was added for each new spelling. Strictly
+more matchable than before, never less.
+
+## Fixed (scripts/fix-catalog-data.js, reversible: --undo)
+- [x] Mojibake x3: DvoraÌ€k -> Dvořák Waltz, FaureÌ -> Fauré Pavane,
+      SchoÌˆn -> Schön Rosmarin (double-encoded UTF-8 baked into the DB).
+- [x] Lost apostrophes x4: Anna's Minuet, Entr'acte IV, Rodger's Waltzes,
+      The Lord's Prayer.
+- [x] Swapped columns: "Four Seasons" / artist "Spring Movement 1"
+      -> "Spring (The Four Seasons)" / Antonio Vivaldi.
+- [x] SPLIT WORK: Skyfall existed as FOUR one-part works ("Skyfall Cello pdf"...)
+      each with an `other` part, so it could not be booked at all. Merged into ONE
+      quartet: 4 parts relabelled vln1/vln2/vla/vc from their explicit filenames
+      (verified 4 distinct sha256 first), stubs ARCHIVED not deleted, and every
+      stub's old name kept as an alias.
+- [x] 14 aliases added.
+
+## Proof
+- [x] Before/after matcher snapshot over 25 names: **0 regressions, 8 newly
+      matching** (typing "Anna's Minuet" or "Skyfall" used to MISS entirely).
+- [x] Live throwaway test, 12 cases: every repaired name matches AND compiles a
+      full 4-part book (Skyfall delivers 4 DIFFERENT files, not one score x4).
+      Deleted after.
+- Undo map: scripts/repertoire-out/fix-catalog-data-undo.json
+
+## Also
+- [x] Stronger (Kanye West) imported — complete quartet + score.
+- [x] export-catalog gate fixes: "Grow Old With You"/"The Old Refrain" were being
+      REJECTED (the annotation rule matched "old" anywhere); placeholder rows
+      ("Glass Animals - Glass Animals", "Jungleland - PSQ", "Jessica Pena Wedding
+      Set", "Recessional", "By Beatles") were being PUBLISHED. Both fixed.
+
+## STILL OPEN — the real gap
+~166 songs live on the brand websites are ABSENT from the Podium library
+(verified: Chanukah Medley, Hine Ma Tov, Dodi Li, Klezmer Medley, Deck the Halls,
+Silver Bells, Winter Wonderland, O Come O Come Emmanuel, Thank U Next, Diamonds,
+Luck Be a Lady...). The sites advertise music Podium cannot build books for.
+=> Any website import must be ADDITIVE. Finding those PDFs is the next project.
