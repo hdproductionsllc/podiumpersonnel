@@ -61,3 +61,15 @@
 **Bug (process):** Plan justified gating `/api/repertoire/upload-url` + `add-work` on "only the intake dialog imports them" from a grep. David required tracing the actual admin upload-a-PDF flow before approving, since a miss would silently break music distribution for every customer org.
 **Root cause:** A grep finds imports; it doesn't prove the user-visible flows that matter route elsewhere.
 **Rule:** Before gating/removing an endpoint because it "has one consumer," manually trace the adjacent user flows that could plausibly hit it (here: admin gig-file upload → `/api/projects/[projectId]/files/upload-url`, musician music → `send-music`/`musician/files`) and record the trace in the plan. Grep is evidence, not proof.
+
+## Verify a work's parts are DISTINCT files, not just present (2026-07-20)
+Importing the Fazio folder, "Harry's Wondrous World" arrived as four identically-named
+part files that were byte-identical copies of ONE PDF — a conductor score, not quartet
+parts. The importer happily created a work with 4 part rows, all pointing at the same
+sha256. Filename checks, part-label checks and "all 4 parts present" checks ALL passed.
+What caught it: asserting the part rows have 4 DISTINCT sha256s.
+Then confirmed by extracting the embedded page images and actually looking at them
+(pdf text extraction returned nothing — it was a scan).
+=> When importing parts: check part COUNT, part LABELS, and part DISTINCTNESS.
+   Scanned PDFs need the images extracted + viewed; text extraction silently returns
+   nothing and reads as "no problem found".
