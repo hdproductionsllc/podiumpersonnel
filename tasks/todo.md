@@ -306,3 +306,19 @@ it says Violin II** — then it is a one-line relabel.
   the cellist; Erev is score-only bookable; old names still resolve. Deleted after.
 - 124 intake tests pass. Catalog 717 -> **722 songs**.
 - Undo: fix-incomplete-works.js --undo, carol-merge-undo.json
+
+## Romeo and Juliet Theme — RESOLVED 2026-07-20 (David confirmed by eye)
+David opened the PDF: the bare "- vln.pdf" IS the violin 2 part.
+Found the labels were CROSSED, not just missing one:
+  "- vln.pdf"  was vln1  -> vln2   (the file David identified)
+  "- vln1.pdf" was other -> vln1   (bumped to 'other' because the vln1 slot was taken)
+Cause: the indexer's vln1 rule accepts a bare "vln", so "- vln.pdf" claimed the vln1
+slot first and the real vln1 file collided out. Now a complete quartet.
+Undo: scripts/repertoire-out/romeo-vln2-undo.json
+
+## FINAL STATE — items 1-4 all confirmed live (9/9 tests)
+- 1 SPLITS: Lay Lady Lay, Say You Know, Carol of the Drum — each builds 4 distinct parts
+- 2 MISLABEL: Welcome To the Jungle — cellist gets the Cello file, artist Guns N' Roses
+- 3 SCORE-ONLY: Erev Shel Shoshanim — every player reads the score (David's call)
+- 4 ROMEO: complete, vln2 = the file David confirmed
+- No old name stopped matching. Catalog now **723 songs**.
