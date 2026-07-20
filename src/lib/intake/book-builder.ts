@@ -152,11 +152,21 @@ export interface PickedFile {
   warning: string | null
 }
 
+/** The individual lines a string ensemble splits into. */
+const CORE_PARTS = ['vln1', 'vln2', 'vla', 'vc']
+
 /**
  * Choose the file that covers `part` for one work:
  *   1. the exact non-substitute part
  *   2. a recorded substitute file covering this line (played_on)
  *   3. Mac fallback: a missing viola is covered by the vln2 file ("vln2 as vla")
+ *   4. a conductor score, but ONLY for a work that has no individual parts at all
+ *
+ * Rung 4 exists because the players read scores off tablets and turn pages with a
+ * foot pedal, so a score-only work is genuinely playable — every player gets the
+ * same document. It is deliberately the LAST rung and deliberately narrow: a work
+ * with some real parts never has one absent line quietly papered over with the
+ * score. That case still returns null, exactly as it did before.
  */
 export function pickFileForPart(rows: PartFileRow[], part: string, workTitle: string): PickedFile | null {
   const usable = rows.filter((r) => r.storage_path)
@@ -179,6 +189,19 @@ export function pickFileForPart(rows: PartFileRow[], part: string, workTitle: st
         row: vln2,
         fileLabel: 'vln2 as vla',
         warning: `"${workTitle}": missing viola part — using vln2 as substitute`,
+      }
+    }
+  }
+
+  // Score-only work: no individual parts exist, so everyone reads the score.
+  const hasAnyCorePart = usable.some((r) => CORE_PARTS.includes(r.part) && !r.substitute)
+  if (!hasAnyCorePart) {
+    const score = usable.find((r) => r.part === 'score')
+    if (score) {
+      return {
+        row: score,
+        fileLabel: 'score',
+        warning: `"${workTitle}": no individual parts — every player reads the score`,
       }
     }
   }

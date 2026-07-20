@@ -74,3 +74,36 @@ When you're in a project and a requested song isn't in the library, use the **"A
 
 Library org: **Project String Quartet** `6edbf230-e43a-42c0-a60d-8cd67be87276`.
 Override with `--org <uuid>` if you ever need a different library.
+
+## Score-only works ("conductor only")
+
+Some works exist only as a **conductor score** — one document with every line on
+it — and have no individual part files. These are playable: the players read the
+score off a tablet and turn pages with a foot pedal.
+
+To add one, name the file with the `score` part:
+
+```
+Harry's Wondrous World - John Williams - score.pdf
+```
+
+The importer will flag it `⚠ missing some parts`. **That warning is expected and
+safe to accept** for a score-only work — it just means no individual parts exist.
+
+What the system then does:
+
+- Every player's book gets the score (`pickFileForPart` falls back to it).
+- The intake screen shows *"reading from score (no individual parts)"* rather than
+  *"missing vln1, vln2, vla, vc"* — nothing is actually missing.
+- It's published to the website catalog like any other song.
+
+**The rule is deliberately narrow.** A work that has *some* real parts is NOT
+score-only: one absent line is never quietly papered over with the score. That
+case still shows a real gap, exactly as before. If you want the score to cover a
+partial work, add the missing part properly instead.
+
+Caveat worth checking before relying on one: a score written for a different
+lineup may not contain a line for every player. *Harry's Wondrous World*, for
+example, is a school-orchestra chart (Vln I / Vla / Cello / String Bass / Piano)
+with **no Violin II staff at all** — so a second violinist has nothing to read
+even though the book builds. Open a score-only work once before booking it.

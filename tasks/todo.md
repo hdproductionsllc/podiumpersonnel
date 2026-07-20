@@ -131,3 +131,71 @@ Built `scripts/export-catalog.js` + `docs/runbooks/export-catalog.md`.
 - [ ] Site grouping (Classical/Pop/Wedding) is manual — library has no genre column.
       V2: add `genre` to repertoire, or serve catalog.json from an API route so the
       marketing site reads the library live and the paste step disappears.
+
+---
+
+# Score-only works ("conductor only") — 2026-07-20
+
+David's players read from scores on iPads with page-turn pedals, so a work that
+only has a conductor score is genuinely playable. Today those works reach nobody:
+`matchInstrumentForPart` maps parts to players by instrument name and `score`
+isn't in that map, so the book builder silently skips them.
+
+## Data (measured before coding)
+- 702 complete works — unaffected.
+- **22 score-only** works (a score, no individual core parts) — currently unbookable.
+  Real repertoire: Something Just Like This, Morning Mood, Oceans, 7 by Beatles,
+  Levitating, Che Gelida, Fireworks Overture, Rumanian (Bartok), Largo Bach Double...
+- 4 partial works that also have a score; 58 partial with no score.
+
+## DAVID'S DECISIONS
+1. Fallback scope = **score-only works ONLY** (not "any missing part").
+   The 4 partial-with-score works keep behaving exactly as they do today.
+   => zero behavior change for any existing work. Unlocks 22.
+2. Score-read songs **DO** go on the public website catalog.
+
+## Design — a score is a delivery format, not a missing part
+A "score-only work" = has a `score` file AND no individual core part files.
+For those, every player reads the score. Concept lives in ONE predicate so the
+matcher, the book builder and the export can't drift apart.
+
+- [ ] `matcher.ts`: add `isScoreOnly(parts)`. `partGap` returns [] for score-only
+      works — nothing is *missing*; the music is all there, in one document.
+      (Do NOT report 4 gaps each "covered by score" — that reads as broken.)
+- [ ] `book-builder.ts`: `pickFileForPart` gains rung 4 — score-only works return
+      the score file, labelled `score`, with a warning so the admin sees it.
+      Rungs 1-3 untouched, so no existing work changes.
+- [ ] `intake-song-row.tsx`: show an honest "reading from score" note instead of
+      the (now empty) missing-parts note.
+- [ ] `export-catalog.js`: score-only works count as bookable → website list.
+- [ ] Tests for the predicate + both call sites.
+- [ ] Re-add Harry's Wondrous World as ONE work + ONE `score` part (honest model,
+      NOT four copies of the same file).
+
+## CAVEAT to re-raise after shipping
+Harry's Wondrous World is a 4-page EXCERPT (Conductor pp. 4-7, opens at bar 38)
+of a school-orchestra chart with staves Vln I / Vla / Cello / Str. Bass / Piano —
+**no Violin II line at all**. Score-reading does not fix that; a 2nd violinist has
+nothing to play. Reinstating per David's call, but it needs real parts sourced.
+
+## RESULT (live 2026-07-20)
+- [x] `isScoreOnly(parts)` in matcher.ts — ONE definition shared by matcher, book
+      builder and the website export so they can't drift.
+- [x] `partGap` returns [] for score-only works (not 4 bogus "missing" entries).
+- [x] `pickFileForPart` rung 4: score-only works give every player the score, with
+      a warning. Rungs 1-3 untouched.
+- [x] Intake row shows "reading from score (no individual parts)".
+- [x] export-catalog.js counts score-only works as bookable.
+- [x] 13 unit tests + typecheck clean; **378 existing tests still pass**, including
+      all 23 book-builder tests unchanged => no regression.
+- [x] Live throwaway test vs the real library: **29 score-only works, every one
+      bookable by every player**; regression check proved the score NEVER leaks
+      into a work that has real parts. Deleted after.
+- [x] Harry's Wondrous World re-added as ONE work + ONE `score` part.
+- [x] Website catalog 702 -> **719 songs** (Something Just Like This, Morning Mood,
+      Oceans, 7 by Beatles, Levitating, Che Gelida, Fireworks Overture, Rumanian...)
+- [x] Both runbooks updated (update-music-library.md gains a "Score-only works"
+      section; export-catalog.md notes the new inclusion rule).
+- STILL TRUE: Harry's Wondrous World has no Violin II staff. The book now builds
+  and every player gets the score, but a 2nd violinist still has nothing to read.
+  Real parts should be sourced. Documented in the runbook caveat.

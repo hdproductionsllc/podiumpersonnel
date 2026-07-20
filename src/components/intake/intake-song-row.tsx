@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { RepertoireSearchResult } from '@/app/api/intake/repertoire/route'
 import { normTitle } from '@/lib/intake/normalize'
-import { partGap, type PartAvailability, type EnsembleCanon } from '@/lib/intake/matcher'
+import { partGap, isScoreOnly, type PartAvailability, type EnsembleCanon } from '@/lib/intake/matcher'
 import { AddWorkDialog, type CreatedWork } from './add-work-dialog'
 
 export type IntakeSectionKey =
@@ -89,6 +89,8 @@ function candidateLabel(c: RepCandidate): string {
  */
 function partGapNote(parts: PartAvailability | null, gig: EnsembleCanon | undefined): string | null {
   if (!parts || !gig) return null
+  // Not a gap — the whole piece is there, just as one document instead of parts.
+  if (isScoreOnly(parts)) return 'reading from score (no individual parts)'
   const gaps = partGap(parts, gig)
   if (gaps.length === 0) return null
   const phrases = gaps.map((g) => (g.subBy ? `${g.part} (${g.subBy} sub available)` : g.part))

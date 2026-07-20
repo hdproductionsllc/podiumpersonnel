@@ -28,7 +28,9 @@ no playable parts, some have no artist. None of that belongs on a website.
 A song is published only if **both** are true:
 
 1. **It's bookable** — every core part for its ensemble is present
-   (quartet/quintet = vln1+vln2+vla+vc, trio = vln1+vln2+vc).
+   (quartet/quintet = vln1+vln2+vla+vc, trio = vln1+vln2+vc), **or** it's a
+   score-only work (a conductor score and no individual parts), which the players
+   read off a tablet. See "Score-only works" in `update-music-library.md`.
 2. **The title reads like a song title** — no filename underscores, page counts,
    working annotations ("copy", "old", "v2"), or part names.
 

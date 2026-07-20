@@ -163,11 +163,37 @@ export function canonicalEnsemble(raw: string | null | undefined): EnsembleCanon
  * this. `subBy` names the covering instrument (e.g. a vln2 file playing the vla
  * line → { part: 'vla', subBy: 'vln2' }); null when nothing covers it.
  */
+/**
+ * A work that exists only as a conductor score — one document containing every
+ * line — with no individual part files.
+ *
+ * These are playable: the players read the score off a tablet and turn pages with
+ * a foot pedal. So a score is a DELIVERY FORMAT, not a missing part, and such a
+ * work must not be reported as "missing vln1, vln2, vla, vc" — the music is all
+ * there, it just isn't split up.
+ *
+ * Deliberately narrow: a work with SOME individual parts plus a score is NOT
+ * score-only, and keeps its existing behaviour (the score never silently covers
+ * one absent part). One definition, shared by the matcher, the book builder and
+ * the website export, so the three can't drift apart.
+ */
+export function isScoreOnly(parts: PartAvailability | undefined): boolean {
+  if (!parts) return false
+  const have = new Set(parts.available)
+  if (!have.has('score')) return false
+  return !CORE_PARTS.some((p) => have.has(p))
+}
+
+/** The individual lines a string ensemble splits into. */
+const CORE_PARTS = ['vln1', 'vln2', 'vla', 'vc'] as const
+
 export function partGap(
   parts: PartAvailability | undefined,
   ensemble: EnsembleCanon | undefined
 ): Array<{ part: string; subBy: string | null }> {
   if (!parts || !ensemble) return []
+  // Everyone reads the one document — nothing is missing.
+  if (isScoreOnly(parts)) return []
   const required = REQUIRED_PARTS[ensemble]
   if (!required) return []
   const have = new Set(parts.available)

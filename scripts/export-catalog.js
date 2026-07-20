@@ -183,7 +183,10 @@ async function main() {
     const need = EXPECTED[row.ensemble] ?? CORE
 
     // gate 1 — bookable?
-    const missing = need.filter((p) => !have.has(p))
+    // A score-only work (a score, no individual parts) IS bookable: the players
+    // read the one document off a tablet. Mirrors isScoreOnly() in the matcher.
+    const scoreOnly = have.has('score') && !CORE.some((p) => have.has(p))
+    const missing = scoreOnly ? [] : need.filter((p) => !have.has(p))
     if (missing.length) {
       held.push({ ...row, why: `missing ${missing.join(', ')}` })
       continue

@@ -2,6 +2,13 @@
 
 *Created for V2.0 (2026-07-11). Goal: stop testing against the production database.*
 
+> **STATUS: INTENTIONALLY PAUSED (2026-07-18).** Podium-Staging is parked on
+> Supabase to free a free-plan active-project slot (WhatMyPetThinks needed it).
+> This is deliberate, not an outage. Staging holds zero real data and can be
+> restored in a few clicks, or rebuilt from `scripts/staging-replay.sql`.
+> **Before rehearsing any new migration, restore it first** (Supabase dashboard →
+> Podium-Staging → Restore), then re-pause when done.
+
 ## Why
 
 Today there is ONE Supabase project. Vercel previews share the prod DB (only email is
