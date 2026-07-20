@@ -115,8 +115,12 @@ function normTitle(title) {
 // ---------------------------------------------------------------------------
 // Trailing annotations that may FOLLOW a part token and must not defeat it.
 // Order matters only in that this is applied repeatedly from the tail.
+// NOTE "v2": an engraver's version suffix ("… - Cello v2.pdf"), NOT violin 2. It is
+// stripped here so the real instrument token behind it can win. Treating it as a
+// part name filed the CELLO of "Welcome To the Jungle" as vln2 and left the work
+// unbookable. Every v-suffixed file in the library is a version, none is a violin.
 const TRAILING_ANNOT =
-  /[\s\-_]*(?:\(\s*\d+\s*\)|copy|fixed|part|old(?:\s+too\s+hard)?|too\s+hard|update(?:d)?(?:\s+\w+)*|version|slower|easier(?:\s+\d{4})?|\d{4}\s+version|june\s+\d{4}|updated\s+\w+\s*\d{0,4}|new\s+version|easy)\s*$/i
+  /[\s\-_]*(?:\(\s*\d+\s*\)|copy|fixed|part|old(?:\s+too\s+hard)?|too\s+hard|update(?:d)?(?:\s+\w+)*|version|slower|easier(?:\s+\d{4})?|\d{4}\s+version|june\s+\d{4}|updated\s+\w+\s*\d{0,4}|new\s+version|easy|v\d+)\s*$/i
 
 function stripTrailingAnnot(s) {
   let prev
@@ -141,8 +145,8 @@ const PART_RULES = [
   // second cello (quintet) -- before generic cello
   { part: 'vc', vc2: true, re: /^(.*?)[\s\-_]+(?:vc\s*2|cello\s*(?:2|ii)|cello\s+part\s*2)$/i },
   // second violin -- before generic violin
-  { part: 'vln2', re: /^(.*?)[\s\-_]+(?:vln\s*2|vln\s*ii|violin\s*2|violin\s*ii|v2|2nd\s+violin|violin\s+two)$/i },
-  { part: 'vln1', re: /^(.*?)[\s\-_]+(?:vln\s*1|vln\s*i|violin\s*1|violin\s*i|v1|1st\s+violin|violin\s+one|vln)$/i },
+  { part: 'vln2', re: /^(.*?)[\s\-_]+(?:vln\s*2|vln\s*ii|violin\s*2|violin\s*ii|2nd\s+violin|violin\s+two)$/i },
+  { part: 'vln1', re: /^(.*?)[\s\-_]+(?:vln\s*1|vln\s*i|violin\s*1|violin\s*i|1st\s+violin|violin\s+one|vln)$/i },
   // viola (incl. common "vIa" capital-I-for-l typo, "va")
   { part: 'vla', re: /^(.*?)[\s\-_]+(?:vla|v[il]a|viola|va)$/i },
   // cello

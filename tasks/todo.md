@@ -250,3 +250,59 @@ more matchable than before, never less.
 Silver Bells, Winter Wonderland, O Come O Come Emmanuel, Thank U Next, Diamonds,
 Luck Be a Lady...). The sites advertise music Podium cannot build books for.
 => Any website import must be ADDITIVE. Finding those PDFs is the next project.
+
+---
+
+# The "18 incomplete works" — 2026-07-20
+
+Diagnosed all 18. **Almost none were missing music.** The files were on disk; they
+were filed wrong. Four distinct faults:
+
+## 1. SPLIT ARRANGEMENTS (3) — one song stored as two rows
+Lay Lady Lay, Say You Know, Carol of the Drum. One file had been renamed to the
+`Title - Artist - part.pdf` convention while its siblings kept their original
+names, so the importer read them as different works and each row held half the parts.
+
+**EVIDENCE (this is the bit that matters):** the last merge pass taught that title
+matching alone gives ~6% wrong merges. These PDFs are vector-drawn with no text, so
+no title could be read. Used **PDF print provenance** instead — each group was
+printed to PDF in one sitting, seconds apart:
+  Lay Lady Lay  2021-08-23 11:16:51 / 11:17:08 / 11:17:25 / 11:17:45  (54s)
+  Say You Know  2021-10-06 09:00:19 / 09:00:34 / 09:00:44 / 09:00:56  (37s)
+  Carol of Drum — vln1 PDF text reads "Violin I | The Carol of the Drum | Katherine
+  K. Davis | arranged by Matthew Naughtin"; the same Naughtin set's Score was
+  ALREADY on the target row.
+
+## 2. MISLABELLED PARTS (1) — worse than "incomplete"
+"Welcome To the Jungle" had the **CELLO file stored as `vln2`**, the viola as
+`other`, Violin I as a substitute, and Violin II missing entirely. Artist: "Cello".
+
+**ROOT CAUSE FIXED** in `scripts/repertoire-index.js`: the part detector treated
+`v2` as "violin 2", but it is an engraver's *version* suffix. Every v-suffixed file
+in the library is a version; none is a violin (measured: 5 files, 0 violins). `v\d+`
+is now a trailing annotation, and `v1`/`v2` were removed from the violin rules — so
+the instrument token behind the suffix wins. part-guess tests still pass.
+
+## 3. WRONG PART TYPE (1)
+"Erev Shel Shoshanim" is a full SCORE stored as `other`, so it counted as a
+fragment. Relabelled `score` -> now bookable via the score-only feature. Retitled
+from `Erev_Shel_Shoshanimfor_string_quartet`, artist Yosef Hadar.
+
+## 4. NOT ACTUALLY BROKEN (the rest)
+Duo/solo-only arrangements (The Final Countdown, This Must Be the Place, Al di la,
+A Postcard to Henry Purcell) and rows where a COMPLETE sibling already existed
+(This Will Be, Ave Maria, Married Life). Deliverable — just not as a quartet.
+
+## NOT TOUCHED — deliberately
+"Romeo and Juliet Theme" has vc/vla/vln1 plus a bare `vln`. Probably violin 2, but
+the PDFs are vector-drawn with no text AND no embedded image, so it cannot be
+verified here and no rasteriser is available. Guessing risks handing a violinist
+the wrong line. **David: open `Romeo and Juliet Theme - Rieu - vln.pdf` and confirm
+it says Violin II** — then it is a one-line relabel.
+
+## Proof
+- Live throwaway test, 8 cases: all recovered works match AND build a full 4-part
+  book with 4 DIFFERENT files; Welcome To the Jungle now hands the Cello file to
+  the cellist; Erev is score-only bookable; old names still resolve. Deleted after.
+- 124 intake tests pass. Catalog 717 -> **722 songs**.
+- Undo: fix-incomplete-works.js --undo, carol-merge-undo.json
