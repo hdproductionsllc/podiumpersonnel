@@ -82,8 +82,11 @@ function tidyTitle(raw) {
   t = t.replace(/\s*\(\s*\d+\s*\)\s*$/, ' ') // "(1)" copy suffix
   // A part name that leaked into the title: "Air in F Viola", "If I Ain't Got You Violin Cello".
   // Only ever stripped from the END, so "Double Violin Concerto" survives intact.
-  t = t.replace(/\s+(violin\s*(1|2|i{1,2})?\s*(and\s*)?)?(viola|violoncello|cello|vc|bass|score)\s*$/i, ' ')
+  t = t.replace(/\s+(violin\s*(1|2|i{1,2})?\s*(and\s*)?)?(viola|violoncello|cello|vc|score)\s*$/i, ' ')
   t = t.replace(/\s+violin\s*(1|2|i{1,2})\s*$/i, ' ')
+  // "Bass" is only a part name in a compound ("String Bass", "Violin and Bass").
+  // A bare trailing "bass" is usually part of the song — "All About That Bass".
+  t = t.replace(/\s+(violin|string|double|upright|contra)\s*(and\s+)?bass\s*$/i, ' ')
   t = t.replace(/\s*-\s*$/, '')
   t = t.replace(/\s{2,}/g, ' ').trim()
   return t
@@ -120,7 +123,9 @@ function presentable(title) {
   if (!title || title.length < 2) return 'empty title'
   if (title.length > 90) return 'suspiciously long'
   if (/^\d{2}\s/.test(title)) return 'leading file-sort number'
-  if (/\b(score|parts?|bass)\s*$/i.test(title)) return 'looks like a part file, not a song'
+  // NB: a bare trailing "bass" is not a part marker — "All About That Bass".
+  if (/\b(score|parts?)\s*$/i.test(title)) return 'looks like a part file, not a song'
+  if (/\b(string|double|upright|contra)\s+bass\s*$/i.test(title)) return 'looks like a part file, not a song'
   if (/\bduets?\s+cubed\b/i.test(title)) return 'exercise/method book'
   if (/[_]{1,}/.test(title)) return 'raw filename underscores'
   if (/\.(pdf|mus|sib)\b/i.test(title)) return 'filename extension'
@@ -254,7 +259,24 @@ async function main() {
   const letters = [...groups.keys()].sort()
 
   // --- markdown ---
-  let md = `# Song Catalog\n\n_${songs.length} songs · updated ${stamp}_\n\n`
+  // catalog.md doubles as the hand-off brief for whoever builds a website page,
+  // so the caveats travel WITH the data instead of living in a chat message.
+  let md =
+    `# Song Catalog\n\n**${songs.length} songs** · exported ${stamp} from the Podium shared ` +
+    `music library.\n\n` +
+    `## What this list is\n\n` +
+    `Every song here is a real, complete, bookable arrangement — all core string parts are\n` +
+    `on file. Unbookable rows and raw-filename titles were held back, so this is safe to\n` +
+    `publish as-is. See NEEDS-REVIEW.md for what was excluded and why.\n\n` +
+    `## Notes for building the page\n\n` +
+    `- Format is \`Title — Artist\`. Artist = performer for pop, composer for classical.\n` +
+    `- Sorted alphabetically by title, ignoring a leading "The/A/An".\n` +
+    `- **No genre data exists**, so if the page groups by Classical / Pop / Wedding, that\n` +
+    `  grouping has to be applied by hand.\n` +
+    `- Two songs appear twice under different artist spellings (composer vs performer):\n` +
+    `  "What a Wonderful World" and "The Four Seasons". Pick one of each if you dedupe.\n` +
+    `- Regenerate any time with \`node scripts/export-catalog.js\` in the Podium repo.\n\n` +
+    `---\n\n`
   for (const L of letters) {
     md += `## ${L}\n\n`
     for (const s of groups.get(L)) md += `- ${s.title} — ${s.artist}\n`
