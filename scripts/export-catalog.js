@@ -123,6 +123,9 @@ function presentable(title) {
   if (!title || title.length < 2) return 'empty title'
   if (title.length > 90) return 'suspiciously long'
   if (/^\d{2}\s/.test(title)) return 'leading file-sort number'
+  // "by Beatles" — a filename that lost its leading words. Only "by" is safe to
+  // treat this way: real songs open with "And", "From", "With", "The".
+  if (/^by\s/i.test(title)) return 'title truncated (starts mid-phrase)'
   // NB: a bare trailing "bass" is not a part marker — "All About That Bass".
   if (/\b(score|parts?)\s*$/i.test(title)) return 'looks like a part file, not a song'
   if (/\b(string|double|upright|contra)\s+bass\s*$/i.test(title)) return 'looks like a part file, not a song'
@@ -130,7 +133,12 @@ function presentable(title) {
   if (/[_]{1,}/.test(title)) return 'raw filename underscores'
   if (/\.(pdf|mus|sib)\b/i.test(title)) return 'filename extension'
   if (/^[a-z]/.test(title) && /-/.test(title)) return 'lowercase filename slug'
-  if (/\b(copy|fixed|old|too hard|update[d]?|version)\b/i.test(title)) return 'working-file annotation'
+  // Anchored to the END, where working annotations actually live. Matching these
+  // words anywhere in a title rejected real songs — "Grow Old With You",
+  // "The Old Refrain". Bare "old" is dropped entirely: too common a word.
+  if (/[\s-]+(copy|fixed|too hard|old too hard|update[d]?|version|v\d+)\s*$/i.test(title)) {
+    return 'working-file annotation'
+  }
   if (/^(db|test|tmp|untitled)\b/i.test(title)) return 'scratch/working title'
   return null // presentable
 }
@@ -212,6 +220,23 @@ async function main() {
     }
     if (!artist) {
       held.push({ ...row, cleaned: title, why: 'no artist/composer' })
+      continue
+    }
+    // A placeholder standing in for a real credit. "Glass Animals — Glass Animals"
+    // means nobody ever filled the title in; "PSQ" is our own org name leaking from
+    // the source files, not an artist a customer would recognise.
+    if (sortKey(artist) === sortKey(title)) {
+      held.push({ ...row, cleaned: title, why: 'artist is a copy of the title (no real credit)' })
+      continue
+    }
+    if (/^(psq|podium|subito|meridian|lonestar)$/i.test(artist.trim())) {
+      held.push({ ...row, cleaned: title, why: `our own brand name as the artist ("${artist}")` })
+      continue
+    }
+    // A client's custom set or a generic bucket — real rows in the library, but
+    // not songs a visitor can pick off a website.
+    if (/\b(wedding set|set list|setlist)\s*$/i.test(title) || /^(recessional|processional|prelude|postlude)$/i.test(title.trim())) {
+      held.push({ ...row, cleaned: title, why: 'a set/section, not a song' })
       continue
     }
 
