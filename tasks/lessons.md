@@ -73,3 +73,35 @@ Then confirmed by extracting the embedded page images and actually looking at th
 => When importing parts: check part COUNT, part LABELS, and part DISTINCTNESS.
    Scanned PDFs need the images extracted + viewed; text extraction silently returns
    nothing and reads as "no problem found".
+
+## Filename part-detection collisions are a bug FAMILY, not one-offs (2026-07-20)
+Three separate unbookable works all traced to the indexer misreading a filename:
+- `v2` read as "violin 2" — it was an engraver's VERSION suffix. Filed the CELLO of
+  "Welcome To the Jungle" as vln2 and set the artist to "Cello". FIXED at source:
+  `v\d+` is now a trailing annotation so the real instrument token wins.
+- A bare `vln` claims the vln1 slot, so "Romeo - vln.pdf" took vln1 and the REAL
+  "- vln1.pdf" was bumped to `other`. Still open — only bit one work.
+- Inconsistent renaming split one arrangement across two rows (one file renamed to
+  `Title - Artist - part.pdf`, siblings left alone). Hit Lay Lady Lay, Say You Know,
+  Carol of the Drum, Skyfall.
+**Rule:** when a work looks "incomplete", check whether the music is actually MISSING
+before hunting for it. Usually it is on disk under a wrong label or a sibling row.
+Symptoms to grep for: a part typed `other`, an artist that is an instrument name, two
+rows whose parts complement each other exactly.
+
+## PDF print provenance verifies a merge when the PDF has no readable text
+Engraved PDFs are often vector-drawn: no text, no embedded image, so neither text
+extraction nor image viewing can confirm what a file is. Title-token matching alone
+was previously measured at ~6% wrong merges, so it is not good enough to move live parts.
+**Use the PDF metadata instead** — `/CreationDate`, `/Producer`. Parts of one
+arrangement get printed in a single sitting, seconds apart:
+    Lay Lady Lay  2021-08-23 11:16:51 / 11:17:08 / 11:17:25 / 11:17:45
+    Say You Know  2021-10-06 09:00:19 / 09:00:34 / 09:00:44 / 09:00:56
+That is objective evidence two rows are the same arrangement. When even this is
+unavailable, DON'T GUESS — ask David to open the file (he confirmed Romeo in seconds).
+
+## Applying a confirmed fix: re-check the whole work, not just the one file
+David confirmed "Romeo's bare vln is the violin 2 part". Relabelling only that file
+would have produced TWO violin 2 parts and NO violin 1 — because the real vln1 file
+had been bumped to `other` by the collision. A confirmation about one file is not a
+confirmation about the work; re-read every part row before writing.
