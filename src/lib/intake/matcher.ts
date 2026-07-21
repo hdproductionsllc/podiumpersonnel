@@ -206,10 +206,16 @@ export function partGap(
   return gaps
 }
 
-/** Normalize an artist for agreement testing (lowercase, punctuation → space). */
+/** Normalize an artist for agreement testing (lowercase, accents folded,
+ *  punctuation → space). Diacritics must fold BEFORE the punctuation collapse:
+ *  a client's "Saint-Saëns" and the library's "Saint-Saens" are the same person,
+ *  and without the fold the ë would split into a bogus mismatch. Match-time
+ *  only — never stored — so folding here has no index-parity constraint. */
 function normArtist(a: string | null | undefined): string {
   if (!a) return ''
   return a
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')

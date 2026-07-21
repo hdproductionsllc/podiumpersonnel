@@ -444,6 +444,9 @@ export function IntakeSongRow({
                 )}
                 <RepertoireSearch onPick={pickSearch} />
                 <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" size="xs" onClick={() => setAddingWork(true)}>
+                    Add to library…
+                  </Button>
                   <Button type="button" variant="ghost" size="xs" onClick={useAsTyped}>
                     Use “{song.titleRaw}” as typed
                   </Button>

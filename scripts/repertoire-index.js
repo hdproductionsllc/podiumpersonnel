@@ -354,6 +354,11 @@ function quickPart(tok) {
   if (/^voice$/.test(t)) return 'voice'
   if (/^organ$/.test(t)) return 'organ'
   if (/^score$/.test(t)) return 'score'
+  // Non-string bonus parts (horn, winds) ride along as 'other' — the DB part
+  // canon has no slot for them, and the original filename preserves which
+  // instrument it is. Without this, "Title - Artist - Horn in F.pdf" misparses
+  // into a separate junk work instead of joining its arrangement.
+  if (/^(french\s*horn|horn(\s*in\s*[a-g])?|trumpet|flute|clarinet|oboe)$/.test(t)) return 'other'
   return null
 }
 

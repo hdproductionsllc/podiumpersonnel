@@ -220,6 +220,14 @@ describe('matchSong — artist disagreement is never auto-matched', () => {
     expect(res.status).toBe('matched')
     expect(res.candidates[0].score).toBe(115) // 100 exact + 15 artist agree
   })
+
+  it('accents fold before agreement: Saint-Saëns == Saint-Saens', () => {
+    const rows = [work('The Swan', 'Camille Saint-Saens')]
+    const res = matchSong({ titleRaw: 'The Swan', artistRaw: 'Camille Saint-Saëns' }, index(rows))
+    expect(res.status).toBe('matched')
+    expect(res.candidates[0].artistMismatch).toBe(false)
+    expect(res.candidates[0].score).toBe(115)
+  })
 })
 
 // --- B3: ensemble auto-resolve (same work, several arrangements) -------------
