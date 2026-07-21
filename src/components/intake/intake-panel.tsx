@@ -23,7 +23,7 @@
  */
 
 import { useState } from 'react'
-import { parseQuestionnaire } from '@/lib/intake/parser'
+import { parseIntake } from '@/lib/intake/parser'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -294,7 +294,11 @@ export function IntakePanel({ projectId, ensembleType, instruments }: IntakePane
     setSongs(groupedOrder(savedSongs.map(rowFromSaved)))
     // Warnings are DERIVED from the immutable raw_text (pure client-side parse),
     // so unplaced-line signals survive reloads instead of vanishing (review F5).
-    setWarnings(intake.raw_text ? parseQuestionnaire(intake.raw_text).warnings : [])
+    // MUST be parseIntake — the same mode dispatcher the server route parses
+    // with. Re-deriving through parseQuestionnaire alone flagged every line of
+    // a plain song-list paste as "unrecognized" on each reopen, even though the
+    // original parse had placed them all via song-list mode.
+    setWarnings(intake.raw_text ? parseIntake(intake.raw_text).warnings : [])
     setWarningsAck(false)
   }
 

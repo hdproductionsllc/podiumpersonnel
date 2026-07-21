@@ -288,6 +288,18 @@ describe('looksLikeQuestionnaire / parseSongList / parseIntake', () => {
     expect(r.songs).toEqual([])
     expect(r.warnings[0]).toMatch(/No text/i)
   })
+
+  // Reload parity: the review panel re-derives warnings from stored raw_text
+  // via parseIntake. A flat "Title – Artist" list (en dash, blank-line set
+  // breaks — the real paste that hit this) must re-parse warning-free, not as
+  // 65 "unrecognized text before the first section" lines.
+  it('parseIntake: an en-dash flat list re-parses with zero warnings', () => {
+    const r = parseIntake(
+      'Our House – Crosby, Stills, Nash & Young\nAll of the Lights – Kanye West\n\nLe Cygne (The Swan) – Camille Saint-Saëns'
+    )
+    expect(r.songs).toHaveLength(3)
+    expect(r.warnings).toEqual([])
+  })
 })
 
 // ---------------------------------------------------------------------------
