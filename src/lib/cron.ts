@@ -16,6 +16,37 @@ export function isCronEnabled(): boolean {
 }
 
 /**
+ * Authorize a scheduled-job request. Returns a 401 response to return early, or
+ * null when the caller is legitimately Vercel Cron.
+ *
+ * Replaces the inline check each route used to do:
+ *
+ *   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) return 401
+ *
+ * That form fails OPEN when CRON_SECRET is unset or blank: the template literal
+ * collapses to the string "Bearer undefined", so anyone sending exactly that
+ * header is let through. These routes email every musician with a pending offer,
+ * so an open one is a mass-mail trigger for the whole database. A missing secret
+ * must deny everything instead — misconfiguration should break the cron job, not
+ * silently expose it.
+ */
+export function requireCronAuth(request: Request): NextResponse | null {
+  const secret = process.env.CRON_SECRET
+
+  if (!secret || secret.trim() === '') {
+    console.error('CRON_SECRET is not set — refusing to run the scheduled job.')
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const authHeader = request.headers.get('authorization')
+  if (authHeader !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  return null
+}
+
+/**
  * If cron is disabled, returns a JSON response the route should return early.
  * Otherwise returns null and the job proceeds. Pass the job name for logging.
  */

@@ -4,16 +4,14 @@ import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendStaffingAlertEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
-import { cronDisabledResponse } from '@/lib/cron'
+import { cronDisabledResponse, requireCronAuth } from '@/lib/cron'
 
 // Alert thresholds in days — one email per project per threshold
 const THRESHOLDS = [14, 7, 3]
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const unauthorized = requireCronAuth(request)
+  if (unauthorized) return unauthorized
 
   const disabled = cronDisabledResponse('staffing-alerts')
   if (disabled) return disabled

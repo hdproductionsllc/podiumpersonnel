@@ -4,14 +4,11 @@ import { getNextCandidates } from '@/lib/next-candidate'
 import { sendOfferExpiredEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
-import { cronDisabledResponse, notifyOps } from '@/lib/cron'
+import { cronDisabledResponse, notifyOps, requireCronAuth } from '@/lib/cron'
 
 export async function GET(request: NextRequest) {
-  // Verify cron secret — Vercel sets this automatically for cron jobs
-  const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const unauthorized = requireCronAuth(request)
+  if (unauthorized) return unauthorized
 
   const disabled = cronDisabledResponse('expire-offers')
   if (disabled) return disabled
