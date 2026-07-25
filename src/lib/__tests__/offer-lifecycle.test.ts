@@ -15,17 +15,17 @@ const read = (rel: string) => readFileSync(resolve(root, rel), 'utf-8')
 
 const acceptRoutes = [
   'src/app/api/gig/[token]/accept/route.ts',
-  'src/app/api/musician/offers/[id]/accept/route.ts',
 ]
 const declineRoutes = [
   'src/app/api/gig/[token]/decline/route.ts',
-  'src/app/api/musician/offers/[id]/decline/route.ts',
 ]
 
 /**
  * The seat-claim and decline logic these tests used to scan for inline now lives
- * in src/lib/offers/respond.ts, shared by both answer paths (the emailed link
- * and the portal) so the two copies can no longer drift apart.
+ * in src/lib/offers/respond.ts. It was extracted when the emailed-link and portal
+ * routes were near-duplicates that had drifted; the portal is gone, but the
+ * module stays — this is the logic that stops two musicians winning one chair,
+ * and it is better tested directly than scanned for as a string in a route.
  *
  * The guarantees below are unchanged — they are asserted against the shared
  * module, plus a check that each route actually delegates to it. The behavioural

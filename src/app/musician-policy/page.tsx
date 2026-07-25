@@ -19,7 +19,7 @@ All musicians are expected to maintain professional conduct during rehearsals an
 
 ## Payment
 
-Payment will be processed according to the terms specified in your offer. Please ensure your payment information is up to date in your profile.
+Payment will be processed according to the terms specified in your offer. If your payment or contact details have changed, let the personnel manager know and they will update your record.
 
 ## Questions
 

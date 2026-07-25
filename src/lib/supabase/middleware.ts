@@ -41,16 +41,11 @@ export async function updateSession(request: NextRequest) {
   const isOnboardingRoute = request.nextUrl.pathname.startsWith('/onboarding')
   const isResetPasswordRoute = request.nextUrl.pathname.startsWith('/reset-password')
 
-  // Musician portal routes
-  const pathname = request.nextUrl.pathname
-  const isMusicianRoute = pathname.startsWith('/musician')
-  const isMusicianAuthRoute = pathname.startsWith('/musician/login') ||
-                              pathname.startsWith('/musician/register') ||
-                              pathname.startsWith('/musician/activate') ||
-                              pathname.startsWith('/musician/forgot-password') ||
-                              pathname.startsWith('/musician/reset-password') ||
-                              pathname.startsWith('/musician/auth/callback')
-  const isMusicianProtectedRoute = isMusicianRoute && !isMusicianAuthRoute
+  // The musician portal (/musician/**) was removed: musicians have no accounts
+  // and drive everything from tokenized links in their email, so there is no
+  // musician session to gate here. The public token pages (/gig, /confirm-details,
+  // /confirm-music) are excluded from the matcher in middleware.ts and never
+  // reach this function.
 
   // Redirect unauthenticated users from protected routes
   if (!user && (isDashboardRoute || isOnboardingRoute)) {
@@ -59,44 +54,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Redirect unauthenticated musicians from protected musician routes
-  if (!user && isMusicianProtectedRoute) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/musician/login'
-    return NextResponse.redirect(url)
-  }
-
   // Redirect authenticated users away from auth routes (except reset-password)
   if (user && isAuthRoute && !isResetPasswordRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
-  }
-
-  // Redirect authenticated musicians away from musician auth routes
-  // But allow through if there's an error param (e.g. no_musician_records) to avoid redirect loops
-  const hasErrorParam = request.nextUrl.searchParams.has('error')
-  if (user && isMusicianAuthRoute && !pathname.startsWith('/musician/reset-password') && !hasErrorParam) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/musician'
-    return NextResponse.redirect(url)
-  }
-
-  // Pass impersonate param as a cookie so the musician layout can read it
-  // (layouts don't receive searchParams in Next.js App Router)
-  const impersonateId = request.nextUrl.searchParams.get('impersonate')
-  if (isMusicianRoute) {
-    if (impersonateId) {
-      supabaseResponse.cookies.set('impersonate-musician', impersonateId, {
-        path: '/musician',
-        maxAge: 60 * 60, // 1 hour
-        httpOnly: true,
-        sameSite: 'lax',
-      })
-    }
-    // Cookie is NOT cleared on navigation without the param — it persists
-    // for its 1-hour maxAge. The "Exit" button navigates to /dashboard
-    // which leaves the /musician path scope, effectively ending impersonation.
   }
 
   return supabaseResponse

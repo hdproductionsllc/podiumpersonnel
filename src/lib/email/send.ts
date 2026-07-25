@@ -15,8 +15,6 @@ import { SubRequestApprovedEmail } from './templates/sub-request-approved'
 import { SubRequestDeclinedEmail } from './templates/sub-request-declined'
 import { MusicianReleasedEmail } from './templates/musician-released'
 import { SubDeclinedFindAnotherEmail } from './templates/sub-declined-find-another'
-import { PortalInvitationEmail } from './templates/portal-invitation'
-import { MusicianWelcomeEmail } from './templates/musician-welcome'
 import { AdminWelcomeEmail } from './templates/admin-welcome'
 import { OfferExpiredEmail } from './templates/offer-expired'
 import { OfferExpiringSoonEmail } from './templates/offer-expiring-soon'
@@ -774,61 +772,9 @@ export async function sendSubDeclinedFindAnotherEmail(params: SendSubDeclinedFin
   })
 }
 
-// Portal Invitation Email
-interface SendPortalInvitationParams {
-  to: string
-  musicianName: string
-  organizationName: string
-  organizationId?: string
-  activationUrl: string
-  expiresAt: string
-  branding?: EmailBranding
-  terms?: TermDictionary
-}
-
-export async function sendPortalInvitationEmail(params: SendPortalInvitationParams) {
-  const terms = await resolveEmailTerms(params.terms, params.organizationId)
-  return sendTransactional({
-    to: params.to,
-    subject: `${params.organizationName} has invited you to Podium`,
-    react: PortalInvitationEmail({
-      musicianName: params.musicianName,
-      organizationName: params.organizationName,
-      activationUrl: params.activationUrl,
-      expiresAt: params.expiresAt,
-      branding: params.branding,
-      terms,
-    }),
-    fromName: params.organizationName,
-    replyToOrgId: params.organizationId,
-    errorContext: 'portal invitation',
-  })
-}
-
-// Musician Welcome Email
-interface SendMusicianWelcomeParams {
-  to: string
-  musicianName: string
-  loginUrl: string
-  organizations: string[]
-  terms?: TermDictionary
-}
-
-export async function sendMusicianWelcomeEmail(params: SendMusicianWelcomeParams) {
-  const terms = await resolveEmailTerms(params.terms, undefined)
-  return sendTransactional({
-    to: params.to,
-    subject: 'Welcome to Podium - your musician portal is ready',
-    react: MusicianWelcomeEmail({
-      musicianName: params.musicianName,
-      email: params.to,
-      loginUrl: params.loginUrl,
-      organizations: params.organizations,
-      terms,
-    }),
-    errorContext: 'musician welcome',
-  })
-}
+// Portal invitation and musician welcome emails were removed with the musician
+// portal. Both existed only to get a musician to create an account; musicians
+// now do everything from the tokenized links already in their gig emails.
 
 // Offer Expired Notification Email (to admins)
 interface SendOfferExpiredParams {

@@ -31,8 +31,6 @@ describe('API route billing gates', () => {
       'src/app/api/projects/[projectId]/send-gig-details-reminder/route.ts',
       'src/app/api/projects/[projectId]/send-music/route.ts',
       'src/app/api/projects/[projectId]/send-music-reminder/route.ts',
-      'src/app/api/musicians/send-portal-invites/route.ts',
-      'src/app/api/musicians/[id]/send-portal-invite/route.ts',
       'src/app/api/musicians/send-w9-request/route.ts',
     ]
 

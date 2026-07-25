@@ -622,30 +622,6 @@ export function MusiciansClient({
             </div>
           ) : '\u2014'}
         </td>
-        <td className="hidden md:table-cell px-4 py-2 text-center">
-          {musician.user_id ? (
-            canManage ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700"
-                onClick={(e) => { e.stopPropagation(); window.open(`/musician?impersonate=${musician.id}`, '_blank') }}
-                title={`View portal as this ${term(terms, 'person', { case: 'lower' })}`}
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                </svg>
-              </Button>
-            ) : (
-              <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-950 dark:text-green-300">
-                Active
-              </span>
-            )
-          ) : (
-            <span className="text-muted-foreground">{'\u2014'}</span>
-          )}
-        </td>
         {canManage && (
           <td className="px-4 py-2 text-right">
             <div
@@ -1519,7 +1495,6 @@ export function MusiciansClient({
                               >
                                 Tags <SortIcon column="tags" />
                               </th>
-                              <th className="hidden md:table-cell w-[100px] px-4 py-2 text-center text-xs font-medium text-muted-foreground">Portal</th>
                               {canManage && (
                                 <th className="w-[120px] px-4 py-2 text-right text-xs font-medium text-muted-foreground">Actions</th>
                               )}
@@ -1622,7 +1597,6 @@ export function MusiciansClient({
                               >
                                 Tags <SortIcon column="tags" />
                               </th>
-                              <th className="hidden md:table-cell w-[100px] px-4 py-2 text-center text-xs font-medium text-muted-foreground">Portal</th>
                               {canManage && (
                                 <th className="w-[120px] px-4 py-2 text-right text-xs font-medium text-muted-foreground">Actions</th>
                               )}

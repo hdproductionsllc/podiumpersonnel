@@ -162,8 +162,6 @@ export default async function GigPage({ params }: GigPageProps) {
       timezone={timezone}
       instruments={instruments}
       existingSubRequest={existingSubRequest}
-      musicianHasAccount={!!musician?.user_id}
-      musicianEmail={musician?.email || null}
       subsEnabled={subsEnabled}
     />
   )
