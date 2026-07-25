@@ -498,7 +498,7 @@ export function SendMusicDialog({
                 You are about to notify {filledPositions.length} {term(terms, 'person', { plural: filledPositions.length !== 1, case: 'lower' })} that music is available.
               </p>
               <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                Each {term(terms, 'person', { case: 'lower' })} will receive an email with their assigned files and a link to download from the portal.
+                Each {term(terms, 'person', { case: 'lower' })} will receive an email with their assigned files and a secure download link. No account or login needed.
                 {notes.trim() ? ' Your message will be included.' : ''}
               </p>
             </div>
@@ -564,7 +564,7 @@ export function SendMusicDialog({
           /* ─── Preview View (initial / resend) ─── */
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Review the files that will be sent to each {term(terms, 'person', { case: 'lower' })}. {term(terms, 'person', { plural: true })} will receive an email notification and can download files from their portal.
+              Review the files that will be sent to each {term(terms, 'person', { case: 'lower' })}. {term(terms, 'person', { plural: true })} will receive an email with a secure download link — no account or login needed.
             </p>
 
             {/* File List */}

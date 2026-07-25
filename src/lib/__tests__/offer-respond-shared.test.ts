@@ -2,15 +2,15 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
 
 /**
- * The shared offer-response logic used by BOTH answer paths:
+ * The shared offer-response logic behind the musician's answer path:
+ * /api/gig/[token]/{accept,decline} — driven by a tokenized email link, no login.
  *
- *   - the emailed link → /api/gig/[token]/{accept,decline}      (no login)
- *   - the portal       → /api/musician/offers/[id]/{accept,decline}
- *
- * These were near-duplicate routes that had already drifted: the portal logged
- * the substitution emails, the token path sent them without logging. Since most
- * musicians answer from the emailed link, a "you've been released" notice
- * usually never reached the contractor's email log.
+ * This lived in two near-duplicate route pairs (emailed link and musician
+ * portal) that had drifted: the portal logged the substitution emails, the token
+ * path sent them without logging, so a "you've been released" notice usually
+ * never reached the contractor's email log. The portal has since been removed;
+ * the extraction stays because the seat claim below is the most correctness-
+ * critical logic in the app and deserves direct tests.
  *
  * The seat claim is the part worth guarding hardest — it is the only thing
  * stopping two musicians from winning the same chair.
@@ -363,18 +363,16 @@ describe('countChairs', () => {
   })
 })
 
-describe('both answer paths use the shared logic', () => {
+describe('the answer path uses the shared logic', () => {
   const { readFileSync } = require('fs')
   const { resolve } = require('path')
   const root = resolve(__dirname, '../../..')
 
   const acceptRoutes = [
     'src/app/api/gig/[token]/accept/route.ts',
-    'src/app/api/musician/offers/[id]/accept/route.ts',
   ]
   const declineRoutes = [
     'src/app/api/gig/[token]/decline/route.ts',
-    'src/app/api/musician/offers/[id]/decline/route.ts',
   ]
 
   it.each(acceptRoutes)('%s claims the chair via the shared helper', (route) => {
