@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { addMemberSchema } from '@/lib/validations/settings'
+import { checkInviteEligibility } from '@/lib/org-membership'
 import { resolveOrgPlan, canAddMember, type OrgBilling } from '@/lib/plan'
 
 export async function GET() {
@@ -120,16 +121,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'No account found with that email address' }, { status: 404 })
   }
 
-  // Check if already a member
-  const { data: existingMember } = await supabase
+  // One account belongs to exactly one organization. Look up EVERY membership
+  // this account holds, not just one in the current org.
+  //
+  // This must use the admin client: the SELECT policy on organization_members is
+  // USING (is_org_member(organization_id)), so a caller-scoped query can only
+  // see rows for orgs the CALLER belongs to. A membership in the invitee's own
+  // org would be invisible here and the guard would silently never fire.
+  const { data: existingMemberships, error: membershipLookupError } = await adminClient
     .from('organization_members')
-    .select('id')
-    .eq('organization_id', membership.organization_id)
+    .select('id, organization_id')
     .eq('user_id', targetUser.id)
-    .single()
 
-  if (existingMember) {
-    return NextResponse.json({ error: 'User is already a member of this organization' }, { status: 409 })
+  if (membershipLookupError) {
+    return NextResponse.json({ error: 'Failed to look up user' }, { status: 500 })
+  }
+
+  // Refuse if the account is already in this org, or in a DIFFERENT one — see
+  // checkInviteEligibility for why a second membership breaks the invitee.
+  const eligibility = checkInviteEligibility(
+    existingMemberships ?? [],
+    membership.organization_id
+  )
+
+  if (!eligibility.allowed) {
+    return NextResponse.json({ error: eligibility.error }, { status: eligibility.status })
   }
 
   const { error: insertError } = await adminClient
