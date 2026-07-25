@@ -103,7 +103,10 @@ export function GigPageClient({
 
   const isExpired = expiresAt && new Date(expiresAt) < new Date()
   const canRespond = offerStatus === 'pending' || offerStatus === 'viewed'
-  const canRequestSub = offerStatus === 'accepted' && !currentSubRequest && musicianHasAccount && subsEnabled
+  // Sub requests never needed an account: /api/gig/[token]/request-sub authorizes
+  // on the token alone and enforces the plan gate server-side. Requiring one here
+  // only hid the button from the musicians most likely to need it.
+  const canRequestSub = offerStatus === 'accepted' && !currentSubRequest && subsEnabled
 
   function handleSubRequestSuccess() {
     setShowSubRequestForm(false)
