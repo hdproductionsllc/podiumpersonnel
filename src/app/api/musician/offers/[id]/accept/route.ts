@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
-import { sendOfferAcceptedEmail, sendAdminOfferResponseEmail, sendMusicianReleasedEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
+import { sendOfferAcceptedEmail, sendAdminOfferResponseEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
+import { claimChairForAccept, notifyMusicianReleased, countChairs } from '@/lib/offers/respond'
 
 export async function POST(
   _request: Request,
@@ -102,53 +103,21 @@ export async function POST(
     .eq('status', 'approved')
     .maybeSingle()
 
-  // Update offer to accepted (optimistic lock: only update if still pending/viewed)
-  const { data: updatedOffer, error: offerUpdateError } = await supabase
-    .from('contract_offers')
-    .update({
-      status: 'accepted',
-      responded_at: new Date().toISOString(),
-    })
-    .eq('id', offer.id)
-    .in('status', ['pending', 'viewed'])
-    .select('id')
+  // Accept the offer and claim the chair atomically (shared with the emailed-link
+  // path — see claimChairForAccept for why the two conditional updates are what
+  // stop two musicians winning the same chair).
+  const claim = await claimChairForAccept(supabase, offer as any, subRequest as any)
 
-  if (offerUpdateError) {
-    console.error('Failed to update offer status:', offerUpdateError)
+  if (claim.outcome === 'error') {
+    console.error('Failed to accept offer:', claim.error)
     return NextResponse.json({ error: 'Failed to accept offer' }, { status: 500 })
   }
 
-  if (!updatedOffer || updatedOffer.length === 0) {
+  if (claim.outcome === 'already_responded') {
     return NextResponse.json({ error: 'This offer has already been responded to' }, { status: 409 })
   }
 
-  // Update position: assign musician and set status to confirmed.
-  // Normal offer: the chair must be unassigned (prevents two musicians winning
-  // the same chair). Substitution: the chair is held by the requesting (original)
-  // musician and is atomically transferred to the substitute.
-  let positionUpdate = supabase
-    .from('project_positions')
-    .update({
-      musician_id: offer.musician_id,
-      status: 'confirmed',
-    })
-    .eq('id', offer.project_position_id)
-  positionUpdate = subRequest
-    ? positionUpdate.eq('musician_id', subRequest.requesting_musician_id)
-    : positionUpdate.is('musician_id', null)
-  const { data: updatedPosition, error: positionUpdateError } = await positionUpdate.select('id')
-
-  if (positionUpdateError) {
-    console.error('Failed to update position:', positionUpdateError)
-    return NextResponse.json({ error: 'Failed to confirm position' }, { status: 500 })
-  }
-
-  if (!updatedPosition || updatedPosition.length === 0) {
-    // Chair was no longer available to this musician — revert the offer status
-    await supabase
-      .from('contract_offers')
-      .update({ status: 'pending', responded_at: null })
-      .eq('id', offer.id)
+  if (claim.outcome === 'position_filled') {
     return NextResponse.json({ error: 'This position has already been filled' }, { status: 409 })
   }
 
@@ -168,68 +137,22 @@ export async function POST(
       .eq('musician_id', subRequest.requesting_musician_id)
       .eq('status', 'accepted')
 
-    const originalMusician = subRequest.requesting_musician as any
-    const serviceName = (subRequest.service as any)?.name || null
-
-    let totalChairs = 1
-    if (project?.id && instrument?.id) {
-      const { count } = await supabase
-        .from('project_positions')
-        .select('*', { count: 'exact', head: true })
-        .eq('project_id', project.id)
-        .eq('instrument_id', instrument.id)
-      totalChairs = count || 1
-    }
-
-    if (originalMusician?.email) {
-      try {
-        const releasedResult = await sendMusicianReleasedEmail({
-          to: originalMusician.email,
-          musicianName: `${originalMusician.first_name} ${originalMusician.last_name}`,
-          organizationName: organization?.name || 'Orchestra',
-          organizationId: organization?.id,
-          projectName: project?.name || 'Project',
-          instrument: instrument?.name || 'Instrument',
-          chairNumber: position?.chair_number || 1,
-          totalChairs,
-          serviceName,
-          substituteName: `${musician?.first_name} ${musician?.last_name}`,
-          performanceDate,
-        }).catch((err) => {
-          console.warn('Failed to send musician released email:', err)
-          return null
-        })
-
-        if (releasedResult && project?.organization_id) {
-          await logEmail({
-            organizationId: project.organization_id,
-            recipientEmail: originalMusician.email,
-            recipientName: `${originalMusician.first_name} ${originalMusician.last_name}`,
-            subject: releasedResult.subject,
-            emailType: 'musician_released',
-            musicianId: originalMusician.id,
-            projectId: project.id,
-            resendEmailId: releasedResult.id || null,
-            body: releasedResult.emailHtml,
-          })
-        }
-      } catch (emailError) {
-        console.warn('Email sending failed:', emailError)
-      }
-    }
+    // Shared with the emailed-link path so both send AND record it identically.
+    await notifyMusicianReleased(supabase, {
+      offer,
+      subRequest,
+      musician,
+      position,
+      project,
+      organization,
+      instrument,
+      performanceDate,
+    })
   }
 
   // Send confirmation emails
   try {
-    let totalChairs = 1
-    if (project?.id && instrument?.id) {
-      const { count } = await supabase
-        .from('project_positions')
-        .select('*', { count: 'exact', head: true })
-        .eq('project_id', project.id)
-        .eq('instrument_id', instrument.id)
-      totalChairs = count || 1
-    }
+    const totalChairs = await countChairs(supabase, project?.id, instrument?.id)
 
     const formattedServices = services
       .sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())

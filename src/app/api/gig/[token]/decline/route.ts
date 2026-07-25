@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
-import { sendOfferDeclinedEmail, sendAdminOfferResponseEmail, sendSubDeclinedFindAnotherEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
+import { sendOfferDeclinedEmail, sendAdminOfferResponseEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
+import { markOfferDeclined, vacateChair, notifySubDeclined, countChairs } from '@/lib/offers/respond'
 
 export async function POST(
   _request: Request,
@@ -88,37 +89,20 @@ async function handleDecline(_request: Request, token: string) {
     .eq('status', 'approved')
     .maybeSingle()
 
-  // Update offer to declined (optimistic lock: only if still pending/viewed, so
-  // a concurrent accept can't be clobbered by a stale decline).
-  const { data: declinedOffer, error: declineError } = await supabase
-    .from('contract_offers')
-    .update({
-      status: 'declined',
-      responded_at: new Date().toISOString(),
-    })
-    .eq('id', offer.id)
-    .in('status', ['pending', 'viewed'])
-    .select('id')
+  // Decline under the same optimistic lock as the accept path, so a stale
+  // decline can't clobber an acceptance that landed first.
+  const declineOutcome = await markOfferDeclined(supabase, offer)
 
-  if (declineError) {
-    console.error(`Failed to decline offer ${offer.id}:`, declineError)
+  if (declineOutcome !== 'declined') {
+    // Already responded to (e.g. accepted concurrently), or the update failed —
+    // either way don't reset the chair or send a decline email.
     return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
   }
 
-  if (!declinedOffer || declinedOffer.length === 0) {
-    // Already responded to (e.g. accepted in a concurrent request) — don't reset
-    // the chair or send a decline email.
-    return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
-  }
-
-  // Reset position to vacant so another offer can be sent. Clear musician_id too
-  // (defensive — never leave a vacant chair still pointing at a musician).
-  // Substitutions keep the chair with the original musician, so skip it.
+  // Free the chair so another offer can go out. Substitutions keep the chair
+  // with the original musician, so skip it there.
   if (!subRequest) {
-    await supabase
-      .from('project_positions')
-      .update({ musician_id: null, status: 'vacant' })
-      .eq('id', offer.project_position_id)
+    await vacateChair(supabase, offer.project_position_id)
   }
 
   // If this is a substitution, update the substitution request and notify original musician
@@ -129,67 +113,24 @@ async function handleDecline(_request: Request, token: string) {
       .update({ status: 'sub_declined' })
       .eq('id', subRequest.id)
 
-    const originalMusician = subRequest.requesting_musician as any
-    const serviceName = (subRequest.service as any)?.name || null
-
-    // Count total chairs
-    let totalChairs = 1
-    if (project?.id && instrument?.id) {
-      const { count } = await supabase
-        .from('project_positions')
-        .select('*', { count: 'exact', head: true })
-        .eq('project_id', project.id)
-        .eq('instrument_id', instrument.id)
-      totalChairs = count || 1
-    }
-
-    // Get the original musician's offer token
-    const { data: originalOffer } = await supabase
-      .from('contract_offers')
-      .select('token')
-      .eq('project_position_id', offer.project_position_id)
-      .eq('musician_id', subRequest.requesting_musician_id)
-      .eq('status', 'accepted')
-      .single()
-
-    const baseUrl = getAppUrl()
-    const gigUrl = originalOffer ? `${baseUrl}/gig/${originalOffer.token}` : baseUrl
-
-    // Send "sub declined, find another" email to the original musician
-    if (originalMusician?.email) {
-      try {
-        await sendSubDeclinedFindAnotherEmail({
-          to: originalMusician.email,
-          musicianName: `${originalMusician.first_name} ${originalMusician.last_name}`,
-          organizationName: organization?.name || 'Orchestra',
-          organizationId: organization?.id,
-          projectName: project?.name || 'Project',
-          instrument: instrument?.name || 'Instrument',
-          chairNumber: position?.chair_number || 1,
-          totalChairs,
-          serviceName,
-          suggestedSubName: subRequest.suggested_sub_name || `${musician?.first_name} ${musician?.last_name}`,
-          gigUrl,
-          performanceDate,
-        }).catch((err) => console.warn('Failed to send sub declined email:', err))
-      } catch (emailError) {
-        console.warn('Email sending failed:', emailError)
-      }
-    }
+    // Tell the original musician their sub fell through. Shared with the portal
+    // path, which also records it — this route used to send without logging, so
+    // the notice never reached the contractor's email log.
+    await notifySubDeclined(supabase, {
+      offer,
+      subRequest,
+      musician,
+      position,
+      project,
+      organization,
+      instrument,
+      performanceDate,
+    })
   }
 
   // Send confirmation emails (don't block on failure)
   try {
-    // Count total chairs for this instrument in this project
-    let totalChairs = 1
-    if (project?.id && instrument?.id) {
-      const { count } = await supabase
-        .from('project_positions')
-        .select('*', { count: 'exact', head: true })
-        .eq('project_id', project.id)
-        .eq('instrument_id', instrument.id)
-      totalChairs = count || 1
-    }
+    const totalChairs = await countChairs(supabase, project?.id, instrument?.id)
 
     // Send confirmation to musician if they have email
     if (musician?.email) {

@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
-import { sendOfferAcceptedEmail, sendAdminOfferResponseEmail, sendMusicianReleasedEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
+import { sendOfferAcceptedEmail, sendAdminOfferResponseEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
+import { claimChairForAccept, notifyMusicianReleased, countChairs } from '@/lib/offers/respond'
 
 export async function POST(
   _request: Request,
@@ -90,43 +91,17 @@ async function handleAccept(_request: Request, token: string) {
     .eq('status', 'approved')
     .maybeSingle()
 
-  // Update offer to accepted (optimistic lock: only update if still pending/viewed)
-  const { data: updatedOffer } = await supabase
-    .from('contract_offers')
-    .update({
-      status: 'accepted',
-      responded_at: new Date().toISOString(),
-    })
-    .eq('id', offer.id)
-    .in('status', ['pending', 'viewed'])
-    .select('id')
+  // Accept the offer and claim the chair atomically (shared with the portal
+  // path — see claimChairForAccept for why the two conditional updates are what
+  // stop two musicians winning the same chair).
+  const claim = await claimChairForAccept(supabase, offer as any, subRequest as any)
 
-  if (!updatedOffer || updatedOffer.length === 0) {
-    return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
-  }
-
-  // Update position: assign musician and set status to confirmed.
-  // Normal offer: the chair must be unassigned (prevents two musicians winning
-  // the same chair). Substitution: the chair is held by the requesting (original)
-  // musician and is atomically transferred to the substitute.
-  let positionUpdate = supabase
-    .from('project_positions')
-    .update({
-      musician_id: offer.musician_id,
-      status: 'confirmed',
-    })
-    .eq('id', offer.project_position_id)
-  positionUpdate = subRequest
-    ? positionUpdate.eq('musician_id', subRequest.requesting_musician_id)
-    : positionUpdate.is('musician_id', null)
-  const { data: updatedPosition } = await positionUpdate.select('id')
-
-  if (!updatedPosition || updatedPosition.length === 0) {
-    // Chair was no longer available to this musician — revert the offer status
-    await supabase
-      .from('contract_offers')
-      .update({ status: 'pending', responded_at: null })
-      .eq('id', offer.id)
+  if (claim.outcome !== 'claimed') {
+    if (claim.outcome === 'error') {
+      console.error(`Failed to accept offer ${offer.id}:`, claim.error)
+    }
+    // already_responded / position_filled / error all land on the gig page,
+    // which renders the status-appropriate message.
     return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
   }
 
@@ -147,55 +122,24 @@ async function handleAccept(_request: Request, token: string) {
       .eq('musician_id', subRequest.requesting_musician_id)
       .eq('status', 'accepted')
 
-    // Get the original musician's accepted offer token for the gig URL
-    const originalMusician = subRequest.requesting_musician as any
-    const serviceName = (subRequest.service as any)?.name || null
-
-    // Count total chairs
-    let totalChairs = 1
-    if (project?.id && instrument?.id) {
-      const { count } = await supabase
-        .from('project_positions')
-        .select('*', { count: 'exact', head: true })
-        .eq('project_id', project.id)
-        .eq('instrument_id', instrument.id)
-      totalChairs = count || 1
-    }
-
-    // Send "you've been released" email to the original musician
-    if (originalMusician?.email) {
-      try {
-        await sendMusicianReleasedEmail({
-          to: originalMusician.email,
-          musicianName: `${originalMusician.first_name} ${originalMusician.last_name}`,
-          organizationName: organization?.name || 'Orchestra',
-          organizationId: organization?.id,
-          projectName: project?.name || 'Project',
-          instrument: instrument?.name || 'Instrument',
-          chairNumber: position?.chair_number || 1,
-          totalChairs,
-          serviceName,
-          substituteName: `${musician?.first_name} ${musician?.last_name}`,
-          performanceDate,
-        }).catch((err) => console.warn('Failed to send musician released email:', err))
-      } catch (emailError) {
-        console.warn('Email sending failed:', emailError)
-      }
-    }
+    // Tell the original musician they've been released. Shared with the portal
+    // path, which also records it — this route used to send without logging, so
+    // the notice never reached the contractor's email log.
+    await notifyMusicianReleased(supabase, {
+      offer,
+      subRequest,
+      musician,
+      position,
+      project,
+      organization,
+      instrument,
+      performanceDate,
+    })
   }
 
   // Send confirmation emails (don't block on failure)
   try {
-    // Count total chairs for this instrument in this project
-    let totalChairs = 1
-    if (project?.id && instrument?.id) {
-      const { count } = await supabase
-        .from('project_positions')
-        .select('*', { count: 'exact', head: true })
-        .eq('project_id', project.id)
-        .eq('instrument_id', instrument.id)
-      totalChairs = count || 1
-    }
+    const totalChairs = await countChairs(supabase, project?.id, instrument?.id)
 
     // Format services for email
     const formattedServices = services

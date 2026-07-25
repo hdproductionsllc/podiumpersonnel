@@ -22,33 +22,68 @@ const declineRoutes = [
   'src/app/api/musician/offers/[id]/decline/route.ts',
 ]
 
-describe('accept routes handle substitutions', () => {
+/**
+ * The seat-claim and decline logic these tests used to scan for inline now lives
+ * in src/lib/offers/respond.ts, shared by both answer paths (the emailed link
+ * and the portal) so the two copies can no longer drift apart.
+ *
+ * The guarantees below are unchanged — they are asserted against the shared
+ * module, plus a check that each route actually delegates to it. The behavioural
+ * versions (simulating a lost race, an already-answered offer, a reverted
+ * accept) live in offer-respond-shared.test.ts.
+ */
+const SHARED = 'src/lib/offers/respond.ts'
+
+describe('accept path handles substitutions', () => {
+  const src = read(SHARED)
+
+  it('transfers the chair from the original musician on a substitution', () => {
+    expect(src).toContain("positionUpdate.eq('musician_id', subRequest.requesting_musician_id)")
+  })
+
+  it('still requires an empty chair for a normal offer', () => {
+    expect(src).toContain("positionUpdate.is('musician_id', null)")
+  })
+
   acceptRoutes.forEach((route) => {
-    const src = read(route)
-    it(`${route} transfers the chair from the original musician on a substitution`, () => {
-      expect(src).toContain("positionUpdate.eq('musician_id', subRequest.requesting_musician_id)")
+    it(`${route} claims the chair through the shared helper`, () => {
+      expect(read(route)).toContain('claimChairForAccept')
     })
-    it(`${route} still requires an empty chair for a normal offer`, () => {
-      expect(src).toContain("positionUpdate.is('musician_id', null)")
-    })
+
     it(`${route} releases the original musician's accepted offer`, () => {
-      expect(src).toContain("status: 'released'")
-      expect(src).toContain("eq('musician_id', subRequest.requesting_musician_id)")
+      // Still route-local: only the accept paths mark the predecessor released.
+      const routeSrc = read(route)
+      expect(routeSrc).toContain("status: 'released'")
+      expect(routeSrc).toContain("eq('musician_id', subRequest.requesting_musician_id)")
     })
   })
 })
 
-describe('decline routes are race-safe', () => {
+describe('decline path is race-safe', () => {
+  const src = read(SHARED)
+
+  it('uses an optimistic lock on the decline update', () => {
+    expect(src).toContain("RESPONDABLE_STATUSES")
+    expect(src).toContain("['pending', 'viewed']")
+  })
+
+  it('clears musician_id when vacating the chair', () => {
+    expect(src).toContain("musician_id: null, status: 'vacant'")
+  })
+
   declineRoutes.forEach((route) => {
-    const src = read(route)
-    it(`${route} uses an optimistic lock on the decline update`, () => {
-      expect(src).toContain(".in('status', ['pending', 'viewed'])")
+    it(`${route} declines through the shared helper`, () => {
+      expect(read(route)).toContain('markOfferDeclined')
     })
-    it(`${route} clears musician_id when vacating the chair`, () => {
-      expect(src).toContain('musician_id: null, status: \'vacant\'')
-    })
+
     it(`${route} bails out when the offer was already responded to`, () => {
-      expect(src).toMatch(/declinedOffer\b/)
+      // The route must branch on the decline outcome and return early — never
+      // vacate the chair or send a decline email after losing the race. The two
+      // routes phrase the guard differently (one checks !== 'declined', the
+      // other matches each outcome), so assert the branch, not the wording.
+      const routeSrc = read(route)
+      expect(routeSrc).toMatch(/declineOutcome\s*(!==\s*'declined'|===\s*'already_responded')/)
+      expect(routeSrc).toMatch(/declineOutcome[\s\S]{0,200}return/)
     })
   })
 })
