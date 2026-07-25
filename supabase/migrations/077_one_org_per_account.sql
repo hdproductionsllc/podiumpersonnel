@@ -73,3 +73,22 @@ COMMENT ON CONSTRAINT organization_members_user_id_key ON organization_members I
   '.single() on this table, which returns nothing when it matches two rows, so a '
   'second membership silently breaks that account. Enforced here so no code path '
   'can violate the rule quietly.';
+
+-- verify: the constraint exists and is UNIQUE on user_id alone. Expect 1 row.
+-- SELECT conname, contype, pg_get_constraintdef(oid) AS definition
+-- FROM pg_constraint
+-- WHERE conrelid = 'organization_members'::regclass
+--   AND conname = 'organization_members_user_id_key';
+
+-- verify: no account holds more than one membership. Expect 0 rows.
+-- SELECT user_id, count(*) FROM organization_members
+-- GROUP BY user_id HAVING count(*) > 1;
+
+-- verify (optional, destructive-free): confirm the rule is enforced by trying a
+-- duplicate inside a rolled-back transaction. Expect a unique_violation error,
+-- then "ROLLBACK" — nothing is written either way.
+-- BEGIN;
+--   INSERT INTO organization_members (organization_id, user_id, role)
+--   SELECT organization_id, user_id, 'member'
+--   FROM organization_members LIMIT 1;
+-- ROLLBACK;

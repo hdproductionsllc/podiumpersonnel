@@ -58,3 +58,23 @@ CREATE POLICY "Org members can view gig detail confirmations"
 -- service-role client in an API route that authorizes the caller itself, and the
 -- service role is not subject to RLS. Adding write policies here would only
 -- re-open surface area.
+
+-- verify: no public/permissive policy survives on either table. Expect 0 rows.
+-- SELECT tablename, policyname, roles, cmd, qual
+-- FROM pg_policies
+-- WHERE tablename IN ('gig_detail_sends','gig_detail_confirmations')
+--   AND 'public' = ANY(roles)
+--   AND qual = 'true';
+
+-- verify: what IS still there, and that each policy is org-scoped. Expect only
+-- the org-member SELECT policies.
+-- SELECT tablename, policyname, cmd, roles, qual, with_check
+-- FROM pg_policies
+-- WHERE tablename IN ('gig_detail_sends','gig_detail_confirmations')
+-- ORDER BY tablename, policyname;
+
+-- verify: RLS is actually enabled on both (a policy is worthless without it).
+-- Expect relrowsecurity = true for both rows.
+-- SELECT relname, relrowsecurity
+-- FROM pg_class
+-- WHERE relname IN ('gig_detail_sends','gig_detail_confirmations');
