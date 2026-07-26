@@ -201,7 +201,7 @@ export const VERTICALS: Vertical[] = [
       },
       {
         title: "Offers singers actually answer",
-        body: "One tap to accept or decline from any phone, plus a personal portal with their schedule and music.",
+        body: "One tap to accept or decline from any phone — with the dates, the venue, and their music all in the same link. No account to create.",
       },
     ],
     audience: [

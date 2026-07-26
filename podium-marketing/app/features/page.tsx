@@ -178,16 +178,16 @@ const features = [
   {
     id: "portal",
     icon: Smartphone,
-    title: "Performer Portal",
-    headline: "Give your performers a home base.",
+    title: "No-Account Access",
+    headline: "Nothing for your people to sign up for.",
     description:
-      "Every performer gets free access to a portal that makes their life easier — and yours. One login for every group they play, sing, or dance for.",
+      "Your performers never create an account or manage a password. Every offer, schedule, part, and W-9 request is a link in their email that just works — so nothing stalls because someone cannot log in.",
     subfeatures: [
       {
         icon: Calendar,
-        title: "Unified Calendar",
+        title: "One Tap to Answer",
         description:
-          "Every booking from every group in one view. No juggling separate sources.",
+          "A link in the email opens the gig and takes their answer. No app, no signup.",
       },
       {
         icon: CheckCircle2,
@@ -203,9 +203,9 @@ const features = [
       },
       {
         icon: Settings,
-        title: "Profile Management",
+        title: "Paperwork Without Chasing",
         description:
-          "Performers keep their own contact info, roles, and pay preferences up to date.",
+          "Performers submit their W-9 from the same kind of link. It lands on their record automatically.",
       },
     ],
   },
@@ -221,7 +221,7 @@ const features = [
         icon: Users,
         title: "Performer-Initiated",
         description:
-          "Performers request a sub through the portal instead of texting you at midnight.",
+          "Performers request a sub from their gig link instead of texting you at midnight.",
       },
       {
         icon: CheckCircle2,

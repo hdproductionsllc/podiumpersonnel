@@ -122,7 +122,7 @@ const jsonLd = {
         "Offer sending, tracking, and cascade",
         "Substitute and backfill workflow",
         "Payment, W-9, and 1099 tracking",
-        "Free performer portal",
+        "No-account access for performers",
         "Calendar integration and QuickBooks export",
       ],
     },
