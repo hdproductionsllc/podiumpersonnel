@@ -507,6 +507,9 @@ interface SendW9RequestParams {
   organizationName: string
   organizationId?: string
   adminEmail?: string
+  /** Tokenized upload page, so the musician can submit without an account. */
+  uploadUrl?: string
+  expiresAt?: string
   branding?: EmailBranding
   terms?: TermDictionary
 }
@@ -520,6 +523,8 @@ export async function sendW9RequestEmail(params: SendW9RequestParams) {
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       adminEmail: params.adminEmail,
+      uploadUrl: params.uploadUrl,
+      expiresAt: params.expiresAt,
       branding: params.branding,
       terms,
     }),

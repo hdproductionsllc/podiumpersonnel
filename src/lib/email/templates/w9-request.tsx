@@ -16,6 +16,9 @@ interface W9RequestEmailProps {
   musicianName: string
   organizationName: string
   adminEmail?: string
+  /** Tokenized upload page. Absent only for sends that predate the feature. */
+  uploadUrl?: string
+  expiresAt?: string
   branding?: EmailBranding
   terms?: TermDictionary
 }
@@ -24,6 +27,8 @@ export function W9RequestEmail({
   musicianName,
   organizationName,
   adminEmail,
+  uploadUrl,
+  expiresAt,
   branding,
   terms,
 }: W9RequestEmailProps) {
@@ -83,12 +88,42 @@ export function W9RequestEmail({
               <Text style={stepsItem}>1. Download and complete the W-9 form</Text>
               <Text style={stepsItem}>2. Sign and date the form</Text>
               <Text style={stepsItem}>
-                3. Reply to this email with the completed form attached
-                {adminEmail && (
-                  <span> or send it directly to <a href={`mailto:${adminEmail}`} style={link}>{adminEmail}</a></span>
+                {uploadUrl ? (
+                  <>3. Upload it using the secure link below — no account or password needed</>
+                ) : (
+                  <>
+                    3. Reply to this email with the completed form attached
+                    {adminEmail && (
+                      <span> or send it directly to <a href={`mailto:${adminEmail}`} style={link}>{adminEmail}</a></span>
+                    )}
+                  </>
                 )}
               </Text>
             </Section>
+
+            {uploadUrl && (
+              <>
+                <Section style={{ textAlign: 'center' as const, margin: '28px 0 8px' }}>
+                  <a href={uploadUrl} style={{ ...button, backgroundColor: brandColor }}>
+                    Upload my W-9
+                  </a>
+                </Section>
+                <Text style={smallText}>
+                  {expiresAt
+                    ? `This link works until ${new Date(expiresAt).toLocaleDateString('en-US', {
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}. `
+                    : ''}
+                  Prefer email? You can also reply to this message with the form attached
+                  {adminEmail && (
+                    <span> or send it to <a href={`mailto:${adminEmail}`} style={link}>{adminEmail}</a></span>
+                  )}
+                  .
+                </Text>
+              </>
+            )}
 
             <Text style={smallText}>
               If you have already submitted a W-9 form to us, please disregard this message
@@ -191,6 +226,18 @@ const stepsItem = {
   color: '#525f7f',
   marginBottom: '8px',
   paddingLeft: '8px',
+}
+
+const button = {
+  backgroundColor: '#1E293B',
+  borderRadius: '6px',
+  color: '#fff',
+  fontSize: '14px',
+  fontWeight: 'bold',
+  textDecoration: 'none',
+  textAlign: 'center' as const,
+  display: 'inline-block',
+  padding: '12px 24px',
 }
 
 const link = {
