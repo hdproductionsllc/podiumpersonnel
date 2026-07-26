@@ -41,6 +41,7 @@ type WaterfallCandidate = {
   call_order: number
   is_leader: boolean
   has_conflict: boolean
+  conflict_reason?: string | null
 }
 
 interface ProjectOffersProps {
@@ -492,11 +493,19 @@ export function ProjectOffers({
                         {waterfallCandidates[offer.project_position_id].map((candidate, idx) => (
                           <div key={candidate.id} className="flex items-center gap-2">
                             {idx > 0 && <span className="text-muted-foreground">or</span>}
-                            <span className={candidate.has_conflict ? 'text-muted-foreground line-through' : ''}>
+                            <span
+                              className={candidate.has_conflict ? 'text-muted-foreground line-through' : ''}
+                              title={candidate.conflict_reason || undefined}
+                            >
                               {candidate.first_name} {candidate.last_name}
                               {candidate.is_leader && ' ★'}
                               {candidate.call_order != null && ` (#${candidate.call_order})`}
                             </span>
+                            {candidate.has_conflict && candidate.conflict_reason && (
+                              <span className="text-xs text-red-600 dark:text-red-400">
+                                {candidate.conflict_reason}
+                              </span>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
