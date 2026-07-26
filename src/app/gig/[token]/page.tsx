@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/server'
 import { GigPageClient } from '@/components/gig/gig-page-client'
-import { getOrgPlan } from '@/lib/api-helpers'
+import { getOrgPlan, getOrgVertical } from '@/lib/api-helpers'
+import { term } from '@/lib/verticals'
 import { canUseSubstitutions } from '@/lib/plan'
 import { DEFAULT_TIMEZONE } from '@/lib/utils'
 
@@ -107,6 +108,13 @@ export default async function GigPage({ params }: GigPageProps) {
 
   // Whether this org's plan includes the substitution workflow (Orchestra+).
   // null plan = billing not enforced = enabled.
+  // Greeting fallback when a musician record has no first name. Follows the
+  // org's vertical so a theatre company greets "Hi Performer," not "Hi Musician,".
+  let personTerm = 'Musician'
+  if (position?.project?.organization_id) {
+    personTerm = term((await getOrgVertical(position.project.organization_id)).terms, 'person')
+  }
+
   let subsEnabled = true
   if (position?.project?.organization_id) {
     const plan = await getOrgPlan(position.project.organization_id)
@@ -147,7 +155,7 @@ export default async function GigPage({ params }: GigPageProps) {
       offerId={offerData.id}
       offerStatus={offerData.status}
       expiresAt={offerData.expires_at}
-      musicianFirstName={musician?.first_name || 'Musician'}
+      musicianFirstName={musician?.first_name || personTerm}
       organizationName={position?.project?.organization?.name || 'Organization'}
       organizationId={position?.project?.organization_id || ''}
       projectName={position?.project?.name || 'Project'}

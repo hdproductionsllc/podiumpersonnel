@@ -13,6 +13,7 @@ export const choir: VerticalTemplate = {
     session: { singular: 'Session', plural: 'Sessions' },
     skill: { singular: 'Voice Part', plural: 'Voice Parts' },
     groupList: { singular: 'Roster', plural: 'Rosters' },
+    materials: { singular: 'Music', plural: 'Music' },
     rank: null,
   },
   nav: [

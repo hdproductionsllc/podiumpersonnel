@@ -13,6 +13,7 @@ export const dance: VerticalTemplate = {
     session: { singular: 'Call', plural: 'Calls' },
     skill: { singular: 'Role', plural: 'Roles' },
     groupList: { singular: 'Roster', plural: 'Rosters' },
+    materials: { singular: 'Music', plural: 'Music' },
     rank: null,
   },
   nav: [

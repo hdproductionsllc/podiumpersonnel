@@ -40,6 +40,12 @@ export type TermDictionary = {
   skill: TermForms
   /** Saved Ensemble / Roster / Cast List / Team / Lineup */
   groupList: TermForms
+  /**
+   * What gets distributed to people ahead of the work: Music / Parts for a
+   * music vertical, Materials or Documents elsewhere. The feature is the same
+   * either way — files attached to a project, sent to whoever is on it.
+   */
+  materials: TermForms
   /** Chair — or null (no rank concept) */
   rank: TermForms | null
 }

@@ -1,5 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { createServiceClient } from '@/lib/supabase/server'
+import { getOrgVertical } from '@/lib/api-helpers'
+import { term, DEFAULT_TERMS } from '@/lib/verticals'
 
 const DEFAULT_POLICY = `## Acceptance of Engagement
 
@@ -34,6 +36,10 @@ export default async function MusicianPolicyPage({ searchParams }: MusicianPolic
 
   let organizationName = 'Podium Personnel'
   let policyContent = DEFAULT_POLICY
+  // The heading follows the org's vertical, so a theatre company sees
+  // "Performer Policy" rather than "Musician Policy". Defaults reproduce the
+  // music wording exactly.
+  let terms = DEFAULT_TERMS
 
   if (orgId) {
     const supabase = createServiceClient()
@@ -45,6 +51,7 @@ export default async function MusicianPolicyPage({ searchParams }: MusicianPolic
 
     if (organization) {
       organizationName = organization.name
+      terms = (await getOrgVertical(orgId)).terms
       if (organization.musician_policy) {
         policyContent = organization.musician_policy
       }
@@ -73,7 +80,7 @@ export default async function MusicianPolicyPage({ searchParams }: MusicianPolic
     <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4 py-8">
       <Card className="w-full max-w-2xl">
         <CardHeader>
-          <CardTitle className="text-2xl">Musician Policy</CardTitle>
+          <CardTitle className="text-2xl">{term(terms, 'person')} Policy</CardTitle>
           <CardDescription>{organizationName}</CardDescription>
         </CardHeader>
         <CardContent className="prose prose-sm dark:prose-invert max-w-none space-y-4">

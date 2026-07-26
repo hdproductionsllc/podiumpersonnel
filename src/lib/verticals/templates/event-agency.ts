@@ -17,6 +17,7 @@ export const eventAgency: VerticalTemplate = {
     session: { singular: 'Set', plural: 'Sets' },
     skill: { singular: 'Skill', plural: 'Skills' },
     groupList: { singular: 'Lineup', plural: 'Lineups' },
+    materials: { singular: 'Material', plural: 'Materials' },
     rank: null,
   },
   nav: [
