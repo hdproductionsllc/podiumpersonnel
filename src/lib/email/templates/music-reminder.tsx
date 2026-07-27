@@ -13,7 +13,7 @@ import {
 } from '@react-email/components'
 import { type EmailBranding } from './email-layout'
 import { PodiumFooter } from './podium-footer'
-import { type TermDictionary } from '@/lib/verticals'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface MusicReminderEmailProps {
   musicianName: string
@@ -44,7 +44,9 @@ export function MusicReminderEmail({
   confirmUrl,
   contactEmail,
   branding,
+  terms,
 }: MusicReminderEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const brandColor = branding?.brandColor || '#1E293B'
   const logoUrl = branding?.logoUrl
   const footerText = branding?.footerText
@@ -53,7 +55,7 @@ export function MusicReminderEmail({
     <Html>
       <Head />
       <Preview>
-        Reminder: Download your music for {projectName}
+        Reminder: Download your {term(t, 'materials', { case: 'lower' })} for {projectName}
       </Preview>
       <Body style={main}>
         <Container style={container}>
@@ -72,7 +74,7 @@ export function MusicReminderEmail({
             <Text style={greeting}>Hi {musicianName},</Text>
 
             <Text style={paragraph}>
-              Following up on the music for <strong>{projectName}</strong> - it's still waiting for you to download.
+              Following up on the {term(t, 'materials', { case: 'lower' })} for <strong>{projectName}</strong> - it&apos;s still waiting for you to download.
             </Text>
 
             <Text style={subheading}>Files:</Text>

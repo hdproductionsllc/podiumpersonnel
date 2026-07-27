@@ -169,9 +169,12 @@ export default function PrivacyPage() {
                     of your organization on Podium.
                   </li>
                   <li>
-                    <strong>Performer Portal:</strong> when you send offers,
-                    the relevant details (dates, venue, compensation) are shared
-                    with the performer via their portal.
+                    <strong>With the performer:</strong> when you send an offer,
+                    gig details, music, or a W-9 request, the relevant
+                    information (dates, venue, compensation, parts) is shared
+                    with that performer through a private link sent to their
+                    email address. Performers do not create an account to use
+                    these links.
                   </li>
                   <li>
                     <strong>Legal requirements:</strong> if required by law,

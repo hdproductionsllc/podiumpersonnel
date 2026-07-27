@@ -12,6 +12,7 @@ export const orchestraBand: VerticalTemplate = {
     session: { singular: 'Service', plural: 'Services' },
     skill: { singular: 'Instrument', plural: 'Instruments' },
     groupList: { singular: 'Roster', plural: 'Rosters' },
+    materials: { singular: 'Music', plural: 'Music' },
     rank: { singular: 'Chair', plural: 'Chairs' },
   },
   nav: [

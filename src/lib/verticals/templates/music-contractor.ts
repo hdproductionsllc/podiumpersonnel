@@ -16,6 +16,7 @@ export const musicContractor: VerticalTemplate = {
     session: { singular: 'Service', plural: 'Services' },
     skill: { singular: 'Instrument', plural: 'Instruments' },
     groupList: { singular: 'Saved Ensemble', plural: 'Saved Ensembles' },
+    materials: { singular: 'Music', plural: 'Music' },
     rank: { singular: 'Chair', plural: 'Chairs' },
   },
   nav: [

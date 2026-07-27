@@ -13,7 +13,7 @@ import {
 } from '@react-email/components'
 import { type EmailBranding } from './email-layout'
 import { PodiumFooter } from './podium-footer'
-import { type TermDictionary } from '@/lib/verticals'
+import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
 
 interface MusicUploadedEmailProps {
   musicianName: string
@@ -46,7 +46,9 @@ export function MusicUploadedEmail({
   notes,
   contactEmail,
   branding,
+  terms,
 }: MusicUploadedEmailProps) {
+  const t = terms ?? DEFAULT_TERMS
   const brandColor = branding?.brandColor || '#1E293B'
   const logoUrl = branding?.logoUrl
   const footerText = branding?.footerText
@@ -55,7 +57,7 @@ export function MusicUploadedEmail({
     <Html>
       <Head />
       <Preview>
-        Music available for download — {projectName}
+        {term(t, 'materials')} available for download — {projectName}
       </Preview>
       <Body style={main}>
         <Container style={container}>
@@ -74,7 +76,7 @@ export function MusicUploadedEmail({
             <Text style={greeting}>Hi {musicianName},</Text>
 
             <Text style={paragraph}>
-              Your music for <strong>{projectName}</strong> is ready for download.
+              Your {term(t, 'materials', { case: 'lower' })} for <strong>{projectName}</strong> is ready for download.
               Click each file below to download.
             </Text>
 

@@ -17,6 +17,7 @@ export const churchWorship: VerticalTemplate = {
     session: { singular: 'Service', plural: 'Services' },
     skill: { singular: 'Team Role', plural: 'Team Roles' },
     groupList: { singular: 'Team', plural: 'Teams' },
+    materials: { singular: 'Music', plural: 'Music' },
     rank: null,
   },
   nav: [

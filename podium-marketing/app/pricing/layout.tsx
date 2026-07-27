@@ -32,7 +32,7 @@ const faqJsonLd = {
       name: "Are performers really always free?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Always. The performer portal never costs your people a cent — one login to see the work from every group they play, sing, or dance for. Only the organization doing the staffing pays for Podium. Performers already have enough expenses.",
+        text: "Always — and they never even make an account. Your performers respond to offers, confirm details, download their music, and submit a W-9 straight from links in their email. No signup, no password, nothing for them to lose track of and nothing for you to reset. Only the organization doing the staffing pays for Podium.",
       },
     },
     {

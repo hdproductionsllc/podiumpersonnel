@@ -209,21 +209,22 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ============================ PORTAL ============================ */}
+      {/* ===================== NO-ACCOUNT ACCESS ===================== */}
       <section className="spotlight-stage section-padding text-cream-100">
         <div className="container-marketing relative grid lg:grid-cols-2 gap-12 items-center">
           <div>
-            <span className="eyebrow !text-brass-400 before:!bg-brass-400/60">Always free for performers</span>
+            <span className="eyebrow !text-brass-400 before:!bg-brass-400/60">No accounts, no passwords</span>
             <h2 className="mt-5 font-display text-3xl md:text-display-md font-semibold text-cream-50 tracking-tight">
-              Your performers will thank you
+              Stop chasing people for answers
             </h2>
             <p className="mt-5 font-body text-lg text-cream-300 leading-relaxed max-w-xl">
-              Every performer gets a free portal — one login to see the work from every
-              group they play, sing, or dance for. Fewer questions in your inbox, faster
-              answers on every offer.
+              Your performers never create an account or manage a password. Offers,
+              schedules, parts, and W-9s all arrive as links in their email that just
+              work — so there is nothing for them to sign up for, and nothing for you
+              to reset, explain, or chase.
             </p>
             <ul className="mt-8 grid sm:grid-cols-2 gap-x-8 gap-y-4">
-              {PORTAL_POINTS.map((pt) => (
+              {NO_ACCOUNT_POINTS.map((pt) => (
                 <li key={pt} className="flex items-start gap-3 font-body text-cream-200">
                   <Check className="mt-1 h-4 w-4 shrink-0 text-brass-400" strokeWidth={2.5} />
                   {pt}
@@ -234,7 +235,7 @@ export default function HomePage() {
               href="/features"
               className="mt-9 inline-flex items-center gap-2 font-body font-medium text-brass-300 hover:text-brass-200 transition-colors"
             >
-              See everything performers get
+              See how it works
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
@@ -583,13 +584,13 @@ const SOLUTIONS = [
   },
 ];
 
-const PORTAL_POINTS = [
-  "One calendar across every group",
-  "Accept or decline in a tap",
-  "Sync to Google, Apple, or Outlook",
-  "Set pay preferences and W-9",
-  "Request a sub when life happens",
-  "Works on any device",
+const NO_ACCOUNT_POINTS = [
+  "Answers in minutes, not days",
+  "No \u201cdid you get my email?\u201d threads",
+  "W-9s collected without chasing",
+  "Sub requests come to you, not a midnight text",
+  "Dates land straight in their calendar",
+  "No logins to reset or support",
 ];
 
 const MARKET_STATS = [

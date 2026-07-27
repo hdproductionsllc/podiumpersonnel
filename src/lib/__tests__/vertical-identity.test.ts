@@ -9,7 +9,7 @@
  * explicit sign-off: they ARE the promise that live orgs see zero change.
  */
 import { describe, it, expect } from 'vitest'
-import { resolveVertical, VERTICALS, DEFAULT_VERTICAL } from '@/lib/verticals'
+import { resolveVertical, VERTICALS, DEFAULT_VERTICAL, term } from '@/lib/verticals'
 import { getPositionTitle } from '@/lib/orchestra-positions'
 import { checkEnsembleDrift } from '@/lib/ensemble-detection'
 
@@ -19,6 +19,12 @@ const FROZEN_DEFAULT_TERMS = {
   session: { singular: 'Service', plural: 'Services' },
   skill: { singular: 'Instrument', plural: 'Instruments' },
   groupList: { singular: 'Saved Ensemble', plural: 'Saved Ensembles' },
+  // Added when the music-distribution emails were generalized. 'Music' is the
+  // word those emails already used ("Music available", "your music"), so this
+  // entry encodes existing behaviour rather than changing it — the no-op
+  // guarantee is preserved, and the assertion below proves the rendered
+  // wording is unchanged.
+  materials: { singular: 'Music', plural: 'Music' },
   rank: { singular: 'Chair', plural: 'Chairs' },
 }
 
@@ -43,6 +49,27 @@ describe('vertical identity: default template = today, frozen', () => {
 
   it('terminology matches the frozen pre-verticals labels exactly', () => {
     expect(def.terms).toEqual(FROZEN_DEFAULT_TERMS)
+  })
+
+  it('music-distribution wording is byte-identical to the pre-verticals strings', () => {
+    // The generalization must be invisible to a music org. These are the exact
+    // phrases the templates and subject lines produced before `materials` existed.
+    const t = def.terms
+    expect(`${term(t, 'materials')} available for download`).toBe('Music available for download')
+    expect(`Your ${term(t, 'materials', { case: 'lower' })} for`).toBe('Your music for')
+    expect(`${term(t, 'materials')} available:`).toBe('Music available:')
+    expect(`Reminder: download your ${term(t, 'materials', { case: 'lower' })} for`).toBe(
+      'Reminder: download your music for'
+    )
+    expect(`Following up on the ${term(t, 'materials', { case: 'lower' })} for`).toBe(
+      'Following up on the music for'
+    )
+  })
+
+  it('the default person label still reads "Musician" wherever it is substituted', () => {
+    // Covers the two former hardcodes: the policy heading and the gig greeting.
+    expect(`${term(def.terms, 'person')} Policy`).toBe('Musician Policy')
+    expect(term(def.terms, 'person')).toBe('Musician')
   })
 
   it('nav matches the frozen pre-verticals sidebar exactly (labels, order, emphasis)', () => {

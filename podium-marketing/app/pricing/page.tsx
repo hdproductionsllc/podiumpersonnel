@@ -39,7 +39,7 @@ const TIERS: Tier[] = [
       "3 active projects",
       "Offers & response tracking",
       "Payment tracking",
-      "Free performer portal",
+      "No-account access for performers",
       "Skills & venue management",
       "Email support",
     ],
@@ -58,7 +58,7 @@ const TIERS: Tier[] = [
       "Saved lineup presets",
       "Email branding",
       "Gig details & group messaging",
-      "Portal invites & W-9 requests",
+      "W-9 requests & document collection",
     ],
   },
   {
@@ -114,7 +114,7 @@ const comparison: {
       { name: "Offers & response tracking", values: [true, true, true, true] },
       { name: "Payment tracking", values: [true, true, true, true] },
       { name: "Project staffing grid", values: [true, true, true, true] },
-      { name: "Performer portal", values: [true, true, true, true] },
+      { name: "No-account performer access", values: [true, true, true, true] },
       { name: "Offer email notifications", values: [true, true, true, true] },
       { name: "Skills & venue management", values: [true, true, true, true] },
     ],
@@ -126,7 +126,6 @@ const comparison: {
       { name: "Saved lineup presets", values: [false, true, true, true] },
       { name: "Email branding", values: [false, true, true, true] },
       { name: "Gig details & group messaging", values: [false, true, true, true] },
-      { name: "Portal invites", values: [false, true, true, true] },
       { name: "W-9 requests", values: [false, true, true, true] },
       { name: "File distribution", values: [false, true, true, true] },
     ],
@@ -167,7 +166,7 @@ const faqs = [
   {
     question: "Are performers really always free?",
     answer:
-      "Always. The performer portal never costs your people a cent — one login to see the work from every group they play, sing, or dance for. Only the organization doing the staffing pays for Podium. Performers already have enough expenses.",
+      "Always — and they never even make an account. Your performers respond to offers, confirm details, download their music, and submit a W-9 straight from links in their email. No signup, no password, nothing for them to lose track of and nothing for you to reset. Only the organization doing the staffing pays for Podium.",
   },
   {
     question: "Which plan is right for me?",

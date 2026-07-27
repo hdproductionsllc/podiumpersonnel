@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { randomBytes } from 'crypto'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendW9RequestEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getOrgPlan } from '@/lib/api-helpers'
 import { canUseEmailFeatures } from '@/lib/plan'
+import { getAppUrl } from '@/lib/utils'
+
+/** How long a W-9 upload link stays valid. Re-requesting is one click. */
+const W9_LINK_TTL_DAYS = 30
 
 export async function POST(request: NextRequest) {
   try {
@@ -79,12 +84,33 @@ export async function POST(request: NextRequest) {
       if (i > 0) await new Promise((r) => setTimeout(r, 600))
       const musician = eligibleMusicians[i]
       try {
+        // Mint a fresh upload token so the musician can submit without an
+        // account. Written with the service client because the musicians RLS
+        // policies are scoped to org members, and re-minted per request so an
+        // older link stops working once a new one is sent.
+        const uploadToken = randomBytes(32).toString('hex')
+        const expiresAt = new Date(Date.now() + W9_LINK_TTL_DAYS * 24 * 60 * 60 * 1000)
+
+        const { error: tokenError } = await createServiceClient()
+          .from('musicians')
+          .update({
+            w9_request_token: uploadToken,
+            w9_request_sent_at: new Date().toISOString(),
+            w9_request_expires_at: expiresAt.toISOString(),
+          })
+          .eq('id', musician.id)
+          .eq('organization_id', organization.id)
+
+        if (tokenError) throw new Error('Could not create an upload link')
+
         const w9Result = await sendW9RequestEmail({
           to: musician.email!,
           musicianName: `${musician.first_name} ${musician.last_name}`,
           organizationName: organization.name,
           organizationId: organization.id,
           adminEmail: user.email || undefined,
+          uploadUrl: `${getAppUrl()}/w9/${uploadToken}`,
+          expiresAt: expiresAt.toISOString(),
           branding: {
             logoUrl: organization.email_logo_url,
             brandColor: organization.email_brand_color,

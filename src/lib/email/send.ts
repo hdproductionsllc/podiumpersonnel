@@ -26,7 +26,7 @@ import { PreGigNotificationEmail } from './templates/pre-gig-notification'
 import { StaffingAlertEmail } from './templates/staffing-alert'
 import { render } from '@react-email/render'
 import { type EmailBranding } from './templates/email-layout'
-import { type TermDictionary, DEFAULT_TERMS } from '@/lib/verticals'
+import { term, type TermDictionary, DEFAULT_TERMS } from '@/lib/verticals'
 import { getOrgVertical } from '@/lib/api-helpers'
 
 export type { EmailBranding }
@@ -507,6 +507,9 @@ interface SendW9RequestParams {
   organizationName: string
   organizationId?: string
   adminEmail?: string
+  /** Tokenized upload page, so the musician can submit without an account. */
+  uploadUrl?: string
+  expiresAt?: string
   branding?: EmailBranding
   terms?: TermDictionary
 }
@@ -520,6 +523,8 @@ export async function sendW9RequestEmail(params: SendW9RequestParams) {
       musicianName: params.musicianName,
       organizationName: params.organizationName,
       adminEmail: params.adminEmail,
+      uploadUrl: params.uploadUrl,
+      expiresAt: params.expiresAt,
       branding: params.branding,
       terms,
     }),
@@ -1038,7 +1043,7 @@ export async function sendMusicUploadedEmail(params: SendMusicUploadedEmailParam
   const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
-    subject: withDate(`Music available: ${params.projectName}`, params.performanceDate || ''),
+    subject: withDate(`${term(terms, 'materials')} available: ${params.projectName}`, params.performanceDate || ''),
     react: MusicUploadedEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
@@ -1076,7 +1081,7 @@ export async function sendMusicReminderEmail(params: SendMusicReminderEmailParam
   const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
-    subject: withDate(`Reminder: download your music for ${params.projectName}`, params.performanceDate || ''),
+    subject: withDate(`Reminder: download your ${term(terms, 'materials', { case: 'lower' })} for ${params.projectName}`, params.performanceDate || ''),
     react: MusicReminderEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,

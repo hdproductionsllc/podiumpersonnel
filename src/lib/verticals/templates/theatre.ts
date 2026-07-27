@@ -13,6 +13,7 @@ export const theatre: VerticalTemplate = {
     session: { singular: 'Call', plural: 'Calls' },
     skill: { singular: 'Role', plural: 'Roles' },
     groupList: { singular: 'Cast List', plural: 'Cast Lists' },
+    materials: { singular: 'Script', plural: 'Scripts' },
     rank: null,
   },
   nav: [

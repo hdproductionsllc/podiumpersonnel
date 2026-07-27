@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { isWithinServiceArea } from '@/lib/zip-distance'
+import { findConflicts, describeConflicts } from '@/lib/schedule-conflict'
 
 export interface Candidate {
   id: string
@@ -9,6 +10,8 @@ export interface Candidate {
   call_order: number | null
   is_leader: boolean
   has_conflict: boolean
+  /** Short reason, e.g. "Booked on Spring Gala". Null when there is no conflict. */
+  conflict_reason?: string | null
 }
 
 /**
@@ -118,8 +121,11 @@ export async function getNextCandidates(
 
   // Filter and sort candidates
   const isLeaderPosition = position.chair_number === 1
-  const candidates: Candidate[] = []
 
+  // Everyone still in the running, before conflicts are considered. Conflicts are
+  // resolved in one batch below rather than per-musician, so adding the
+  // cross-project check does not turn this into N round-trips.
+  const eligible: any[] = []
   for (const musician of (musicians || [])) {
     // Skip if already offered or already declined this position
     if (excludedMusicianIds.includes(musician.id)) continue
@@ -133,29 +139,43 @@ export async function getNextCandidates(
     )
     if (!inArea) continue
 
-    // Check for scheduling conflicts
-    const hasConflict = (musician.competing_schedules || []).some((sched: any) => {
-      const schedStart = new Date(sched.start_time).getTime()
-      const schedEnd = new Date(sched.end_time).getTime()
-      return (services || []).some((svc: any) => {
-        const svcStart = new Date(svc.start_time).getTime()
-        const svcEnd = svc.end_time
-          ? new Date(svc.end_time).getTime()
-          : svcStart + 3 * 60 * 60 * 1000
-        return schedStart < svcEnd && schedEnd > svcStart
-      })
-    })
+    eligible.push(musician)
+  }
 
-    candidates.push({
+  // Busy is busy, whether the clash is an outside commitment the contractor
+  // recorded or an active offer on another project in Podium. Only the first of
+  // those used to be checked here, so this list would happily suggest someone
+  // already confirmed on a different gig that night.
+  const externalByMusician = new Map<
+    string,
+    { title: string; start_time: string; end_time: string }[]
+  >()
+  for (const musician of eligible) {
+    if (musician.competing_schedules?.length) {
+      externalByMusician.set(musician.id, musician.competing_schedules)
+    }
+  }
+
+  const conflictsByMusician = await findConflicts(supabase, {
+    musicianIds: eligible.map((m) => m.id),
+    services: services || [],
+    excludeProjectId: project.id,
+    externalByMusician,
+  })
+
+  const candidates: Candidate[] = eligible.map((musician) => {
+    const conflicts = conflictsByMusician.get(musician.id)
+    return {
       id: musician.id,
       first_name: musician.first_name,
       last_name: musician.last_name,
       email: musician.email,
       call_order: musician.call_order,
       is_leader: musician.is_leader,
-      has_conflict: hasConflict,
-    })
-  }
+      has_conflict: !!conflicts && conflicts.length > 0,
+      conflict_reason: describeConflicts(conflicts),
+    }
+  })
 
   // Sort: leaders first for chair 1, then by call_order, conflicts last
   candidates.sort((a, b) => {

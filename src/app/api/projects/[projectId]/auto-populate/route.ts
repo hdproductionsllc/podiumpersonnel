@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { isWithinServiceArea } from '@/lib/zip-distance'
+import { findConflicts, describeConflicts } from '@/lib/schedule-conflict'
 
 export async function POST(
   request: NextRequest,
@@ -58,7 +59,7 @@ export async function POST(
       call_order,
       is_leader,
       musician_instruments(instrument_id),
-      competing_schedules(id, start_time, end_time)
+      competing_schedules(id, title, start_time, end_time)
     `)
     .eq('organization_id', organizationId)
     .eq('is_active', true)
@@ -72,6 +73,27 @@ export async function POST(
     .from('services')
     .select('id, start_time, end_time')
     .eq('project_id', projectId)
+
+  // Resolve conflicts once for the whole roster. Services are the same for every
+  // chair in this project, so there is nothing per-entry to recompute — and this
+  // now covers active offers on OTHER projects, not just the outside commitments
+  // typed into competing_schedules.
+  const externalByMusician = new Map<
+    string,
+    { title: string; start_time: string; end_time: string }[]
+  >()
+  for (const musician of (musicians || []) as any[]) {
+    if (musician.competing_schedules?.length) {
+      externalByMusician.set(musician.id, musician.competing_schedules)
+    }
+  }
+
+  const conflictsByMusician = await findConflicts(supabase, {
+    musicianIds: ((musicians || []) as any[]).map((m) => m.id),
+    services: services || [],
+    excludeProjectId: projectId,
+    externalByMusician,
+  })
 
   // Build suggested positions
   const suggestions: any[] = []
@@ -98,23 +120,15 @@ export async function POST(
         musician.service_radius_miles
       )
 
-      // Check for scheduling conflicts
-      const hasConflict = (musician.competing_schedules || []).some((sched: any) => {
-        const schedStart = new Date(sched.start_time).getTime()
-        const schedEnd = new Date(sched.end_time).getTime()
-        return (services || []).some((svc: any) => {
-          const svcStart = new Date(svc.start_time).getTime()
-          const svcEnd = svc.end_time
-            ? new Date(svc.end_time).getTime()
-            : svcStart + 3 * 60 * 60 * 1000
-          return schedStart < svcEnd && schedEnd > svcStart
-        })
-      })
+      const conflicts = conflictsByMusician.get(musician.id)
+      const hasConflict = !!conflicts && conflicts.length > 0
+      const conflictReason = describeConflicts(conflicts)
 
       rankedMusicians.push({
         ...musician,
         in_area: inArea,
         has_conflict: hasConflict,
+        conflict_reason: conflictReason,
       })
     }
 
@@ -161,6 +175,7 @@ export async function POST(
         is_leader: suggestedMusician.is_leader,
         in_area: suggestedMusician.in_area,
         has_conflict: suggestedMusician.has_conflict,
+        conflict_reason: suggestedMusician.conflict_reason ?? null,
       } : null,
       alternates: rankedMusicians.slice(1, 4).map(m => ({
         id: m.id,
