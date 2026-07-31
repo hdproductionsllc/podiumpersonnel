@@ -18,7 +18,18 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { normTitle } from '@/lib/intake/normalize'
 
 const PAGE_SIZE = 50
-const MAX_PAGE_SIZE = 100
+const MAX_PAGE_SIZE = 200
+
+/** Sort options. Kept server-side so a caller can't order by an arbitrary column. */
+const SORTS = {
+  title: { column: 'title', ascending: true },
+  'title-desc': { column: 'title', ascending: false },
+  artist: { column: 'artist', ascending: true },
+  newest: { column: 'created_at', ascending: false },
+  oldest: { column: 'created_at', ascending: true },
+} as const
+
+type SortKey = keyof typeof SORTS
 
 /** Ensembles a work can be arranged for — mirrors the repertoire CHECK constraint. */
 const ENSEMBLES = ['quartet', 'quintet', 'trio', 'duo', 'solo', 'viola-trio', 'other']
@@ -44,6 +55,8 @@ export interface LibraryWork {
   ensemble: string
   tags: string[]
   parts: LibraryPart[]
+  /** False when the work has been archived out of the working library. */
+  is_active: boolean
 }
 
 /** Escape PostgREST ilike wildcards so a query can't break out of the filter. */
@@ -60,6 +73,8 @@ export async function GET(request: Request) {
     const q = (url.searchParams.get('q') ?? '').trim()
     const ensemble = (url.searchParams.get('ensemble') ?? '').trim()
     const part = (url.searchParams.get('part') ?? '').trim()
+    const sortParam = (url.searchParams.get('sort') ?? 'title').trim()
+    const includeArchived = url.searchParams.get('includeArchived') === '1'
     const page = Math.max(0, Number(url.searchParams.get('page') ?? '0') || 0)
     const pageSize = Math.min(
       MAX_PAGE_SIZE,
@@ -72,14 +87,21 @@ export async function GET(request: Request) {
     if (part && !PARTS.includes(part)) {
       return apiError('Unknown part filter')
     }
+    if (!(sortParam in SORTS)) {
+      return apiError('Unknown sort option')
+    }
+    const sort = SORTS[sortParam as SortKey]
 
     const service = createServiceClient()
 
     let query = service
       .from('repertoire')
-      .select('id, title, artist, ensemble, tags', { count: 'exact' })
+      .select('id, title, artist, ensemble, tags, is_active', { count: 'exact' })
       .eq('organization_id', libraryOrgId)
-      .eq('is_active', true)
+
+    // Archived works stay in the database (is_active = false) so nothing that
+    // referenced them breaks. They are hidden unless explicitly asked for.
+    if (!includeArchived) query = query.eq('is_active', true)
 
     if (q) {
       // Match the raw title, the artist, OR the normalized title — the last one
@@ -99,7 +121,7 @@ export async function GET(request: Request) {
 
     const from = page * pageSize
     const { data: works, count, error: worksError } = await query
-      .order('title', { ascending: true })
+      .order(sort.column, { ascending: sort.ascending, nullsFirst: false })
       .range(from, from + pageSize - 1)
 
     if (worksError) return serverError('Library search failed', worksError)
@@ -139,6 +161,7 @@ export async function GET(request: Request) {
       artist: w.artist,
       ensemble: w.ensemble,
       tags: w.tags ?? [],
+      is_active: w.is_active !== false,
       parts: (byWork.get(w.id) ?? []).sort((a, b) => a.part.localeCompare(b.part)),
     }))
 
@@ -156,6 +179,7 @@ export async function GET(request: Request) {
       total: count ?? results.length,
       page,
       pageSize,
+      sort: sortParam,
       partFiltered: !!part,
     })
   } catch (err) {
