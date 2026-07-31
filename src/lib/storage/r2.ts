@@ -127,6 +127,30 @@ function isBufferLike(body: R2Body): boolean {
   )
 }
 
+/** Response-header overrides signed into a presigned GET. */
+export interface SignedGetOptions {
+  /** true → save as a file; false/omitted → render in the browser. */
+  download?: boolean
+  /** Name the browser should save it under. Quotes and control chars stripped. */
+  filename?: string
+  /** Override the Content-Type R2 returns (e.g. force application/pdf). */
+  contentType?: string
+}
+
+/**
+ * Make a filename safe to sit inside a quoted Content-Disposition header.
+ * Strips quotes, backslashes, and control characters — a stray quote would end
+ * the header value early and let the rest be read as new directives.
+ */
+export function sanitizeFilename(name: string): string {
+  return name
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f"\\]/g, '')
+    .replace(/[\r\n]/g, '')
+    .trim()
+    .slice(0, 200) || 'download.pdf'
+}
+
 export interface R2Client {
   config: R2Config
   /** Full URL for an object key (path-style). */
@@ -137,8 +161,8 @@ export interface R2Client {
   headObject(key: string): Promise<HeadResult | null>
   /** GET the first `length` bytes of an object (Range request). */
   getRange(key: string, length: number): Promise<Uint8Array>
-  /** Presigned GET URL valid for `expiresSeconds`. */
-  getSignedUrl(key: string, expiresSeconds: number): Promise<string>
+  /** Presigned GET URL valid for `expiresSeconds`, with optional response overrides. */
+  getSignedUrl(key: string, expiresSeconds: number, opts?: SignedGetOptions): Promise<string>
   /** Presigned PUT URL valid for `expiresSeconds` (browser-direct upload). */
   getSignedPutUrl(key: string, expiresSeconds: number): Promise<string>
   /** DELETE an object (idempotent — a missing object is not an error). */
@@ -245,9 +269,33 @@ export function makeR2Client(config: R2Config): R2Client {
     return new Uint8Array(await res.arrayBuffer())
   }
 
-  async function getSignedUrl(key: string, expiresSeconds: number): Promise<string> {
-    const url = `${objectUrl(key)}?X-Amz-Expires=${encodeURIComponent(String(expiresSeconds))}`
-    const signed = await aws.sign(url, {
+  async function getSignedUrl(
+    key: string,
+    expiresSeconds: number,
+    opts?: SignedGetOptions
+  ): Promise<string> {
+    const params = new URLSearchParams()
+    params.set('X-Amz-Expires', String(expiresSeconds))
+
+    // Ask R2 to override the response headers it sends back. `attachment` makes
+    // the browser save the file under a real name instead of rendering it;
+    // `inline` previews it in a tab. Both are signed into the URL, so neither
+    // can be swapped by whoever holds the link.
+    if (opts?.filename) {
+      const disposition = opts.download ? 'attachment' : 'inline'
+      params.set(
+        'response-content-disposition',
+        `${disposition}; filename="${sanitizeFilename(opts.filename)}"`
+      )
+    } else if (opts?.download) {
+      params.set('response-content-disposition', 'attachment')
+    }
+
+    if (opts?.contentType) {
+      params.set('response-content-type', opts.contentType)
+    }
+
+    const signed = await aws.sign(`${objectUrl(key)}?${params.toString()}`, {
       method: 'GET',
       aws: { signQuery: true },
     })

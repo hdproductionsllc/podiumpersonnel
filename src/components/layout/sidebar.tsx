@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Logo } from '@/components/ui/logo'
 import { usePlan } from '@/components/providers/plan-provider'
+import { useOrgFlags } from '@/components/providers/org-flags-provider'
 import { useVertical } from '@/components/providers/vertical-provider'
 import { NAV_ROUTES } from '@/lib/verticals'
 import type { NavItemId } from '@/lib/verticals'
@@ -90,6 +91,14 @@ function SettingsIcon({ className }: { className?: string }) {
 // Icon per nav id. Labels/order/visibility come from the active vertical's nav
 // config; routes come from NAV_ROUTES. Both are stable across verticals — only
 // the wording changes, so the same sidebar structure serves every org type.
+function LibraryIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
+    </svg>
+  )
+}
+
 const NAV_ICONS: Record<NavItemId, typeof HomeIcon> = {
   dashboard: HomeIcon,
   projects: FolderIcon,
@@ -133,6 +142,11 @@ function SidebarPlanIndicator() {
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
   const { nav } = useVertical()
+  // Rendered outside the vertical's NavConfig on purpose. The library follows the
+  // intake flag, not the org's vertical, and the default nav is frozen
+  // string-for-string by vertical-identity.test.ts — adding an item there would
+  // break the no-op guarantee for every existing org.
+  const { intakeEnabled } = useOrgFlags()
 
   const items = nav.map(({ id, label, emphasize }) => ({
     name: label,
@@ -167,6 +181,26 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
             </Button>
           )
         })}
+
+        {intakeEnabled && (() => {
+          const isActive = pathname === '/dashboard/library' || pathname.startsWith('/dashboard/library/')
+          return (
+            <Button
+              variant="ghost"
+              className={cn(
+                'w-full justify-start text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors',
+                isActive && 'bg-sidebar-accent text-sidebar-primary font-semibold border-l-2 border-sidebar-primary rounded-l-none shadow-[inset_0_0_12px_rgb(196_145_90_/_0.08)]'
+              )}
+              asChild
+              onClick={onNavigate}
+            >
+              <Link href="/dashboard/library">
+                <LibraryIcon className={cn('mr-3 h-5 w-5', isActive && 'text-sidebar-primary')} />
+                Music Library
+              </Link>
+            </Button>
+          )
+        })()}
       </nav>
       <div className="px-3 pb-4">
         <Separator className="mb-3 bg-sidebar-border/50" />
