@@ -21,6 +21,7 @@ interface LibraryWork {
   ensemble: string
   tags: string[]
   parts: LibraryPart[]
+  is_active: boolean
 }
 
 const ENSEMBLES = [
@@ -47,9 +48,23 @@ const PARTS = [
   { value: 'other', label: 'Other' },
 ]
 
+const SORTS = [
+  { value: 'title', label: 'Title A–Z' },
+  { value: 'title-desc', label: 'Title Z–A' },
+  { value: 'artist', label: 'Artist A–Z' },
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+]
+
 const PART_LABELS: Record<string, string> = Object.fromEntries(
   PARTS.filter((p) => p.value).map((p) => [p.value, p.label])
 )
+
+/** Compact codes for the dense view — a whole work's parts fit on one line. */
+const PART_SHORT: Record<string, string> = {
+  vln1: 'V1', vln2: 'V2', vla: 'Va', vc: 'Vc', bass: 'Bs',
+  voice: 'Vo', organ: 'Or', score: 'Sc', other: '—',
+}
 
 function formatBytes(bytes: number | null): string {
   if (!bytes || bytes <= 0) return ''
@@ -57,21 +72,33 @@ function formatBytes(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+/** sha256 of a file, hex — the key the library is content-addressed by. */
+async function sha256Hex(file: File): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer())
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
 export function LibraryClient({ totalWorks }: { totalWorks: number }) {
   const [query, setQuery] = useState('')
   const [ensemble, setEnsemble] = useState('')
   const [part, setPart] = useState('')
+  const [sort, setSort] = useState('title')
+  const [includeArchived, setIncludeArchived] = useState(false)
+  const [compact, setCompact] = useState(true)
+  const [pageSize, setPageSize] = useState(100)
   const [page, setPage] = useState(0)
 
   const [works, setWorks] = useState<LibraryWork[]>([])
   const [total, setTotal] = useState(0)
-  const [pageSize, setPageSize] = useState(50)
   const [partFiltered, setPartFiltered] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
-  // Guards against an earlier, slower request overwriting a newer one — the
-  // classic search race where you type fast and land on stale results.
+  // Guards the search race: a slower earlier request must not overwrite a newer one.
   const requestId = useRef(0)
 
   const load = useCallback(async () => {
@@ -84,17 +111,18 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
       if (query.trim()) params.set('q', query.trim())
       if (ensemble) params.set('ensemble', ensemble)
       if (part) params.set('part', part)
+      params.set('sort', sort)
       params.set('page', String(page))
+      params.set('pageSize', String(pageSize))
+      if (includeArchived) params.set('includeArchived', '1')
 
       const res = await fetch(`/api/library/search?${params.toString()}`)
       const data = await res.json().catch(() => ({}))
       if (id !== requestId.current) return
-
       if (!res.ok) throw new Error(data.error || 'Could not load the library.')
 
       setWorks(data.works ?? [])
       setTotal(data.total ?? 0)
-      setPageSize(data.pageSize ?? 50)
       setPartFiltered(!!data.partFiltered)
     } catch (err) {
       if (id !== requestId.current) return
@@ -103,64 +131,194 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
     } finally {
       if (id === requestId.current) setLoading(false)
     }
-  }, [query, ensemble, part, page])
+  }, [query, ensemble, part, sort, page, pageSize, includeArchived])
 
-  // Debounced so typing doesn't fire a request per keystroke.
   useEffect(() => {
     const t = setTimeout(load, 250)
     return () => clearTimeout(t)
   }, [load])
 
-  // Any filter change starts from the first page; staying on page 7 of a new
-  // search shows nothing and reads as "no results".
+  // Changing what you're looking at returns to the first page — staying on page 7
+  // of a new result set shows nothing and reads as "no matches".
   useEffect(() => {
     setPage(0)
-  }, [query, ensemble, part])
+  }, [query, ensemble, part, sort, pageSize, includeArchived])
+
+  async function setArchived(work: LibraryWork, archived: boolean) {
+    setBusyId(work.id)
+    setNotice(null)
+    try {
+      const res = await fetch(`/api/library/works/${work.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not update that work.')
+
+      // Reflect it locally so the row doesn't jump before you've read the result.
+      setWorks((prev) =>
+        prev.map((w) => (w.id === work.id ? { ...w, is_active: !archived } : w))
+      )
+      setNotice(
+        archived
+          ? `Archived "${work.title}". It stays in the database and can be restored.`
+          : `Restored "${work.title}".`
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function deletePart(work: LibraryWork, p: LibraryPart) {
+    const label = PART_LABELS[p.part] ?? p.part
+    if (!confirm(`Remove the ${label} part from "${work.title}"?\n\nThe PDF stays in storage; only this part entry is removed.`)) {
+      return
+    }
+
+    setBusyId(p.id)
+    setNotice(null)
+    try {
+      const res = await fetch(`/api/library/parts/${p.id}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not remove that part.')
+
+      setWorks((prev) =>
+        prev.map((w) =>
+          w.id === work.id ? { ...w, parts: w.parts.filter((x) => x.id !== p.id) } : w
+        )
+      )
+      setNotice(`Removed the ${label} part from "${work.title}".`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function replacePart(work: LibraryWork, p: LibraryPart, file: File) {
+    if (!/\.pdf$/i.test(file.name)) {
+      setError('Only PDF files can be added to the library.')
+      return
+    }
+
+    setBusyId(p.id)
+    setError(null)
+    setNotice(null)
+    try {
+      // Hash first: the key is content-addressed, so the hash IS the address.
+      const sha256 = await sha256Hex(file)
+
+      const urlRes = await fetch('/api/repertoire/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sha256, bytes: file.size, filename: file.name }),
+      })
+      const urlData = await urlRes.json().catch(() => ({}))
+      if (!urlRes.ok) throw new Error(urlData.error || 'Could not start the upload.')
+
+      // Skipped when these exact bytes are already stored — content addressing
+      // makes a re-upload of identical content unnecessary.
+      if (urlData.uploadUrl) {
+        const put = await fetch(urlData.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/pdf' },
+          body: file,
+        })
+        if (!put.ok) throw new Error('The upload failed. Please try again.')
+      }
+
+      const res = await fetch(`/api/library/parts/${p.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sha256, bytes: file.size, filename: file.name }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not replace that part.')
+
+      setWorks((prev) =>
+        prev.map((w) =>
+          w.id === work.id
+            ? {
+                ...w,
+                parts: w.parts.map((x) =>
+                  x.id === p.id
+                    ? { ...x, original_filename: file.name, bytes: file.size, available: true }
+                    : x
+                ),
+              }
+            : w
+        )
+      )
+      setNotice(`Replaced the ${PART_LABELS[p.part] ?? p.part} part on "${work.title}".`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.')
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   const lastPage = Math.max(0, Math.ceil(total / pageSize) - 1)
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Music Library</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {totalWorks.toLocaleString()} works on the shelf. Search, then open or download any part.
-        </p>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Music Library</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {totalWorks.toLocaleString()} works on the shelf.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setCompact((c) => !c)}>
+          {compact ? 'Detailed view' : 'Compact view'}
+        </Button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-wrap gap-2">
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by title or artist…"
-          className="sm:max-w-sm"
+          className="sm:max-w-xs"
           aria-label="Search the music library"
         />
-        <select
-          value={ensemble}
-          onChange={(e) => setEnsemble(e.target.value)}
+        <select value={ensemble} onChange={(e) => setEnsemble(e.target.value)}
           aria-label="Filter by ensemble"
-          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-        >
-          {ENSEMBLES.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm">
+          {ENSEMBLES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        <select
-          value={part}
-          onChange={(e) => setPart(e.target.value)}
+        <select value={part} onChange={(e) => setPart(e.target.value)}
           aria-label="Filter by part"
-          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-        >
-          {PARTS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm">
+          {PARTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+        <select value={sort} onChange={(e) => setSort(e.target.value)}
+          aria-label="Sort"
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm">
+          {SORTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}
+          aria-label="Results per page"
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm">
+          {[50, 100, 200].map((n) => <option key={n} value={n}>{n} per page</option>)}
+        </select>
+        <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <input type="checkbox" checked={includeArchived}
+            onChange={(e) => setIncludeArchived(e.target.checked)} />
+          Show archived
+        </label>
       </div>
 
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-800 dark:text-red-200">
           {error}
+        </div>
+      )}
+      {notice && (
+        <div className="rounded-md border border-green-200 bg-green-50 dark:bg-green-950/30 p-3 text-sm text-green-800 dark:text-green-200">
+          {notice}
         </div>
       )}
 
@@ -169,104 +327,203 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
       ) : works.length === 0 ? (
         <div className="rounded-md border border-dashed p-8 text-center">
           <p className="text-sm text-muted-foreground">
-            {query || ensemble || part
-              ? 'Nothing matches those filters.'
-              : 'The library is empty.'}
+            {query || ensemble || part ? 'Nothing matches those filters.' : 'The library is empty.'}
           </p>
         </div>
       ) : (
         <>
           <p className="text-xs text-muted-foreground">
             {partFiltered
-              ? `Showing works on this page that have a ${PART_LABELS[part] ?? part} part.`
-              : `${total.toLocaleString()} ${total === 1 ? 'work' : 'works'} found.`}
+              ? `Showing works on this page with a ${PART_LABELS[part] ?? part} part.`
+              : `${total.toLocaleString()} ${total === 1 ? 'work' : 'works'}.`}
           </p>
 
-          <div className="space-y-2">
-            {works.map((work) => (
-              <div key={work.id} className="rounded-lg border p-4">
-                <div className="flex flex-wrap items-baseline gap-x-2">
-                  <h2 className="font-medium">{work.title}</h2>
-                  {work.artist && (
-                    <span className="text-sm text-muted-foreground">— {work.artist}</span>
-                  )}
-                  <span className="text-xs rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
-                    {work.ensemble}
-                  </span>
-                </div>
-
-                {work.parts.length === 0 ? (
-                  <p className="mt-3 text-xs text-muted-foreground">No parts catalogued yet.</p>
-                ) : (
-                  <div className="mt-3 space-y-1.5">
-                    {work.parts.map((p) => (
-                      <div
-                        key={p.id}
-                        className="flex flex-wrap items-center gap-2 text-sm border-t pt-1.5 first:border-t-0 first:pt-0"
-                      >
-                        <span className="font-medium min-w-[5.5rem]">
-                          {PART_LABELS[p.part] ?? p.part}
-                          {p.substitute && p.played_on && (
-                            <span className="font-normal text-muted-foreground">
-                              {' '}for {PART_LABELS[p.played_on] ?? p.played_on}
-                            </span>
+          {compact ? (
+            <div className="rounded-lg border overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium">Title</th>
+                    <th className="px-3 py-2 text-left font-medium hidden sm:table-cell">Artist</th>
+                    <th className="px-3 py-2 text-left font-medium hidden md:table-cell">Ensemble</th>
+                    <th className="px-3 py-2 text-left font-medium">Parts</th>
+                    <th className="px-3 py-2 text-right font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {works.map((work) => (
+                    <tr key={work.id} className={`border-t ${!work.is_active ? 'opacity-50' : ''}`}>
+                      <td className="px-3 py-2">
+                        {work.title}
+                        {!work.is_active && (
+                          <span className="ml-2 text-xs text-muted-foreground">(archived)</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground hidden sm:table-cell">
+                        {work.artist || '—'}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground hidden md:table-cell">
+                        {work.ensemble}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="flex flex-wrap gap-1">
+                          {work.parts.length === 0 && (
+                            <span className="text-xs text-muted-foreground">none</span>
                           )}
-                        </span>
-                        <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
-                          {p.original_filename}
-                          {formatBytes(p.bytes) && ` · ${formatBytes(p.bytes)}`}
-                        </span>
-
-                        {p.available ? (
-                          <span className="flex gap-1.5 shrink-0">
-                            <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
-                              {/* noreferrer keeps the signed R2 URL out of any Referer chain */}
+                          {work.parts.map((p) => (
+                            p.available ? (
                               <a
+                                key={p.id}
                                 href={`/api/library/parts/${p.id}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                title={`${PART_LABELS[p.part] ?? p.part} — ${p.original_filename}`}
+                                className="rounded bg-muted px-1.5 py-0.5 text-xs hover:bg-accent hover:underline"
                               >
-                                Preview
+                                {PART_SHORT[p.part] ?? p.part}
                               </a>
-                            </Button>
-                            <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
-                              <a href={`/api/library/parts/${p.id}?download=1`} rel="noreferrer">
-                                Download
-                              </a>
-                            </Button>
-                          </span>
-                        ) : (
-                          <span className="text-xs text-amber-700 dark:text-amber-400 shrink-0">
-                            Not uploaded
-                          </span>
-                        )}
-                      </div>
-                    ))}
+                            ) : (
+                              <span
+                                key={p.id}
+                                title={`${PART_LABELS[p.part] ?? p.part} — not uploaded`}
+                                className="rounded border border-dashed px-1.5 py-0.5 text-xs text-muted-foreground"
+                              >
+                                {PART_SHORT[p.part] ?? p.part}
+                              </span>
+                            )
+                          ))}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={busyId === work.id}
+                          onClick={() => setArchived(work, work.is_active)}
+                        >
+                          {work.is_active ? 'Archive' : 'Restore'}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {works.map((work) => (
+                <div key={work.id} className={`rounded-lg border p-4 ${!work.is_active ? 'opacity-60' : ''}`}>
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                      <h2 className="font-medium">{work.title}</h2>
+                      {work.artist && (
+                        <span className="text-sm text-muted-foreground">— {work.artist}</span>
+                      )}
+                      <span className="text-xs rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+                        {work.ensemble}
+                      </span>
+                      {!work.is_active && (
+                        <span className="text-xs rounded-full bg-amber-100 dark:bg-amber-950 px-2 py-0.5 text-amber-800 dark:text-amber-200">
+                          Archived
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled={busyId === work.id}
+                      onClick={() => setArchived(work, work.is_active)}
+                    >
+                      {work.is_active ? 'Archive' : 'Restore'}
+                    </Button>
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
+
+                  {work.parts.length === 0 ? (
+                    <p className="mt-3 text-xs text-muted-foreground">No parts catalogued yet.</p>
+                  ) : (
+                    <div className="mt-3 space-y-1.5">
+                      {work.parts.map((p) => (
+                        <div key={p.id} className="flex flex-wrap items-center gap-2 text-sm border-t pt-1.5 first:border-t-0 first:pt-0">
+                          <span className="font-medium min-w-[5.5rem]">
+                            {PART_LABELS[p.part] ?? p.part}
+                            {p.substitute && p.played_on && (
+                              <span className="font-normal text-muted-foreground">
+                                {' '}for {PART_LABELS[p.played_on] ?? p.played_on}
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
+                            {p.original_filename}
+                            {formatBytes(p.bytes) && ` · ${formatBytes(p.bytes)}`}
+                          </span>
+
+                          <span className="flex gap-1.5 shrink-0 items-center">
+                            {p.available ? (
+                              <>
+                                <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+                                  <a href={`/api/library/parts/${p.id}`} target="_blank" rel="noopener noreferrer">
+                                    Preview
+                                  </a>
+                                </Button>
+                                <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+                                  <a href={`/api/library/parts/${p.id}?download=1`} rel="noreferrer">
+                                    Download
+                                  </a>
+                                </Button>
+                              </>
+                            ) : (
+                              <span className="text-xs text-amber-700 dark:text-amber-400">Not uploaded</span>
+                            )}
+
+                            <label className="cursor-pointer">
+                              <span className="inline-flex h-7 items-center rounded-md border px-2 text-xs hover:bg-accent">
+                                {busyId === p.id ? 'Working…' : 'Replace'}
+                              </span>
+                              <input
+                                type="file"
+                                accept="application/pdf,.pdf"
+                                className="hidden"
+                                disabled={busyId === p.id}
+                                onChange={(e) => {
+                                  const f = e.target.files?.[0]
+                                  e.target.value = ''
+                                  if (f) replacePart(work, p, f)
+                                }}
+                              />
+                            </label>
+
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-red-600 hover:text-red-700"
+                              disabled={busyId === p.id}
+                              onClick={() => deletePart(work, p)}
+                            >
+                              Remove
+                            </Button>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {lastPage > 0 && (
             <div className="flex items-center justify-between pt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page === 0 || loading}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-              >
+              <Button variant="outline" size="sm" disabled={page === 0 || loading}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}>
                 Previous
               </Button>
               <span className="text-xs text-muted-foreground">
                 Page {page + 1} of {lastPage + 1}
               </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= lastPage || loading}
-                onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
-              >
+              <Button variant="outline" size="sm" disabled={page >= lastPage || loading}
+                onClick={() => setPage((p) => Math.min(lastPage, p + 1))}>
                 Next
               </Button>
             </div>

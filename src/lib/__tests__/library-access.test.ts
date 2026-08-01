@@ -197,3 +197,98 @@ describe('the redirect that hands out the signed URL carries the protections', (
     expect(res.headers.get('location')).toContain('X-Amz-Signature=')
   })
 })
+
+describe('archiving a work instead of deleting it', () => {
+  const src = read('src/app/api/library/works/[workId]/route.ts')
+
+  it('flips is_active rather than removing the row', () => {
+    // A hard delete would cascade through repertoire_parts and title_aliases,
+    // and NULL out intake_songs.matched_repertoire_id — silently unlinking the
+    // work from every intake that matched it.
+    expect(src).toContain('is_active')
+    expect(src).not.toMatch(/\.delete\(\)/)
+  })
+
+  it('is scoped to the resolved library org', () => {
+    expect(src).toContain("eq('organization_id', libraryOrgId)")
+  })
+
+  it('requires an intake-enabled admin', () => {
+    expect(src).toContain('requireIntakeEnabled')
+  })
+
+  it('rejects anything other than a boolean', () => {
+    expect(src).toContain("typeof body.archived !== 'boolean'")
+  })
+
+  it('is reversible — the same route restores', () => {
+    expect(src).toContain('is_active: !body.archived')
+  })
+})
+
+describe('removing and replacing a part', () => {
+  const src = read(PART_ROUTE)
+
+  it('deletes the row but never the stored object', () => {
+    // Keys are content-addressed, so two parts with identical bytes share one
+    // object. Deleting it because one part went away would break the other.
+    expect(src).not.toContain('deleteObject(')
+  })
+
+  it('scopes both mutations to the library org', () => {
+    const deleteBlock = src.slice(src.indexOf('export async function DELETE'), src.indexOf('export async function PUT'))
+    const putBlock = src.slice(src.indexOf('export async function PUT'))
+    expect(deleteBlock).toContain("eq('organization_id', libraryOrgId)")
+    expect(putBlock).toContain("eq('organization_id', libraryOrgId)")
+  })
+
+  it('derives the replacement key server-side from the hash', () => {
+    // The client never chooses where bytes live, so it cannot repoint a part at
+    // another org's object.
+    expect(src).toContain('`repertoire/${libraryOrgId}/${sha256}.pdf`')
+  })
+
+  it('validates the hash shape before trusting it', () => {
+    expect(src).toContain('/^[0-9a-f]{64}$/')
+  })
+
+  it('confirms the bytes really landed before repointing the row', () => {
+    // Otherwise a failed upload leaves the part advertising a file that is not
+    // there — worse than the old file, which at least opened.
+    expect(src).toContain('headObject(storagePath)')
+    expect(src).toMatch(/head\.size !== bytes/)
+  })
+
+  it('only accepts PDFs', () => {
+    expect(src).toMatch(/\\\.pdf\$\/i/)
+  })
+})
+
+describe('seeing more at a glance', () => {
+  const search = read(SEARCH_ROUTE)
+  const client = read('src/components/library/library-client.tsx')
+
+  it('offers sorts, all resolved server-side', () => {
+    // Sorting by a caller-supplied column name would let anyone order by, or
+    // probe, columns the API never meant to expose.
+    expect(search).toContain('const SORTS')
+    expect(search).toContain('Unknown sort option')
+    expect(search).not.toMatch(/\.order\((\s*)(sortParam|url\.searchParams)/)
+  })
+
+  it('lets a page hold more rows, still bounded', () => {
+    const max = /MAX_PAGE_SIZE = (\d+)/.exec(search)
+    expect(Number(max![1])).toBeGreaterThanOrEqual(200)
+    expect(Number(max![1])).toBeLessThanOrEqual(500)
+  })
+
+  it('defaults to the compact table', () => {
+    expect(client).toContain('useState(true)')
+    expect(client).toContain('Detailed view')
+  })
+
+  it('hides archived works unless asked', () => {
+    expect(search).toContain("includeArchived") 
+    expect(search).toContain("if (!includeArchived) query = query.eq('is_active', true)")
+  })
+})
