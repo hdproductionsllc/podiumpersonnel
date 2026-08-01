@@ -288,7 +288,150 @@ describe('seeing more at a glance', () => {
   })
 
   it('hides archived works unless asked', () => {
-    expect(search).toContain("includeArchived") 
+    expect(search).toContain("includeArchived")
     expect(search).toContain("if (!includeArchived) query = query.eq('is_active', true)")
+  })
+
+  it('offers every part action in the default view, not just the detailed one', () => {
+    // The first cut defined Replace/Remove only inside the detailed branch while
+    // defaulting to compact, so the actions the user asked for were invisible.
+    // One shared component used by both views is what prevents that recurring.
+    expect(client).toContain('function PartRow(')
+    const rowCount = (client.match(/<PartRow/g) ?? []).length
+    expect(rowCount).toBeGreaterThanOrEqual(2)
+
+    // And the actions live in the shared component, not in either branch.
+    const row = client.slice(client.indexOf('function PartRow('), client.indexOf('export function LibraryClient'))
+    for (const action of ['Preview', 'Download', 'Replace', 'History', 'Remove', 'Put back']) {
+      expect(row, `${action} missing from PartRow`).toMatch(new RegExp(`['>]\\s*${action}\\b`))
+    }
+  })
+})
+
+describe('replacing a part keeps the old arrangement', () => {
+  const src = read(PART_ROUTE)
+  const versions = read('src/app/api/library/parts/[partId]/versions/route.ts')
+  const migration = read('supabase/migrations/079_repertoire_part_versions.sql')
+
+  it('reads the outgoing file before repointing the row', () => {
+    // After the update the previous storage_path is gone from the row, so there
+    // is nothing left to archive. It has to be captured first.
+    const put = src.slice(src.indexOf('export async function PUT'))
+    expect(put.indexOf('const { data: current }')).toBeLessThan(put.indexOf('.update({'))
+  })
+
+  it('archives only after the repoint succeeded', () => {
+    // Archiving first would leave history for a replacement that never happened.
+    const put = src.slice(src.indexOf('export async function PUT'))
+    expect(put.indexOf('.update({')).toBeLessThan(put.indexOf("from('repertoire_part_versions').insert"))
+  })
+
+  it('does not fail the request when only the archive write fails', () => {
+    // The replacement itself succeeded; erroring now would tell the user it did
+    // not, and they would replace again.
+    const put = src.slice(src.indexOf('export async function PUT'))
+    const archive = put.slice(put.indexOf("from('repertoire_part_versions').insert"))
+    expect(archive).toContain('console.error')
+    expect(archive.slice(0, archive.indexOf('return NextResponse.json'))).not.toContain('serverError(')
+  })
+
+  it('rejects re-uploading the file already in place', () => {
+    // Content-addressed keys mean an identical file yields an identical key.
+    // Writing a version row for it would archive a file against itself.
+    expect(src).toContain('current.storage_path === storagePath')
+  })
+
+  it('records who replaced it', () => {
+    expect(src).toContain('replaced_by: userId')
+  })
+
+  it('never deletes the superseded object', () => {
+    // Another part may hold the same bytes under the same content-addressed key.
+    expect(src).not.toContain('deleteObject(')
+    expect(versions).not.toContain('deleteObject(')
+  })
+})
+
+describe('the version history route', () => {
+  const src = read('src/app/api/library/parts/[partId]/versions/route.ts')
+  const part = read(PART_ROUTE)
+
+  it('requires an intake-enabled admin on both verbs', () => {
+    const get = src.slice(src.indexOf('export async function GET'), src.indexOf('export async function POST'))
+    const post = src.slice(src.indexOf('export async function POST'))
+    expect(get).toContain('requireIntakeEnabled')
+    expect(post).toContain('requireIntakeEnabled')
+  })
+
+  it('scopes every query to the resolved library org', () => {
+    const scoped = (src.match(/eq\('organization_id', libraryOrgId\)/g) ?? []).length
+    // list, restore lookup, current lookup, update, cleanup delete
+    expect(scoped).toBeGreaterThanOrEqual(5)
+  })
+
+  it('will not restore a version belonging to a different part', () => {
+    // Otherwise a version id from another work could be pushed onto this part.
+    expect(src).toContain("eq('part_id', partId)")
+  })
+
+  it('archives the live file before putting an old one back', () => {
+    // Restoring is itself a replacement, so undoing an undo has to work.
+    expect(src).toContain("from('repertoire_part_versions').insert")
+  })
+
+  it('drops the restored row from history so it is not offered twice', () => {
+    const post = src.slice(src.indexOf('export async function POST'))
+    expect(post).toContain(".delete()")
+    expect(post).toContain("eq('id', version.id)")
+  })
+
+  it('refuses a version whose bytes never landed', () => {
+    expect(src).toContain('!version.storage_path')
+    expect(src).toMatch(/409/)
+  })
+
+  it('keeps the history list bounded', () => {
+    expect(src).toMatch(/\.limit\(\d+\)/)
+  })
+
+  it('carries the same no-index, no-referrer protections', () => {
+    expect(src).toContain('X-Robots-Tag')
+    expect(src).toContain('noindex')
+    expect(src).toContain('no-store')
+    expect(src).toContain("'Referrer-Policy': 'no-referrer'")
+  })
+
+  it('lets an old arrangement be previewed before it is restored', () => {
+    // Otherwise "put back" is a guess about which file you are choosing.
+    expect(part).toContain("url.searchParams.get('versionId')")
+    const preview = part.slice(part.indexOf("url.searchParams.get('versionId')"))
+    expect(preview).toContain("eq('organization_id', libraryOrgId)")
+    expect(preview).toContain("eq('part_id', partId)")
+  })
+})
+
+describe('migration 079', () => {
+  const sql = read('supabase/migrations/079_repertoire_part_versions.sql')
+
+  it('turns RLS on', () => {
+    expect(sql).toContain('ENABLE ROW LEVEL SECURITY')
+  })
+
+  it('gates reads on org membership, not on the row merely existing', () => {
+    expect(sql).toContain('is_org_member(organization_id)')
+    expect(sql).not.toMatch(/USING\s*\(\s*true\s*\)/i)
+  })
+
+  it('grants no write policy — writes go through the service role', () => {
+    expect(sql).not.toMatch(/FOR\s+(INSERT|UPDATE|DELETE|ALL)/i)
+  })
+
+  it('cascades from the part so a removed part leaves no orphan history', () => {
+    expect(sql).toContain('REFERENCES repertoire_parts(id) ON DELETE CASCADE')
+  })
+
+  it('is re-runnable', () => {
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS')
+    expect(sql).toContain('DROP POLICY IF EXISTS')
   })
 })

@@ -45,8 +45,39 @@ export async function GET(
   if (error || !libraryOrgId) return error ?? apiError('Not found', 404)
 
   try {
-    const download = new URL(request.url).searchParams.get('download') === '1'
+    const url = new URL(request.url)
+    const download = url.searchParams.get('download') === '1'
+    // Look at a superseded arrangement without restoring it first — otherwise
+    // you would be putting back a file you cannot see.
+    const versionId = url.searchParams.get('versionId')
     const service = createServiceClient()
+
+    if (versionId) {
+      const { data: version } = await service
+        .from('repertoire_part_versions')
+        .select('storage_path, original_filename')
+        .eq('id', versionId)
+        .eq('part_id', partId)
+        .eq('organization_id', libraryOrgId)
+        .maybeSingle()
+
+      if (!version?.storage_path) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404, headers: PRIVATE_HEADERS })
+      }
+      if (!isR2Configured()) {
+        return NextResponse.json(
+          { error: 'File storage is not configured.' },
+          { status: 503, headers: PRIVATE_HEADERS }
+        )
+      }
+
+      const versionUrl = await getR2Client().getSignedUrl(version.storage_path, LINK_TTL_SECONDS, {
+        download,
+        filename: version.original_filename || 'previous.pdf',
+        contentType: 'application/pdf',
+      })
+      return NextResponse.redirect(versionUrl, { status: 302, headers: PRIVATE_HEADERS })
+    }
 
     // Scoped to the resolved library org, so a part id belonging to anyone else
     // simply does not exist as far as this caller is concerned.
@@ -159,8 +190,9 @@ export async function PUT(
   { params }: { params: Promise<{ partId: string }> }
 ) {
   const { partId } = await params
-  const { libraryOrgId, error } = await requireIntakeEnabled()
+  const { user, libraryOrgId, error } = await requireIntakeEnabled()
   if (error || !libraryOrgId) return error ?? apiError('Not found', 404)
+  const userId = user?.id ?? null
 
   let body: { sha256?: unknown; bytes?: unknown; filename?: unknown }
   try {
@@ -201,6 +233,30 @@ export async function PUT(
     }
 
     const service = createServiceClient()
+
+    // Read the outgoing file first so it can be archived. Without this the
+    // previous arrangement becomes unreachable the moment the row is repointed —
+    // the bytes survive in R2, but nothing records what they were.
+    const { data: current } = await service
+      .from('repertoire_parts')
+      .select('id, repertoire_id, storage_path, sha256, bytes, original_filename')
+      .eq('id', partId)
+      .eq('organization_id', libraryOrgId)
+      .maybeSingle()
+
+    if (!current) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404, headers: PRIVATE_HEADERS })
+    }
+
+    if (current.storage_path === storagePath) {
+      // Same content-addressed key means identical bytes: nothing to archive and
+      // nothing to change. Say so rather than writing a no-op version row.
+      return NextResponse.json(
+        { error: 'That is the same file this part already uses.' },
+        { status: 409, headers: PRIVATE_HEADERS }
+      )
+    }
+
     const { data: updated, error: updateError } = await service
       .from('repertoire_parts')
       .update({
@@ -217,6 +273,26 @@ export async function PUT(
     if (updateError) return serverError('Library part replace failed', updateError)
     if (!updated || updated.length === 0) {
       return NextResponse.json({ error: 'Not found' }, { status: 404, headers: PRIVATE_HEADERS })
+    }
+
+    // Only once the row is safely repointed. Archiving first would leave a
+    // history entry for a replacement that never happened.
+    if (current.original_filename) {
+      const { error: versionError } = await service.from('repertoire_part_versions').insert({
+        part_id: current.id,
+        repertoire_id: current.repertoire_id,
+        organization_id: libraryOrgId,
+        storage_path: current.storage_path,
+        sha256: current.sha256,
+        bytes: current.bytes,
+        original_filename: current.original_filename,
+        replaced_by: userId,
+      })
+      // Best-effort: the replacement itself succeeded, and failing the request
+      // now would tell the user it didn't. Logged loudly instead.
+      if (versionError) {
+        console.error(`Failed to archive previous version of part ${partId}:`, versionError)
+      }
     }
 
     return NextResponse.json({ success: true, part: updated[0] }, { headers: PRIVATE_HEADERS })

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -80,6 +80,145 @@ async function sha256Hex(file: File): Promise<string> {
     .join('')
 }
 
+
+interface PartVersion {
+  id: string
+  original_filename: string
+  bytes: number | null
+  replaced_at: string
+  restorable: boolean
+}
+
+/**
+ * One part, with everything you can do to it. Defined once and used by BOTH the
+ * compact and detailed views — the first cut put Replace only in the detailed
+ * view while defaulting to compact, which hid it completely.
+ */
+function PartRow({
+  work, part, busyId, versions, onToggleVersions, onReplace, onDelete, onRestoreVersion,
+}: {
+  work: LibraryWork
+  part: LibraryPart
+  busyId: string | null
+  versions: PartVersion[] | undefined
+  onToggleVersions: () => void
+  onReplace: (file: File) => void
+  onDelete: () => void
+  onRestoreVersion: (versionId: string) => void
+}) {
+  const busy = busyId === part.id
+  return (
+    <div className="border-t pt-1.5 first:border-t-0 first:pt-0">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="font-medium min-w-[5.5rem]">
+          {PART_LABELS[part.part] ?? part.part}
+          {part.substitute && part.played_on && (
+            <span className="font-normal text-muted-foreground">
+              {' '}for {PART_LABELS[part.played_on] ?? part.played_on}
+            </span>
+          )}
+        </span>
+        <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
+          {part.original_filename}
+          {formatBytes(part.bytes) && ` \u00b7 ${formatBytes(part.bytes)}`}
+        </span>
+
+        <span className="flex gap-1.5 shrink-0 items-center">
+          {part.available ? (
+            <>
+              <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+                <a href={`/api/library/parts/${part.id}`} target="_blank" rel="noopener noreferrer">
+                  Preview
+                </a>
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+                <a href={`/api/library/parts/${part.id}?download=1`} rel="noreferrer">
+                  Download
+                </a>
+              </Button>
+            </>
+          ) : (
+            <span className="text-xs text-amber-700 dark:text-amber-400">Not uploaded</span>
+          )}
+
+          <label className="cursor-pointer">
+            <span className="inline-flex h-7 items-center rounded-md border px-2 text-xs hover:bg-accent">
+              {busy ? 'Working\u2026' : 'Replace'}
+            </span>
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              disabled={busy}
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                e.target.value = ''
+                if (f) onReplace(f)
+              }}
+            />
+          </label>
+
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onToggleVersions}>
+            {versions ? 'Hide history' : 'History'}
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-red-600 hover:text-red-700"
+            disabled={busy}
+            onClick={onDelete}
+          >
+            Remove
+          </Button>
+        </span>
+      </div>
+
+      {versions && (
+        <div className="mt-1.5 ml-2 border-l pl-3 space-y-1">
+          {versions.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No previous arrangements — this part has never been replaced.
+            </p>
+          ) : (
+            versions.map((v) => (
+              <div key={v.id} className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-muted-foreground truncate flex-1 min-w-0">
+                  {v.original_filename}
+                  {formatBytes(v.bytes) && ` \u00b7 ${formatBytes(v.bytes)}`}
+                  {' \u00b7 replaced '}
+                  {new Date(v.replaced_at).toLocaleDateString()}
+                </span>
+                {v.restorable ? (
+                  <span className="flex gap-1.5 shrink-0">
+                    <a
+                      href={`/api/library/parts/${part.id}?versionId=${v.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline underline-offset-2 hover:text-foreground"
+                    >
+                      View
+                    </a>
+                    <button
+                      type="button"
+                      className="underline underline-offset-2 hover:text-foreground"
+                      onClick={() => onRestoreVersion(v.id)}
+                    >
+                      Put back
+                    </button>
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground shrink-0">no file</span>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function LibraryClient({ totalWorks }: { totalWorks: number }) {
   const [query, setQuery] = useState('')
   const [ensemble, setEnsemble] = useState('')
@@ -97,6 +236,8 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const [versions, setVersions] = useState<Record<string, PartVersion[]>>({})
 
   // Guards the search race: a slower earlier request must not overwrite a newer one.
   const requestId = useRef(0)
@@ -143,6 +284,50 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
   useEffect(() => {
     setPage(0)
   }, [query, ensemble, part, sort, pageSize, includeArchived])
+
+  async function toggleVersions(part: LibraryPart) {
+    if (versions[part.id]) {
+      setVersions((v) => {
+        const next = { ...v }
+        delete next[part.id]
+        return next
+      })
+      return
+    }
+    try {
+      const res = await fetch(`/api/library/parts/${part.id}/versions`)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not load history.')
+      setVersions((v) => ({ ...v, [part.id]: data.versions ?? [] }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.')
+    }
+  }
+
+  async function restoreVersion(work: LibraryWork, part: LibraryPart, versionId: string) {
+    setBusyId(part.id)
+    setNotice(null)
+    try {
+      const res = await fetch(`/api/library/parts/${part.id}/versions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ versionId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not restore that version.')
+      setNotice(`Put back "${data.restored}" on ${PART_LABELS[part.part] ?? part.part}.`)
+      setVersions((v) => {
+        const next = { ...v }
+        delete next[part.id]
+        return next
+      })
+      load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.')
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   async function setArchived(work: LibraryWork, archived: boolean) {
     setBusyId(work.id)
@@ -252,7 +437,15 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
             : w
         )
       )
-      setNotice(`Replaced the ${PART_LABELS[p.part] ?? p.part} part on "${work.title}".`)
+      setVersions((v) => {
+        const next = { ...v }
+        delete next[p.id]
+        return next
+      })
+      setNotice(
+        `Replaced the ${PART_LABELS[p.part] ?? p.part} part on "${work.title}". ` +
+          'The old arrangement is kept under History.'
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {
@@ -352,7 +545,8 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
                 </thead>
                 <tbody>
                   {works.map((work) => (
-                    <tr key={work.id} className={`border-t ${!work.is_active ? 'opacity-50' : ''}`}>
+                    <Fragment key={work.id}>
+                    <tr className={`border-t ${!work.is_active ? 'opacity-50' : ''}`}>
                       <td className="px-3 py-2">
                         {work.title}
                         {!work.is_active && (
@@ -399,6 +593,14 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
                           variant="ghost"
                           size="sm"
                           className="h-7 text-xs"
+                          onClick={() => setExpanded((e) => ({ ...e, [work.id]: !e[work.id] }))}
+                        >
+                          {expanded[work.id] ? 'Close' : 'Manage'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
                           disabled={busyId === work.id}
                           onClick={() => setArchived(work, work.is_active)}
                         >
@@ -406,6 +608,32 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
                         </Button>
                       </td>
                     </tr>
+                    {expanded[work.id] && (
+                      <tr className="border-t bg-muted/20">
+                        <td colSpan={5} className="px-3 py-3">
+                          {work.parts.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">No parts catalogued yet.</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {work.parts.map((p) => (
+                                <PartRow
+                                  key={p.id}
+                                  work={work}
+                                  part={p}
+                                  busyId={busyId}
+                                  versions={versions[p.id]}
+                                  onToggleVersions={() => toggleVersions(p)}
+                                  onReplace={(f) => replacePart(work, p, f)}
+                                  onDelete={() => deletePart(work, p)}
+                                  onRestoreVersion={(vId) => restoreVersion(work, p, vId)}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                   ))}
                 </tbody>
               </table>
@@ -445,66 +673,17 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
                   ) : (
                     <div className="mt-3 space-y-1.5">
                       {work.parts.map((p) => (
-                        <div key={p.id} className="flex flex-wrap items-center gap-2 text-sm border-t pt-1.5 first:border-t-0 first:pt-0">
-                          <span className="font-medium min-w-[5.5rem]">
-                            {PART_LABELS[p.part] ?? p.part}
-                            {p.substitute && p.played_on && (
-                              <span className="font-normal text-muted-foreground">
-                                {' '}for {PART_LABELS[p.played_on] ?? p.played_on}
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
-                            {p.original_filename}
-                            {formatBytes(p.bytes) && ` · ${formatBytes(p.bytes)}`}
-                          </span>
-
-                          <span className="flex gap-1.5 shrink-0 items-center">
-                            {p.available ? (
-                              <>
-                                <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
-                                  <a href={`/api/library/parts/${p.id}`} target="_blank" rel="noopener noreferrer">
-                                    Preview
-                                  </a>
-                                </Button>
-                                <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
-                                  <a href={`/api/library/parts/${p.id}?download=1`} rel="noreferrer">
-                                    Download
-                                  </a>
-                                </Button>
-                              </>
-                            ) : (
-                              <span className="text-xs text-amber-700 dark:text-amber-400">Not uploaded</span>
-                            )}
-
-                            <label className="cursor-pointer">
-                              <span className="inline-flex h-7 items-center rounded-md border px-2 text-xs hover:bg-accent">
-                                {busyId === p.id ? 'Working…' : 'Replace'}
-                              </span>
-                              <input
-                                type="file"
-                                accept="application/pdf,.pdf"
-                                className="hidden"
-                                disabled={busyId === p.id}
-                                onChange={(e) => {
-                                  const f = e.target.files?.[0]
-                                  e.target.value = ''
-                                  if (f) replacePart(work, p, f)
-                                }}
-                              />
-                            </label>
-
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 text-xs text-red-600 hover:text-red-700"
-                              disabled={busyId === p.id}
-                              onClick={() => deletePart(work, p)}
-                            >
-                              Remove
-                            </Button>
-                          </span>
-                        </div>
+                        <PartRow
+                          key={p.id}
+                          work={work}
+                          part={p}
+                          busyId={busyId}
+                          versions={versions[p.id]}
+                          onToggleVersions={() => toggleVersions(p)}
+                          onReplace={(f) => replacePart(work, p, f)}
+                          onDelete={() => deletePart(work, p)}
+                          onRestoreVersion={(vId) => restoreVersion(work, p, vId)}
+                        />
                       ))}
                     </div>
                   )}
