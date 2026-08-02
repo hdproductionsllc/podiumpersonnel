@@ -170,6 +170,27 @@ describe('the book builder never silently uses an archived work', () => {
   })
 })
 
+describe('a build never uses a cached manifest', () => {
+  const src = read('src/components/intake/book-download.tsx')
+
+  it('re-fetches on every build and publish', () => {
+    // The manifest holds presigned URLs for the files as they were when it was
+    // fetched. After fixing a work in the library, a stale tab would hand back
+    // the OLD files and read as "the fix didn't work". The links expire too.
+    const builders = src.split('\n').filter((l) => l.includes('await loadManifest('))
+    expect(builders.length).toBeGreaterThanOrEqual(4)
+    for (const line of builders) {
+      expect(line, `build path reuses a cached manifest: ${line.trim()}`).toContain(
+        'loadManifest(true)'
+      )
+    }
+  })
+
+  it('still allows a cached read for plain rendering', () => {
+    expect(src).toContain('if (manifest && !fresh) return manifest')
+  })
+})
+
 describe('the review screen flags an archived match before books are built', () => {
   it('the API returns is_active with the matched work', () => {
     const src = read(INTAKE_ROUTE)
