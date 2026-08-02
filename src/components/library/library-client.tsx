@@ -95,12 +95,13 @@ interface PartVersion {
  * view while defaulting to compact, which hid it completely.
  */
 function PartRow({
-  work, part, busyId, versions, onToggleVersions, onReplace, onDelete, onRestoreVersion,
+  work, part, busyId, versions, historyUnavailable, onToggleVersions, onReplace, onDelete, onRestoreVersion,
 }: {
   work: LibraryWork
   part: LibraryPart
   busyId: string | null
   versions: PartVersion[] | undefined
+  historyUnavailable: boolean
   onToggleVersions: () => void
   onReplace: (file: File) => void
   onDelete: () => void
@@ -176,7 +177,12 @@ function PartRow({
 
       {versions && (
         <div className="mt-1.5 ml-2 border-l pl-3 space-y-1">
-          {versions.length === 0 ? (
+          {historyUnavailable ? (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              Version history isn&apos;t switched on for this database yet, so replacements
+              aren&apos;t being recorded. Replace still works — the old file just isn&apos;t kept.
+            </p>
+          ) : versions.length === 0 ? (
             <p className="text-xs text-muted-foreground">
               No previous arrangements — this part has never been replaced.
             </p>
@@ -238,6 +244,8 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
   const [notice, setNotice] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [versions, setVersions] = useState<Record<string, PartVersion[]>>({})
+  /** Parts whose history could not be read because migration 079 is unapplied. */
+  const [unavailable, setUnavailable] = useState<Set<string>>(new Set())
 
   // Guards the search race: a slower earlier request must not overwrite a newer one.
   const requestId = useRef(0)
@@ -298,6 +306,14 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
       const res = await fetch(`/api/library/parts/${part.id}/versions`)
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Could not load history.')
+      // Migration 079 not applied: no history is being recorded, which is not
+      // the same as this part never having been replaced.
+      setUnavailable((u) => {
+        const next = new Set(u)
+        if (data.unavailable) next.add(part.id)
+        else next.delete(part.id)
+        return next
+      })
       setVersions((v) => ({ ...v, [part.id]: data.versions ?? [] }))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
@@ -624,6 +640,7 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
                                   part={p}
                                   busyId={busyId}
                                   versions={versions[p.id]}
+                                  historyUnavailable={unavailable.has(p.id)}
                                   onToggleVersions={() => toggleVersions(p)}
                                   onReplace={(f) => replacePart(work, p, f)}
                                   onDelete={() => deletePart(work, p)}
@@ -681,6 +698,7 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
                           part={p}
                           busyId={busyId}
                           versions={versions[p.id]}
+                          historyUnavailable={unavailable.has(p.id)}
                           onToggleVersions={() => toggleVersions(p)}
                           onReplace={(f) => replacePart(work, p, f)}
                           onDelete={() => deletePart(work, p)}

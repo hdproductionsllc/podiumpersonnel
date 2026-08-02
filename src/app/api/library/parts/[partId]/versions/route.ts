@@ -23,6 +23,19 @@ const PRIVATE_HEADERS = {
   'Referrer-Policy': 'no-referrer',
 } as const
 
+/**
+ * Migration 079 not applied yet. The rest of the library works fine without it —
+ * replacing still swaps the file, it just isn't recorded — so this degrades to
+ * "no history" instead of erroring at a user who has done nothing wrong.
+ */
+function isMissingVersionsTable(err: { code?: string; message?: string } | null): boolean {
+  if (!err) return false
+  const code = err.code ?? ''
+  if (code === '42P01' || code === 'PGRST205') return true
+  const msg = (err.message ?? '').toLowerCase()
+  return msg.includes('repertoire_part_versions') && (msg.includes('does not exist') || msg.includes('could not find'))
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ partId: string }> }
@@ -41,7 +54,12 @@ export async function GET(
       .order('replaced_at', { ascending: false })
       .limit(50)
 
-    if (listError) return serverError('Library version list failed', listError)
+    if (listError) {
+      if (isMissingVersionsTable(listError)) {
+        return NextResponse.json({ versions: [], unavailable: true }, { headers: PRIVATE_HEADERS })
+      }
+      return serverError('Library version list failed', listError)
+    }
 
     return NextResponse.json(
       {
@@ -84,7 +102,7 @@ export async function POST(
 
     // Both scoped to the library org, so neither a part nor a version belonging
     // to another org can be reached.
-    const { data: version } = await service
+    const { data: version, error: lookupError } = await service
       .from('repertoire_part_versions')
       .select('id, part_id, storage_path, sha256, bytes, original_filename')
       .eq('id', body.versionId)
@@ -92,6 +110,12 @@ export async function POST(
       .eq('organization_id', libraryOrgId)
       .maybeSingle()
 
+    if (lookupError && isMissingVersionsTable(lookupError)) {
+      return NextResponse.json(
+        { error: 'Version history is not set up on this database yet (migration 079).' },
+        { status: 503, headers: PRIVATE_HEADERS }
+      )
+    }
     if (!version) {
       return NextResponse.json({ error: 'Not found' }, { status: 404, headers: PRIVATE_HEADERS })
     }
