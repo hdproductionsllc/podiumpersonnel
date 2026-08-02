@@ -146,18 +146,31 @@ export async function GET(
     )
   )
 
-  let repById = new Map<string, { id: string; title: string; artist: string | null; ensemble: string }>()
+  // is_active comes along so the review screen can flag a match that has since
+  // been archived. Matching (intake/parse) filters archived works out, but a
+  // match SAVED before the archive keeps pointing at it, and the book builder
+  // will happily assemble that work's old files. Without this the row renders as
+  // a clean "Matched: <Title>" and nothing looks wrong until the book is opened.
+  let repById = new Map<
+    string,
+    { id: string; title: string; artist: string | null; ensemble: string; is_active: boolean }
+  >()
   if (matchedIds.length > 0) {
     // Matched works live in the (possibly shared) library, not necessarily the
     // caller's own org — scope this read to libraryOrgId.
     const { data: repRows, error: repErr } = await service
       .from('repertoire')
-      .select('id,title,artist,ensemble')
+      .select('id,title,artist,ensemble,is_active')
       .eq('organization_id', libraryOrgId)
       .in('id', matchedIds)
 
     if (repErr) return serverError('intake: load matched repertoire', repErr)
-    repById = new Map((repRows ?? []).map((r) => [r.id as string, r as { id: string; title: string; artist: string | null; ensemble: string }]))
+    repById = new Map(
+      (repRows ?? []).map((r) => [
+        r.id as string,
+        r as { id: string; title: string; artist: string | null; ensemble: string; is_active: boolean },
+      ])
+    )
   }
 
   const songsWithMatch = songRows.map((s) => ({

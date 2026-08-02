@@ -347,7 +347,9 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
       )
       setNotice(
         archived
-          ? `Archived "${work.title}". It stays in the database and can be restored.`
+          ? `Archived "${work.title}". It stops matching new questionnaires and can be restored ` +
+            `any time. It does NOT unlink projects already matched to it — those books still ` +
+            `build from these files. To swap the arrangement, use Replace on each part instead.`
           : `Restored "${work.title}".`
       )
     } catch (err) {

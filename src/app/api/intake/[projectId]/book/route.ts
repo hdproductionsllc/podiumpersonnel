@@ -84,7 +84,23 @@ export async function GET(
   // so the tenant boundary holds: a brand only ever reaches its own owner's library.
   const workIds = [...new Set(ordered.map((r) => r.matched_repertoire_id).filter((v): v is string => !!v))]
   const partsByWork = new Map<string, PartFileRow[]>()
+  // Archived works still have their old part files attached, and a match saved
+  // before the archive keeps pointing at them — so a book can be assembled from
+  // an arrangement the admin thought they had retired. The files are still
+  // included (omitting them would send musicians to a gig with no music), but
+  // never without saying so.
+  const archivedWorkIds = new Set<string>()
   if (workIds.length > 0) {
+    const { data: workRows, error: worksErr } = await service
+      .from('repertoire')
+      .select('id, is_active')
+      .eq('organization_id', libraryOrgId)
+      .in('id', workIds)
+    if (worksErr) return serverError('book: load matched works', worksErr)
+    for (const w of workRows ?? []) {
+      if (w.is_active === false) archivedWorkIds.add(w.id as string)
+    }
+
     const { data: partRows, error: partsErr } = await service
       .from('repertoire_parts')
       .select('repertoire_id, part, substitute, played_on, storage_path, original_filename')
@@ -153,6 +169,16 @@ export async function GET(
       } else {
         entry.missingParts.push(bp.part)
       }
+    }
+
+    // Checked before the other warnings: a book built from a retired
+    // arrangement is wrong in a way a missing part is not — the PDFs are all
+    // there, so nothing else in this response looks amiss.
+    if (row.matched_repertoire_id && archivedWorkIds.has(row.matched_repertoire_id)) {
+      warnings.push(
+        `⚠ "${title}" is still linked to an ARCHIVED library work, so this book uses the archived arrangement. ` +
+          `Restore the work, or re-match this song to the current one, then rebuild.`
+      )
     }
 
     if (entry.specialRequest) {
