@@ -105,8 +105,19 @@ export function BookDownload({
   // The publish confirmation step: book → instrument routing awaiting approval.
   const [publishPlan, setPublishPlan] = useState<PublishRow[] | null>(null)
 
-  async function loadManifest(): Promise<Manifest | null> {
-    if (manifest) return manifest
+  /**
+   * The manifest holds presigned R2 URLs for the files as they were when it was
+   * fetched. Anything that changes what a song points at — replacing a part,
+   * restoring an archived work, re-matching a row — leaves a cached manifest
+   * serving the OLD files, on a page that looks perfectly current. The links
+   * also expire (SIGNED_GET_TTL_SECONDS), so a tab left open long enough starts
+   * handing out dead URLs.
+   *
+   * So every actual BUILD re-fetches. The cached copy is only for rendering the
+   * part list and warnings, where being a moment stale costs nothing.
+   */
+  async function loadManifest(fresh = false): Promise<Manifest | null> {
+    if (manifest && !fresh) return manifest
     setLoading(true)
     try {
       const res = await fetch(`/api/intake/${projectId}/book`)
@@ -185,7 +196,7 @@ export function BookDownload({
   }
 
   async function downloadOne(bp: BookPart) {
-    const m = await loadManifest()
+    const m = await loadManifest(true)
     if (!m) return
     setBuilding(bp.part)
     try {
@@ -210,7 +221,7 @@ export function BookDownload({
   }
 
   async function downloadAll() {
-    const m = await loadManifest()
+    const m = await loadManifest(true)
     if (!m) return
     setBuilding('all')
     try {
@@ -273,7 +284,7 @@ export function BookDownload({
    */
   function openPublishPlan() {
     void (async () => {
-      const m = await loadManifest()
+      const m = await loadManifest(true)
       if (!m) return
       if (instruments.length === 0) {
         toast.error('This project has no positions yet — add positions before sending books.')
@@ -296,7 +307,7 @@ export function BookDownload({
    * upload to Supabase Storage, then the metadata call with scope 'assigned'.
    */
   async function publishToMusicParts(plan: PublishRow[]) {
-    const m = await loadManifest()
+    const m = await loadManifest(true)
     if (!m) return
     const active = plan.filter((r) => r.instrumentId !== 'skip')
     if (active.length === 0) {
