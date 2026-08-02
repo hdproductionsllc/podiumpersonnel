@@ -171,14 +171,43 @@ export function AddWorkDialog({
       if (!res.ok) throw new Error(data.error || 'Could not add the work to the library.')
 
       const work = data.work as CreatedWork
-      if (data.existed) {
+      const inserted: string[] = data.insertedParts ?? []
+      const replaced: string[] = data.replacedParts ?? []
+      const retained: string[] = data.retainedParts ?? []
+      const skipped: string[] = data.skippedParts ?? []
+
+      if (data.revived) {
+        // The work was archived and is now back, carrying the new files.
         toast.success(
-          data.insertedParts.length > 0
-            ? `"${work.title}" was already in the library — added ${data.insertedParts.length} new part${data.insertedParts.length === 1 ? '' : 's'}.`
+          `"${work.title}" restored to the library with ${
+            [...replaced, ...inserted].length
+          } updated part${[...replaced, ...inserted].length === 1 ? '' : 's'}.`
+        )
+      } else if (data.existed) {
+        toast.success(
+          inserted.length > 0
+            ? `"${work.title}" was already in the library — added ${inserted.length} new part${inserted.length === 1 ? '' : 's'}.`
             : `"${work.title}" was already in the library with these parts.`
         )
       } else {
-        toast.success(`"${work.title}" added to the library with ${data.insertedParts.length} part${data.insertedParts.length === 1 ? '' : 's'}.`)
+        toast.success(`"${work.title}" added to the library with ${inserted.length} part${inserted.length === 1 ? '' : 's'}.`)
+      }
+
+      // Both of these mean a book built now would use a file the admin did not
+      // just upload. Neither is a failure, and neither may be silent.
+      if (retained.length > 0) {
+        toast.warning(
+          `${retained.join(', ')} kept the previous file — you didn't upload a replacement, so books will use the older arrangement for those parts.`,
+          { duration: 12000 }
+        )
+      }
+      if (skipped.length > 0) {
+        toast.warning(
+          `${skipped.join(', ')} already had a file, so your upload was NOT used for ${
+            skipped.length === 1 ? 'it' : 'them'
+          }. Use Replace in the music library to swap the file.`,
+          { duration: 12000 }
+        )
       }
       onCreated(work)
       onOpenChange(false)

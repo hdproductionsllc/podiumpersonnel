@@ -14,6 +14,28 @@
  * role are skipped, never overwritten) and the existing work is returned — so
  * "add to library" from an intake row can safely double as "locate".
  *
+ * ARCHIVED works are matched here on purpose, and handled differently. The
+ * identity index (repertoire_identity_uidx) does not include is_active, so an
+ * archived work still occupies its title's slot — inserting a fresh row for the
+ * same title would violate the index. Skipping archived rows in the lookup was
+ * therefore never an option; the earlier code found them and treated them like
+ * any other existing work, which produced this:
+ *
+ *   archive "Merry Go Round of Life"  →  it stops matching (parse filters
+ *   is_active) →  the intake row says "not in library" and asks for an upload
+ *   →  the upload lands here, finds the ARCHIVED row, sees every part role
+ *   already taken, skips all of them, and returns the archived work
+ *   →  the intake row is now matched to the archived work, whose parts are
+ *      still the OLD files  →  the book is built from the old arrangement.
+ *
+ * So an upload that lands on an archived work is treated as a REVIVAL: the work
+ * comes back, and every part role the upload supplies REPLACES the archived
+ * file rather than being skipped (the superseded file is archived to
+ * repertoire_part_versions, so the old arrangement stays recoverable). Roles the
+ * upload does NOT supply keep their old file and are reported back as retained —
+ * mixing a new arrangement with leftover parts of an old one is exactly the
+ * failure this route is fixing, so it is never silent.
+ *
  * Security: org from the admin's membership. Storage paths are derived
  * server-side from org + sha; the client never supplies a path.
  */
@@ -36,8 +58,9 @@ interface IncomingPart {
 }
 
 export async function POST(request: Request) {
-  const { membership, libraryOrgId, error } = await requireIntakeEnabled()
+  const { user, membership, libraryOrgId, error } = await requireIntakeEnabled()
   if (error || !membership || !libraryOrgId) return error ?? apiError('Not found', 404)
+  const userId = user?.id ?? null
   // Adding a work writes into the (possibly SHARED) library. When a brand shares
   // another org's library, the work lands there — so it's instantly available to
   // every brand that shares it, with one copy of the row and one copy of the file.
@@ -121,9 +144,12 @@ export async function POST(request: Request) {
     const service = createServiceClient()
 
     // Dedupe on 068's identity key: (org, norm_title, coalesce(artist,''), ensemble).
+    // Archived rows are included deliberately — see the header note: they still
+    // hold the identity slot, so not finding one here would mean a unique-index
+    // violation on insert rather than a clean second work.
     const { data: sameTitle, error: findErr } = await service
       .from('repertoire')
-      .select('id,title,artist,ensemble')
+      .select('id,title,artist,ensemble,is_active')
       .eq('organization_id', orgId)
       .eq('norm_title', norm)
       .eq('ensemble', ensemble)
@@ -131,11 +157,24 @@ export async function POST(request: Request) {
 
     const existing = (sameTitle ?? []).find((w) => (w.artist ?? '') === (artist ?? ''))
 
+    // An upload landing on an archived work means "here is the replacement for
+    // the version I archived" — the only reason that work is archived and this
+    // upload exists at all.
+    const reviving = !!existing && existing.is_active === false
+
     let workId: string
     let existed = false
     if (existing) {
       workId = existing.id as string
       existed = true
+      if (reviving) {
+        const { error: reviveErr } = await service
+          .from('repertoire')
+          .update({ is_active: true, updated_at: new Date().toISOString() })
+          .eq('id', workId)
+          .eq('organization_id', orgId)
+        if (reviveErr) return serverError('repertoire: restore archived work', reviveErr)
+      }
     } else {
       const { data: created, error: insErr } = await service
         .from('repertoire')
@@ -152,23 +191,79 @@ export async function POST(request: Request) {
       workId = created.id as string
     }
 
-    // Skip part roles the work already has (068 role key: part+substitute+played_on).
-    // Never overwrite an existing file — the library is append-only from here.
+    // Part roles the work already has (068 role key: part+substitute+played_on).
+    // For a live work these are left alone — the library is append-only, so a
+    // near-duplicate upload can never quietly overwrite a good chart. For a
+    // revival they are exactly what the upload is here to replace.
     const { data: existingParts, error: partsErr } = await service
       .from('repertoire_parts')
-      .select('part,substitute,played_on')
+      .select('id,part,substitute,played_on,storage_path,sha256,bytes,original_filename')
       .eq('repertoire_id', workId)
       .eq('organization_id', orgId)
     if (partsErr) return serverError('repertoire: load existing parts', partsErr)
 
-    const taken = new Set(
-      (existingParts ?? [])
-        .filter((p) => p.substitute === false && (p.played_on == null || p.played_on === ''))
-        .map((p) => p.part as string)
+    const primaryParts = (existingParts ?? []).filter(
+      (p) => p.substitute === false && (p.played_on == null || p.played_on === '')
     )
+    const takenBy = new Map(primaryParts.map((p) => [p.part as string, p]))
 
-    const toInsert = parts.filter((p) => !taken.has(p.part))
-    const skipped = parts.filter((p) => taken.has(p.part)).map((p) => p.part)
+    const toInsert = parts.filter((p) => !takenBy.has(p.part))
+    const collided = parts.filter((p) => takenBy.has(p.part))
+
+    // Live work: collisions are skipped, as before. Revival: they are replaced.
+    const toReplace = reviving ? collided : []
+    const skipped = reviving ? [] : collided.map((p) => p.part)
+
+    // Roles this upload did NOT supply keep whatever the archived work had. That
+    // silently mixes an old arrangement into a new one, so it is reported back.
+    const supplied = new Set(parts.map((p) => p.part))
+    const retained = reviving
+      ? primaryParts.filter((p) => !supplied.has(p.part as string)).map((p) => p.part as string)
+      : []
+
+    for (const p of toReplace) {
+      const old = takenBy.get(p.part)!
+      if (old.storage_path === p.storagePath) continue // identical bytes: nothing to do
+
+      // Archive BEFORE repointing — once the row moves, what it used to hold is
+      // unrecoverable from the row itself. Best-effort so a missing versions
+      // table (migration 079 not yet applied) cannot block the replacement the
+      // user is explicitly asking for; the payload is logged if it fails.
+      if (old.original_filename) {
+        const versionRow = {
+          part_id: old.id,
+          repertoire_id: workId,
+          organization_id: orgId,
+          storage_path: old.storage_path,
+          sha256: old.sha256,
+          bytes: old.bytes,
+          original_filename: old.original_filename,
+          replaced_by: userId,
+          note: 'Superseded by re-upload after the work was archived.',
+        }
+        const { error: versionErr } = await service.from('repertoire_part_versions').insert(versionRow)
+        if (versionErr) {
+          console.error(
+            `Failed to archive superseded part ${old.id} during revival of work ${workId}:`,
+            versionErr,
+            JSON.stringify(versionRow)
+          )
+        }
+      }
+
+      const { error: repointErr } = await service
+        .from('repertoire_parts')
+        .update({
+          storage_path: p.storagePath,
+          original_filename: p.originalFilename,
+          bytes: p.bytes,
+          sha256: p.sha256,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', old.id)
+        .eq('organization_id', orgId)
+      if (repointErr) return serverError('repertoire: replace archived part', repointErr)
+    }
 
     if (toInsert.length > 0) {
       const { error: partInsErr } = await service.from('repertoire_parts').insert(
@@ -190,7 +285,10 @@ export async function POST(request: Request) {
     return apiSuccess({
       work: { id: workId, title: existing ? existing.title : title, artist, ensemble },
       existed,
+      revived: reviving,
       insertedParts: toInsert.map((p) => p.part),
+      replacedParts: toReplace.map((p) => p.part),
+      retainedParts: retained,
       skippedParts: skipped,
     })
   } catch (e) {

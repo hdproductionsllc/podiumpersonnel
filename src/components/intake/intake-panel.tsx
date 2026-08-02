@@ -158,7 +158,13 @@ function rowFromProposed(p: ProposedSong): SongRow {
 }
 
 type SavedSong = IntakeSong & {
-  matched_repertoire?: { id: string; title: string; artist: string | null; ensemble: string } | null
+  matched_repertoire?: {
+    id: string
+    title: string
+    artist: string | null
+    ensemble: string
+    is_active?: boolean
+  } | null
 }
 
 function rowFromSaved(s: SavedSong): SongRow {
@@ -173,6 +179,9 @@ function rowFromSaved(s: SavedSong): SongRow {
     matchStatus: s.match_status as RowMatchStatus,
     matchedRepertoireId: s.matched_repertoire_id,
     matchedLabel: rep ? workLabel(rep.title, rep.artist) : null,
+    // Matched before the work was archived. The link still resolves and the book
+    // builder still finds files, so nothing else here would look wrong.
+    matchedArchived: rep ? rep.is_active === false : false,
     matchedParts: null,
     candidates: [],
     warning: null,

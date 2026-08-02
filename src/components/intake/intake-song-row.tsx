@@ -56,6 +56,11 @@ export interface SongRow {
   matchedRepertoireId: string | null
   /** Display label for the currently matched/selected work ("Title — Artist"). */
   matchedLabel: string | null
+  /** The matched work has since been archived. Set only when loading a saved
+   *  intake — a fresh match can never pick an archived work (parse and the
+   *  library search both filter is_active), but a match saved BEFORE the archive
+   *  survives, and the book builder still assembles that work's old files. */
+  matchedArchived?: boolean
   /** Candidate works for an ambiguous match, or "did you mean" guesses for a
    *  missing one (empty once resolved or on reload). */
   candidates: RepCandidate[]
@@ -243,6 +248,9 @@ export function IntakeSongRow({
       matchedParts: c.parts ?? null,
       rememberAlias: aliasWouldHelp(song.titleRaw, c.title),
       specialRequest: false,
+      // Any deliberate re-match clears the archived flag — it describes the old
+      // link, not this one.
+      matchedArchived: false,
       warning: null,
     })
     setChanging(false)
@@ -256,6 +264,9 @@ export function IntakeSongRow({
       matchedParts: null,
       rememberAlias: aliasWouldHelp(song.titleRaw, r.title),
       specialRequest: false,
+      // Any deliberate re-match clears the archived flag — it describes the old
+      // link, not this one.
+      matchedArchived: false,
       warning: null,
     })
     setChanging(false)
@@ -269,6 +280,9 @@ export function IntakeSongRow({
       matchedParts: null,
       rememberAlias: false,
       specialRequest: false,
+      // Any deliberate re-match clears the archived flag — it describes the old
+      // link, not this one.
+      matchedArchived: false,
       warning: null,
     })
     setChanging(false)
@@ -283,6 +297,9 @@ export function IntakeSongRow({
       matchedParts: null,
       rememberAlias: aliasWouldHelp(song.titleRaw, w.title),
       specialRequest: false,
+      // Any deliberate re-match clears the archived flag — it describes the old
+      // link, not this one.
+      matchedArchived: false,
       warning: null,
     })
     setChanging(false)
@@ -298,6 +315,9 @@ export function IntakeSongRow({
       matchedParts: null,
       rememberAlias: false,
       specialRequest: true,
+      // Any deliberate re-match clears the archived flag — it describes the old
+      // link, not this one.
+      matchedArchived: false,
       warning: null,
     })
     setChanging(false)
@@ -323,6 +343,9 @@ export function IntakeSongRow({
           )}
           {song.matchStatus === 'manual' && !song.matchedRepertoireId && !song.specialRequest && (
             <Badge variant="secondary" className="text-xs">As typed</Badge>
+          )}
+          {song.matchedArchived && (
+            <Badge variant="destructive" className="text-xs ml-1">Archived work</Badge>
           )}
         </span>
       </div>
@@ -394,6 +417,15 @@ export function IntakeSongRow({
                     Change
                   </Button>
                 </div>
+                {/* Archived match — the one failure that otherwise looks fine.
+                    The link resolves, the badge is green, and the book quietly
+                    gets built from the retired arrangement. */}
+                {song.matchedArchived && (
+                  <p className="text-xs text-red-600 dark:text-red-400">
+                    This work is archived in your library. Books will still be built from its
+                    old files — restore it, or use Change to match the current version.
+                  </p>
+                )}
                 {/* Part-gap badge — informational, never blocks confirm. */}
                 {gapNote && (
                   <p className="text-xs text-amber-700 dark:text-amber-400">
