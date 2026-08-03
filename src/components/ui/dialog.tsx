@@ -60,7 +60,18 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 outline-none sm:max-w-lg max-h-[85vh] overflow-y-auto",
+          // [&>*]:min-w-0 is load-bearing. This is a grid, and a grid item's
+          // default min-width:auto refuses to shrink below its content — so one
+          // wide row (a long filename next to fixed-width controls) pushed the
+          // whole dialog past max-w and you had to scroll sideways to reach the
+          // buttons. Measured at 1280/768/390px: +229px, +229px, +351px of
+          // horizontal overflow before this, none after.
+          //
+          // Note overflow-y-auto already forces overflow-x to auto per spec,
+          // which is why it scrolled rather than clipped. Children that are
+          // genuinely wide (tables, code) should get their own overflow-x-auto
+          // wrapper rather than widening the dialog.
+          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 outline-none sm:max-w-lg max-h-[85vh] overflow-y-auto [&>*]:min-w-0",
           className
         )}
         {...props}
