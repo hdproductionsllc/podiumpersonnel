@@ -23,6 +23,7 @@ import {
   destFilename,
   orderForBook,
   pickFileForPart,
+  SCORE_BOOK_PART,
   stripListNumber,
   type PartFileRow,
 } from '@/lib/intake/book-builder'
@@ -141,6 +142,11 @@ export async function GET(
     missingParts: string[]
   }>
 
+  // How many songs actually have a score. The UI only offers the score book
+  // when this is non-zero, and shows the coverage so nobody assumes a complete
+  // score when the library only has half of them.
+  let scoreCount = 0
+
   let num = 0
   for (const row of ordered) {
     num += 1
@@ -158,6 +164,21 @@ export async function GET(
     }
 
     const fileRows = row.matched_repertoire_id ? partsByWork.get(row.matched_repertoire_id) ?? [] : []
+
+    // The optional score book. Exact match only — deliberately none of
+    // pickFileForPart's fallbacks (substitutes, vln2-as-vla, score-as-any-part).
+    // Those exist so a player is never left without music; a score is either the
+    // actual score or it does not belong in a score book. A song with no score
+    // is simply skipped rather than substituted or reported as missing.
+    const scoreRow = fileRows.find((r) => r.part === 'score' && !r.substitute && r.storage_path)
+    if (scoreRow?.storage_path) {
+      entry.files[SCORE_BOOK_PART.part] = {
+        url: await signedUrl(scoreRow.storage_path),
+        zipName: destFilename(num, title, entry.artist, SCORE_BOOK_PART.part),
+      }
+      scoreCount += 1
+    }
+
     for (const bp of parts) {
       const picked = row.matched_repertoire_id ? pickFileForPart(fileRows, bp.part, title) : null
       if (picked && picked.row.storage_path) {
@@ -214,6 +235,8 @@ export async function GET(
       notes: intake.notes ?? null,
     },
     parts,
+    scorePart: scoreCount > 0 ? SCORE_BOOK_PART : null,
+    scoreCount,
     songs,
     warnings,
   })
