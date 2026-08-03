@@ -55,6 +55,10 @@ interface ManifestSong {
 interface Manifest {
   header: PlaylistHeader
   parts: BookPart[]
+  /** The score book, present only when at least one song actually has a score. */
+  scorePart: BookPart | null
+  /** How many songs have one — the library does not have scores for everything. */
+  scoreCount: number
   songs: ManifestSong[]
   warnings: string[]
 }
@@ -102,6 +106,10 @@ export function BookDownload({
   const [building, setBuilding] = useState<string | null>(null) // part or 'all'
   const [progress, setProgress] = useState('')
   const [combined, setCombined] = useState(true)
+  // Off by default: a score book is an extra for the contractor/conductor, not
+  // something any player is waiting on, and the library has scores for only some
+  // works. Nobody should get one unless they ask.
+  const [includeScore, setIncludeScore] = useState(false)
   // The publish confirmation step: book → instrument routing awaiting approval.
   const [publishPlan, setPublishPlan] = useState<PublishRow[] | null>(null)
 
@@ -134,6 +142,15 @@ export function BookDownload({
     } finally {
       setLoading(false)
     }
+  }
+
+  /**
+   * The books this build produces. The score is appended only when the admin
+   * asked for it AND the manifest actually has one, so a stale checkbox on a
+   * project with no scores can never produce an empty score book.
+   */
+  function partsToBuild(m: Manifest): BookPart[] {
+    return includeScore && m.scorePart ? [...m.parts, m.scorePart] : m.parts
   }
 
   /** Fetch every unique file url once; return bytes keyed by url. */
@@ -225,18 +242,19 @@ export function BookDownload({
     if (!m) return
     setBuilding('all')
     try {
-      const bytesByUrl = await fetchFiles(m, m.parts)
+      const built = partsToBuild(m)
+      const bytesByUrl = await fetchFiles(m, built)
       const client = normalizeForFilename(m.header.client)
       const root: Zippable = {}
       if (combined) {
-        for (const bp of m.parts) {
+        for (const bp of built) {
           setProgress(`Combining ${bp.label}…`)
           const pdf = await mergePdfs(await bookSources(m, bp, bytesByUrl))
           root[`${client} - ${bp.label}.pdf`] = [pdf, { level: 0 }]
         }
       } else {
         setProgress('Building the zip…')
-        for (const bp of m.parts) {
+        for (const bp of built) {
           root[bp.folder] = await bookEntries(m, bp, bytesByUrl)
         }
       }
@@ -290,8 +308,11 @@ export function BookDownload({
         toast.error('This project has no positions yet — add positions before sending books.')
         return
       }
+      // The score appears in the plan only when it was built. It matches no
+      // instrument, so it defaults to "Don't send" and has to be routed
+      // deliberately — a score belongs to whoever is directing, not to a chair.
       setPublishPlan(
-        m.parts.map((bp) => ({
+        partsToBuild(m).map((bp) => ({
           part: bp.part,
           label: bp.label,
           instrumentId: matchInstrumentForPart(bp.part, instruments)?.id ?? 'skip',
@@ -433,13 +454,41 @@ export function BookDownload({
           ? 'Each musician gets a single ready-to-play PDF.'
           : 'Each book is a zip: 00 - Playlist.pdf plus every song as "NN - Title - Artist - part.pdf" — sort by filename to combine by number.'}
       </p>
+
+      {/* Optional score book. Only offered once the manifest confirms at least
+          one song actually has a score — the library does not have them for
+          everything, and an empty book helps nobody. */}
+      {manifest && manifest.scorePart && (
+        <label className="flex items-start gap-2 text-xs text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={includeScore}
+            onChange={(e) => setIncludeScore(e.target.checked)}
+            className="h-3.5 w-3.5 mt-0.5 shrink-0"
+            disabled={building !== null}
+          />
+          <span>
+            Also build a score book
+            {manifest.scoreCount < manifest.songs.length && (
+              <>
+                {' '}
+                <span className="text-amber-700 dark:text-amber-400">
+                  ({manifest.scoreCount} of {manifest.songs.length} songs have a score — the rest are
+                  left out)
+                </span>
+              </>
+            )}
+            {manifest.scoreCount === manifest.songs.length && ' (every song has one)'}
+          </span>
+        </label>
+      )}
       {/* Step 1 — assemble + download for review */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[11px] font-semibold text-muted-foreground w-4">1.</span>
         <Button size="sm" onClick={downloadAll} disabled={building !== null || loading}>
           {building === 'all' ? 'Building…' : 'Download all books'}
         </Button>
-        {(manifest?.parts ?? []).map((bp) => (
+        {(manifest ? partsToBuild(manifest) : []).map((bp) => (
           <Button
             key={bp.part}
             size="sm"

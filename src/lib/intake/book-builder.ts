@@ -64,6 +64,20 @@ export interface BookPart {
   label: string
 }
 
+/**
+ * The optional score book. Deliberately NOT returned by bookParts(): it is not
+ * an instrument, nobody is assigned to it, and the library has scores for only
+ * some works — so including it by default would add a "no file for score"
+ * warning to most songs in most books.
+ *
+ * Folder sorts to 00_ so it sits above the instruments when a build is unzipped.
+ */
+export const SCORE_BOOK_PART: BookPart = {
+  part: 'score',
+  folder: '00_Score',
+  label: 'SCORE',
+}
+
 /** Instrument folders per ensemble — mirrors the Mac config's folder_info. */
 export function bookParts(ensemble: EnsembleCanon | undefined): BookPart[] {
   switch (ensemble) {
