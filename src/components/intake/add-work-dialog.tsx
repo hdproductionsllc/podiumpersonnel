@@ -279,8 +279,17 @@ export function AddWorkDialog({
             {files.length > 0 && (
               <ul className="rounded-md border divide-y">
                 {files.map((row) => (
-                  <li key={row.uid} className="flex items-center gap-2 px-2.5 py-1.5">
-                    <span className="flex-1 min-w-0 truncate text-sm" title={row.file.name}>{row.file.name}</span>
+                  <li key={row.uid} className="flex flex-wrap items-center gap-2 px-2.5 py-1.5">
+                    {/* Full line of its own on narrow screens: the part select,
+                        status and remove button take ~260px of fixed width, which
+                        left the filename about 50px on a phone — truncated past
+                        the point of telling two parts apart. */}
+                    <span
+                      className="w-full sm:w-auto sm:flex-1 min-w-0 truncate text-sm"
+                      title={row.file.name}
+                    >
+                      {row.file.name}
+                    </span>
                     <Select value={row.part} onValueChange={(v) => setRow(row.uid, { part: v as PartKey })} disabled={busy}>
                       <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
