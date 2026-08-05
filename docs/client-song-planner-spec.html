@@ -198,7 +198,7 @@
       library as they go, invisibly, so the operator reviews a mostly-resolved list instead of
       transcribing one.
     </p>
-    <span class="status">Proposed · nothing built yet</span>
+    <span class="status">Built · migration 082 + routes + UI + reminder cron</span>
   </header>
 
   <section>
@@ -401,7 +401,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_intakes_client_token
       <p>Debounced (~1.5s idle). Accepts the whole list; replaces <code>intake_songs</code> for that intake in a transaction. Per save, server-side:</p>
       <ul>
         <li>Reject if <code>client_submitted_at</code> is set (locked) → 409</li>
-        <li>Bound the list: <strong>max 100 songs</strong>, max 200 chars per field</li>
+        <li>Bound the list: <strong>max 120 songs</strong>, 200 chars per title / artist / role, 500 per note</li>
         <li>Renumber <code>position</code> densely per section — never trust client positions</li>
         <li>Reject any section not in <code>BOOK_SECTION_ORDER</code></li>
         <li>Run <code>matchSong()</code> and write <code>matched_repertoire_id</code> / <code>match_status</code> server-side only</li>
@@ -496,7 +496,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_intakes_client_token
         <li>An operator reopen makes the list editable again.</li>
         <li>A submitted list appears in the existing intake panel with matches already resolved where the library had them — the operator types nothing.</li>
         <li>An expired, revoked, and never-existed token are indistinguishable: all 404.</li>
-        <li>A 100-song list saves; a 101-song list is rejected.</li>
+        <li>A 120-song list saves; a 121-song list is rejected.</li>
         <li>Books built from a client-submitted intake are byte-identical to books built from the same list entered by hand today.</li>
       </ol>
     </div>
@@ -521,35 +521,36 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_intakes_client_token
   </section>
 
   <section>
-    <div class="head"><span class="num">12</span><h2>Open questions</h2></div>
+    <div class="head"><span class="num">12</span><h2>The questions, answered</h2></div>
     <div class="body">
-      <p>These change what gets built. Everything above is settled enough to start without them, except&nbsp;5.</p>
+      <p>Answered before the build. Each one is now a constant or a route, not a guess.</p>
       <div class="q">
         <span class="q-n">1</span>
-        <span class="q-t"><b>Song count cap</b><span>100 is a guess. What is a realistically large wedding list?</span></span>
+        <span class="q-t"><b>Song count cap — 120</b><span><code>PLANNER_MAX_SONGS</code>. A big wedding runs 60–80, so this is headroom rather than a target. The save endpoint rejects 121.</span></span>
       </div>
       <div class="q">
         <span class="q-n">2</span>
-        <span class="q-t"><b>Due date default</b><span>Event date minus how long? 30 days?</span></span>
+        <span class="q-t"><b>Due date — event date minus 30 days</b><span>Stamped at end of that day, so a client filing “on the due date” is never late by a timezone. A project with no date gets no deadline and no reminders — better silent than chased against a date we invented.</span></span>
       </div>
       <div class="q">
         <span class="q-n">3</span>
-        <span class="q-t"><b>Contact fields</b><span>Can the client edit their own contact details, or only songs?</span></span>
+        <span class="q-t"><b>Contact details editable too</b><span>Contact name, phone, the walking order, the recessional cue (verbatim, as 069 requires) and a free “anything else” note. Nothing else on the intake is reachable from the client’s page.</span></span>
       </div>
       <div class="q">
         <span class="q-n">4</span>
-        <span class="q-t"><b>After lock</b><span>Does “request changes” email you, or does the page just say to get in touch?</span></span>
+        <span class="q-t"><b>“Request changes” emails you</b><span>A locked list stays locked — the client cannot unlock their own — but the button sends you their message and you reopen it in one click. <b>Assumption, flagged:</b> “all editable” was read as all editable <em>while unlocked</em>, with the lock still real after submit. Flipping that is a one-line change in the save route’s 409 gate.</span></span>
       </div>
       <div class="q">
         <span class="q-n">5</span>
-        <span class="q-t"><b>Spotify</b><span><code>intakes.spotify_url</code> already exists and there is a ranking helper. Should a pasted playlist seed rows? Powerful, and the biggest single scope risk here — recommend deferring to v2.</span></span>
+        <span class="q-t"><b>No Spotify</b><span>Playlists are unreliable and popular songs have too many versions to seed rows from safely. <code>intakes.spotify_url</code> and the ranking helper are untouched — this feature neither reads nor writes them.</span></span>
       </div>
     </div>
   </section>
 
   <footer>
-    Proposed spec — no code written. React to the shape before the build starts; the open questions
-    above are the ones worth answering first.
+    Built and pushed. The one thing still worth arguing with is §4: the client gets a free-text box,
+    never a picker over the library — and no <code>/plan</code> response carries a repertoire id,
+    title or match status, with a test that reads the routes and asserts it.
   </footer>
 
 </div>
