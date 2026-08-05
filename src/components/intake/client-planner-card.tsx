@@ -25,6 +25,9 @@ interface ClientPlannerCardProps {
   planner: Partial<IntakePlannerFields> | null
   /** Whether the project has a client email — drives "send" vs "copy only". */
   hasClientEmail: boolean
+  /** SONG_PLANNER_EMAILS, from the server. Off means this feature sends nothing
+   *  — no invite, no reminders — and the operator sends the link themselves. */
+  emailsEnabled: boolean
   /** Re-load the intake after an action that changes the songs' editability. */
   onChanged?: () => void
 }
@@ -40,6 +43,7 @@ export function ClientPlannerCard({
   projectId,
   planner,
   hasClientEmail,
+  emailsEnabled,
   onChanged,
 }: ClientPlannerCardProps) {
   const [fields, setFields] = useState<Partial<IntakePlannerFields>>(planner ?? {})
@@ -79,7 +83,11 @@ export function ClientPlannerCard({
           client_opened_at: null,
           client_submitted_at: null,
         }))
-        if (data.sendError) {
+        if (data.sendingDisabled) {
+          // SONG_PLANNER_EMAILS is off. The link is real — only the send was
+          // withheld — so say exactly that rather than implying it went out.
+          toast.success('Link ready. Emailing is switched off, so copy it and send it yourself.')
+        } else if (data.sendError) {
           toast.error('The link is ready, but the email would not send — copy it and send it yourself.')
         } else if (data.sent) {
           toast.success('Sent to the client.')
@@ -148,7 +156,17 @@ export function ClientPlannerCard({
       )}
 
       {dueOn && state !== 'submitted' && (
-        <p className="text-xs text-muted-foreground">Due {dueOn} · reminders go out automatically.</p>
+        <p className="text-xs text-muted-foreground">
+          Due {dueOn}
+          {emailsEnabled ? ' · reminders go out automatically.' : '.'}
+        </p>
+      )}
+
+      {!emailsEnabled && (
+        <p className="text-xs text-muted-foreground">
+          Emailing is switched off for the planner, so nothing is sent automatically —
+          no invite and no reminders. Copy the link below and send it yourself.
+        </p>
       )}
 
       {url && (
@@ -159,7 +177,7 @@ export function ClientPlannerCard({
       )}
 
       <div className="flex flex-wrap gap-2">
-        {hasClientEmail && (
+        {hasClientEmail && emailsEnabled && (
           <Button size="sm" onClick={() => act('send', post(true))} disabled={busy !== null}>
             {busy === 'send' ? 'Sending…' : state === 'not-sent' ? 'Email the client' : 'Send a fresh link'}
           </Button>
@@ -206,7 +224,7 @@ export function ClientPlannerCard({
         )}
       </div>
 
-      {!hasClientEmail && (
+      {!hasClientEmail && emailsEnabled && (
         <p className="text-xs text-muted-foreground">
           No client email on this project — add one under Client &amp; Booking to send it from here.
         </p>

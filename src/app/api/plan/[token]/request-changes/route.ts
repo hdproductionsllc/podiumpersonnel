@@ -21,6 +21,7 @@ import { logEmail } from '@/lib/email/log'
 import { rateLimit } from '@/lib/rate-limit'
 import { getAppUrl, escapeHtml } from '@/lib/utils'
 import { PLANNER_MAX_NOTE_CHARS } from '@/lib/intake/planner'
+import { plannerEmailsEnabled, plannerEmailSkipped } from '@/lib/intake/planner-email'
 
 const PUBLIC_HEADERS = {
   'Cache-Control': 'no-store',
@@ -61,6 +62,16 @@ export async function POST(
 
   const message =
     typeof body.message === 'string' ? body.message.trim().slice(0, PLANNER_MAX_NOTE_CHARS) : ''
+
+  // This endpoint exists only to send mail, so with sending off there is nothing
+  // honest to do but tell the client to call. Never claim it was passed on.
+  if (!plannerEmailsEnabled()) {
+    plannerEmailSkipped('planner change request', 'organization admins')
+    return json(
+      { error: 'Please get in touch with us directly and we\'ll sort this out for you.' },
+      503
+    )
+  }
 
   const adminEmails = await getOrgAdminEmails(ctx.organizationId)
   if (adminEmails.length === 0) {

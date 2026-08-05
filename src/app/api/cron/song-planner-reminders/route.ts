@@ -18,6 +18,7 @@ import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
 import { cronDisabledResponse, notifyOps, requireCronAuth } from '@/lib/cron'
 import { PLANNER_REMINDER_OFFSETS } from '@/lib/intake/planner'
+import { plannerEmailsEnabled } from '@/lib/intake/planner-email'
 
 /** Whole days from now until `due`, rounded up so "later today" is 0, not -1. */
 function daysUntil(due: Date, now: Date): number {
@@ -34,6 +35,13 @@ export async function GET(request: NextRequest) {
 
   const disabled = cronDisabledResponse('song-planner-reminders')
   if (disabled) return disabled
+
+  // This is the only UNATTENDED sender in the feature — nobody clicks it. It
+  // stops here, before the query, until planner mail is explicitly switched on.
+  if (!plannerEmailsEnabled()) {
+    console.log('[SONG PLANNER EMAILS OFF] song-planner-reminders skipped (set SONG_PLANNER_EMAILS=true to enable)')
+    return NextResponse.json({ skipped: true, reason: 'SONG_PLANNER_EMAILS is not enabled' })
+  }
 
   const supabase = createServiceClient()
   const now = new Date()

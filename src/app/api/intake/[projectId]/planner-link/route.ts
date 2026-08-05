@@ -22,6 +22,7 @@ import { sendSongPlannerEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
 import { plannerDueAt, plannerLinkExpiry } from '@/lib/intake/planner'
+import { plannerEmailsEnabled, plannerEmailSkipped } from '@/lib/intake/planner-email'
 
 type SupabaseError = { code?: string; message?: string } | null
 
@@ -130,8 +131,11 @@ export async function POST(
   const intake = await ensureIntake(service, projectId, orgId)
   if (!intake.ok) return intake.response
 
-  const shouldSend = body.send === true
-  if (shouldSend && !project.client_email) {
+  // The switch is checked BEFORE the "no client email" complaint: with sending
+  // off, a missing address is not a problem the operator needs to hear about.
+  const sendingEnabled = plannerEmailsEnabled()
+  const shouldSend = body.send === true && sendingEnabled
+  if (body.send === true && sendingEnabled && !project.client_email) {
     return apiError('This project has no client email — add one, or copy the link and send it yourself.', 400)
   }
 
@@ -164,6 +168,13 @@ export async function POST(
   }
 
   const url = `${getAppUrl()}/plan/${token}`
+
+  if (body.send === true && !sendingEnabled) {
+    // The link is real and usable — only the send is withheld. Say so plainly
+    // rather than reporting a success that never left the building.
+    plannerEmailSkipped('planner invite', project.client_email ?? '(no client email)')
+    return apiSuccess({ url, dueAt, expiresAt, sent: false, sendingDisabled: true })
+  }
 
   if (shouldSend) {
     const { data: org } = await service

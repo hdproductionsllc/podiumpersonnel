@@ -15,6 +15,7 @@ import { resolvePlannerToken } from '@/lib/intake/planner-token'
 import { sendEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { rateLimit } from '@/lib/rate-limit'
+import { plannerEmailsEnabled, plannerEmailSkipped } from '@/lib/intake/planner-email'
 import { getAppUrl, escapeHtml } from '@/lib/utils'
 
 const PUBLIC_HEADERS = {
@@ -83,6 +84,13 @@ async function notifyOperator(
 
   const adminEmails = await getOrgAdminEmails(ctx.organizationId)
   if (adminEmails.length === 0) return
+
+  // The switch covers this too. The client's list is safely locked in either
+  // way; with sending off the operator finds it on the project as usual.
+  if (!plannerEmailsEnabled()) {
+    plannerEmailSkipped('planner submitted notification', adminEmails.join(', '))
+    return
+  }
 
   const { count } = await service
     .from('intake_songs')

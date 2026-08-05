@@ -255,6 +255,9 @@ export function IntakePanel({ projectId, ensembleType, instruments, clientEmail 
   // The client song planner's columns (082), read straight off the loaded
   // intake. Null until the intake loads, or when none exists yet.
   const [planner, setPlanner] = useState<Partial<IntakePlannerFields> | null>(null)
+  // Whether SONG_PLANNER_EMAILS is on, read from the server — the card must not
+  // promise automatic reminders that are switched off.
+  const [plannerEmails, setPlannerEmails] = useState(false)
 
   async function handleOpen() {
     const next = !open
@@ -282,6 +285,7 @@ export function IntakePanel({ projectId, ensembleType, instruments, clientEmail 
       const intake = data.intake as IntakeRecord | null
       const savedSongs = (data.songs ?? []) as SavedSong[]
       setPlanner((intake as Partial<IntakePlannerFields> | null) ?? null)
+      setPlannerEmails(data.plannerEmails === true)
       if (!intake) {
         setPhase('empty')
         setLoaded(true)
@@ -613,6 +617,7 @@ export function IntakePanel({ projectId, ensembleType, instruments, clientEmail 
               projectId={projectId}
               planner={planner}
               hasClientEmail={!!clientEmail}
+              emailsEnabled={plannerEmails}
               onChanged={() => void load()}
             />
           )}

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import {
@@ -449,5 +449,81 @@ describe('migration 082 is additive', () => {
 
   it('keeps the token index partial so the NULLs do not collide', () => {
     expect(statements).toMatch(/idx_intakes_client_token[\s\S]{0,200}WHERE client_token IS NOT NULL/)
+  })
+})
+
+// --- the outbound-mail switch ------------------------------------------------
+
+describe('the planner cannot email anyone until it is switched on', () => {
+  const original = process.env.SONG_PLANNER_EMAILS
+
+  afterEach(() => {
+    if (original === undefined) delete process.env.SONG_PLANNER_EMAILS
+    else process.env.SONG_PLANNER_EMAILS = original
+    vi.resetModules()
+  })
+
+  async function enabledWith(value: string | undefined): Promise<boolean> {
+    if (value === undefined) delete process.env.SONG_PLANNER_EMAILS
+    else process.env.SONG_PLANNER_EMAILS = value
+    vi.resetModules()
+    const mod = await import('@/lib/intake/planner-email')
+    return mod.plannerEmailsEnabled()
+  }
+
+  it('is OFF when unset — a missing env var never sends mail', async () => {
+    expect(await enabledWith(undefined)).toBe(false)
+  })
+
+  it('is OFF for blank, false, and anything unrecognized', async () => {
+    for (const value of ['', '   ', 'false', '0', 'off', 'no', 'maybe', 'TRUEish']) {
+      expect(await enabledWith(value)).toBe(false)
+    }
+  })
+
+  it('is ON only for an explicit yes', async () => {
+    for (const value of ['true', 'TRUE', '1', 'on', 'yes']) {
+      expect(await enabledWith(value)).toBe(true)
+    }
+  })
+
+  it('gates all four senders — invite, reminders, submitted, change request', () => {
+    // Every path in this feature that can put mail in someone's inbox. If a
+    // fifth is ever added, this list is where it has to be accounted for.
+    for (const route of [LINK_ROUTE, CRON_ROUTE, SUBMIT_ROUTE, CHANGES_ROUTE]) {
+      expect(read(route)).toContain('plannerEmailsEnabled')
+    }
+  })
+
+  it('stops the unattended sender before it even reads the table', () => {
+    // The cron is the only sender nobody clicks, so its gate comes first.
+    const src = read(CRON_ROUTE)
+    const gate = src.indexOf('plannerEmailsEnabled()')
+    const query = src.indexOf(".from('intakes')")
+    expect(gate).toBeGreaterThan(-1)
+    expect(gate).toBeLessThan(query)
+  })
+
+  it('still mints a working link with sending off', () => {
+    // The feature has to keep working: the operator copies the link instead.
+    const src = read(LINK_ROUTE)
+    expect(src).toContain('sendingDisabled: true')
+    expect(src).toMatch(/sendingDisabled: true[\s\S]{0,120}\)/)
+    // and the URL goes back in that same response
+    expect(src).toMatch(/return apiSuccess\(\{ url, dueAt, expiresAt, sent: false, sendingDisabled: true \}\)/)
+  })
+
+  it('never tells a client their change request was passed on when it was not', () => {
+    const src = read(CHANGES_ROUTE)
+    const gate = src.indexOf('!plannerEmailsEnabled()')
+    const ok = src.indexOf('return json({ ok: true })')
+    expect(gate).toBeGreaterThan(-1)
+    expect(gate).toBeLessThan(ok)
+  })
+
+  it('says so in the operator UI rather than looking broken', () => {
+    const src = read('src/components/intake/client-planner-card.tsx')
+    expect(src).toContain('emailsEnabled')
+    expect(src).toContain('Emailing is switched off')
   })
 })
