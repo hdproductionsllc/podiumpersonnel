@@ -35,6 +35,7 @@ const ADD_WORK = 'src/app/api/repertoire/add-work/route.ts'
 const BOOK_ROUTE = 'src/app/api/intake/[projectId]/book/route.ts'
 const INTAKE_ROUTE = 'src/app/api/intake/[projectId]/route.ts'
 const PARSE_ROUTE = 'src/app/api/intake/parse/route.ts'
+const MATCH_INDEX = 'src/lib/intake/match-index.ts'
 const SONG_ROW = 'src/components/intake/intake-song-row.tsx'
 const ADD_DIALOG = 'src/components/intake/add-work-dialog.tsx'
 
@@ -53,8 +54,14 @@ describe('the archived work still owns its identity slot', () => {
 })
 
 describe('matching correctly ignores archived works', () => {
-  it('parse filters is_active, which is what produced the upload prompt', () => {
-    expect(read(PARSE_ROUTE)).toContain("if (table === 'repertoire') q = q.eq('is_active', true)")
+  it('the match index filters is_active, which is what produced the upload prompt', () => {
+    // The filter moved out of the parse route into the shared index loader when
+    // the client song planner (082) started matching through the same code. Both
+    // callers inherit it, which is the point — a client's typed song and the same
+    // song pasted from a questionnaire must never disagree about an archived work.
+    expect(read(MATCH_INDEX)).toContain("if (table === 'repertoire') q = q.eq('is_active', true)")
+    expect(read(PARSE_ROUTE)).toContain('loadMatchIndex(')
+    expect(read('src/app/api/plan/[token]/save/route.ts')).toContain('loadMatchIndex(')
   })
 
   it('the manual repertoire search filters is_active too', () => {

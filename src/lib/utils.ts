@@ -38,3 +38,20 @@ export function getAppUrl(): string {
   // trim: a stray trailing newline in the env var must not leak into URLs
   return (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').trim()
 }
+
+/**
+ * Escape text for interpolation into a hand-built HTML email body.
+ *
+ * React templates escape for us; the string-concatenated notifications do not.
+ * Anywhere a person's own words reach an `html:` string — a client's note, a
+ * name they typed — they go through here first, or a stray `<` breaks the email
+ * and a deliberate one writes markup into the operator's inbox.
+ */
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}

@@ -18,11 +18,9 @@ import {
   matchSong,
   capCandidates,
   canonicalEnsemble,
-  type RepertoireRow,
-  type AliasRow,
   type MatchResult,
-  type PartAvailability,
 } from '@/lib/intake/matcher'
+import { loadMatchIndex } from '@/lib/intake/match-index'
 
 export interface ProposedSong {
   section: string
@@ -64,64 +62,16 @@ export async function POST(request: Request) {
   // 1. Parse (pure; never trusts anything downstream — proposal only).
   const parsed = parseIntake(rawText)
 
-  // 2. Load the caller's (possibly SHARED) library repertoire + aliases (service
-  //    client, scoped to libraryOrgId — the org that owns the library, which may
-  //    be a different brand of the same owner).
-  //    ALL of these reads paginate: PostgREST caps responses at 1,000 rows, and
-  //    this library already has 3,558 parts — an unpaginated read silently
-  //    truncates and produces confidently-wrong gap badges (adversarial finding).
+  // 2. Load the caller's (possibly SHARED) library repertoire + aliases + parts,
+  //    scoped to libraryOrgId — the org that owns the library, which may be a
+  //    different brand of the same owner. Paginated inside loadMatchIndex; the
+  //    client planner's save endpoint (082) matches through the same helper so
+  //    both paths see one index.
   const service = createServiceClient()
 
-  async function selectAll<T>(table: string, columns: string): Promise<{ rows: T[]; error: unknown }> {
-    const PAGE = 1000
-    const rows: T[] = []
-    for (let from = 0; ; from += PAGE) {
-      let q = service.from(table).select(columns).eq('organization_id', libraryOrgId).range(from, from + PAGE - 1)
-      if (table === 'repertoire') q = q.eq('is_active', true)
-      const { data, error } = await q
-      if (error) return { rows, error }
-      const page = (data ?? []) as T[]
-      rows.push(...page)
-      if (page.length < PAGE) break
-    }
-    return { rows, error: null }
-  }
-
-  const rep = await selectAll<RepertoireRow>('repertoire', 'id,title,artist,ensemble,norm_title')
-  if (rep.error) return serverError('intake/parse: load repertoire', rep.error)
-  const repRows = rep.rows
-
-  const alias = await selectAll<AliasRow>('title_aliases', 'alias_norm,repertoire_id')
-  if (alias.error) return serverError('intake/parse: load aliases', alias.error)
-  const aliasRows = alias.rows
-
-  // Part availability per work, so the review UI can show a gap badge
-  // ("matched — missing vla"). One extra org-scoped query, aggregated here.
-  const parts = await selectAll<{ repertoire_id: string; part: string; substitute: boolean; played_on: string | null }>(
-    'repertoire_parts',
-    'repertoire_id,part,substitute,played_on'
-  )
-  if (parts.error) return serverError('intake/parse: load repertoire parts', parts.error)
-  const partRows = parts.rows
-
-  const partsByRep = new Map<string, PartAvailability>()
-  for (const p of (partRows ?? []) as Array<{ repertoire_id: string; part: string; substitute: boolean; played_on: string | null }>) {
-    let pa = partsByRep.get(p.repertoire_id)
-    if (!pa) {
-      pa = { available: [], substitutes: [] }
-      partsByRep.set(p.repertoire_id, pa)
-    }
-    if (p.substitute) {
-      if (p.played_on) pa.substitutes.push({ part: p.part, playedOn: p.played_on })
-    } else if (!pa.available.includes(p.part)) {
-      pa.available.push(p.part)
-    }
-  }
-
-  const index = {
-    repertoire: (repRows ?? []) as RepertoireRow[],
-    aliases: (aliasRows ?? []) as AliasRow[],
-  }
+  const loaded = await loadMatchIndex(service, libraryOrgId, { withParts: true })
+  if (!loaded.ok) return serverError(loaded.context, loaded.error)
+  const { index, partsByRep } = loaded.data
 
   // Decorate a match's candidates with each work's part availability (in place).
   const decorate = (match: MatchResult): MatchResult => {

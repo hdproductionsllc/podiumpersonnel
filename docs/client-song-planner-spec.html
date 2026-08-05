@@ -1,0 +1,556 @@
+<title>Client Song Planner — build spec</title>
+
+<style>
+  /* ------------------------------------------------------------------
+     Palette: engraved-edition. Deep indigo ink on cool paper (not cream),
+     neutrals biased toward the ink so nothing reads as default grey.
+     One accent (pine) for structure and emphasis; a separate rust used
+     ONLY for exclusions and locks, so semantic never borrows the accent.
+     ------------------------------------------------------------------ */
+  :root {
+    --paper:      #F6F6F3;
+    --paper-sunk: #EFEFEA;
+    --ink:        #1B2033;
+    --ink-soft:   #3D4459;
+    --muted:      #5C6275;
+    --rule:       #D8D8D0;
+    --rule-soft:  #E6E6DF;
+    --accent:     #2F6F63;
+    --accent-dim: #E2ECE8;
+    --flag:       #A4552F;
+    --flag-dim:   #F5E7DF;
+    --shadow:     0 1px 2px rgba(27, 32, 51, .06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:      #14161F;
+      --paper-sunk: #1B1E2A;
+      --ink:        #E8E8E2;
+      --ink-soft:   #C2C4CE;
+      --muted:      #949AAB;
+      --rule:       #2E3242;
+      --rule-soft:  #23263230;
+      --accent:     #6FBBAA;
+      --accent-dim: #1C2E2C;
+      --flag:       #D98A62;
+      --flag-dim:   #2C2019;
+      --shadow:     0 1px 2px rgba(0, 0, 0, .4);
+    }
+  }
+  /* The viewer's toggle stamps data-theme on :root and must win both ways. */
+  :root[data-theme="light"] {
+    --paper: #F6F6F3; --paper-sunk: #EFEFEA; --ink: #1B2033; --ink-soft: #3D4459;
+    --muted: #5C6275; --rule: #D8D8D0; --rule-soft: #E6E6DF; --accent: #2F6F63;
+    --accent-dim: #E2ECE8; --flag: #A4552F; --flag-dim: #F5E7DF;
+    --shadow: 0 1px 2px rgba(27, 32, 51, .06);
+  }
+  :root[data-theme="dark"] {
+    --paper: #14161F; --paper-sunk: #1B1E2A; --ink: #E8E8E2; --ink-soft: #C2C4CE;
+    --muted: #949AAB; --rule: #2E3242; --rule-soft: #232632; --accent: #6FBBAA;
+    --accent-dim: #1C2E2C; --flag: #D98A62; --flag-dim: #2C2019;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+  }
+
+  /* Three type roles, all system-resident: a Palatino-class serif with real
+     character for prose, a grotesque for labels and data, mono for schema.
+     No webfont URL — the CSP would block it and fall back silently. */
+  :root {
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino,
+             "Book Antiqua", Georgia, serif;
+    --sans:  ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+             Roboto, Helvetica, Arial, sans-serif;
+    --mono:  ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+             "Liberation Mono", monospace;
+  }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 78ch;
+    margin: 0 auto;
+    padding: clamp(2rem, 6vw, 5rem) clamp(1.1rem, 4vw, 2rem) 6rem;
+  }
+
+  /* --- masthead --- */
+  .masthead { display: flex; flex-direction: column; gap: .9rem; padding-bottom: 1.6rem;
+              border-bottom: 2px solid var(--ink); }
+  .eyebrow { font-family: var(--sans); font-size: .69rem; font-weight: 600;
+             letter-spacing: .17em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-size: clamp(2rem, 5.5vw, 2.9rem); line-height: 1.1; margin: 0;
+       font-weight: 600; letter-spacing: -.015em; text-wrap: balance; }
+  .standfirst { font-size: 1.09rem; color: var(--ink-soft); margin: 0; max-width: 62ch; }
+
+  .status { display: inline-flex; align-items: center; gap: .5rem; align-self: flex-start;
+            font-family: var(--sans); font-size: .74rem; font-weight: 600;
+            letter-spacing: .05em; text-transform: uppercase;
+            background: var(--flag-dim); color: var(--flag);
+            border: 1px solid color-mix(in srgb, var(--flag) 30%, transparent);
+            padding: .3rem .65rem; border-radius: 2px; }
+
+  /* --- sections: number hangs in the gutter, like edition marginalia --- */
+  section { margin-top: 3.2rem; }
+  .head { display: grid; grid-template-columns: 2.6rem 1fr; align-items: baseline;
+          gap: .6rem; margin-bottom: 1rem; }
+  .num { font-family: var(--sans); font-size: .8rem; font-weight: 600; color: var(--accent);
+         font-variant-numeric: tabular-nums; padding-top: .35rem; }
+  h2 { font-size: 1.5rem; font-weight: 600; margin: 0; letter-spacing: -.01em;
+       text-wrap: balance; padding-bottom: .5rem; border-bottom: 1px solid var(--rule); }
+  h3 { font-family: var(--sans); font-size: .82rem; font-weight: 700; letter-spacing: .09em;
+       text-transform: uppercase; color: var(--muted); margin: 2rem 0 .7rem; }
+  .body { display: flex; flex-direction: column; gap: 1rem; }
+  @media (min-width: 700px) { .body { padding-left: 3.2rem; } }
+
+  p { margin: 0; max-width: 66ch; }
+  strong { font-weight: 600; }
+  em { font-style: italic; }
+  a { color: var(--accent); text-underline-offset: 2px; }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  ul, ol { margin: 0; padding-left: 1.3rem; display: flex; flex-direction: column; gap: .45rem; }
+  li { max-width: 64ch; }
+  li::marker { color: var(--muted); }
+
+  code { font-family: var(--mono); font-size: .855em;
+         background: var(--paper-sunk); border: 1px solid var(--rule-soft);
+         padding: .08em .34em; border-radius: 3px; }
+
+  pre { font-family: var(--mono); font-size: .8rem; line-height: 1.6; margin: 0;
+        background: var(--paper-sunk); border: 1px solid var(--rule);
+        border-left: 2px solid var(--accent);
+        padding: 1rem 1.1rem; overflow-x: auto; border-radius: 3px; }
+  pre code { background: none; border: 0; padding: 0; font-size: inherit; }
+
+  /* --- tables --- */
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px;
+            background: var(--paper-sunk); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-family: var(--sans);
+          font-size: .845rem; }
+  th, td { text-align: left; padding: .6rem .8rem; border-bottom: 1px solid var(--rule-soft);
+           vertical-align: top; }
+  th { font-weight: 700; font-size: .71rem; letter-spacing: .08em; text-transform: uppercase;
+       color: var(--muted); white-space: nowrap; background: var(--paper); }
+  tr:last-child td { border-bottom: 0; }
+  td code { font-size: .82em; }
+
+  /* --- scope columns --- */
+  .cols { display: grid; gap: 1rem; }
+  @media (min-width: 640px) { .cols { grid-template-columns: 1fr 1fr; } }
+  .card { border: 1px solid var(--rule); border-radius: 3px; padding: 1rem 1.1rem;
+          background: var(--paper-sunk); display: flex; flex-direction: column; gap: .6rem; }
+  .card.out { border-color: color-mix(in srgb, var(--flag) 32%, transparent);
+              background: var(--flag-dim); }
+  .card h4 { font-family: var(--sans); font-size: .73rem; font-weight: 700; letter-spacing: .1em;
+             text-transform: uppercase; margin: 0; color: var(--accent); }
+  .card.out h4 { color: var(--flag); }
+  .card ul { gap: .35rem; }
+  .card li { font-family: var(--sans); font-size: .865rem; line-height: 1.5; }
+
+  /* --- flow --- */
+  .flow { display: grid; gap: .7rem; }
+  @media (min-width: 760px) { .flow { grid-template-columns: 1fr 1fr 1fr; } }
+  .lane { border: 1px solid var(--rule); border-top: 2px solid var(--accent);
+          border-radius: 3px; background: var(--paper-sunk); padding: .9rem 1rem;
+          display: flex; flex-direction: column; gap: .5rem; }
+  .lane.client { border-top-color: var(--flag); }
+  .lane-who { font-family: var(--sans); font-size: .69rem; font-weight: 700;
+              letter-spacing: .13em; text-transform: uppercase; color: var(--accent); }
+  .lane.client .lane-who { color: var(--flag); }
+  .lane ol { padding-left: 1.05rem; gap: .3rem; }
+  .lane li { font-family: var(--sans); font-size: .84rem; line-height: 1.45; }
+
+  /* --- callout --- */
+  .callout { border: 1px solid var(--accent); border-left-width: 3px; border-radius: 3px;
+             background: var(--accent-dim); padding: 1.1rem 1.2rem;
+             display: flex; flex-direction: column; gap: .7rem; }
+  .callout .lede { font-size: 1.12rem; font-weight: 600; margin: 0; }
+
+  /* --- open questions --- */
+  .q { border: 1px solid var(--rule); border-radius: 3px; background: var(--paper-sunk);
+       padding: .85rem 1rem; display: flex; gap: .85rem; align-items: flex-start; }
+  .q-n { font-family: var(--sans); font-size: .74rem; font-weight: 700; color: var(--flag);
+         font-variant-numeric: tabular-nums; background: var(--flag-dim);
+         border-radius: 2px; padding: .12rem .42rem; flex: none; margin-top: .18rem; }
+  .q-t { display: flex; flex-direction: column; gap: .25rem; }
+  .q-t b { font-family: var(--sans); font-size: .9rem; font-weight: 700; }
+  .q-t span { font-family: var(--sans); font-size: .855rem; color: var(--ink-soft);
+              line-height: 1.5; }
+
+  footer { margin-top: 4rem; padding-top: 1.2rem; border-top: 1px solid var(--rule);
+           font-family: var(--sans); font-size: .78rem; color: var(--muted); }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Podium Personnel · Build spec</div>
+    <h1>Client Song Planner</h1>
+    <p class="standfirst">
+      Replaces the 17hats questionnaire with a tokenized page where the client builds their own
+      song list — drag to order, save, come back, submit when due. Matching runs against the
+      library as they go, invisibly, so the operator reviews a mostly-resolved list instead of
+      transcribing one.
+    </p>
+    <span class="status">Built · migration 082 + routes + UI + reminder cron</span>
+  </header>
+
+  <section>
+    <div class="head"><span class="num">01</span><h2>Why this is small</h2></div>
+    <div class="body">
+      <p>
+        The data model already fits. <code>intakes.source</code> has a CHECK constraint that
+        already permits <code>'client-form'</code> — the table was designed with this in mind.
+      </p>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>What the feature needs</th><th>What already exists</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Ordered songs, grouped</td><td><code>intake_songs.section</code> + <code>position</code>, <code>UNIQUE (intake_id, section, position)</code></td></tr>
+            <tr><td>The seven groups</td><td><code>BOOK_SECTION_ORDER</code> — prelude, ceremony, recessional, postlude, cocktail&nbsp;hour, reception, other</td></tr>
+            <tr><td>Save and resume</td><td><code>intakes.status = 'draft'</code></td></tr>
+            <tr><td>Walk order</td><td><code>intakes.processional_order</code> (JSONB array)</td></tr>
+            <tr><td>Free-text song entry</td><td><code>title_raw</code>, <code>artist_raw</code>, <code>role</code>, <code>notes</code></td></tr>
+            <tr><td>“Can you play X?”</td><td><code>intake_songs.special_request</code> (070)</td></tr>
+            <tr><td>Fuzzy matching</td><td><code>matchSong()</code> — exact norm_title → token → dice similarity</td></tr>
+            <tr><td>Operator review</td><td>the existing intake panel, unchanged</td></tr>
+            <tr><td>Books</td><td>the existing book builder, unchanged</td></tr>
+            <tr><td>Public tokenized pages</td><td><code>/gig/[token]</code>, <code>/w9/[token]</code>, <code>/confirm-details/[token]</code></td></tr>
+            <tr><td>Reminder scheduling</td><td>the existing cron jobs</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        <strong>What is genuinely new:</strong> a token on <code>intakes</code>, one public page,
+        two public endpoints, and a reminder job.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="num">02</span><h2>Scope</h2></div>
+    <div class="body">
+      <div class="cols">
+        <div class="card">
+          <h4>In scope</h4>
+          <ul>
+            <li>A tokenized, client-facing page to build and reorder a song list</li>
+            <li>Autosave, resume, and a deliberate submit</li>
+            <li>Server-side matching on save, never shown to the client</li>
+            <li>A due date and reminder emails</li>
+            <li>Lock on submit, with an operator reopen</li>
+          </ul>
+        </div>
+        <div class="card out">
+          <h4>Not in scope</h4>
+          <ul>
+            <li>Contracts, e-signature, invoicing, payment</li>
+            <li>Any view of the organization’s repertoire</li>
+            <li>Client accounts, passwords, or login</li>
+            <li>Editing anything but the song list and its own contact fields</li>
+          </ul>
+        </div>
+      </div>
+      <p>
+        Same discipline as the invoicing spec: this replaces the questionnaire. If a request
+        touches contracts or money, stop and ask.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="num">03</span><h2>The flow</h2></div>
+    <div class="body">
+      <div class="flow">
+        <div class="lane">
+          <span class="lane-who">Operator</span>
+          <ol>
+            <li>Creates the planner link — mints the token, sets the due date</li>
+            <li>Sends it however they already talk to the client</li>
+          </ol>
+        </div>
+        <div class="lane client">
+          <span class="lane-who">Client</span>
+          <ol>
+            <li>Opens the link — no login</li>
+            <li>Adds songs as free text, drags to order</li>
+            <li>Autosaves; leaves; comes back</li>
+            <li>Submits — the list locks</li>
+          </ol>
+        </div>
+        <div class="lane">
+          <span class="lane-who">Operator</span>
+          <ol>
+            <li>Notified on submit</li>
+            <li>Reviews matches, resolves gaps</li>
+            <li>Confirms the intake</li>
+            <li>Builds books</li>
+          </ol>
+        </div>
+      </div>
+      <p>
+        The operator’s half — review, resolve, confirm, build — is <strong>unchanged</strong>.
+        This feature ends where the existing intake panel begins.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="num">04</span><h2>The central decision: no library browsing</h2></div>
+    <div class="body">
+      <div class="callout">
+        <p class="lede">The client gets a free-text box, not a picker.</p>
+        <ol>
+          <li><strong>A picker publishes the catalogue.</strong> Autocomplete over
+            <code>repertoire</code> hands every client a browsable list of the arrangements.
+            Tokens limit <em>who</em> can look; a real client can still capture the whole list.</li>
+          <li><strong>A list makes the operation look small.</strong> Every song not in the picker
+            reads as “they can’t do that.” “We’ll get it arranged” is a selling point, and special
+            requests are revenue.</li>
+          <li><strong>The matcher already solves the hard part.</strong> “Canon in D”, “Pachelbel
+            Canon”, and “Cannon in D” all land on the same work today.</li>
+        </ol>
+      </div>
+      <p>
+        So the client types <code>Perfect — Ed Sheeran</code> and sees only their own list. The
+        match happens on the server and is visible only to the operator.
+      </p>
+      <p>
+        <strong>Corollary:</strong> match results are never returned to the client. Not as a badge,
+        not as a count, not as a “we have this one!”. No response body from the save endpoint may
+        contain a repertoire id, title, or match status.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="num">05</span><h2>Schema — migration 082</h2></div>
+    <div class="body">
+      <p>Additive only. No existing column changes, so every current flow is untouched.</p>
+      <pre><code>ALTER TABLE intakes
+  ADD COLUMN IF NOT EXISTS client_token            TEXT,
+  ADD COLUMN IF NOT EXISTS client_token_expires_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS client_due_at           TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS client_opened_at        TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS client_submitted_at     TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS client_last_reminder_at TIMESTAMPTZ;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_intakes_client_token
+  ON intakes(client_token) WHERE client_token IS NOT NULL;</code></pre>
+      <p>
+        Token generation mirrors 078: 256 bits from <code>gen_random_bytes</code>, minted only
+        when a link is actually created, partial unique index so many NULLs are fine.
+      </p>
+
+      <h3>Why <code>status</code> is left alone</h3>
+      <p>
+        <code>intakes.status</code> is CHECK-constrained to <code>('draft','confirmed')</code> and
+        the book route gates on <code>status !== 'confirmed'</code>. Adding a third value would
+        risk that gate. Client progress is carried by timestamps instead, which compose cleanly:
+      </p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>State</th><th>Condition</th></tr></thead>
+          <tbody>
+            <tr><td>Not sent</td><td><code>client_token IS NULL</code></td></tr>
+            <tr><td>Sent, untouched</td><td>token set, <code>client_opened_at IS NULL</code></td></tr>
+            <tr><td>In progress</td><td><code>client_opened_at</code> set, <code>client_submitted_at IS NULL</code></td></tr>
+            <tr><td>Submitted (locked)</td><td><code>client_submitted_at</code> set</td></tr>
+            <tr><td>Reopened</td><td>operator clears <code>client_submitted_at</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>RLS</h3>
+      <p>
+        <strong>Unchanged.</strong> <code>intakes</code> and <code>intake_songs</code> keep their
+        org-scoped policies from 069. The public page reaches them through the
+        <strong>service client</strong> after validating the token, exactly as
+        <code>/gig/[token]</code> and <code>/w9/[token]</code> do. No policy is added for
+        <code>anon</code> — migration 076 removed the last <code>USING (true)</code> policies from
+        this database and none come back.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="num">06</span><h2>Routes</h2></div>
+    <div class="body">
+      <h3>GET /plan/[token] — the client page</h3>
+      <p>
+        Server component, service client. Resolves the token; 404s on anything unknown, expired,
+        or belonging to a cancelled project — never distinguishing between them.
+        Headers match the library page: <code>noindex, nofollow, noarchive, nosnippet</code>,
+        <code>no-store</code>, <code>Referrer-Policy: no-referrer</code>.
+      </p>
+      <p>
+        Renders only: the couple’s names, event date, venue, the section lanes for this event
+        type, and whatever the client has already entered. <strong>No repertoire, no pricing, no
+        musician names, no internal notes.</strong>
+      </p>
+
+      <h3>POST /api/plan/[token]/save — autosave</h3>
+      <p>Debounced (~1.5s idle). Accepts the whole list; replaces <code>intake_songs</code> for that intake in a transaction. Per save, server-side:</p>
+      <ul>
+        <li>Reject if <code>client_submitted_at</code> is set (locked) → 409</li>
+        <li>Bound the list: <strong>max 120 songs</strong>, 200 chars per title / artist / role, 500 per note</li>
+        <li>Renumber <code>position</code> densely per section — never trust client positions</li>
+        <li>Reject any section not in <code>BOOK_SECTION_ORDER</code></li>
+        <li>Run <code>matchSong()</code> and write <code>matched_repertoire_id</code> / <code>match_status</code> server-side only</li>
+        <li>Set <code>client_opened_at</code> on first save if null</li>
+      </ul>
+      <p>
+        The client may never set <code>matched_repertoire_id</code>, <code>match_status</code>,
+        <code>organization_id</code>, or <code>intake_id</code> — those come from the token.
+        <strong>Response is <code>{ ok: true, savedAt }</code> and nothing else.</strong>
+      </p>
+
+      <h3>POST /api/plan/[token]/submit</h3>
+      <p>Sets <code>client_submitted_at</code>, locks the list, emails the operator. Idempotent — submitting twice is not an error.</p>
+
+      <h3>Operator actions (existing authenticated API)</h3>
+      <ul>
+        <li>Create planner link — mints token, sets <code>client_due_at</code></li>
+        <li>Copy / re-send link</li>
+        <li>Reopen — clears <code>client_submitted_at</code></li>
+        <li>Revoke — clears the token</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="num">07</span><h2>The page itself</h2></div>
+    <div class="body">
+      <p>
+        <strong>Sections are driven by <code>projects.event_type</code>.</strong> A wedding gets
+        prelude, ceremony, recessional, postlude, cocktail hour, reception. A corporate or private
+        booking gets far fewer. Showing a “recessional” lane on a corporate gig is how a form
+        starts feeling like paperwork.
+      </p>
+      <p>
+        Each lane is a drop target; each row is a drag handle, title, artist, and an optional note.
+        Ceremony rows also get <code>role</code> — Processional, Bride’s Entrance, Unity.
+      </p>
+      <p>
+        <strong>A second, smaller list for <code>processional_order</code></strong> — who walks in,
+        in order. Plain string rows, dragged. This is what clients most want to fiddle with, and it
+        already has a home in the schema.
+      </p>
+      <ul>
+        <li>Works on a phone. Half of these will be filled in on a sofa.</li>
+        <li>Keyboard-accessible reordering (move up / move down), not drag-only.</li>
+        <li>Autosave with a visible “Saved” state, and an explicit all-saved indicator before submit.</li>
+        <li>Submit asks for confirmation and states plainly that the list locks.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="num">08</span><h2>Reminders</h2></div>
+    <div class="body">
+      <p>
+        A cron job following the existing pattern — <code>requireCronAuth</code>, fails closed,
+        respects <code>CRON_ENABLED</code> and <code>EMAIL_SAFE_MODE</code>.
+      </p>
+      <p>
+        Nudge at <strong>T-30, T-14, T-3</strong> days before <code>client_due_at</code>, and once
+        on the due date. Skip if <code>client_submitted_at</code> is set.
+        <code>client_last_reminder_at</code> prevents double-sends if the job runs twice.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="num">09</span><h2>Security requirements</h2></div>
+    <div class="body">
+      <ol>
+        <li>The token is the only credential. 256 bits, unguessable, single-purpose.</li>
+        <li>The page is <code>noindex</code> and <code>no-referrer</code>.</li>
+        <li>The save endpoint is <strong>write-only with respect to the library</strong> — no repertoire data in any response.</li>
+        <li>Everything the client submits is untrusted text. It reaches the book only as <code>title_raw</code> / <code>artist_raw</code>, rendered as text, never HTML.</li>
+        <li>Bounded input: song count, field lengths, request body size.</li>
+        <li>Rate-limit save and submit per token.</li>
+        <li>A revoked or expired token 404s exactly like a wrong one.</li>
+        <li>Tokens live 12–18 months by design — weddings book far out. Acceptable because the page guards a song list, not money, which is also why it must carry no PII beyond what the client entered themselves.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="num">10</span><h2>Acceptance criteria</h2></div>
+    <div class="body">
+      <ol>
+        <li>A client with a valid token can add, reorder, and remove songs, close the tab, return a week later, and see the list exactly as they left it.</li>
+        <li>Reordering within a section survives a reload in the same order.</li>
+        <li>Section order in the built book matches the client’s ordering, via the existing <code>orderForBook</code>.</li>
+        <li>No response to any <code>/plan/*</code> or <code>/api/plan/*</code> request contains a repertoire id, work title, or match status.</li>
+        <li>After submit, a save attempt returns 409 and changes nothing.</li>
+        <li>An operator reopen makes the list editable again.</li>
+        <li>A submitted list appears in the existing intake panel with matches already resolved where the library had them — the operator types nothing.</li>
+        <li>An expired, revoked, and never-existed token are indistinguishable: all 404.</li>
+        <li>A 120-song list saves; a 121-song list is rejected.</li>
+        <li>Books built from a client-submitted intake are byte-identical to books built from the same list entered by hand today.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="num">11</span><h2>Build order</h2></div>
+    <div class="body">
+      <ol>
+        <li>Migration 082 + token minting + the operator’s “create link” action.</li>
+        <li><code>/plan/[token]</code> read-only: renders an existing list, proving token resolution and the 404 behaviour.</li>
+        <li>Save endpoint with bounds, renumbering, and server-side matching. <strong>Verify criterion 4 before building any UI on top of it.</strong></li>
+        <li>The drag-and-drop UI, phone-first.</li>
+        <li>Submit, lock, reopen, operator notification.</li>
+        <li>Reminder cron.</li>
+      </ol>
+      <p>
+        Criterion 10 is the regression test for the whole feature: the same list, entered either
+        way, must produce the same books.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="num">12</span><h2>The questions, answered</h2></div>
+    <div class="body">
+      <p>Answered before the build. Each one is now a constant or a route, not a guess.</p>
+      <div class="q">
+        <span class="q-n">1</span>
+        <span class="q-t"><b>Song count cap — 120</b><span><code>PLANNER_MAX_SONGS</code>. A big wedding runs 60–80, so this is headroom rather than a target. The save endpoint rejects 121.</span></span>
+      </div>
+      <div class="q">
+        <span class="q-n">2</span>
+        <span class="q-t"><b>Due date — event date minus 30 days</b><span>Stamped at end of that day, so a client filing “on the due date” is never late by a timezone. A project with no date gets no deadline and no reminders — better silent than chased against a date we invented.</span></span>
+      </div>
+      <div class="q">
+        <span class="q-n">3</span>
+        <span class="q-t"><b>Contact details editable too</b><span>Contact name, phone, the walking order, the recessional cue (verbatim, as 069 requires) and a free “anything else” note. Nothing else on the intake is reachable from the client’s page.</span></span>
+      </div>
+      <div class="q">
+        <span class="q-n">4</span>
+        <span class="q-t"><b>“Request changes” emails you</b><span>A locked list stays locked — the client cannot unlock their own — but the button sends you their message and you reopen it in one click. <b>Assumption, flagged:</b> “all editable” was read as all editable <em>while unlocked</em>, with the lock still real after submit. Flipping that is a one-line change in the save route’s 409 gate.</span></span>
+      </div>
+      <div class="q">
+        <span class="q-n">5</span>
+        <span class="q-t"><b>No Spotify</b><span>Playlists are unreliable and popular songs have too many versions to seed rows from safely. <code>intakes.spotify_url</code> and the ranking helper are untouched — this feature neither reads nor writes them.</span></span>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Built and pushed. The one thing still worth arguing with is §4: the client gets a free-text box,
+    never a picker over the library — and no <code>/plan</code> response carries a repertoire id,
+    title or match status, with a test that reads the routes and asserts it.
+  </footer>
+
+</div>

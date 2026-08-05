@@ -24,6 +24,7 @@ import { MusicUploadedEmail } from './templates/music-uploaded'
 import { MusicReminderEmail } from './templates/music-reminder'
 import { PreGigNotificationEmail } from './templates/pre-gig-notification'
 import { StaffingAlertEmail } from './templates/staffing-alert'
+import { SongPlannerEmail, type SongPlannerVariant } from './templates/song-planner'
 import { render } from '@react-email/render'
 import { type EmailBranding } from './templates/email-layout'
 import { term, type TermDictionary, DEFAULT_TERMS } from '@/lib/verticals'
@@ -1177,5 +1178,48 @@ export async function sendStaffingAlertEmail(params: SendStaffingAlertParams) {
       terms,
     }),
     errorContext: 'staffing alert',
+  })
+}
+
+// Client Song Planner (082) — invitation and nudges, sent to the CLIENT.
+//
+// Replies must reach a human at the org, not the platform inbox: a couple who
+// hits reply is asking about their wedding. replyToOrgId does that.
+interface SendSongPlannerParams {
+  to: string
+  clientName: string
+  organizationName: string
+  organizationId: string
+  /** Tokenized planner page — the client has no account. */
+  plannerUrl: string
+  eventDate?: string | null
+  dueAt?: string | null
+  variant: SongPlannerVariant
+  branding?: EmailBranding
+}
+
+export async function sendSongPlannerEmail(params: SendSongPlannerParams) {
+  const subject =
+    params.variant === 'invite'
+      ? `Choose your music — ${params.organizationName}`
+      : params.variant === 'due'
+        ? `Your music selections are due today — ${params.organizationName}`
+        : `A nudge about your music selections — ${params.organizationName}`
+
+  return sendTransactional({
+    to: params.to,
+    subject,
+    react: SongPlannerEmail({
+      clientName: params.clientName,
+      organizationName: params.organizationName,
+      plannerUrl: params.plannerUrl,
+      eventDate: params.eventDate,
+      dueAt: params.dueAt,
+      variant: params.variant,
+      branding: params.branding,
+    }),
+    fromName: params.organizationName,
+    replyToOrgId: params.organizationId,
+    errorContext: 'song planner',
   })
 }
