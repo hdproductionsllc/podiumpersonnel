@@ -51,6 +51,51 @@ export interface IntakeRecord {
   updated_at: string
 }
 
+/**
+ * The client song planner's columns on `intakes` (082). Kept as a separate
+ * interface so the shape of an intake as the REVIEW screen knows it (above) is
+ * unchanged — the planner is additive, and code that never mints a link never
+ * sees any of this.
+ *
+ * There is no new `status` value: 082 carries the client's progress in
+ * timestamps so `status` keeps meaning exactly what it means today (the
+ * operator's book-readiness gate). See plannerState() for the derivation.
+ */
+export interface IntakePlannerFields {
+  /** 256-bit hex token for /plan/[token]. NULL = no live client page. */
+  client_token: string | null
+  client_token_expires_at: string | null
+  client_link_sent_at: string | null
+  /** When the client's list is due — defaults to the event date minus 30 days. */
+  client_due_at: string | null
+  client_opened_at: string | null
+  /** Non-NULL = locked to the client. The operator clears it to reopen. */
+  client_submitted_at: string | null
+  client_last_reminder_at: string | null
+}
+
+export type IntakeRecordWithPlanner = IntakeRecord & IntakePlannerFields
+
+/** The five states of the client's half, derived (never stored). */
+export type PlannerState =
+  | 'not-sent'
+  | 'sent'
+  | 'in-progress'
+  | 'submitted'
+  | 'expired'
+
+export function plannerState(intake: Partial<IntakePlannerFields>, now = new Date()): PlannerState {
+  if (!intake.client_token) return 'not-sent'
+  // Submitted wins over expired: a list that arrived is not un-arrived by the
+  // link going stale afterwards.
+  if (intake.client_submitted_at) return 'submitted'
+  if (intake.client_token_expires_at && new Date(intake.client_token_expires_at) < now) {
+    return 'expired'
+  }
+  if (intake.client_opened_at) return 'in-progress'
+  return 'sent'
+}
+
 // One proposed song per row. title_raw/artist_raw are what the parser read;
 // matched_repertoire_id/match_status are what it matched to (nullable — a song
 // can stay unmatched and still be reviewed/confirmed).

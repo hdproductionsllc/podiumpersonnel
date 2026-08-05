@@ -1,6 +1,8 @@
 # Client Song Planner — build spec
 
-**Status:** proposed, awaiting sign-off. Nothing built yet.
+**Status:** built (migration 082 + routes + UI + reminder cron). The open
+questions in §12 are answered and the answers are folded into the sections
+above; §12 records what was decided and why.
 
 Replaces the 17hats *questionnaire* with a tokenized page where the client builds
 their own song list — drag to order, save, come back, submit when due. Matching
@@ -28,8 +30,9 @@ already permits `'client-form'`; the table was designed with this in mind.
 | Public tokenized pages | `/gig/[token]`, `/w9/[token]`, `/confirm-details/[token]` |
 | Reminder scheduling | the existing cron jobs |
 
-**What is genuinely new:** a token on `intakes`, one public page, two public
-endpoints, and a reminder job.
+**What is genuinely new:** a token on `intakes`, one public page, three public
+endpoints (save, submit, request-changes), the operator's link controls, and a
+reminder job.
 
 ---
 
@@ -106,6 +109,7 @@ Additive only. No existing column changes, so every current flow is untouched.
 ALTER TABLE intakes
   ADD COLUMN IF NOT EXISTS client_token            TEXT,
   ADD COLUMN IF NOT EXISTS client_token_expires_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS client_link_sent_at     TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS client_due_at           TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS client_opened_at        TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS client_submitted_at     TIMESTAMPTZ,
@@ -115,8 +119,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_intakes_client_token
   ON intakes(client_token) WHERE client_token IS NOT NULL;
 ```
 
-Token generation mirrors 078: 256 bits from `gen_random_bytes`, minted only when
-a link is actually created, partial unique index so many NULLs are fine.
+Token generation mirrors 078: 256 bits from `randomBytes(32)` in the app, minted
+only when a link is actually created and re-minted on every resend (so a
+forwarded old email stops working), partial unique index so many NULLs are fine.
 
 ### Why `status` is left alone
 
@@ -168,7 +173,8 @@ intake inside a transaction.
 
 Server-side, per save:
 - Reject if `client_submitted_at` is set (locked) → 409
-- Bound the list: **max 100 songs**, max 200 chars per field
+- Bound the list: **max 120 songs** (owner's number), 200 chars per title /
+  artist / role, 500 per note
 - Renumber `position` densely per section — never trust client positions
 - Reject any section not in `BOOK_SECTION_ORDER`
 - Run `matchSong()` for each row and write `matched_repertoire_id` /
@@ -259,13 +265,13 @@ double-sends if the job runs twice.
 7. A submitted list appears in the existing intake panel with matches already
    resolved where the library had them — the operator types nothing.
 8. An expired, revoked, and never-existed token are indistinguishable: all 404.
-9. A 100-song list saves; a 101-song list is rejected.
+9. A 120-song list saves; a 121-song list is rejected.
 10. Books built from a client-submitted intake are byte-identical to books built
     from the same list entered by hand today.
 
 ---
 
-## 11. Build order
+## 11. Build order (all six shipped)
 
 1. Migration 082 + token minting + the operator's "create link" action.
 2. `/plan/[token]` read-only: renders an existing list, proves token resolution
@@ -281,13 +287,29 @@ either way, must produce the same books.
 
 ---
 
-## 12. Open questions for the operator
+## 12. The open questions, answered
 
-1. **Song count cap.** 100 is a guess. What is a realistically large wedding list?
-2. **Due date default.** Event date minus how long? 30 days?
-3. **Can the client edit contact fields**, or only songs?
-4. **After lock, self-service or call?** Does "request changes" email the
-   operator, or does the page just say to get in touch?
-5. **Spotify.** `intakes.spotify_url` already exists and there is a ranking
-   helper. Should the client be able to paste a playlist and have it seed rows?
-   Powerful, and the biggest single scope risk here — recommend deferring to v2.
+Answered by the owner before the build; each one is now a constant or a route,
+not a guess.
+
+1. **Song count cap: 120.** `PLANNER_MAX_SONGS`. A big wedding runs 60–80, so
+   this is headroom rather than a target, and the save endpoint rejects 121.
+2. **Due date: event date minus 30 days.** `PLANNER_DUE_DAYS_BEFORE_EVENT`,
+   stamped at end of that day so a client filing "on the due date" is never late
+   by a timezone. A project with no date gets no deadline and no reminders —
+   better silent than chased against a date we invented.
+3. **The client edits their own contact details too**, not only songs: contact
+   name, phone, the walking order, the recessional cue (stored verbatim, as 069
+   requires) and a free "anything else" note. Nothing else on the intake is
+   reachable from the client's page.
+4. **"Request changes" emails the operator.** A locked list stays locked — the
+   client cannot unlock their own — but the button on the locked page sends the
+   operator their message and the operator reopens it in one click.
+   *Assumption, flagged:* "all editable" was read as **all editable while the
+   list is unlocked**, with the lock still real after submit. That is the reading
+   Q4 implies (a change request has nothing to request if the page is already
+   editable). Flipping it is a one-line change in the save route's 409 gate.
+5. **No Spotify.** Owner's reasoning: playlists are unreliable and popular songs
+   have too many versions to seed rows from safely. `intakes.spotify_url` and the
+   existing ranking helper are untouched — this feature neither reads nor writes
+   them.

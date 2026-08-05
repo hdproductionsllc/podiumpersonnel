@@ -45,9 +45,10 @@ import {
   type RowMatchStatus,
 } from './intake-song-row'
 import { BookDownload } from './book-download'
+import { ClientPlannerCard } from './client-planner-card'
 import { SpotifyPlaylistBuilder } from './spotify-playlist-builder'
 import type { ProposedSong } from '@/app/api/intake/parse/route'
-import type { IntakeRecord, IntakeSong } from '@/lib/intake/types'
+import type { IntakeRecord, IntakeSong, IntakePlannerFields } from '@/lib/intake/types'
 import { canonicalEnsemble, type MatchCandidate } from '@/lib/intake/matcher'
 
 // --- section vocabulary (matches migration 069's CHECK set) ------------------
@@ -211,6 +212,9 @@ function isResolved(r: SongRow): boolean {
 
 interface IntakePanelProps {
   projectId: string
+  /** The project's client email, if any — decides whether the planner link can
+   *  be emailed from here or only copied. Optional. */
+  clientEmail?: string | null
   /** The project's ensemble label ("String Quartet", …) if known — used to rank
    *  matches toward the right arrangement and to badge part gaps. Optional. */
   ensembleType?: string | null
@@ -219,7 +223,7 @@ interface IntakePanelProps {
   instruments?: Array<{ id: string; name: string }>
 }
 
-export function IntakePanel({ projectId, ensembleType, instruments }: IntakePanelProps) {
+export function IntakePanel({ projectId, ensembleType, instruments, clientEmail }: IntakePanelProps) {
   // Fold the project's free-text ensemble label to the repertoire canon once.
   const gigEnsemble = canonicalEnsemble(ensembleType)
   const [open, setOpen] = useState(false)
@@ -248,6 +252,9 @@ export function IntakePanel({ projectId, ensembleType, instruments }: IntakePane
   // Owner's sign-off that the assembled books are ready to send (071). Any
   // save clears it server-side; mirrored here.
   const [booksApprovedAt, setBooksApprovedAt] = useState<string | null>(null)
+  // The client song planner's columns (082), read straight off the loaded
+  // intake. Null until the intake loads, or when none exists yet.
+  const [planner, setPlanner] = useState<Partial<IntakePlannerFields> | null>(null)
 
   async function handleOpen() {
     const next = !open
@@ -274,6 +281,7 @@ export function IntakePanel({ projectId, ensembleType, instruments }: IntakePane
       }
       const intake = data.intake as IntakeRecord | null
       const savedSongs = (data.songs ?? []) as SavedSong[]
+      setPlanner((intake as Partial<IntakePlannerFields> | null) ?? null)
       if (!intake) {
         setPhase('empty')
         setLoaded(true)
@@ -595,6 +603,18 @@ export function IntakePanel({ projectId, ensembleType, instruments }: IntakePane
               <p className="text-sm text-destructive">{loadError}</p>
               <Button size="sm" variant="outline" onClick={() => load()}>Retry</Button>
             </div>
+          )}
+
+          {/* The client's own way in. Shown in every phase: before a
+              questionnaire exists (it replaces pasting one), while a draft is
+              being reviewed, and after confirm (so a link can be reopened). */}
+          {!loading && !unavailable && !loadError && (
+            <ClientPlannerCard
+              projectId={projectId}
+              planner={planner}
+              hasClientEmail={!!clientEmail}
+              onChanged={() => void load()}
+            />
           )}
 
           {/* EMPTY */}
