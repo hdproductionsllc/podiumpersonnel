@@ -61,6 +61,10 @@ bravura-master/
 # local database backups (large, contain PII)
 scripts/backups/
 
+# the old Python gig compiler — ~1 GB of PDFs and its own git repo, kept on the
+# laptop only. Podium replaced it; nothing here builds or deploys from it.
+Music Compiler Local System/
+
 # repertoire import indexer output (regenerated from the local music library)
 scripts/repertoire-out/
 
