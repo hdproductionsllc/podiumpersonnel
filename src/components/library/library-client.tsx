@@ -3,6 +3,8 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { AddWorkDialog, type CreatedWork } from '@/components/intake/add-work-dialog'
+import { guessPartFromFilename, PART_OPTIONS } from '@/lib/intake/part-guess'
 
 interface LibraryPart {
   id: string
@@ -78,6 +80,36 @@ async function sha256Hex(file: File): Promise<string> {
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
+}
+
+/**
+ * Get one PDF into R2 and hand back the sha256 the server will address it by.
+ *
+ * Hash first: the key is content-addressed, so the hash IS the address — which
+ * also means identical bytes already on the shelf skip the upload entirely. The
+ * bytes go browser → R2 direct; they never cross a serverless route.
+ */
+async function uploadPdf(file: File): Promise<string> {
+  const sha256 = await sha256Hex(file)
+
+  const urlRes = await fetch('/api/repertoire/upload-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sha256, bytes: file.size, filename: file.name }),
+  })
+  const urlData = await urlRes.json().catch(() => ({}))
+  if (!urlRes.ok) throw new Error(urlData.error || `Could not start the upload for "${file.name}".`)
+
+  if (urlData.uploadUrl) {
+    const put = await fetch(urlData.uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/pdf' },
+      body: file,
+    })
+    if (!put.ok) throw new Error(`The upload of "${file.name}" failed. Please try again.`)
+  }
+
+  return sha256
 }
 
 
@@ -225,6 +257,199 @@ function PartRow({
   )
 }
 
+/** A file waiting to be attached, with the part role the admin has confirmed. */
+interface PendingPart {
+  uid: string
+  file: File
+  part: string
+}
+
+let uidSeq = 0
+const nextUid = () => `p-${++uidSeq}`
+
+/**
+ * Add a part to a work that is already on the shelf — the score that turns up
+ * after the parts did, the cello line that was missing all along.
+ *
+ * Only roles the work does NOT already fill are offered. That is not just
+ * tidiness: (repertoire_id, part, substitute, played_on) is unique, so a second
+ * Violin 1 is a row the database would refuse. Swapping a file it already has is
+ * Replace's job, one row up, and the empty state says so.
+ */
+function AddPartsForm({
+  work,
+  busy,
+  onAdd,
+}: {
+  work: LibraryWork
+  busy: boolean
+  onAdd: (rows: Array<{ file: File; part: string }>) => Promise<boolean>
+}) {
+  const [open, setOpen] = useState(false)
+  const [rows, setRows] = useState<PendingPart[]>([])
+  const [problem, setProblem] = useState<string | null>(null)
+
+  const taken = new Set(
+    work.parts.filter((p) => !p.substitute && !p.played_on).map((p) => p.part)
+  )
+  // Roles already spoken for by a file in this batch are gone too — the work
+  // holds one file per part, whether or not it is saved yet.
+  const claimed = new Set(rows.map((r) => r.part))
+  const freeRoles = PART_OPTIONS.filter((o) => !taken.has(o.value))
+
+  function reset() {
+    setRows([])
+    setProblem(null)
+  }
+
+  function addFiles(list: FileList | null) {
+    if (!list) return
+    const next: PendingPart[] = []
+    const spoken = new Set([...taken, ...claimed])
+    let rejected: string | null = null
+
+    for (const file of Array.from(list)) {
+      if (!/\.pdf$/i.test(file.name)) {
+        rejected = `"${file.name}" is not a PDF, so it was skipped.`
+        continue
+      }
+      const guess = guessPartFromFilename(file.name)
+      // The guess is a starting point; if that role is filled, land on the first
+      // one that isn't rather than pre-selecting something we'd have to refuse.
+      const part = spoken.has(guess)
+        ? PART_OPTIONS.find((o) => !spoken.has(o.value))?.value
+        : guess
+      if (!part) {
+        rejected = 'Every part role on this work is already filled.'
+        continue
+      }
+      spoken.add(part)
+      next.push({ uid: nextUid(), file, part })
+    }
+
+    setProblem(rejected)
+    setRows((prev) => [...prev, ...next])
+  }
+
+  async function submit() {
+    setProblem(null)
+    const ok = await onAdd(rows.map((r) => ({ file: r.file, part: r.part })))
+    if (ok) {
+      reset()
+      setOpen(false)
+    }
+  }
+
+  if (freeRoles.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground pt-1">
+        Every part role is filled. To swap a file, use Replace on that part.
+      </p>
+    )
+  }
+
+  if (!open) {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-7 text-xs mt-1"
+        onClick={() => setOpen(true)}
+      >
+        + Add part
+      </Button>
+    )
+  }
+
+  return (
+    <div className="mt-2 rounded-md border bg-background p-2.5 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="cursor-pointer">
+          <span className="inline-flex h-7 items-center rounded-md border px-2 text-xs hover:bg-accent">
+            Choose PDFs…
+          </span>
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            multiple
+            className="hidden"
+            disabled={busy}
+            onChange={(e) => {
+              addFiles(e.target.files)
+              e.target.value = ''
+            }}
+          />
+        </label>
+        <span className="text-xs text-muted-foreground">
+          Missing: {freeRoles.map((o) => o.label).join(', ')}
+        </span>
+      </div>
+
+      {problem && <p className="text-xs text-amber-700 dark:text-amber-400">{problem}</p>}
+
+      {rows.length > 0 && (
+        <ul className="divide-y rounded-md border">
+          {rows.map((row) => (
+            <li key={row.uid} className="flex flex-wrap items-center gap-2 px-2 py-1.5">
+              <span className="w-full sm:flex-1 sm:w-auto min-w-0 truncate text-xs" title={row.file.name}>
+                {row.file.name}
+                {formatBytes(row.file.size) && ` · ${formatBytes(row.file.size)}`}
+              </span>
+              <select
+                value={row.part}
+                aria-label={`Part role for ${row.file.name}`}
+                disabled={busy}
+                className="h-7 rounded-md border border-input bg-background px-1.5 text-xs"
+                onChange={(e) =>
+                  setRows((prev) =>
+                    prev.map((r) => (r.uid === row.uid ? { ...r, part: e.target.value } : r))
+                  )
+                }
+              >
+                {freeRoles
+                  // Another file in this batch already carries that role.
+                  .filter((o) => o.value === row.part || !claimed.has(o.value))
+                  .map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+              </select>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                disabled={busy}
+                onClick={() => setRows((prev) => prev.filter((r) => r.uid !== row.uid))}
+              >
+                Remove
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="flex gap-2">
+        <Button size="sm" className="h-7 text-xs" disabled={busy || rows.length === 0} onClick={submit}>
+          {busy ? 'Uploading…' : `Add ${rows.length} part${rows.length === 1 ? '' : 's'}`}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-xs"
+          disabled={busy}
+          onClick={() => {
+            reset()
+            setOpen(false)
+          }}
+        >
+          Cancel
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export function LibraryClient({ totalWorks }: { totalWorks: number }) {
   const [query, setQuery] = useState('')
   const [ensemble, setEnsemble] = useState('')
@@ -241,6 +466,10 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  /** The work currently receiving new part files (separate from busyId, which
+   *  tracks per-part work — a work can be uploading while nothing else is). */
+  const [addingId, setAddingId] = useState<string | null>(null)
+  const [addWorkOpen, setAddWorkOpen] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [versions, setVersions] = useState<Record<string, PartVersion[]>>({})
@@ -411,27 +640,7 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
     setError(null)
     setNotice(null)
     try {
-      // Hash first: the key is content-addressed, so the hash IS the address.
-      const sha256 = await sha256Hex(file)
-
-      const urlRes = await fetch('/api/repertoire/upload-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sha256, bytes: file.size, filename: file.name }),
-      })
-      const urlData = await urlRes.json().catch(() => ({}))
-      if (!urlRes.ok) throw new Error(urlData.error || 'Could not start the upload.')
-
-      // Skipped when these exact bytes are already stored — content addressing
-      // makes a re-upload of identical content unnecessary.
-      if (urlData.uploadUrl) {
-        const put = await fetch(urlData.uploadUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/pdf' },
-          body: file,
-        })
-        if (!put.ok) throw new Error('The upload failed. Please try again.')
-      }
+      const sha256 = await uploadPdf(file)
 
       const res = await fetch(`/api/library/parts/${p.id}`, {
         method: 'PUT',
@@ -471,6 +680,62 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
     }
   }
 
+  /**
+   * Attach new part files to a work that is already on the shelf. Returns
+   * whether it succeeded so the form can clear itself only when it did.
+   */
+  async function addParts(
+    work: LibraryWork,
+    rows: Array<{ file: File; part: string }>
+  ): Promise<boolean> {
+    if (rows.length === 0) return false
+
+    setAddingId(work.id)
+    setError(null)
+    setNotice(null)
+    try {
+      const uploaded = []
+      for (const row of rows) {
+        const sha256 = await uploadPdf(row.file)
+        uploaded.push({
+          part: row.part,
+          sha256,
+          bytes: row.file.size,
+          originalFilename: row.file.name,
+        })
+      }
+
+      const res = await fetch(`/api/library/works/${work.id}/parts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parts: uploaded }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not add those parts.')
+
+      const added: LibraryPart[] = data.parts ?? []
+      setWorks((prev) =>
+        prev.map((w) =>
+          w.id === work.id
+            ? { ...w, parts: [...w.parts, ...added].sort((a, b) => a.part.localeCompare(b.part)) }
+            : w
+        )
+      )
+      setNotice(
+        `Added ${added.map((p) => PART_LABELS[p.part] ?? p.part).join(', ')} to "${work.title}".` +
+          (work.is_active
+            ? ''
+            : ' This work is still archived — restore it if you want it matching questionnaires again.')
+      )
+      return true
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.')
+      return false
+    } finally {
+      setAddingId(null)
+    }
+  }
+
   const lastPage = Math.max(0, Math.ceil(total / pageSize) - 1)
 
   return (
@@ -482,10 +747,40 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
             {totalWorks.toLocaleString()} works on the shelf.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setCompact((c) => !c)}>
-          {compact ? 'Detailed view' : 'Compact view'}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setCompact((c) => !c)}>
+            {compact ? 'Detailed view' : 'Compact view'}
+          </Button>
+          <Button size="sm" onClick={() => setAddWorkOpen(true)}>
+            Add work
+          </Button>
+        </div>
       </div>
+
+      {/* The same dialog the intake review screen uses, with nothing pre-filled:
+          one implementation of "upload part PDFs and make a work out of them",
+          including its server-side hash verification. If the title, artist and
+          arrangement match a work already on the shelf, it extends that work
+          rather than creating a twin. */}
+      {/* Mounted only while open so every visit starts blank — it seeds its
+          fields from props once, and a stale title left over from the last work
+          is how you accidentally add parts to the wrong one. */}
+      {addWorkOpen && (
+      <AddWorkDialog
+        open
+        onOpenChange={setAddWorkOpen}
+        defaultTitle=""
+        defaultArtist=""
+        onCreated={(work: CreatedWork) => {
+          setNotice(`"${work.title}" is in the library.`)
+          // Jump the list to what was just added rather than leaving it on
+          // whatever page the admin happened to be browsing.
+          setQuery(work.title)
+          setPage(0)
+          load()
+        }}
+      />
+      )}
 
       <div className="flex flex-wrap gap-2">
         <Input
@@ -649,6 +944,11 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
                               ))}
                             </div>
                           )}
+                          <AddPartsForm
+                            work={work}
+                            busy={addingId === work.id}
+                            onAdd={(rows) => addParts(work, rows)}
+                          />
                         </td>
                       </tr>
                     )}
@@ -707,6 +1007,11 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
                       ))}
                     </div>
                   )}
+                  <AddPartsForm
+                    work={work}
+                    busy={addingId === work.id}
+                    onAdd={(rows) => addParts(work, rows)}
+                  />
                 </div>
               ))}
             </div>

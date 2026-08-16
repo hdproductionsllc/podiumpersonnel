@@ -40,10 +40,10 @@
  * server-side from org + sha; the client never supplies a path.
  */
 
-import { createHash } from 'crypto'
 import { requireIntakeEnabled, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getR2Client, isR2Configured } from '@/lib/storage/r2'
+import { verifyUploadedParts } from '@/lib/repertoire/uploaded-parts'
 import { normTitle } from '@/lib/intake/normalize'
 import { PART_KEYS } from '@/lib/intake/part-guess'
 
@@ -114,32 +114,11 @@ export async function POST(request: Request) {
       }
     })
 
-    const r2 = getR2Client()
-
     // FIDELITY GATE: every object must exist, match its claimed size, and hash
-    // back to the sha in its own key. Downloaded and hashed server-side.
-    for (const p of parts) {
-      const head = await r2.headObject(p.storagePath)
-      if (!head) {
-        return apiError(`"${p.originalFilename}" was not found in storage — upload it first.`, 400)
-      }
-      if (head.size !== p.bytes) {
-        return apiError(
-          `"${p.originalFilename}": stored size (${head.size}) doesn't match the upload (${p.bytes}).`,
-          400
-        )
-      }
-      const stored = await r2.getRange(p.storagePath, head.size)
-      const actual = createHash('sha256').update(stored).digest('hex')
-      if (actual !== p.sha256) {
-        // The object at this key is corrupt for everyone — remove it.
-        await r2.deleteObject(p.storagePath)
-        return apiError(
-          `"${p.originalFilename}" failed integrity verification and was removed. Please upload it again.`,
-          400
-        )
-      }
-    }
+    // back to the sha in its own key. Downloaded and hashed server-side. Shared
+    // with the library page's add-part route so both enforce one implementation.
+    const problem = await verifyUploadedParts(getR2Client(), parts)
+    if (problem) return apiError(problem, 400)
 
     const service = createServiceClient()
 

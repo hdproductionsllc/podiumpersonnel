@@ -61,6 +61,35 @@ When you're in a project and a requested song isn't in the library, use the **"A
 
 ---
 
+## Option C — a missing part on a song that's already there (Music Library page)
+
+**Dashboard → Music Library.** This is the one to use when a work is on the shelf
+but incomplete — the classic case being a **score that turns up after the parts**.
+
+- **Add one part to an existing work:** find the song, click **Manage** (compact
+  view) or switch to Detailed view, then **+ Add part** under its part list.
+  Choose the PDFs, confirm the part role in the dropdown, **Add**.
+  The dropdown only offers roles that work is missing, and the line above it
+  spells out which those are — so you can't create a second Violin 1.
+- **Add a whole new work:** the **Add work** button at the top right of the page.
+  Same dialog as Option B: title, artist, arrangement, and the part PDFs. If a
+  work with that exact title/artist/arrangement already exists, it extends that
+  one instead of creating a twin.
+
+Notes:
+
+- To **swap** a file the work already has, that's **Replace** on the part row, not
+  Add — Add is append-only and will refuse a role that's already filled (it tells
+  you to use Replace). Replace keeps the old file under **History**.
+- Adding a part to an **archived** work works, but the work stays archived and so
+  still matches nothing. Restore it if you want it back in play — the success
+  message says so.
+- Every file is re-downloaded and re-hashed on the server before it becomes a
+  library row, the same check Options A and B run. A file that doesn't match what
+  the browser sent is rejected, not saved.
+
+---
+
 ## Under the hood
 
 `update-library.js` is a thin wrapper over three idempotent scripts:
