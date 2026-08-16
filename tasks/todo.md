@@ -322,3 +322,56 @@ Undo: scripts/repertoire-out/romeo-vln2-undo.json
 - 3 SCORE-ONLY: Erev Shel Shoshanim — every player reads the score (David's call)
 - 4 ROMEO: complete, vln2 = the file David confirmed
 - No old name stopped matching. Catalog now **723 songs**.
+
+---
+
+# Music library: add parts / add works from the library page (2026-08-16)
+
+## The gap
+
+The library page could Preview, Download, **Replace**, History, Remove and Archive —
+but there was no way to ADD. If a work was missing a part (e.g. "Iris" has
+vln1/vln2/vla/vc but no Score), the only door into the library was the intake
+review screen's "Add to library" dialog, which needs an intake row to hang off.
+So a score that arrived on its own had nowhere to go.
+
+`POST /api/repertoire/add-work` already knew how to extend an existing work, but it
+identifies the work by (title, artist, ensemble) because an intake row has no id
+yet — from the library page, a typo in the title would silently create a SECOND work.
+
+## Done
+
+- [x] Extracted the upload fidelity gate (HEAD -> size check -> server-side re-hash ->
+      delete corrupt object) into `src/lib/repertoire/uploaded-parts.ts`, so add-work
+      and the new route clear the same bar from one implementation.
+- [x] New route `POST /api/library/works/[workId]/parts` — attach uploaded PDFs to a
+      work BY ID. Org-scoped through the resolved library org, append-only, refuses a
+      filled role with a 409 naming Replace.
+- [x] Library page: **+ Add part** under each work's part list (compact *and* detailed
+      views — Replace once shipped detailed-only while the page defaults to compact,
+      which hid it completely).
+- [x] Library page: **Add work** button, reusing the intake AddWorkDialog unchanged.
+- [x] Runbook: `docs/runbooks/update-music-library.md` Option C.
+
+## Decisions
+
+- Only roles the work is MISSING are offered. Not tidiness: (repertoire_id, part,
+  substitute, coalesce(played_on,'')) is unique, so a second Violin 1 is a row the DB
+  refuses. A substitute ("vla covering vc") is keyed separately and does not block the
+  real viola role.
+- Add never overwrites. Swapping a file is Replace's job, which keeps the old one under
+  History. A silent skip is what the archived-work book bug felt like from outside.
+- Adding to an ARCHIVED work is allowed but says the work is still archived — it still
+  matches nothing until restored.
+- No migration. This uses the 068 tables as they stand.
+
+## Verification log
+
+- 22 new tests in `src/lib/__tests__/library-add-parts.test.ts`: fidelity gate driven
+  against a fake R2 (missing object, size mismatch, hash mismatch -> object deleted,
+  good file passes), route gates, collision rules, both views wired.
+- Full suite: 666 passed. 1 failure, `plan-limit-enforcement.test.ts`, PRE-EXISTING —
+  confirmed failing with these changes stashed. Unrelated (it parses migration 080 SQL).
+- `tsc --noEmit` clean; `npm run build` compiles and registers
+  `/api/library/works/[workId]/parts`.
+- NOT yet clicked through in a browser against real data.
