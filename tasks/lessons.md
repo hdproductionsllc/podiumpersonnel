@@ -105,3 +105,36 @@ David confirmed "Romeo's bare vln is the violin 2 part". Relabelling only that f
 would have produced TWO violin 2 parts and NO violin 1 — because the real vln1 file
 had been bumped to `other` by the collision. A confirmation about one file is not a
 confirmation about the work; re-read every part row before writing.
+
+## The project's own context is the answer — don't ask the human what the record knows
+David, on the Book Builder mismatches: "we should be matching whatever the project is —
+your builder should grab that context, in this case it's quartet."
+
+The plumbing was already right (`projects.ensemble_type` = "String Quartet" →
+`canonicalEnsemble` → `'quartet'` → `matchSong`). The failure was that the matcher
+treated the ensemble as a mere tiebreaker, so an exact title hit on a SOLO cello chart
+outranked the quartet arrangement sitting in the library under a slightly different
+title. The reviewer got a confident green match plus "missing vln1, vln2, vla".
+
+Two patterns to carry forward:
+1. **Before proposing new plumbing, trace whether the context already arrives.** It
+   usually does. The bug is nearly always in how a downstream rule *weighs* it.
+2. **Not every mismatch is equally bad — model the asymmetry.** A quartet chart on a
+   trio gig is fine (drop a part). A solo chart on a quartet gig leaves three players
+   holding nothing. My first fix escalated on any ensemble mismatch and broke an
+   existing test that correctly asserted "ensemble is only a tiebreaker". The test was
+   right; the rule needed to be one-directional (arrangement SMALLER than the gig only).
+   When a fix breaks an old test, read what the test was defending before rewriting it.
+
+## Parsers built from one source format will silently mangle a hand-typed one
+The intake parser was a faithful port of the 17hats questionnaire machine, where every
+field carries an explicit label. Fed a hand-typed list it produced phantom songs from
+section headers ("CEREMONY"), phantom songs from people ("Bridal party 5 pairs"), and —
+worst — the 17hats "Officiant (Name)" handler ate the FOLLOWING line as a name, so
+"Parents, 2 pairs" vanished with no song, no walking-order step and no warning. That
+broke the parser's own documented never-drop-a-line contract.
+
+When adding a looser input mode, re-run the traced parse (`parseQuestionnaireTraced`
+exposes a per-line disposition) and assert every line is accounted for — a `meta`
+disposition looks just as clean as a correct one, so line-accounting alone is not
+enough; check WHERE the content landed.
