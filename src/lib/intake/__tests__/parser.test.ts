@@ -468,3 +468,116 @@ describe('processional walking order — inline example variant', () => {
     expect(traced.processionalOrder).toEqual(['Grandparents', 'Officiant', 'Bride'])
   })
 })
+
+// ---------------------------------------------------------------------------
+// Hand-typed song lists (the Megan Graves regression, 2026-08-23)
+//
+// The parser was built against 17hats output, where every field carries an
+// explicit label. A hand-typed list has bare ALL-CAPS headers and bare
+// participant lines, and four defects fell out of that — one of which silently
+// LOST a line, breaking the never-drop-a-line contract.
+// ---------------------------------------------------------------------------
+
+const MEGAN_RAW = `August 28th - Megan Graves
+
+Prelude
+A Thousand Years
+Married Life
+Yellow
+CEREMONY
+Processional: Canon in D
+Officiant
+Parents, 2 pairs
+Bridal party 5 pairs
+Bride with FoB
+Bride's Entrance: Chasing Cars
+Recessional: Wouldn't It be nice
+
+Postlude:
+Viva la Vida
+
+COCKTAIL HOUR
+No Scrubs
+Chapel of Love`
+
+describe('parseQuestionnaire — hand-typed list (Megan Graves)', () => {
+  const traced = parseQuestionnaireTraced(MEGAN_RAW)
+
+  it('accounts for every line and raises no warnings', () => {
+    assertEveryLineAccountedFor(MEGAN_RAW, traced)
+    expect(traced.warnings).toEqual([])
+  })
+
+  it('reads "August 28th - Megan Graves" as the event header, not an error', () => {
+    expect(traced.contactName).toBe('Megan Graves')
+    expect(traced.lineDispositions[0]).toBe('meta')
+  })
+
+  it('treats a bare "CEREMONY" line as a section header, not a song', () => {
+    expect(traced.songs.map((s) => s.titleRaw)).not.toContain('Ceremony')
+    expect(traced.songs.filter((s) => s.section === 'prelude')).toHaveLength(3)
+  })
+
+  it('routes walking-order participants to processionalOrder, not to songs', () => {
+    expect(traced.processionalOrder).toEqual([
+      'Officiant',
+      'Parents, 2 pairs',
+      'Bridal party 5 pairs',
+      'Bride with FoB',
+    ])
+    const titles = traced.songs.map((s) => s.titleRaw)
+    expect(titles).not.toContain('Bridal Party 5 Pairs')
+    expect(titles).not.toContain('Bride With Fob')
+  })
+
+  it('never lets a bare "Officiant" swallow the line after it', () => {
+    // The bug: the 17hats "Officiant (Name)" handler consumed "Parents, 2 pairs"
+    // as the officiant's name, and the line vanished with no warning.
+    expect(traced.processionalOrder).toContain('Parents, 2 pairs')
+  })
+
+  it('still places the ceremony songs under their roles', () => {
+    const ceremony = traced.songs.filter((s) => s.section === 'ceremony')
+    expect(ceremony.map((s) => [s.titleRaw, s.role])).toEqual([
+      ['Canon In D', 'Processional'],
+      ['Chasing Cars', 'Bride Entrance'],
+    ])
+    expect(traced.songs.filter((s) => s.section === 'recessional')[0].titleRaw).toBe(
+      "Wouldn't It Be Nice"
+    )
+    expect(traced.songs.filter((s) => s.section === 'cocktail_hour')).toHaveLength(2)
+  })
+})
+
+describe('parser — walking-order recognition is tight', () => {
+  /** Run a one-line ceremony body and report what the line became. */
+  const underCeremony = (line: string) =>
+    parseQuestionnaireTraced(['CEREMONY', line].join('\n'))
+
+  it('does not mistake song titles that share wedding words for participants', () => {
+    for (const title of ['Ring of Fire', 'The Man', 'My Girl', 'Marry You', 'Chapel of Love']) {
+      const t = underCeremony(title)
+      expect(t.processionalOrder, `"${title}" was read as a walking-order step`).toEqual([])
+      expect(t.songs).toHaveLength(1)
+    }
+  })
+
+  it('requires a strong anchor — a weak role word alone is still a song', () => {
+    // "Bride" and "Flower" are ordinary song words; only an anchor promotes a line.
+    expect(underCeremony('Flowers').processionalOrder).toEqual([])
+    expect(underCeremony('Bridesmaids').processionalOrder).toEqual(['Bridesmaids'])
+  })
+
+  it('only applies inside the ceremony section', () => {
+    const t = parseQuestionnaireTraced(['Cocktail Hour', 'Officiant'].join('\n'))
+    expect(t.processionalOrder).toEqual([])
+  })
+
+  it('still skips 17hats "Ceremony Information" boilerplate rather than sectioning on it', () => {
+    const t = parseQuestionnaireTraced(
+      ['Ceremony Information', 'Prelude Requests', 'Yellow by Coldplay'].join('\n')
+    )
+    expect(t.lineDispositions[0]).toBe('skip')
+    expect(t.songs.map((s) => s.section)).toEqual(['prelude'])
+  })
+})

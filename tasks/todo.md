@@ -375,3 +375,96 @@ yet — from the library page, a typo in the title would silently create a SECON
 - `tsc --noEmit` clean; `npm run build` compiles and registers
   `/api/library/works/[workId]/parts`.
 - NOT yet clicked through in a browser against real data.
+
+
+---
+
+# Book Builder — loose song-list parsing (Megan Graves 8/28)
+
+## Problem
+The parser was built against 17hats questionnaire output, where every field has an
+explicit label ("Processional Walking Order", "Prelude Requests", "Officiant (Name)").
+A hand-typed list uses bare ALL-CAPS headers and bare participant lines. Five defects
+result, one of which SILENTLY LOSES DATA.
+
+## Confirmed defects (traced, line by line)
+
+### Parser
+- [x] P1. **"CEREMONY" is not a section header.** SECTION_PATTERNS has no bare
+      `\bceremony\b` rule, so the line falls through and becomes a phantom song
+      "Ceremony" at Prelude #10. Must not hijack 17hats' "Ceremony Information"
+      boilerplate -> gate section detection on `!hasSkipMarker()`.
+- [x] P2. **"Officiant" swallows the NEXT line.** The bare-officiant branch treats the
+      following line as the officiant's name, so "Parents, 2 pairs" was consumed as a
+      name and DISAPPEARED - no song, no walking-order step, no warning. This breaks
+      the parser's own foolproof contract ("never drop a line silently").
+- [x] P3. **Walking-order participants become songs.** "Bridal party 5 pairs" and
+      "Bride with FoB" were added as ceremony songs with role Processional. They must
+      go to `processionalOrder` (the UI's "Processional walking order" field, which
+      currently reads "None specified").
+- [x] P4. **Event header line warns.** "August 28th - Megan Graves" -> red warning.
+      A `<date> - <name>` preamble should be consumed and the name offered as the
+      contact name (visible, editable field) rather than raised as an error.
+
+### Matcher
+- [x] M1. **"Everlasting Love" -> confident green match on the WRONG song.**
+      Library has no "Everlasting Love"; it has "This Will Be (An Everlasting Love)".
+      The keyword tier's subset test made the query a token-subset of a longer title
+      and returned status='matched'. Fix: a keyword hit that lands ENTIRELY inside the
+      library title's parenthetical is a subtitle-only match -> demote to 'ambiguous'.
+      (Must NOT break "Canon in D" -> "Pachelbel - Canon in D - Score", which is right.)
+- [x] M2. **"Married Life" -> matched the SOLO cello chart for a string quartet.**
+      Library rows: "Married Life from UP" (quartet, has vln1/vln2/vla/vc/score),
+      "Married Life" (solo, vc only). Exact title beats the correct arrangement, so
+      the book builder would hand a quartet a cello-only chart. Fix: when the exact
+      tier yields NO candidate in the gig's ensemble, keep searching the looser tiers
+      and merge, so the real quartet arrangement is offered.
+
+## Not bugs (leaving alone)
+- "How Sweet It Is", "Teenage Dream", "Dancing On My Own", "Never Let You Go" are
+  genuinely absent from the library. The flags are correct - this is repertoire to buy
+  (see tasks/missing-repertoire.md).
+- "What A Wonderful World" amber (quartet/WeissThiele vs duo/Louis Armstrong) is a
+  real choice - same title, different credited artist. Auto-picking on ensemble alone
+  would silently guess between same-titled different songs. Leave as one-click amber.
+- "Recessional" as its own section (not a ceremony role) is the existing data model.
+
+## Verification
+- [x] V1. New regression test: this exact Megan Graves text -> 0 warnings,
+      correct sections, walking order populated, no phantom songs.
+- [x] V2. New matcher tests for M1 and M2 (and the "Canon in D" non-regression).
+- [x] V3. Full suite green (baseline: 126 passing).
+- [x] V4. Re-run the real text end to end and eyeball the review screen.
+
+## Outcome (verified 2026-08-23, local — NOT yet deployed)
+
+Re-ran the real Megan Graves text against the live PSQ library (908 works, 252
+aliases) through the same functions the API route uses. Exactly four rows changed
+and nothing else:
+
+  - OK   Married Life -> Married Life [solo] (missing vln1, vln2, vla)
+  + PICK Married Life -> Married Life from UP [quartet]
+  - MISS Ceremony                  (phantom song, gone)
+  - MISS Bridal Party 5 Pairs      (phantom song, now a walking-order step)
+  - MISS Bride With Fob            (phantom song, now a walking-order step)
+  - OK   Everlasting Love -> This Will Be (An Everlasting Love)
+  + PICK Everlasting Love -> This Will Be (An Everlasting Love)  + subtitle warning
+
+Before: 8 of 42 unmatched, 1 red parse warning, walking order empty.
+After:  30 matched / 7 need a pick / 2 genuinely missing, 0 warnings,
+        walking order = Officiant, Parents 2 pairs, Bridal party 5 pairs, Bride with FoB.
+
+Tests: 145 pass in src/lib/intake (was 126 - added 19). Full suite 685/686; the
+one failure (plan-limit-enforcement) is PRE-EXISTING and unrelated - it parses a
+plan-limits SQL migration and fails identically with these changes stashed.
+tsc --noEmit clean, eslint clean.
+
+## Notes for v2
+- "Mirrors" is filed as `trio` in the library but actually carries all four parts.
+  The label is wrong, not the match - worth a data sweep for other mis-foldered works.
+- The escalation only searches the keyword tier. A quartet arrangement titled with
+  NO shared keyword (a translated or renamed title) still won't be found; that needs
+  a title alias.
+- "What A Wonderful World" stays a one-click pick on purpose: same title, different
+  credited artist (WeissThiele composer credit vs Louis Armstrong performer credit).
+  Auto-picking on ensemble alone would silently guess between same-titled songs.

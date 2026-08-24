@@ -123,6 +123,13 @@ const SECTION_PATTERNS: SectionPattern[] = [
   { re: /\bcocktail\b/i, section: 'cocktail_hour', role: null },
   { re: /\bdinner\b/i, section: 'dinner', role: null },
   { re: /\breception\b/i, section: 'reception', role: null },
+  // Bare "CEREMONY" header. 17hats always qualifies the word ("Ceremony - Other",
+  // "Ceremony Information"), so this only ever fires on a hand-typed list. It sits
+  // LAST so every qualified ceremony pattern — and every other bare section word —
+  // still wins: "Ceremony / Processional" is a processional, not a bare ceremony.
+  // Boilerplate like "Ceremony Information" is held off by the hasSkipMarker guard
+  // on the section loop, not by pattern order.
+  { re: /\bceremony\b/i, section: 'ceremony', role: null },
 ]
 
 // Lines to skip (instructions, not song data). Lowercase substrings.
@@ -144,6 +151,91 @@ const INSTRUCTION_MARKERS = ['select', 'please', 'example', 'optional']
 
 // Match a Spotify link anywhere in a line.
 const SPOTIFY_RE = /https?:\/\/open\.spotify\.com\/\S+/i
+
+// --- unlabelled processional walking order ----------------------------------
+// A 17hats questionnaire labels the walking order ("Processional Walking Order")
+// and the parser collects everything under that label. A hand-typed list has no
+// label — the participants are just listed under the ceremony header:
+//
+//   CEREMONY
+//   Processional: Canon in D
+//   Officiant            <- people, not songs
+//   Parents, 2 pairs
+//   Bridal party 5 pairs
+//   Bride with FoB
+//
+// Recognising them has to be TIGHT: a real song title must never be mistaken for
+// a participant. So a line qualifies only when BOTH hold:
+//   (a) it contains a STRONG anchor — a wedding-party word that is essentially
+//       never a song title on its own ("officiant", "bridesmaids", "FoB"), and
+//   (b) every remaining word is a weak role word, a connector, or a count.
+// "Ring of Fire" and "The Man" carry no anchor; "Bride with FoB" does. The check
+// is further gated to the ceremony section, the only place walking order appears.
+
+/** Fold a line for walking-order testing: drop periods so "F.o.B." → "fob",
+ *  then reduce every other separator to a single space. */
+function foldForWalkingOrder(line: string): string {
+  return line.toLowerCase().replace(/\./g, '').replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+const WALKING_ORDER_ANCHORS: RegExp[] = [
+  /\bofficiants?\b/g,
+  /\bcelebrants?\b/g,
+  /\bgroomsm[ae]n\b/g,
+  /\bbridesmaids?\b/g,
+  /\bgrandparents?\b/g,
+  /\bparents\b/g,
+  /\bushers?\b/g,
+  /\battendants?\b/g,
+  // Father/Mother of the Bride/Groom, as initials — the common shorthand.
+  /\b(?:fob|fog|mob|mog)\b/g,
+  /\b(?:bridal|wedding)\s+party\b/g,
+  /\bflower\s+girls?\b/g,
+  /\bring\s+bearers?\b/g,
+  /\bbest\s+m[ae]n\b/g,
+  /\b(?:maid|matron)s?\s+of\s+honou?r\b/g,
+  /\b(?:mother|father|mom|dad)s?\s+of\s+the\s+(?:bride|groom)\b/g,
+]
+
+// Role words that are allowed ALONGSIDE an anchor but can never trigger a
+// walking-order line on their own ("Bride" and "Girl" are ordinary song words).
+const WALKING_ORDER_WEAK = new Set([
+  'bride', 'brides', 'groom', 'grooms', 'mother', 'mothers', 'father', 'fathers',
+  'mom', 'moms', 'dad', 'dads', 'grandmother', 'grandmothers', 'grandfather',
+  'grandfathers', 'family', 'families', 'couple', 'party', 'girl', 'girls',
+  'boy', 'boys', 'man', 'men', 'woman', 'women', 'ring', 'rings', 'flower',
+  'flowers', 'guests', 'escort', 'escorted', 'seating', 'seated', 'entrance',
+  'honor', 'honour', 'maid', 'matron', 'bearer', 'bearers',
+])
+
+// Connectors and counts: "Parents, 2 pairs", "Bride with FoB", "Bridal party x5".
+const WALKING_ORDER_CONNECTORS = new Set([
+  'and', 'with', 'of', 'the', 'a', 'then', 'by', 'in', 'to', 'plus', 'followed',
+  'pair', 'pairs', 'x', 'each', 'total', 'people', 'person', 'couples',
+])
+
+/** Is this line a processional participant rather than a song? See the note above. */
+function isWalkingOrderStep(line: string): boolean {
+  const folded = foldForWalkingOrder(line)
+  if (!folded) return false
+  if (!WALKING_ORDER_ANCHORS.some((re) => { re.lastIndex = 0; return re.test(folded) })) return false
+  let rest = folded
+  for (const re of WALKING_ORDER_ANCHORS) {
+    re.lastIndex = 0
+    rest = rest.replace(re, ' ')
+  }
+  return rest
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((w) => /^\d+$/.test(w) || WALKING_ORDER_WEAK.has(w) || WALKING_ORDER_CONNECTORS.has(w))
+}
+
+// --- event header -------------------------------------------------------------
+// A hand-typed list often opens with "August 28th - Megan Graves". That is the
+// gig, not a song and not an error. A date on one side of a dash and a short name
+// on the other is the whole signature.
+const DATE_LIKE_RE =
+  /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s*\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?\b|\b\d{1,2}\s*[/.-]\s*\d{1,2}(?:\s*[/.-]\s*\d{2,4})?\b|\b\d{1,2}(?:st|nd|rd|th)\s+(?:of\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b/i
 
 // Inline special-request marker on a SONG line: "(*special request*)",
 // "(special request)", "*special request*". The phrase must be wrapped in
@@ -361,6 +453,18 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
       if (sp) { spotifyUrl = sp[0]; disp[i] = 'meta'; i += 1; continue }
     }
 
+    // --- unlabelled walking-order participant (hand-typed list) ---
+    // MUST precede the officiant handler below. A bare "Officiant" line inside a
+    // ceremony section is a person walking down the aisle, but that handler reads
+    // it as the 17hats "Officiant (Name)" field and swallows the FOLLOWING line as
+    // the name — which silently ate "Parents, 2 pairs" (no song, no walking-order
+    // step, no warning) and broke this parser's never-drop-a-line contract.
+    if (currentSection === 'ceremony' && isWalkingOrderStep(line)) {
+      const entry = line.replace(/^[-•*]\s*/, '').replace(/^\d{1,2}[.)]\s*/, '').trim()
+      if (entry) processionalOrder.push(entry)
+      disp[i] = 'meta'; i += 1; continue
+    }
+
     // --- officiant (questionnaire format) ---
     if (lower.includes('officiant') && (lower.includes('name') || lower === 'officiant' || lower.replace(/^[-•*]\s*/, '').trim() === 'officiant')) {
       const parenM = /\(name\)/.exec(lower)
@@ -556,7 +660,9 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
     // --- section headers ---
     const strippedForSection = lower.replace(/^\d+\.\s*/, '')
     let matchedSection = false
-    for (const { re, section, role } of SECTION_PATTERNS) {
+    // Known boilerplate is never a section header. The bare /\bceremony\b/ pattern
+    // would otherwise turn 17hats' "Ceremony Information" preamble into a section.
+    for (const { re, section, role } of hasSkipMarker(lower) ? [] : SECTION_PATTERNS) {
       if (re.test(strippedForSection) || re.test(lower)) {
         currentSection = section
         currentRole = role
@@ -650,6 +756,26 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
             venueNote = candidate; disp[i] = 'meta'; i += 1; continue
           }
         }
+      }
+      // Event header: "August 28th - Megan Graves" (or the name first). One side
+      // is a date, the other a short name — that is the gig, not a song and not an
+      // error. The name fills the contact field only when it is still empty, so a
+      // bad guess lands in a visible, editable box instead of a red warning.
+      const headerM = /^(.+?)\s+[-–—]\s+(.+)$/.exec(line)
+      if (headerM) {
+        const left = headerM[1].trim()
+        const right = headerM[2].trim()
+        const leftIsDate = DATE_LIKE_RE.test(left)
+        const rightIsDate = DATE_LIKE_RE.test(right)
+        if (leftIsDate !== rightIsDate) {
+          const name = leftIsDate ? right : left
+          if (!contactName && name.split(/\s+/).length <= 5) contactName = name
+          disp[i] = 'meta'; i += 1; continue
+        }
+      }
+      // A bare date line ("August 28th", "8/28/26") on its own is the same thing.
+      if (DATE_LIKE_RE.test(line) && !line.replace(DATE_LIKE_RE, '').replace(/[^a-z0-9]/gi, '').trim()) {
+        disp[i] = 'meta'; i += 1; continue
       }
       // Unrecognized preamble — surface it rather than swallow it silently.
       warnings.push(`Line ${i + 1}: unrecognized text before the first section: "${line}"`)

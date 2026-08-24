@@ -244,6 +244,30 @@ function keywordsOf(nt: string): string[] {
   return nt.split(' ').filter((w) => w.length > 1 && !STOPWORDS.has(w))
 }
 
+/**
+ * Did a keyword hit land ONLY inside the library title's parenthetical?
+ *
+ * The keyword tier is a SUBSET test, so any short title that happens to be a
+ * token-subset of a longer library title comes back as a clean single hit. That
+ * turned "Everlasting Love" — a song the library does not have — into a
+ * confident green match on "This Will Be (An Everlasting Love)", a different
+ * song. The query matched the SUBTITLE and nothing in the main title.
+ *
+ * A parenthetical is a subtitle, and matching only the subtitle is a lead, not a
+ * settled answer. Deliberately narrow so it cannot cost us good matches:
+ *  - a library title with no parenthetical is never affected — "Canon in D" →
+ *    "Pachelbel - Canon in D - Score" stays a match;
+ *  - a query that touches the main title at all is never affected — "How Sweet
+ *    It Is" → "How Sweet It Is (To Be Loved By You)" stays a match.
+ */
+function isSubtitleOnlyHit(queryKeywords: string[], libraryTitle: string): boolean {
+  if (!libraryTitle.includes('(')) return false
+  const outside = normTitle(libraryTitle.replace(/\([^)]*\)/g, ' '))
+  if (!outside) return false
+  const outsideTokens = new Set(outside.split(' ').filter(Boolean))
+  return !queryKeywords.some((k) => outsideTokens.has(k))
+}
+
 /** Sørensen–Dice coefficient over the two titles' token sets (0..1). Pure,
  *  order-independent, and cheap — used only to rank best-guesses for red rows. */
 function tokenDice(a: string, b: string): number {
@@ -253,6 +277,24 @@ function tokenDice(a: string, b: string): number {
   let inter = 0
   for (const t of sa) if (sb.has(t)) inter++
   return (2 * inter) / (sa.size + sb.size)
+}
+
+/**
+ * How many players an arrangement is written for. Used to tell the two kinds of
+ * ensemble mismatch apart, which are NOT equally bad:
+ *   - a BIGGER arrangement on a smaller gig (quartet chart, trio gig) is fine —
+ *     the players just leave a part out;
+ *   - a SMALLER arrangement on a bigger gig (solo cello chart, quartet gig)
+ *     leaves the other three players holding nothing.
+ * Only the second is worth interrupting the reviewer over. 'other' is unknown, so
+ * it returns null and is treated as no-problem rather than guessed at.
+ */
+const ENSEMBLE_SIZE: Partial<Record<EnsembleCanon, number>> = {
+  solo: 1, duo: 2, trio: 3, 'viola-trio': 3, quartet: 4, quintet: 5,
+}
+
+function ensembleSize(ensemble: string): number | null {
+  return ENSEMBLE_SIZE[ensemble as EnsembleCanon] ?? null
 }
 
 /** Rank for ensemble-aware ordering: a work whose ensemble equals the gig's sorts
@@ -356,19 +398,57 @@ export function matchSong(
   }
 
   // --- Tier 4: keyword fallback (only if loose found nothing) ---
-  if (candidates.length === 0) {
-    const keywords = keywordsOf(nt)
-    if (keywords.length > 0) {
-      candidates = repertoire
-        .filter((r) => {
+  const keywords = keywordsOf(nt)
+  const keywordHits = (rows: RepertoireRow[]): RepertoireRow[] =>
+    keywords.length === 0
+      ? []
+      : rows.filter((r) => {
           const tokens = new Set(r.norm_title.split(' '))
           return keywords.every((k) => tokens.has(k))
         })
-        .map((r) => build(r, 'keyword'))
+
+  if (candidates.length === 0) {
+    candidates = keywordHits(repertoire).map((r) => build(r, 'keyword'))
+  }
+
+  // Every surviving hit rests on a subtitle alone → a lead, never a settled match.
+  const subtitleOnly =
+    candidates.length > 0 && candidates.every((c) => isSubtitleOnlyHit(keywords, c.title))
+
+  // --- Ensemble escalation ---
+  // A stronger tier can settle on an arrangement TOO SMALL FOR THE GIG. The
+  // library holds "Married Life" (solo — cello part only) and "Married Life from
+  // UP" (quartet — vln1/vln2/vla/vc). For a string quartet the exact title hit on
+  // the solo chart beat the arrangement the gig actually needs, and the reviewer
+  // saw a confident match carrying a "missing vln1, vln2, vla" note instead of the
+  // quartet chart sitting right there in the library.
+  //
+  // So when every candidate is written for FEWER players than the gig has, keep
+  // looking through the keyword tier for an arrangement that seats everyone, and
+  // lead with it. Deliberately one-directional: a quartet chart on a trio gig is
+  // not a problem (drop a part) and never triggers this — only an arrangement that
+  // would leave players with nothing to play does. It never auto-matches over the
+  // stronger hit either; two real options means the human picks. Inert unless the
+  // project told us its ensemble.
+  const gigSize = gigEnsemble ? ensembleSize(gigEnsemble) : null
+  const leavesPlayersIdle = (c: MatchCandidate): boolean => {
+    const size = ensembleSize(c.ensemble)
+    return gigSize !== null && size !== null && size < gigSize
+  }
+  let escalated = false
+  if (gigEnsemble && candidates.length > 0 && candidates.every(leavesPlayersIdle)) {
+    const seen = new Set(candidates.map((c) => c.repertoireId))
+    const extras = keywordHits(repertoire)
+      .filter((r) => !seen.has(r.id))
+      .map((r) => build(r, 'keyword'))
+      .filter((c) => !leavesPlayersIdle(c))
+    if (extras.length > 0) {
+      escalated = true
+      candidates = [...sortCandidates(extras, gigEnsemble), ...sortCandidates(candidates, gigEnsemble)]
     }
   }
 
-  candidates = sortCandidates(candidates, gigEnsemble)
+  if (!escalated) candidates = sortCandidates(candidates, gigEnsemble)
 
   // --- Tier 5: similarity (only when nothing else matched) ---
   // Never a dead end: attach the top Dice-ranked works. Confidence decides how
@@ -437,10 +517,7 @@ export function matchSong(
   // Auto-matchable = candidates whose artist does NOT contradict the questionnaire.
   const autoMatchable = candidates.filter((c) => !c.artistMismatch)
 
-  if (autoMatchable.length === 1) {
-    return { status: 'matched', candidates }
-  }
-
+  // A contradicted artist is the most specific thing we can say — report it first.
   if (autoMatchable.length === 0) {
     // Every candidate's library artist disagrees with the questionnaire artist.
     // Never guess — surface for human confirmation.
@@ -449,6 +526,30 @@ export function matchSong(
       status: 'ambiguous',
       candidates,
       warning: `Questionnaire artist "${song.artistRaw}" doesn't match the library artist "${top.artist ?? ''}" for "${top.title}". Confirm before using.`,
+    }
+  }
+
+  if (autoMatchable.length === 1 && !subtitleOnly && !escalated) {
+    return { status: 'matched', candidates }
+  }
+
+  if (subtitleOnly) {
+    const top = autoMatchable[0] ?? candidates[0]
+    return {
+      status: 'ambiguous',
+      candidates,
+      warning: `"${song.titleRaw}" only matches the subtitle of "${top.title}" — these may be different songs. Confirm, or add the work to the library.`,
+    }
+  }
+
+  if (escalated) {
+    const tooSmall = candidates.find(leavesPlayersIdle)
+    return {
+      status: 'ambiguous',
+      candidates,
+      warning: `The exact title match for "${song.titleRaw}" is${
+        tooSmall ? ` the ${tooSmall.ensemble} arrangement` : ' too small'
+      }, which would leave players with nothing on a ${gigEnsemble} gig. Fuller arrangements in your library are listed first.`,
     }
   }
 

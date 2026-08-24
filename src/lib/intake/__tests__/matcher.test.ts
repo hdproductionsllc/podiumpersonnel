@@ -359,3 +359,80 @@ describe('matchSong — single-character tokens are not keywords', () => {
     expect(matchSong({ titleRaw: 'Air on the G String' }, index(rows)).status).toBe('matched')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Wrong-arrangement and subtitle-only regressions (Megan Graves, 2026-08-23)
+// ---------------------------------------------------------------------------
+
+describe('matchSong — the gig ensemble outranks a wrong-arrangement exact hit', () => {
+  // Real library shape: the quartet chart carries "from UP" in its title, so the
+  // solo cello chart is the only EXACT hit. It used to win, and a string quartet
+  // was handed a cello-only part with a "missing vln1, vln2, vla" note.
+  const rows = [
+    work('Married Life', 'Michael Giacchino', 'solo'),
+    work('Married Life from UP', 'Giacchino', 'quartet'),
+  ]
+
+  it('surfaces the quartet arrangement instead of settling on the solo chart', () => {
+    const res = matchSong({ titleRaw: 'Married Life' }, index(rows), 'quartet')
+    expect(res.status).toBe('ambiguous')
+    expect(res.candidates[0].ensemble).toBe('quartet')
+    expect(res.candidates[0].title).toBe('Married Life from UP')
+    expect(res.warning).toMatch(/nothing on a quartet gig/)
+  })
+
+  it('keeps the exact hit available — it is offered, not discarded', () => {
+    const res = matchSong({ titleRaw: 'Married Life' }, index(rows), 'quartet')
+    expect(res.candidates.map((c) => c.ensemble)).toContain('solo')
+  })
+
+  it('does not escalate when the exact hit already plays the gig ensemble', () => {
+    const res = matchSong({ titleRaw: 'Married Life' }, index(rows), 'solo')
+    expect(res.status).toBe('matched')
+    expect(res.candidates[0].ensemble).toBe('solo')
+  })
+
+  it('leaves a lone off-ensemble match alone when nothing better exists', () => {
+    // Only a duo arrangement exists — still a match, with the part gap to show it.
+    const duoOnly = [work('Somewhere Over the Rainbow', 'Israel K', 'duo')]
+    const res = matchSong({ titleRaw: 'Somewhere Over the Rainbow' }, index(duoOnly), 'quartet')
+    expect(res.status).toBe('matched')
+  })
+
+  it('is inert when the project never told us its ensemble', () => {
+    const res = matchSong({ titleRaw: 'Married Life' }, index(rows))
+    expect(res.status).toBe('matched')
+    expect(res.candidates[0].ensemble).toBe('solo')
+  })
+})
+
+describe('matchSong — a subtitle-only keyword hit is a lead, not a match', () => {
+  it('will not confidently match a song the library does not have', () => {
+    // "Everlasting Love" is a token-subset of "This Will Be (An Everlasting Love)"
+    // but they are different songs — the query touches only the parenthetical.
+    const rows = [work('This Will Be (An Everlasting Love)', 'Natalie Cole')]
+    const res = matchSong({ titleRaw: 'Everlasting Love' }, index(rows), 'quartet')
+    expect(res.status).toBe('ambiguous')
+    expect(res.warning).toMatch(/only matches the subtitle/i)
+    expect(res.candidates[0].title).toBe('This Will Be (An Everlasting Love)')
+  })
+
+  it('still matches when the query touches the main title', () => {
+    const rows = [work('How Sweet It Is (To Be Loved By You)', 'James Taylor')]
+    const res = matchSong({ titleRaw: 'How Sweet It Is' }, index(rows), 'quartet')
+    expect(res.status).toBe('matched')
+  })
+
+  it('leaves parenthetical-free titles alone (Canon in D non-regression)', () => {
+    const rows = [work('Pachelbel - Canon in D - Score', null)]
+    const res = matchSong({ titleRaw: 'Canon in D' }, index(rows), 'quartet')
+    expect(res.status).toBe('matched')
+    expect(res.candidates[0].via).toBe('keyword')
+  })
+
+  it('does not fire on an exact match that happens to have a parenthetical', () => {
+    const rows = [work('This Will Be (An Everlasting Love)', 'Natalie Cole')]
+    const res = matchSong({ titleRaw: 'This Will Be (An Everlasting Love)' }, index(rows))
+    expect(res.status).toBe('matched')
+  })
+})
