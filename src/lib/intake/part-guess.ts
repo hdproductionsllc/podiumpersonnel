@@ -56,3 +56,22 @@ export function guessPartFromFilename(filename: string): PartKey {
   }
   return 'other'
 }
+
+/**
+ * Split a filename so the part-identifying tail is never the bit that gets cut.
+ *
+ * Library files are named "Title - Artist - Vln1.pdf", so what tells two parts
+ * apart lives at the END. Plain CSS truncation trims the end, which removed
+ * exactly the token the admin is here to check — five files reading
+ * "How Sweet It Is - Marvin…" with no way to tell which part each one is.
+ *
+ * The head truncates; the tail is rendered separately and never shrinks.
+ */
+export function splitPartFilename(name: string): { head: string; tail: string } {
+  // Greedy head → matches the LAST " - ", which is where the part token starts.
+  const m = /^(.*)(\s[-–—]\s.*)$/.exec(name)
+  if (m && m[2].length <= 40) return { head: m[1], tail: m[2] }
+  // No separator (or a tail too long to pin open): keep a readable last chunk.
+  if (name.length <= 28) return { head: '', tail: name }
+  return { head: name.slice(0, name.length - 20), tail: name.slice(-20) }
+}
