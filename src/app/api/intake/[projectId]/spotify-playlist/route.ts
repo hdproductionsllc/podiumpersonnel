@@ -78,7 +78,15 @@ export async function POST(
 
     const { error: updErr } = await service
       .from('intakes')
-      .update({ spotify_url: url })
+      .update({
+        spotify_url: url,
+        // The playlist URL is printed on every book's cover as a clickable link,
+        // so a playlist created AFTER the books were built leaves those books
+        // wrong — and, if they were already approved, wrong AND blessed. Books
+        // approval covers one exact list (071), and this changed it, so the
+        // approval has to go the same way every save clears it.
+        books_approved_at: null,
+      })
       .eq('id', intake.id)
       .eq('organization_id', orgId)
     if (updErr) {

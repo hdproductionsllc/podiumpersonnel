@@ -913,7 +913,14 @@ export function IntakePanel({ projectId, ensembleType, instruments, clientEmail 
               <SpotifyPlaylistBuilder
                 projectId={projectId}
                 currentUrl={header.spotifyUrl || null}
-                onCreated={(url) => setHeader((h) => ({ ...h, spotifyUrl: url }))}
+                onCreated={(url) => {
+                  setHeader((h) => ({ ...h, spotifyUrl: url }))
+                  // The URL is printed on every book cover, so any book already
+                  // built and approved no longer matches what a rebuild produces.
+                  // The server clears the approval; mirror it here so the publish
+                  // gate closes immediately instead of on the next reload.
+                  setBooksApprovedAt(null)
+                }}
                 autoSignal={spotifyAutoSignal}
               />
 
@@ -923,6 +930,7 @@ export function IntakePanel({ projectId, ensembleType, instruments, clientEmail 
                 instruments={instruments}
                 booksApprovedAt={booksApprovedAt}
                 onApprovalChange={setBooksApprovedAt}
+                playlistUrl={header.spotifyUrl || null}
               />
 
               <div className="border-t pt-4">
