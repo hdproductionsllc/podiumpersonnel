@@ -37,7 +37,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { guessPartFromFilename, PART_OPTIONS, type PartKey } from '@/lib/intake/part-guess'
+import {
+  guessPartFromFilename,
+  splitPartFilename,
+  PART_OPTIONS,
+  type PartKey,
+} from '@/lib/intake/part-guess'
 import type { EnsembleCanon } from '@/lib/intake/matcher'
 
 export interface CreatedWork {
@@ -231,7 +236,11 @@ export function AddWorkDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
-      <DialogContent className="sm:max-w-lg">
+      {/* Wide enough to read a real library filename. These names run long
+          ("How Sweet It Is - Marvin Gaye - Vln1.pdf") and the whole job here is
+          checking each one against its part dropdown, so the dialog has to fit
+          the filename and the dropdown on one line. */}
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Add to library</DialogTitle>
           <DialogDescription>
@@ -283,12 +292,24 @@ export function AddWorkDialog({
                     {/* Full line of its own on narrow screens: the part select,
                         status and remove button take ~260px of fixed width, which
                         left the filename about 50px on a phone — truncated past
-                        the point of telling two parts apart. */}
+                        the point of telling two parts apart.
+
+                        The head truncates and the tail does not, so the "- Vln1"
+                        that names the part stays on screen at every width — it is
+                        the one thing this row exists to let the admin check. */}
                     <span
-                      className="w-full sm:w-auto sm:flex-1 min-w-0 truncate text-sm"
+                      className="w-full sm:w-auto sm:flex-1 min-w-0 flex text-sm"
                       title={row.file.name}
                     >
-                      {row.file.name}
+                      {(() => {
+                        const { head, tail } = splitPartFilename(row.file.name)
+                        return (
+                          <>
+                            <span className="truncate text-muted-foreground">{head}</span>
+                            <span className="shrink-0 font-medium">{tail}</span>
+                          </>
+                        )
+                      })()}
                     </span>
                     <Select value={row.part} onValueChange={(v) => setRow(row.uid, { part: v as PartKey })} disabled={busy}>
                       <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
