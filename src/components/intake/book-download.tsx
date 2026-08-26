@@ -82,6 +82,12 @@ interface BookDownloadProps {
    *  null = not approved. Gates the publish step. */
   booksApprovedAt: string | null
   onApprovalChange: (ts: string | null) => void
+  /** The intake's Spotify playlist URL, or null when there isn't one yet. The
+   *  book covers print it as a clickable link, so building before it exists
+   *  produces books that have to be rebuilt once the playlist is made. Passed
+   *  from the panel (not read off the manifest) so the notice below appears
+   *  immediately and clears the moment the playlist is created. */
+  playlistUrl: string | null
 }
 
 interface PublishRow {
@@ -100,6 +106,7 @@ export function BookDownload({
   instruments = [],
   booksApprovedAt,
   onApprovalChange,
+  playlistUrl,
 }: BookDownloadProps) {
   const [manifest, setManifest] = useState<Manifest | null>(null)
   const [loading, setLoading] = useState(false)
@@ -482,6 +489,22 @@ export function BookDownload({
           </span>
         </label>
       )}
+      {/* The books' cover carries the playlist link, so the playlist is a
+          DEPENDENCY of the build. Building first means rebuilding later — which
+          is exactly what happened in real use: books downloaded with no link,
+          playlist created, books built all over again. Say so before the build,
+          not after. Not a block: a rush job with no playlist is legitimate. */}
+      {!playlistUrl && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 p-2">
+          <p className="text-xs text-amber-800 dark:text-amber-300">
+            <span className="font-semibold">No Spotify playlist yet.</span> The playlist link is
+            printed on each book&rsquo;s cover, so books built now won&rsquo;t carry it and
+            you&rsquo;d have to build them again after creating it. Create the playlist just above
+            first — or carry on if you don&rsquo;t need the link.
+          </p>
+        </div>
+      )}
+
       {/* Step 1 — assemble + download for review */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[11px] font-semibold text-muted-foreground w-4">1.</span>
