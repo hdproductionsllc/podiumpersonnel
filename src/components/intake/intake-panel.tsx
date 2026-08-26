@@ -118,6 +118,7 @@ function rowFromProposed(p: ProposedSong): SongRow {
     titleRaw: p.titleRaw,
     artistRaw: p.artistRaw ?? '',
     notes: p.notes ?? null,
+    noMusic: p.noMusic === true,
     rememberAlias: false,
     // The parser only SUGGESTS special requests; the admin decides on the row.
     specialRequest: false,
@@ -177,6 +178,7 @@ function rowFromSaved(s: SavedSong): SongRow {
     titleRaw: s.title_raw ?? '',
     artistRaw: s.artist_raw ?? '',
     notes: s.notes ?? null,
+    noMusic: s.no_music === true,
     matchStatus: s.match_status as RowMatchStatus,
     matchedRepertoireId: s.matched_repertoire_id,
     matchedLabel: rep ? workLabel(rep.title, rep.artist) : null,
@@ -394,6 +396,7 @@ export function IntakePanel({ projectId, ensembleType, instruments, clientEmail 
         matchedRepertoireId: r.matchedRepertoireId,
         matchStatus: r.matchStatus,
         specialRequest: r.specialRequest,
+        noMusic: r.noMusic,
       })),
     }
   }
@@ -496,6 +499,7 @@ export function IntakePanel({ projectId, ensembleType, instruments, clientEmail 
       titleRaw: '',
       artistRaw: '',
       notes: null,
+      noMusic: false,
       matchStatus: 'missing',
       matchedRepertoireId: null,
       matchedLabel: null,

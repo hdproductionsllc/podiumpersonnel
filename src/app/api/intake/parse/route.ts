@@ -31,6 +31,9 @@ export interface ProposedSong {
   /** The questionnaire marked this line "(*special request*)" — the review UI
    *  prompts the admin to mark the row as a special request. */
   specialRequest: boolean
+  /** The list said we don't play this slot ("TACET - DJ will play"). Never
+   *  matched against the library — there is nothing to find. */
+  noMusic: boolean
   match: MatchResult
 }
 
@@ -86,16 +89,21 @@ export async function POST(request: Request) {
   //    list (section carried on each row) so the review UI can render + reorder.
   const songs: ProposedSong[] = []
   for (const s of parsed.songs) {
-    const match = decorate(
-      capCandidates(matchSong({ titleRaw: s.titleRaw, artistRaw: s.artistRaw }, index, gigEnsemble))
-    )
+    // A "no music" row is already resolved — searching the library for "TACET"
+    // would flag it red and send the owner hunting for a song that never existed.
+    const match = s.noMusic
+      ? ({ status: 'missing', candidates: [] } as MatchResult)
+      : decorate(
+          capCandidates(matchSong({ titleRaw: s.titleRaw, artistRaw: s.artistRaw }, index, gigEnsemble))
+        )
     songs.push({
       section: s.section,
       role: s.role,
       titleRaw: s.titleRaw,
       artistRaw: s.artistRaw ?? '',
-      notes: null,
+      notes: s.notes,
       specialRequest: s.specialRequest,
+      noMusic: s.noMusic,
       match,
     })
   }

@@ -138,6 +138,7 @@ export async function GET(
     role: string | null
     notes: string | null
     specialRequest: boolean
+    noMusic: boolean
     files: Record<string, { url: string; zipName: string }>
     missingParts: string[]
   }>
@@ -159,6 +160,7 @@ export async function GET(
       role: row.role ?? null,
       notes: row.notes ?? null,
       specialRequest: row.special_request === true,
+      noMusic: row.no_music === true,
       files: {} as Record<string, { url: string; zipName: string }>,
       missingParts: [] as string[],
     }
@@ -202,7 +204,11 @@ export async function GET(
       )
     }
 
-    if (entry.specialRequest) {
+    if (entry.noMusic) {
+      // Nothing to build and nothing wrong — the slot is deliberately silent.
+      // Not a warning: it is an answer, and warning about it would train the
+      // owner to ignore the warning list.
+    } else if (entry.specialRequest) {
       warnings.push(`"${title}" is a special request — no library file; it appears on the playlist only.`)
     } else if (!row.matched_repertoire_id) {
       warnings.push(`"${title}" is not linked to a library work — it appears on the playlist only.`)

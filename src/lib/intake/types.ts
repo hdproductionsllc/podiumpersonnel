@@ -114,6 +114,10 @@ export interface IntakeSong {
   /** Client explicitly requested a work outside the library ("(*special
    *  request*)" in the questionnaire, or the admin marked it). Added in 070. */
   special_request: boolean
+  /** The list said we don't play this slot ("TACET - DJ will play"). Not a match
+   *  failure and not a library work — nothing to find, nothing to build into a
+   *  book, but the players still need to see it. Added in 083. */
+  no_music: boolean
   created_at: string
   updated_at: string
 }

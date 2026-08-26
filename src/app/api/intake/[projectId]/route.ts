@@ -66,6 +66,7 @@ interface IncomingSong {
   matchedRepertoireId?: string | null
   matchStatus?: string | null
   specialRequest?: boolean
+  noMusic?: boolean
 }
 
 /** Confirm the project exists AND belongs to the admin's org. Never trust the
@@ -240,6 +241,7 @@ export async function PUT(
     match_status: normalizeMatchStatus(s.matchStatus),
     notes: typeof s.notes === 'string' ? s.notes : null,
     special_request: s.specialRequest === true,
+    no_music: s.noMusic === true,
   }))
 
   // Never trust caller-supplied repertoire ids (house rule; two past cross-tenant

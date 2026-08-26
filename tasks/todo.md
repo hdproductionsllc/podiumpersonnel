@@ -468,3 +468,61 @@ tsc --noEmit clean, eslint clean.
 - "What A Wonderful World" stays a one-click pick on purpose: same title, different
   credited artist (WeissThiele composer credit vs Louis Armstrong performer credit).
   Auto-picking on ensemble alone would silently guess between same-titled songs.
+
+---
+
+# Hand-typed lists, round two (Kyle & Sara 8/29) — 2026-08-26
+
+The vocabulary-based walking-order check from the Megan pass could not survive
+real input. Four defects, plus one serious PRE-EXISTING bug found while testing.
+
+## Confirmed defects
+
+- [x] K1. **"Bridemaids, 3" and "Incense carrier, 1" became songs.** A whitelist of
+      role words cannot cover a typo ("Bridemaids") or a role no list enumerates
+      (an incense carrier, in a Persian ceremony). Fixed with a STRUCTURAL tell that
+      needs no vocabulary: a headcount. "Officiants, 2" / "Grandparents, 2 pairs" /
+      "Incense carrier, 1" are counts of people; songs do not carry counts.
+      Guarded so a bare trailing digit does NOT qualify — "Spring 1" and
+      "Christmas Medley 3" are real library works and must stay songs. The count
+      must follow a comma, or be followed by a counting noun.
+- [x] K2. **A performance direction was read as an artist.** "Soltane Ghalbha -
+      START AT pickup to bar 8 (only violin 1 has pickup)" split like any
+      "Title - Artist" line, so the direction became the artist and the matcher
+      raised a bogus artist-disagreement against the real composer. Directions now
+      go to intake_songs.notes and never reach the matcher. Decided at addSong —
+      the single choke point every split funnels through.
+- [x] K3. **"TACET - DJ will play" was hunted for in the library.** TACET means we
+      do not play. New no_music state (migration 083): kept and marked, never
+      dropped, because the players need to know the slot is the DJ's. Grey badge,
+      no library search, no candidates, excluded from books, still on gig details.
+- [x] K4. **Event header + walking order held up** from the Megan pass (contact name
+      "Kyle and Sara" read correctly, 4 of 6 steps already captured).
+
+## PRE-EXISTING bug found while testing (not from the Megan pass)
+
+- [x] K5. **Any song line containing the word "please" was SILENTLY DROPPED.**
+      INSTRUCTION_MARKERS was tested with `lower.includes(m)` against the whole
+      line, so "Canon in D - please start at bar 8" and "Perfect - please play this
+      one slowly" both vanished — no song, no warning. Clients ask for directions
+      exactly that way, so this was live data loss. An instruction line must now
+      BEGIN with the word, or be a wholly parenthesised aside.
+
+## Caught by the new tests, before shipping
+- A bare `silent` in the no-music pattern swallowed **Silent Night**; a bare
+  `nothing` swallowed **Nothing Else Matters**. Both are real works. The pattern
+  now only matches phrases that can never be a title.
+
+## Verification (local — migration NOT yet run, code NOT yet deployed)
+Kyle & Sara: 14 rows with 4 unmatched  ->  12 rows, 10 matched / 1 pick / 0 missing,
+0 warnings, all 6 walking-order steps, the direction filed as a note, the recessional
+marked "No music — DJ will play".
+Megan Graves re-run: byte-identical to the deployed behaviour — no regression.
+Tests 145 -> 159 in src/lib/intake. tsc clean, eslint clean (one pre-existing warning).
+Full suite 699/700; the one failure (plan-limit-enforcement) is pre-existing.
+
+## Notes for v2
+- Walking order is still only detected inside the ceremony section. A list that
+  puts the participants before any header would still read them as songs.
+- The client planner's save route defaults no_music to false; only the paste path
+  sets it. Fine today (the planner is a structured form), revisit if that changes.

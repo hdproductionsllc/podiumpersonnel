@@ -57,6 +57,23 @@ export interface ParsedSong {
    * mark the row as a special request; the parser only FLAGS, never decides.
    */
   specialRequest: boolean
+  /**
+   * A direction to the players that rode along on the song line — "START AT
+   * pickup to bar 8 (only violin 1 has pickup)". It reads like an artist to any
+   * "Title - Artist" split, so it is separated out here: it belongs to the
+   * performance, not to the credit, and must never reach the matcher as an
+   * artist (it produced bogus "artist disagreement" warnings on good matches).
+   * Persisted to intake_songs.notes.
+   */
+  notes: string | null
+  /**
+   * The list answered this slot with "we don't play here" — "Recessional: TACET -
+   * DJ will play". Not a match failure and not a library work: there is nothing to
+   * find, so the row must not be hunted for or flagged red. It is kept rather than
+   * dropped because the players need to know the slot is someone else's.
+   * Persisted to intake_songs.no_music (083); the detail rides in `notes`.
+   */
+  noMusic: boolean
 }
 
 export interface ParsedQuestionnaire {
@@ -149,6 +166,32 @@ const RUNSHEET_SKIP_PREFIXES = ['cue:', 'note:', 'lead musician:']
 // Instruction words that mark a non-song line inside a section.
 const INSTRUCTION_MARKERS = ['select', 'please', 'example', 'optional']
 
+// An instruction line BEGINS with one of those words ("Please select up to 5
+// pieces", "(select one)", "Example: ..."), optionally behind a bullet or paren.
+//
+// Testing for the word ANYWHERE in the line — which is what this used to do —
+// silently swallowed real songs: "Canon in D - please start at bar 8" and
+// "Perfect - please play this one slowly" both vanished with no warning, because
+// a client asking for a performance direction naturally writes "please". Same
+// silent-loss failure as the officiant handler, and clients write like this often.
+const INSTRUCTION_LINE_RE = new RegExp(
+  `^[\\s(\\[*•\\-–—]*(?:${INSTRUCTION_MARKERS.join('|')})\\b`,
+  'i'
+)
+
+/** Is this whole line an instruction rather than a song? */
+function isInstructionLine(line: string): boolean {
+  const t = line.trim()
+  if (!t) return false
+  if (INSTRUCTION_LINE_RE.test(t)) return true
+  // A wholly parenthesised aside — "(select one piece)", "(optional)".
+  if (/^\(.*\)$/.test(t)) {
+    const inner = t.toLowerCase()
+    return INSTRUCTION_MARKERS.some((m) => inner.includes(m))
+  }
+  return false
+}
+
 // Match a Spotify link anywhere in a line.
 const SPOTIFY_RE = /https?:\/\/open\.spotify\.com\/\S+/i
 
@@ -182,7 +225,8 @@ const WALKING_ORDER_ANCHORS: RegExp[] = [
   /\bofficiants?\b/g,
   /\bcelebrants?\b/g,
   /\bgroomsm[ae]n\b/g,
-  /\bbridesmaids?\b/g,
+  // "bridemaids" is a common typo and shows up in real lists — accept both.
+  /\bbrides?maids?\b/g,
   /\bgrandparents?\b/g,
   /\bparents\b/g,
   /\bushers?\b/g,
@@ -214,10 +258,23 @@ const WALKING_ORDER_CONNECTORS = new Set([
   'pair', 'pairs', 'x', 'each', 'total', 'people', 'person', 'couples',
 ])
 
+// A HEADCOUNT is the other reliable tell, and it needs no vocabulary at all: a
+// walking order says how many of each party walk ("Officiants, 2", "Bridemaids, 3",
+// "Incense carrier, 1", "Grandparents, 2 pairs"). Songs do not carry headcounts.
+// This is what makes the check survive roles no list could enumerate — an incense
+// carrier in a Persian ceremony — and plain misspellings.
+//
+// The count must be introduced by a COMMA, or be followed by a counting noun. A
+// bare trailing digit is not enough: "Spring 1" and "Christmas Medley 3" are real
+// works in the library and must stay songs.
+const HEADCOUNT_RE =
+  /,\s*\d{1,2}\s*(?:pairs?|people|persons?|couples?)?\s*$|\b\d{1,2}\s+(?:pairs?|people|persons?|couples?)\s*$/i
+
 /** Is this line a processional participant rather than a song? See the note above. */
 function isWalkingOrderStep(line: string): boolean {
   const folded = foldForWalkingOrder(line)
   if (!folded) return false
+  if (HEADCOUNT_RE.test(line.trim())) return true
   if (!WALKING_ORDER_ANCHORS.some((re) => { re.lastIndex = 0; return re.test(folded) })) return false
   let rest = folded
   for (const re of WALKING_ORDER_ANCHORS) {
@@ -228,6 +285,63 @@ function isWalkingOrderStep(line: string): boolean {
     .split(/\s+/)
     .filter(Boolean)
     .every((w) => /^\d+$/.test(w) || WALKING_ORDER_WEAK.has(w) || WALKING_ORDER_CONNECTORS.has(w))
+}
+
+// --- performance directions ---------------------------------------------------
+// "Soltane Ghalbha - START AT pickup to bar 8 (only violin 1 has pickup)" splits on
+// the dash like any "Title - Artist" line, so the direction landed in the ARTIST
+// field. The matcher then reported it as an artist disagreement against the real
+// composer — noise on a row that had matched perfectly well.
+//
+// A direction is for the players, not a credit. It belongs in the row's note, where
+// it reaches the musicians and stops interfering with matching. Two tells, either
+// sufficient: musical-direction vocabulary, or sheer length — a credit is a name,
+// and names do not run to seven words.
+const PERFORMANCE_DIRECTION_RE =
+  /\b(?:start(?:ing|s)?\s+(?:at|from)|begin(?:ning|s)?\s+(?:at|from)|end(?:ing|s)?\s+(?:at|after)|stop\s+(?:at|after)|pick[-\s]?up|bars?\b|measures?\b|repeat|tacet|vamp|verse|chorus|intro|outro|fade|loop|segue|coda|coming\s+in|coda|d\.?\s?[sc]\.?\s+al|first\s+\d|last\s+\d|coming\s+out|only\s+(?:the\s+)?(?:violin|viola|cello|vln|vla|vc|bass)|no\s+(?:repeat|intro|outro))/i
+
+/** Is this trailing text a direction to the players rather than an artist credit? */
+function isPerformanceDirection(text: string): boolean {
+  const t = text.trim()
+  if (!t) return false
+  // No artist credit ever begins with "please" — that is someone asking for
+  // something ("Perfect - please play this one slowly").
+  if (/^please\b/i.test(t)) return true
+  if (PERFORMANCE_DIRECTION_RE.test(t)) return true
+  return t.split(/\s+/).filter(Boolean).length >= 7
+}
+
+// --- "no music" answers --------------------------------------------------------
+// A list can answer a slot with "we don't play this": "Recessional: TACET - DJ will
+// play". TACET is the musical term for a silent player. It is an ANSWER, not a
+// song — searching the library for it produces a red "not in library" flag that
+// sends the owner hunting for something that was never meant to exist.
+//
+// The row is kept and marked rather than dropped: the players need to know the
+// recessional belongs to the DJ so they stop playing, and that only reaches them
+// if the row survives onto the review screen and the gig details.
+//
+// Anchored to the START of the answer so a real title is never swallowed — the
+// song "Silence" stays a song, while "TACET - DJ will play" and "No music, the DJ
+// takes over" do not.
+// Every alternative has to be a phrase that is NEVER a song title. Two were caught
+// in testing: a bare "silent" swallows "Silent Night", and a bare "nothing"
+// swallows "Nothing Else Matters" — both real works. So the loose single words are
+// gone, and what remains can only read as an instruction.
+const NO_MUSIC_RE =
+  /^[\s\-–—*•]*(?:tacet\b|n\/?a\s*[-–—]\s*dj\b|no\s+(?:music|live\s+music|strings|quartet|trio|players?|playing)\b|dj\s+(?:will\s+play|takes?\s+over|handles?)\b|band\s+(?:will\s+play|takes?\s+over)\b|we\s+(?:don'?t|do\s+not)\s+play\b|nothing\s+to\s+play\b|skip\s+this\b)/i
+
+/**
+ * Does this answer mean "no live music for this slot"? Returns the detail to keep
+ * alongside it ("DJ will play"), or null when the line is an ordinary song.
+ * The whole line is preserved as the note when there is no separate detail, so
+ * nothing the client wrote is lost.
+ */
+function readNoMusicAnswer(title: string, trailing: string): string | null {
+  const t = title.trim()
+  if (!t || !NO_MUSIC_RE.test(t)) return null
+  const detail = trailing.trim()
+  return detail || t
 }
 
 // --- event header -------------------------------------------------------------
@@ -418,7 +532,21 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
   // `special` = the current line carried an inline special-request marker.
   const addSong = (section: string, titleRaw: string, artistRaw: string, role: string | null, special = false) => {
     const pos = sectionCounts.get(section) ?? 0
-    songs.push({ section, position: pos, titleRaw, artistRaw: artistRaw || null, role, specialRequest: special })
+    // Every "Title - Artist" split funnels through here, so this is the one place
+    // that has to tell a credit from a direction to the players — or from an answer
+    // that says we are not playing at all.
+    const noMusicNote = readNoMusicAnswer(titleRaw, artistRaw)
+    const direction = !noMusicNote && artistRaw && isPerformanceDirection(artistRaw)
+    songs.push({
+      section,
+      position: pos,
+      titleRaw,
+      artistRaw: noMusicNote || direction ? null : artistRaw || null,
+      role,
+      specialRequest: special,
+      notes: noMusicNote ?? (direction ? artistRaw.trim() : null),
+      noMusic: noMusicNote !== null,
+    })
     sectionCounts.set(section, pos + 1)
   }
 
@@ -821,7 +949,7 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
       // "N/a" / "none" / "TBD" answers are boilerplate, never songs.
       if (NON_ANSWER_RE.test(songLine)) { disp[i] = 'skip'; i += 1; continue }
 
-      const isInstruction = INSTRUCTION_MARKERS.some((m) => lower.includes(m))
+      const isInstruction = isInstructionLine(line)
 
       if (songLine.startsWith('-') || songLine.startsWith('•') || songLine.startsWith('*')) {
         const rawTitle = songLine.replace(/^[-•*]\s*/, '').trim()
@@ -948,7 +1076,18 @@ export function parseSongList(rawText: string): ParsedQuestionnaire {
 
   const push = (section: string, titleRaw: string, artistRaw: string, special = false) => {
     const pos = sectionCounts.get(section) ?? 0
-    result.songs.push({ section, position: pos, titleRaw, artistRaw: artistRaw || null, role: null, specialRequest: special })
+    const noMusicNote = readNoMusicAnswer(titleRaw, artistRaw)
+    const direction = !noMusicNote && artistRaw && isPerformanceDirection(artistRaw)
+    result.songs.push({
+      section,
+      position: pos,
+      titleRaw,
+      artistRaw: noMusicNote || direction ? null : artistRaw || null,
+      role: null,
+      specialRequest: special,
+      notes: noMusicNote ?? (direction ? artistRaw.trim() : null),
+      noMusic: noMusicNote !== null,
+    })
     sectionCounts.set(section, pos + 1)
   }
 

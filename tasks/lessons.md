@@ -138,3 +138,33 @@ When adding a looser input mode, re-run the traced parse (`parseQuestionnaireTra
 exposes a per-line disposition) and assert every line is accounted for — a `meta`
 disposition looks just as clean as a correct one, so line-accounting alone is not
 enough; check WHERE the content landed.
+
+## A whitelist of words will always be one real-world input behind
+The walking-order check shipped with a vocabulary of wedding roles. The very next
+list broke it twice: "Bridemaids" (a typo) and "Incense carrier" (a Persian ceremony
+role no list would have enumerated). Vocabulary is a losing game against free text.
+
+What actually worked was a STRUCTURAL tell — a headcount. "Officiants, 2",
+"Grandparents, 2 pairs", "Incense carrier, 1" are counts of people, and songs do not
+carry counts. It needs no vocabulary at all, so it survives typos, other languages,
+and traditions nobody thought of.
+
+When a classifier needs a list of words to work, look for the shape instead. Keep the
+vocabulary as a second signal, not the only one.
+
+## Write the negative tests before shipping the pattern — they find the real damage
+The "no music" regex started with bare `silent` and `nothing` alternatives. A test
+asserting ordinary songs are NOT swallowed caught that it ate **Silent Night** and
+**Nothing Else Matters** — both real works in the library, both would have been
+silently marked "we don't play this" on a real gig.
+
+For any new pattern that CLASSIFIES text, the test that matters is the one listing
+things it must NOT match, drawn from actual library titles. The positive cases are
+the ones you already had in mind; they prove nothing.
+
+## Test failures are evidence — read them before assuming the test is wrong
+A test I wrote failed because the line contained "please". The reflex is to fix the
+test. Investigating instead uncovered a live bug: INSTRUCTION_MARKERS was matched
+with `includes()` against the whole line, so ANY song line containing "please" was
+dropped with no warning — and "Canon in D - please start at bar 8" is exactly how
+clients write. Two songs vanished in a three-line fixture.

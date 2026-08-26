@@ -581,3 +581,163 @@ describe('parser — walking-order recognition is tight', () => {
     expect(t.songs.map((s) => s.section)).toEqual(['prelude'])
   })
 })
+
+// ---------------------------------------------------------------------------
+// Hand-typed list, round two (Kyle & Sara, 2026-08-26)
+//
+// The vocabulary-only walking-order check could not survive a role no list can
+// enumerate ("Incense carrier") or a plain typo ("Bridemaids"). A headcount is
+// the structural tell that needs no vocabulary at all. Two more real-world
+// shapes came with it: a performance direction riding on a song line, and a
+// slot the couple asked us NOT to play.
+// ---------------------------------------------------------------------------
+
+const KYLE_RAW = `August 29th - Kyle and Sara
+
+Prelude:
+Birds of a Feather
+Iris
+
+CEREMONY
+Processional: Canon in D
+Grandparents, 2 pairs
+Officiants, 2
+Bridemaids, 3
+Incense carrier, 1
+Groom with parents
+Ring bearer & flower girl
+
+Bride's Entrance: Soltane Ghalbha - START AT pickup to bar 8 (only violin 1 has pickup)
+Recessional: TACET - DJ will play`
+
+describe('parseQuestionnaire — hand-typed list (Kyle & Sara)', () => {
+  const traced = parseQuestionnaireTraced(KYLE_RAW)
+
+  it('accounts for every line and raises no warnings', () => {
+    assertEveryLineAccountedFor(KYLE_RAW, traced)
+    expect(traced.warnings).toEqual([])
+  })
+
+  it('captures a headcount line even when the role is unknown or misspelled', () => {
+    // "Bridemaids" is a typo and "Incense carrier" is in no vocabulary list —
+    // both used to become songs. The ", N" headcount is what saves them.
+    expect(traced.processionalOrder).toEqual([
+      'Grandparents, 2 pairs',
+      'Officiants, 2',
+      'Bridemaids, 3',
+      'Incense carrier, 1',
+      'Groom with parents',
+      'Ring bearer & flower girl',
+    ])
+    const titles = traced.songs.map((s) => s.titleRaw)
+    expect(titles).not.toContain('Bridemaids, 3')
+    expect(titles).not.toContain('Incense Carrier, 1')
+  })
+
+  it('keeps a performance direction out of the artist field', () => {
+    const entrance = traced.songs.find((s) => s.role === 'Bride Entrance')!
+    expect(entrance.titleRaw).toBe('Soltane Ghalbha')
+    // The direction used to land in artistRaw and provoke a bogus artist
+    // disagreement against the real composer.
+    expect(entrance.artistRaw).toBeNull()
+    expect(entrance.notes).toBe('START AT pickup to bar 8 (only violin 1 has pickup)')
+  })
+
+  it('reads "TACET - DJ will play" as no music, not a missing song', () => {
+    const rec = traced.songs.find((s) => s.section === 'recessional')!
+    expect(rec.noMusic).toBe(true)
+    expect(rec.notes).toBe('DJ will play')
+    expect(rec.artistRaw).toBeNull()
+  })
+
+  it('keeps the no-music row rather than dropping it', () => {
+    // The players need to know the recessional belongs to the DJ.
+    expect(traced.songs.filter((s) => s.section === 'recessional')).toHaveLength(1)
+  })
+})
+
+describe('parser — headcounts, directions and no-music are narrowly detected', () => {
+  const underCeremony = (line: string) => parseQuestionnaireTraced(['CEREMONY', line].join('\n'))
+
+  it('does not treat a bare trailing digit as a headcount', () => {
+    // Real library works: a bare number is part of the title, not a count.
+    for (const title of ['Spring 1', 'Christmas Medley 3', 'Symphony No 5']) {
+      const t = underCeremony(title)
+      expect(t.processionalOrder, `"${title}" was read as a headcount`).toEqual([])
+      expect(t.songs).toHaveLength(1)
+    }
+  })
+
+  it('accepts a headcount introduced by a comma or followed by a counting noun', () => {
+    expect(underCeremony('Incense carrier, 1').processionalOrder).toEqual(['Incense carrier, 1'])
+    expect(underCeremony('Readers, 2 pairs').processionalOrder).toEqual(['Readers, 2 pairs'])
+    expect(underCeremony('Chuppah holders 4 people').processionalOrder).toEqual([
+      'Chuppah holders 4 people',
+    ])
+  })
+
+  it('keeps a real artist in the artist field', () => {
+    const t = parseQuestionnaireTraced(['Prelude', 'Yellow - Coldplay'].join('\n'))
+    expect(t.songs[0].artistRaw).toBe('Coldplay')
+    expect(t.songs[0].notes).toBeNull()
+  })
+
+  it('treats an over-long credit as a direction, not an artist', () => {
+    const t = parseQuestionnaireTraced(
+      ['Prelude', 'Some Song - fade this one out after the first two minutes'].join('\n')
+    )
+    expect(t.songs[0].artistRaw).toBeNull()
+    expect(t.songs[0].notes).toMatch(/fade this one out/)
+  })
+
+  it('does not read an ordinary song as a no-music answer', () => {
+    // Anchored to the start, so a title that merely contains a word like
+    // "silence" or "nothing" is untouched.
+    for (const title of ['The Sound of Silence', 'Nothing Else Matters', 'Silent Night', 'Silence']) {
+      const t = parseQuestionnaireTraced(['Prelude', title].join('\n'))
+      expect(t.songs[0].noMusic, `"${title}" was read as no music`).toBe(false)
+    }
+  })
+
+  it('recognises the common no-music phrasings', () => {
+    for (const line of ['TACET', 'No music', 'DJ will play', 'No live music - DJ takes over']) {
+      const t = parseQuestionnaireTraced(['Recessional:', line].join('\n'))
+      expect(t.songs[0]?.noMusic, `"${line}" was not read as no music`).toBe(true)
+    }
+  })
+})
+
+describe('parser — an instruction WORD does not make a song line an instruction', () => {
+  // Found while testing the Kyle list: INSTRUCTION_MARKERS was tested against the
+  // whole line, so any song whose line contained "please" was dropped in silence.
+  // Clients ask for directions exactly that way.
+  const RAW = [
+    'Prelude',
+    'Canon in D - please start at bar 8',
+    'Yellow',
+    'Perfect - please play this one slowly',
+  ].join('\n')
+
+  const traced = parseQuestionnaireTraced(RAW)
+
+  it('keeps a song whose line merely contains "please"', () => {
+    expect(traced.songs.map((s) => s.titleRaw)).toEqual(['Canon In D', 'Yellow', 'Perfect'])
+    assertEveryLineAccountedFor(RAW, traced)
+    expect(traced.warnings).toEqual([])
+  })
+
+  it('files the request as a performance note, not an artist', () => {
+    expect(traced.songs[0].notes).toBe('please start at bar 8')
+    expect(traced.songs[0].artistRaw).toBeNull()
+    expect(traced.songs[2].notes).toBe('please play this one slowly')
+    expect(traced.songs[2].artistRaw).toBeNull()
+  })
+
+  it('still skips lines that genuinely are instructions', () => {
+    const t = parseQuestionnaireTraced(
+      ['Prelude', 'Please select up to 5 pieces', '(select one)', '(optional)', 'Yellow'].join('\n')
+    )
+    expect(t.songs.map((s) => s.titleRaw)).toEqual(['Yellow'])
+    expect(t.lineDispositions.slice(1, 4)).toEqual(['skip', 'skip', 'skip'])
+  })
+})
