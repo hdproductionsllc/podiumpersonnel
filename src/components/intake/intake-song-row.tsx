@@ -9,6 +9,9 @@
  *   green  "Matched"        — a clean single library hit (or an admin pick)
  *   amber  "Needs a choice" — ambiguous: pick from candidates or search
  *   red    "Not in library" — missing: search the library or keep as typed
+ *   grey   "No music" — the list said we don't play this slot ("TACET - DJ will
+ *          play"). Resolved, not missing: nothing to search for, so no red flag
+ *          and no candidates — but the row stays so the players see it.
  *
  * A row counts as RESOLVED when its status is 'matched' or 'manual'. The panel
  * gates Confirm on every row being resolved, so misparses can never be saved
@@ -74,6 +77,11 @@ export interface SongRow {
   /** Admin decision: this song is a special request — a work the client knows
    *  is outside the library. Saved to intake_songs.special_request (070). */
   specialRequest: boolean
+  /** The list said we don't play this slot ("TACET - DJ will play"). Resolved, not
+   *  missing: no library search, no red flag, excluded from the books — but still
+   *  shown so the players know the slot belongs to someone else. Saved to
+   *  intake_songs.no_music (083). */
+  noMusic: boolean
   /** The parser saw "(*special request*)" on this line — prompt the admin to
    *  mark it (never auto-decided; UI-only, not persisted). */
   suggestedSpecial: boolean
@@ -331,17 +339,19 @@ export function IntakeSongRow({
         <span className="font-medium">{song.titleRaw || <span className="text-muted-foreground italic">(untitled)</span>}</span>
         {song.artistRaw && <span className="text-muted-foreground text-sm">{song.artistRaw}</span>}
         {isCeremony && song.role && <Badge variant="outline" className="text-xs">{song.role}</Badge>}
+        {song.notes && <span className="text-xs text-amber-700 dark:text-amber-500">{song.notes}</span>}
         <span className="ml-auto">
-          {song.matchStatus === 'matched' && (
+          {song.noMusic && <Badge variant="secondary" className="text-xs">No music</Badge>}
+          {!song.noMusic && song.matchStatus === 'matched' && (
             <Badge variant="success" className="text-xs">Matched: {song.matchedLabel}</Badge>
           )}
-          {song.matchStatus === 'manual' && song.matchedRepertoireId && (
+          {!song.noMusic && song.matchStatus === 'manual' && song.matchedRepertoireId && (
             <Badge variant="success" className="text-xs">Set: {song.matchedLabel}</Badge>
           )}
-          {song.matchStatus === 'manual' && !song.matchedRepertoireId && song.specialRequest && (
+          {!song.noMusic && song.matchStatus === 'manual' && !song.matchedRepertoireId && song.specialRequest && (
             <Badge variant="outline" className="text-xs border-violet-400 text-violet-700 dark:border-violet-700 dark:text-violet-300">Special request</Badge>
           )}
-          {song.matchStatus === 'manual' && !song.matchedRepertoireId && !song.specialRequest && (
+          {!song.noMusic && song.matchStatus === 'manual' && !song.matchedRepertoireId && !song.specialRequest && (
             <Badge variant="secondary" className="text-xs">As typed</Badge>
           )}
           {song.matchedArchived && (
@@ -380,6 +390,21 @@ export function IntakeSongRow({
             </div>
           </div>
 
+          {/* Performance note — a direction to the players ("START AT pickup to
+              bar 8"), not a credit. The parser routes these here so they stop
+              being read as an artist and colliding with library matching. */}
+          <div>
+            <label className="text-[11px] font-medium text-muted-foreground block mb-0.5">
+              Performance note
+            </label>
+            <Input
+              value={song.notes ?? ''}
+              onChange={(e) => onChange({ notes: e.target.value || null })}
+              placeholder="(optional) e.g. start at bar 8, first verse only"
+              className="h-8 text-sm"
+            />
+          </div>
+
           {/* Ceremony role */}
           {isCeremony && (
             <div>
@@ -395,8 +420,22 @@ export function IntakeSongRow({
 
           {/* Match state */}
           <div className="space-y-1.5">
+            {/* No music — an ANSWER, not a match failure. Shown before every other
+                state so this row can never render a red "Not in library" or offer
+                library candidates: there is nothing to find. */}
+            {song.noMusic && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary" className="text-xs">
+                  No music{song.notes ? ` — ${song.notes}` : ''}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  We don&rsquo;t play this slot; it stays on the gig details so the players know.
+                </span>
+              </div>
+            )}
+
             {/* Resolved */}
-            {resolved && !changing && (
+            {!song.noMusic && resolved && !changing && (
               <div className="space-y-1.5">
                 <div className="flex flex-wrap items-center gap-2">
                   {song.matchStatus === 'matched' && (
@@ -448,7 +487,7 @@ export function IntakeSongRow({
             )}
 
             {/* Ambiguous */}
-            {song.matchStatus === 'ambiguous' && !changing && (
+            {!song.noMusic && song.matchStatus === 'ambiguous' && !changing && (
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
                   <Badge variant="warning" className="text-xs">
@@ -495,7 +534,7 @@ export function IntakeSongRow({
             )}
 
             {/* Missing */}
-            {song.matchStatus === 'missing' && !changing && (
+            {!song.noMusic && song.matchStatus === 'missing' && !changing && (
               <div className="space-y-1.5">
                 <Badge variant="destructive" className="text-xs">Not in library</Badge>
                 {specialPrompt}
