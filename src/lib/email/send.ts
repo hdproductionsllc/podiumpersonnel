@@ -27,31 +27,42 @@ import { StaffingAlertEmail } from './templates/staffing-alert'
 import { SongPlannerEmail, type SongPlannerVariant } from './templates/song-planner'
 import { render } from '@react-email/render'
 import { type EmailBranding } from './templates/email-layout'
-import { term, type TermDictionary, DEFAULT_TERMS } from '@/lib/verticals'
+import { term, type TermDictionary, DEFAULT_TERMS, brandFor, DEFAULT_BRAND, type VerticalBrand } from '@/lib/verticals'
 import { getOrgVertical } from '@/lib/api-helpers'
 
 export type { EmailBranding }
 
 /**
- * Resolve the terminology dictionary for a send. Order of preference:
- * an explicit dictionary (call site already resolved it) > the sending org's
- * vertical (looked up from organizationId) > the built-in music default.
+ * Resolve terminology and brand for a send from a single vertical lookup.
+ * Order of preference for terms: an explicit dictionary (call site already
+ * resolved it) > the sending org's vertical (looked up from organizationId)
+ * > the built-in music default. Brand always follows the org's vertical
+ * (falling back to Podium) since brand isn't something callers pre-resolve.
  * getOrgVertical already fail-opens to the default template, and we guard the
- * lookup so a terminology miss can never block a real email send.
+ * lookup so a terminology/brand miss can never block a real email send.
  */
+async function resolveEmailVertical(
+  explicitTerms: TermDictionary | undefined,
+  organizationId: string | undefined | null
+): Promise<{ terms: TermDictionary; brand: VerticalBrand }> {
+  if (!organizationId) {
+    return { terms: explicitTerms ?? DEFAULT_TERMS, brand: DEFAULT_BRAND }
+  }
+  try {
+    const vertical = await getOrgVertical(organizationId)
+    return { terms: explicitTerms ?? vertical.terms, brand: brandFor(vertical) }
+  } catch (err) {
+    console.warn(`Vertical lookup failed for org ${organizationId}:`, err)
+    return { terms: explicitTerms ?? DEFAULT_TERMS, brand: DEFAULT_BRAND }
+  }
+}
+
+/** Thin wrapper for the (more common) terms-only call sites. */
 async function resolveEmailTerms(
   explicit: TermDictionary | undefined,
   organizationId: string | undefined
 ): Promise<TermDictionary> {
-  if (explicit) return explicit
-  if (organizationId) {
-    try {
-      return (await getOrgVertical(organizationId)).terms
-    } catch {
-      return DEFAULT_TERMS
-    }
-  }
-  return DEFAULT_TERMS
+  return (await resolveEmailVertical(explicit, organizationId)).terms
 }
 
 /**
@@ -198,7 +209,7 @@ interface SendContractOfferParams {
 }
 
 export async function sendContractOfferEmail(params: SendContractOfferParams) {
-  const terms = await resolveEmailTerms(params.terms, params.organizationId)
+  const { terms, brand } = await resolveEmailVertical(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Call: ${params.projectName} - ${params.instrument}`, getSubjectDate(params.services)),
@@ -221,6 +232,7 @@ export async function sendContractOfferEmail(params: SendContractOfferParams) {
       ensembleType: params.ensembleType,
       branding: params.branding,
       terms,
+      brand,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,
@@ -247,7 +259,7 @@ interface SendOfferReminderParams {
 }
 
 export async function sendOfferReminderEmail(params: SendOfferReminderParams) {
-  const terms = await resolveEmailTerms(params.terms, params.organizationId)
+  const { terms, brand } = await resolveEmailVertical(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Reminder: ${params.projectName} - response needed`, params.performanceDate || ''),
@@ -263,6 +275,7 @@ export async function sendOfferReminderEmail(params: SendOfferReminderParams) {
       daysRemaining: params.daysRemaining,
       branding: params.branding,
       terms,
+      brand,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,
@@ -298,7 +311,7 @@ interface SendOfferAcceptedParams {
 }
 
 export async function sendOfferAcceptedEmail(params: SendOfferAcceptedParams) {
-  const terms = await resolveEmailTerms(params.terms, params.organizationId)
+  const { terms, brand } = await resolveEmailVertical(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Confirmed: You're booked for ${params.projectName}`, getSubjectDate(params.services)),
@@ -314,6 +327,7 @@ export async function sendOfferAcceptedEmail(params: SendOfferAcceptedParams) {
       calendarUrl: params.calendarUrl,
       googleCalendarUrl: params.googleCalendarUrl,
       terms,
+      brand,
     }),
     fromName: params.organizationName,
     replyTo: params.contactEmail || undefined,
@@ -960,7 +974,7 @@ interface SendGigDetailsEmailParams {
 }
 
 export async function sendGigDetailsEmail(params: SendGigDetailsEmailParams) {
-  const terms = await resolveEmailTerms(params.terms, params.organizationId)
+  const { terms, brand } = await resolveEmailVertical(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Gig details: ${params.projectName}`, getSubjectDate(params.services)),
@@ -975,6 +989,7 @@ export async function sendGigDetailsEmail(params: SendGigDetailsEmailParams) {
       notes: params.notes,
       branding: params.branding,
       terms,
+      brand,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,

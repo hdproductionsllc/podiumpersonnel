@@ -161,6 +161,7 @@ export default async function GigPage({ params }: GigPageProps) {
       offerStatus={offerData.status}
       expiresAt={offerData.expires_at}
       musicianFirstName={musician?.first_name || personTerm}
+      personTerm={personTerm}
       organizationName={position?.project?.organization?.name || 'Organization'}
       organizationId={position?.project?.organization_id || ''}
       projectName={position?.project?.name || 'Project'}

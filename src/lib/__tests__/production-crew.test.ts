@@ -5,8 +5,10 @@
  * brand does NOT leak into any other vertical.
  */
 import { describe, it, expect } from 'vitest'
+import { render } from '@react-email/render'
 import { VERTICALS, VERTICAL_KEYS, brandFor, DEFAULT_BRAND, resolveVertical, term } from '@/lib/verticals'
 import { PRODUCTION_CREW_SEEDS } from '@/lib/verticals/seeds'
+import { ContractOfferEmail } from '@/lib/email/templates/contract-offer'
 
 const crew = VERTICALS.production_crew
 
@@ -62,5 +64,32 @@ describe('brand resolution', () => {
 
   it('the music vertical carries no brand field, so the identity freeze still holds', () => {
     expect(VERTICALS.music_contractor.brand).toBeUndefined()
+  })
+})
+
+describe('email footer brand (ContractOfferEmail)', () => {
+  const baseProps = {
+    musicianName: 'Alex Rivera',
+    organizationName: 'Test Org',
+    projectName: 'Spring Concert',
+    instrument: 'Cello',
+    chairNumber: 1,
+    totalChairs: 2,
+    services: [],
+    responseUrl: 'https://app.example.com/gig/token123',
+    expiresAt: null,
+  }
+
+  it('says Podium when no brand prop is given', async () => {
+    const html = await render(ContractOfferEmail({ ...baseProps }))
+    expect(html).toContain('via')
+    expect(html).toContain('Podium')
+    expect(html).not.toContain('Overhire')
+  })
+
+  it('says Overhire when the production_crew brand is passed', async () => {
+    const html = await render(ContractOfferEmail({ ...baseProps, brand: brandFor(crew) }))
+    expect(html).toContain('Overhire')
+    expect(html).toContain('https://overhire.app')
   })
 })

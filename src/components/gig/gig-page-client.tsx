@@ -66,6 +66,7 @@ interface GigPageClientProps {
   instruments: Instrument[]
   existingSubRequest: SubRequest | null
   subsEnabled?: boolean
+  personTerm?: string
 }
 
 export function GigPageClient({
@@ -89,6 +90,7 @@ export function GigPageClient({
   instruments,
   existingSubRequest,
   subsEnabled = true,
+  personTerm = 'Musician',
 }: GigPageClientProps) {
   const [showSubRequestForm, setShowSubRequestForm] = useState(false)
   const [subRequestSubmitted, setSubRequestSubmitted] = useState(false)
@@ -453,7 +455,7 @@ export function GigPageClient({
                       rel="noopener noreferrer"
                       className="text-primary underline hover:text-primary/80"
                     >
-                      Musician Policy
+                      {personTerm} Policy
                     </a>
                     .
                   </p>
