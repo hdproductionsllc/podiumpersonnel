@@ -8,6 +8,52 @@ import { OrgFlagsProvider } from '@/components/providers/org-flags-provider'
 import { TrialBanner } from '@/components/billing/trial-banner'
 import { resolveOrgPlan } from '@/lib/plan'
 import type { OrgBilling } from '@/lib/plan'
+import { brandFor, resolveVertical } from '@/lib/verticals'
+import type { Metadata } from 'next'
+
+/**
+ * Looks up the current user's org and its vertical key. Shared by the page
+ * body (which needs the key to pick a UI template) and generateMetadata
+ * (which needs it for the browser tab title) — Next resolves these in
+ * separate passes, so this runs twice per request; that's fine, it's a
+ * couple of cheap indexed lookups. Fails open to null (default template) on
+ * any missing session, membership, or not-yet-migrated column.
+ */
+async function getVerticalKeyForCurrentUser(): Promise<string | null> {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data: membership } = await supabase
+    .from('organization_members')
+    .select('organization_id')
+    .eq('user_id', user.id)
+    .limit(1)
+    .maybeSingle()
+  if (!membership) return null
+
+  try {
+    const { data: verticalData } = await supabase
+      .from('organizations')
+      .select('vertical')
+      .eq('id', membership.organization_id)
+      .single()
+    return (verticalData as { vertical?: string } | null)?.vertical ?? null
+  } catch (err) {
+    // Column doesn't exist yet — default template
+    console.warn('Dashboard layout: vertical column unavailable, using default template:', err)
+    return null
+  }
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const key = await getVerticalKeyForCurrentUser()
+  const name = brandFor(resolveVertical(key)).name
+  return { title: name === 'Podium' ? 'Podium Personnel' : name }
+}
 
 export default async function DashboardLayout({
   children,
@@ -66,18 +112,7 @@ export default async function DashboardLayout({
 
   // Fetch the vertical key separately so a missing column (migration 065 not
   // yet applied) can't disturb the billing query above. Null → default template.
-  let verticalKey: string | null = null
-  try {
-    const { data: verticalData } = await supabase
-      .from('organizations')
-      .select('vertical')
-      .eq('id', membership.organization_id)
-      .single()
-    verticalKey = (verticalData as { vertical?: string } | null)?.vertical ?? null
-  } catch (err) {
-    // Column doesn't exist yet — default template
-    console.warn('Dashboard layout: vertical column unavailable, using default template:', err)
-  }
+  const verticalKey = await getVerticalKeyForCurrentUser()
 
   // Fetch the intake feature flag separately so a missing column (migration 073
   // not yet applied) can't disturb the queries above. Fails closed to false.

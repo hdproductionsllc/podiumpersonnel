@@ -38,7 +38,7 @@ import { useVertical } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
 import type { ProjectWithServices } from './projects-client'
 
-type TemplateType = 'string-quartet' | 'string-trio' | 'duo' | 'solo' | 'orchestra' | 'custom'
+type TemplateType = 'string-quartet' | 'string-trio' | 'duo' | 'solo' | 'orchestra' | 'three-call-show' | 'custom'
 
 const ENSEMBLE_LABELS: Partial<Record<TemplateType, string>> = {
   'string-quartet': 'String Quartet',
@@ -78,6 +78,11 @@ const TEMPLATES: Record<TemplateType, { label: string; description: string; defa
     description: '2 rehearsals + 1 performance',
     defaultName: 'Orchestra Concert',
   },
+  'three-call-show': {
+    label: 'Three-call show',
+    description: 'Load-in, show day, strike — add roles after',
+    defaultName: 'Show',
+  },
   'custom': {
     label: 'Custom Project',
     description: 'Blank form — set up everything yourself',
@@ -111,6 +116,10 @@ export function ProjectFormDialog({
   // go straight to the blank form (audit finding: choir admins were greeted
   // with "String Quartet Gig" as the first screen of the core workflow).
   const hasMusicTemplates = vertical.features.useTitleInference
+  // Crew orgs have no instrumentation-specific templates, but they do get one
+  // template of their own (three-call show) — so the picker still needs to
+  // appear for them, just with a different template list (see render below).
+  const isCrew = vertical.key === 'production_crew'
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showTemplatePicker, setShowTemplatePicker] = useState(false)
@@ -212,9 +221,9 @@ export function ProjectFormDialog({
           coordinator_email: '',
           coordinator_phone: '',
         })
-        // Template picker for new projects — music verticals only
-        setShowTemplatePicker(hasMusicTemplates)
-        setSelectedTemplate(hasMusicTemplates ? null : 'custom')
+        // Template picker for new projects — music verticals and crew orgs only
+        setShowTemplatePicker(hasMusicTemplates || isCrew)
+        setSelectedTemplate(hasMusicTemplates || isCrew ? null : 'custom')
         setIsSingleDay(false)
         setBookingOpen(false)
         setCallTime('18:30')
@@ -278,7 +287,7 @@ export function ProjectFormDialog({
     }
 
     // Validate time ordering for single-day events with time pickers
-    const showTimePicker = isSingleDay && (isEditing || (selectedTemplate !== null && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra'))
+    const showTimePicker = isSingleDay && (isEditing || (selectedTemplate !== null && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' && selectedTemplate !== 'three-call-show'))
     if (showTimePicker) {
       if (endTime <= startTime) {
         setError('End time must be after start time.')
@@ -408,9 +417,9 @@ export function ProjectFormDialog({
         start_date: data.start_date || null,
         end_date: data.end_date || null,
         template: selectedTemplate || undefined,
-        callTime: isSingleDay && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' ? callTime : undefined,
-        startTime: isSingleDay && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' ? startTime : undefined,
-        endTime: isSingleDay && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' ? endTime : undefined,
+        callTime: isSingleDay && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' && selectedTemplate !== 'three-call-show' ? callTime : undefined,
+        startTime: isSingleDay && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' && selectedTemplate !== 'three-call-show' ? startTime : undefined,
+        endTime: isSingleDay && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' && selectedTemplate !== 'three-call-show' ? endTime : undefined,
         venueName: venueName || undefined,
         venueId: venueId,
       })
@@ -434,7 +443,9 @@ export function ProjectFormDialog({
           </DialogHeader>
 
           <div className="space-y-3 py-2">
-            {(Object.keys(TEMPLATES) as TemplateType[]).map((key) => {
+            {(Object.keys(TEMPLATES) as TemplateType[])
+              .filter((key) => (isCrew ? key === 'three-call-show' || key === 'custom' : key !== 'three-call-show'))
+              .map((key) => {
               const t = TEMPLATES[key]
               return (
                 <button
@@ -588,7 +599,7 @@ export function ProjectFormDialog({
                     )}
                   />
 
-                  {(isEditing || (selectedTemplate !== null && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra')) && (
+                  {(isEditing || (selectedTemplate !== null && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' && selectedTemplate !== 'three-call-show')) && (
                     <>
                     <p className="text-xs text-muted-foreground">All times in {formatTimezoneLabel(timezone)}</p>
                     <div className="grid grid-cols-3 gap-3">

@@ -633,6 +633,78 @@ export function ProjectsClient({
             },
           ]))
         }
+      } else if (newProject.template === 'three-call-show') {
+        // Load-in, show day, strike — services only, no positions (crew is
+        // built role by role after the show exists, there's no fixed
+        // instrumentation to seed the way a quartet has one).
+        const startDateStr = newProject.start_date
+        const endDateStr = newProject.end_date
+        const multiDay = !!startDateStr && !!endDateStr && startDateStr !== endDateStr
+
+        if (multiDay) {
+          trackTemplateWrite('services', await supabase.from('services').insert([
+            {
+              project_id: newProject.id,
+              name: `${newProject.name} Load-in`,
+              service_type: 'load_in',
+              start_time: toISO(startDateStr, '07:00'),
+              end_time: toISO(startDateStr, '15:00'),
+              call_time: toISO(startDateStr, '06:30'),
+              ...venueFields,
+            },
+            {
+              project_id: newProject.id,
+              name: `${newProject.name} Show Day`,
+              service_type: 'performance',
+              start_time: toISO(endDateStr, '06:00'),
+              end_time: toISO(endDateStr, '22:00'),
+              call_time: toISO(endDateStr, '05:30'),
+              ...venueFields,
+            },
+            {
+              project_id: newProject.id,
+              name: `${newProject.name} Strike`,
+              service_type: 'strike',
+              start_time: toISO(endDateStr, '22:00'),
+              end_time: toISO(endDateStr, '23:59'),
+              call_time: toISO(endDateStr, '22:00'),
+              ...venueFields,
+            },
+          ]))
+        } else {
+          const dateStr = startDateStr || endDateStr
+          if (dateStr) {
+            trackTemplateWrite('services', await supabase.from('services').insert([
+              {
+                project_id: newProject.id,
+                name: `${newProject.name} Load-in`,
+                service_type: 'load_in',
+                start_time: toISO(dateStr, '06:00'),
+                end_time: toISO(dateStr, '10:00'),
+                call_time: toISO(dateStr, '05:30'),
+                ...venueFields,
+              },
+              {
+                project_id: newProject.id,
+                name: `${newProject.name} Show Day`,
+                service_type: 'performance',
+                start_time: toISO(dateStr, '10:00'),
+                end_time: toISO(dateStr, '22:00'),
+                call_time: toISO(dateStr, '09:30'),
+                ...venueFields,
+              },
+              {
+                project_id: newProject.id,
+                name: `${newProject.name} Strike`,
+                service_type: 'strike',
+                start_time: toISO(dateStr, '22:00'),
+                end_time: toISO(dateStr, '23:59'),
+                call_time: toISO(dateStr, '22:00'),
+                ...venueFields,
+              },
+            ]))
+          }
+        }
       } else if (newProject.template === 'custom') {
         // Auto-create a performance with default times
         const dateStr = newProject.start_date || newProject.end_date
