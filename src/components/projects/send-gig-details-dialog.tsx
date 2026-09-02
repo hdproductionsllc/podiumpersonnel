@@ -96,8 +96,9 @@ export function SendGigDetailsDialog({
           setConfirmations(data.confirmations || [])
         }
       }
-    } catch {
-      // No existing sends — that's fine
+    } catch (err) {
+      // Treated as no existing sends — that's fine
+      console.warn('send-gig-details-dialog: could not check existing sends:', err)
     } finally {
       setLoadingStatus(false)
     }

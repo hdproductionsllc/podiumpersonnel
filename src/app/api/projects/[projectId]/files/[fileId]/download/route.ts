@@ -59,12 +59,17 @@ export async function POST(
     }
 
     if (body.musicianId) {
-      await serviceClient
+      const { error: trackError } = await serviceClient
         .from('project_file_downloads')
         .insert({
           file_id: fileId,
           musician_id: body.musicianId,
         })
+
+      if (trackError) {
+        // Best effort — the download link is still issued.
+        console.error(`Failed to record download of file ${fileId} by musician ${body.musicianId}:`, trackError)
+      }
     }
 
     // Generate signed URL (1 hour)

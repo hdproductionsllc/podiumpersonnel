@@ -339,12 +339,13 @@ export function AssignMusicianDialog({
                                         className="w-full px-3 py-2 text-left hover:bg-muted flex items-center justify-between gap-2"
                                         onClick={async () => {
                                           const supabase = createClient()
-                                          await supabase.from('musician_instruments').insert({
+                                          const { error: linkError } = await supabase.from('musician_instruments').insert({
                                             musician_id: m.id,
                                             instrument_id: instrumentId,
                                             is_primary: false,
                                             proficiency: 'professional',
                                           })
+                                          if (linkError) console.warn('assign-musician-dialog: auto-link instrument failed:', linkError)
                                           m.musician_instruments.push({ instrument_id: instrumentId })
                                           toast.success(`Added ${instrumentName || term(terms, 'skill', { case: 'lower' })} to ${m.first_name} ${m.last_name}'s profile`)
                                           setSelectedMusicianId(m.id)
@@ -456,7 +457,7 @@ export function AssignMusicianDialog({
                               .single()
                             if (insertErr) { setError(insertErr.message); return }
                             if (newMusician) {
-                              await supabase
+                              const { error: linkError } = await supabase
                                 .from('musician_instruments')
                                 .insert({
                                   musician_id: newMusician.id,
@@ -464,6 +465,7 @@ export function AssignMusicianDialog({
                                   is_primary: true,
                                   proficiency: 'professional',
                                 })
+                              if (linkError) console.warn('assign-musician-dialog: link new musician instrument failed:', linkError)
                               setLocallyAddedMusicians(prev => [...prev, {
                                 id: newMusician.id,
                                 first_name: newFirstName.trim() || newLastName.trim(),

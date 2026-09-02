@@ -135,11 +135,17 @@ export async function POST(
 
     // Add instrument association
     if (subRequest.suggested_sub_instrument_id) {
-      await supabase.from('musician_instruments').insert({
+      const { error: instrumentError } = await supabase.from('musician_instruments').insert({
         musician_id: substituteMusician.id,
         instrument_id: subRequest.suggested_sub_instrument_id,
         is_primary: true,
       })
+
+      if (instrumentError) {
+        // The musician record exists; they just won't show under the instrument
+        // until an admin adds it. Not worth blocking the substitution.
+        console.error(`Failed to add instrument ${subRequest.suggested_sub_instrument_id} to new substitute ${substituteMusician.id}:`, instrumentError)
+      }
     }
   }
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getOrgPlan } from '@/lib/api-helpers'
+import { getOrgPlan, serverError } from '@/lib/api-helpers'
 import { canExport } from '@/lib/plan'
 import { DEFAULT_TIMEZONE } from '@/lib/utils'
 import * as XLSX from 'xlsx'
@@ -204,14 +204,19 @@ export async function POST(request: Request) {
     // Generate buffer
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })
 
-    // Mark payments as exported
-    await supabase
+    // Mark payments as exported. If this fails the file must not go out either:
+    // an unstamped export would be silently re-exported next time.
+    const { error: stampError } = await supabase
       .from('payments')
       .update({
         exported_at: new Date().toISOString(),
         export_batch_id: batchId,
       })
       .in('id', paymentIds)
+
+    if (stampError) {
+      return serverError(`Failed to mark payments exported (batch ${batchId})`, stampError)
+    }
 
     // Return Excel file
     const fileName = `payments-${format}-${batchId}.xlsx`

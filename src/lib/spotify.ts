@@ -109,7 +109,7 @@ export async function getConnection(orgId: string): Promise<SpotifyConnection | 
   const refreshed = await tokenRequest(
     new URLSearchParams({ grant_type: 'refresh_token', refresh_token: conn.refresh_token })
   )
-  await service
+  const { error: persistError } = await service
     .from('spotify_connections')
     .update({
       access_token: refreshed.access_token,
@@ -118,6 +118,13 @@ export async function getConnection(orgId: string): Promise<SpotifyConnection | 
       ...(refreshed.refresh_token ? { refresh_token: refreshed.refresh_token } : {}),
     })
     .eq('organization_id', orgId)
+
+  if (persistError) {
+    // The fresh token still works for this request; the next call just has to
+    // refresh again. If Spotify rotated the refresh token, losing it here is
+    // what eventually forces a reconnect — worth a loud log.
+    console.error(`Failed to persist refreshed Spotify token for org ${orgId}:`, persistError)
+  }
 
   return { spotify_user_id: conn.spotify_user_id, display_name: conn.display_name, accessToken: refreshed.access_token }
 }

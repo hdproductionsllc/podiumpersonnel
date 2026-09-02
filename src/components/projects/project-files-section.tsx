@@ -113,8 +113,9 @@ export function ProjectFilesSection({
         const data = await res.json()
         setFiles(data.files || [])
       }
-    } catch {
-      // Fail silently
+    } catch (err) {
+      // The section just stays empty; the admin can reopen to retry
+      console.warn('project-files-section: could not load files:', err)
     } finally {
       setLoading(false)
     }

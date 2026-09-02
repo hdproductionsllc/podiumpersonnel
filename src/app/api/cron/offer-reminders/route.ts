@@ -88,12 +88,19 @@ export async function GET(request: NextRequest) {
 
     // Claim this offer atomically BEFORE sending, so an overlapping cron run
     // can't send the musician a duplicate reminder. Only one run wins the claim.
-    const { data: claimed } = await supabase
+    const { data: claimed, error: claimError } = await supabase
       .from('contract_offers')
       .update({ reminder_sent_at: now.toISOString() })
       .eq('id', offer.id)
       .is('reminder_sent_at', null)
       .select('id')
+
+    if (claimError) {
+      // Treated as "not claimed": sending without the stamp would risk a
+      // duplicate reminder from the next run, so skip and let it retry.
+      console.error(`Failed to claim offer ${offer.id} for reminder:`, claimError)
+      continue
+    }
 
     if (!claimed || claimed.length === 0) {
       continue // another run already claimed and is sending this reminder

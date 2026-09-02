@@ -3,6 +3,7 @@ import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendPositionUnassignedEmail, sendEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { PODIUM_FOOTER_URL } from '@/lib/email/templates/podium-footer'
+import { serverError } from '@/lib/api-helpers'
 
 export async function POST(
   request: NextRequest,
@@ -83,16 +84,26 @@ export async function POST(
     }
 
     // Delete any contract offers for this position
-    await supabase
+    const { error: deleteOffersError } = await supabase
       .from('contract_offers')
       .delete()
       .eq('project_position_id', positionId)
 
+    if (deleteOffersError) {
+      return serverError(`Failed to delete offers for position ${positionId}`, deleteOffersError)
+    }
+
     // Reset the position to vacant
-    await supabase
+    const { error: vacateError } = await supabase
       .from('project_positions')
       .update({ musician_id: null, status: 'vacant' })
       .eq('id', positionId)
+
+    if (vacateError) {
+      // Nothing has been emailed yet; the admin can retry and the delete above
+      // is a no-op the second time.
+      return serverError(`Failed to vacate position ${positionId}`, vacateError)
+    }
 
     // Send email notifications
     const emailPromises: Promise<any>[] = []

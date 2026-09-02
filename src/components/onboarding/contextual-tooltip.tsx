@@ -33,13 +33,15 @@ export function ContextualTooltip({
     const supabase = createClient()
     const newDismissed = [...dismissedTooltips, tooltipId]
 
-    await supabase
+    const { error: saveError } = await supabase
       .from('user_tutorial_state')
       .upsert({
         user_id: userId,
         organization_id: organizationId,
         dismissed_tooltips: newDismissed,
       }, { onConflict: 'user_id,organization_id' })
+    // Worst case the tip shows again next visit — it is already hidden for now.
+    if (saveError) console.warn('contextual-tooltip: could not save dismissed tooltip:', saveError)
   }
 
   return (
