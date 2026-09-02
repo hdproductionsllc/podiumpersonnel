@@ -81,7 +81,6 @@ export async function POST(request: NextRequest) {
 
     // Send emails
     for (let i = 0; i < eligibleMusicians.length; i++) {
-      if (i > 0) await new Promise((r) => setTimeout(r, 600))
       const musician = eligibleMusicians[i]
       try {
         // Mint a fresh upload token so the musician can submit without an

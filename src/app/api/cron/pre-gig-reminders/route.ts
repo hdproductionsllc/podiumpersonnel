@@ -183,9 +183,6 @@ export async function GET(request: NextRequest) {
     } catch (emailError) {
       console.error(`Failed to send pre-gig notification for project ${project.id}:`, emailError)
     }
-
-    // Rate limit between projects
-    if (draftsCreated > 0) await new Promise((r) => setTimeout(r, 600))
   }
 
   console.log(`Pre-gig cron: ${draftsCreated} drafts created, ${emailsSent} emails sent, ${expiredCount ?? 0} expired`)

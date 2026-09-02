@@ -120,9 +120,6 @@ export async function GET(request: NextRequest) {
       : null
     if (lastAt && sameUtcDay(lastAt, now)) { skipped++; continue }
 
-    // Space the sends out, matching the other jobs' pacing against the provider.
-    if (sent > 0) await new Promise((r) => setTimeout(r, 600))
-
     try {
       const result = await sendSongPlannerEmail({
         to: project.client_email,
