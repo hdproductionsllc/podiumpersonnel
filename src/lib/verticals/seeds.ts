@@ -74,3 +74,27 @@ export const EVENT_AGENCY_SEEDS: SkillSeed[] = [
   { name: 'Specialty Act', abbreviation: 'Act', section: 'other', sort_order: 104 },
   { name: 'Sound Technician', abbreviation: 'Sound', section: 'other', sort_order: 105 },
 ]
+
+/**
+ * Production crew roles, in the order a crew coordinator writes a call:
+ * audio, lighting, video, then hands and leadership. Abbreviations are the
+ * ones techs actually use on a call sheet ("A1", "L1", "V1").
+ */
+export const PRODUCTION_CREW_SEEDS: SkillSeed[] = [
+  { name: 'A1 (FOH Audio Engineer)', abbreviation: 'A1', section: 'other', sort_order: 100 },
+  { name: 'A2 (Monitor / Stage Audio)', abbreviation: 'A2', section: 'other', sort_order: 101 },
+  { name: 'L1 (Lighting Designer)', abbreviation: 'L1', section: 'other', sort_order: 200 },
+  { name: 'L2 (Lighting Tech)', abbreviation: 'L2', section: 'other', sort_order: 201 },
+  { name: 'V1 (Video Director)', abbreviation: 'V1', section: 'other', sort_order: 300 },
+  { name: 'V2 (Video Tech)', abbreviation: 'V2', section: 'other', sort_order: 301 },
+  { name: 'Camera Operator', abbreviation: 'Cam', section: 'other', sort_order: 302 },
+  { name: 'Graphics Operator', abbreviation: 'GFX', section: 'other', sort_order: 303 },
+  { name: 'Projectionist', abbreviation: 'Proj', section: 'other', sort_order: 304 },
+  { name: 'LED Tech', abbreviation: 'LED', section: 'other', sort_order: 305 },
+  { name: 'Breakout Tech', abbreviation: 'Breakout', section: 'other', sort_order: 400 },
+  { name: 'Rigger', abbreviation: 'Rig', section: 'other', sort_order: 500 },
+  { name: 'Stagehand', abbreviation: 'Hand', section: 'other', sort_order: 501 },
+  { name: 'Truck / Driver', abbreviation: 'Truck', section: 'other', sort_order: 502 },
+  { name: 'Stage Manager', abbreviation: 'SM', section: 'other', sort_order: 600 },
+  { name: 'Show Caller', abbreviation: 'Caller', section: 'other', sort_order: 601 },
+]

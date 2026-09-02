@@ -11,7 +11,7 @@ import {
 } from '@react-email/components'
 import { type EmailBranding } from './email-layout'
 import { PodiumFooter } from './podium-footer'
-import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
+import { term, DEFAULT_TERMS, type TermDictionary, type VerticalBrand } from '@/lib/verticals'
 
 interface OfferReminderEmailProps {
   musicianName: string
@@ -25,6 +25,7 @@ interface OfferReminderEmailProps {
   daysRemaining: number | null
   branding?: EmailBranding
   terms?: TermDictionary
+  brand?: VerticalBrand
 }
 
 export function OfferReminderEmail({
@@ -39,6 +40,7 @@ export function OfferReminderEmail({
   daysRemaining,
   branding,
   terms,
+  brand,
 }: OfferReminderEmailProps) {
   const t = terms ?? DEFAULT_TERMS
   const urgentStyle = daysRemaining !== null && daysRemaining <= 2
@@ -103,6 +105,7 @@ export function OfferReminderEmail({
           <PodiumFooter
             organizationName={organizationName}
             footerText={footerText}
+            brand={brand}
           />
         </Container>
       </Body>

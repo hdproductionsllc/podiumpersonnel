@@ -11,7 +11,7 @@ import {
 } from '@react-email/components'
 import { type EmailBranding } from './email-layout'
 import { PodiumFooter } from './podium-footer'
-import { type TermDictionary } from '@/lib/verticals'
+import { type TermDictionary, type VerticalBrand } from '@/lib/verticals'
 
 interface RosterMember {
   name: string
@@ -48,6 +48,7 @@ interface GigDetailsEmailProps {
   notes?: string
   branding?: EmailBranding
   terms?: TermDictionary
+  brand?: VerticalBrand
 }
 
 export function GigDetailsEmail({
@@ -60,6 +61,7 @@ export function GigDetailsEmail({
   confirmUrl,
   notes,
   branding,
+  brand,
 }: GigDetailsEmailProps) {
   const brandColor = branding?.brandColor || '#1E293B'
   const logoUrl = branding?.logoUrl
@@ -222,6 +224,7 @@ export function GigDetailsEmail({
           <PodiumFooter
             organizationName={organizationName}
             footerText={footerText}
+            brand={brand}
           />
         </Container>
       </Body>

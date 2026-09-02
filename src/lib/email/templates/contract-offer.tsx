@@ -12,7 +12,7 @@ import {
 } from '@react-email/components'
 import { type EmailBranding } from './email-layout'
 import { PodiumFooter } from './podium-footer'
-import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
+import { term, DEFAULT_TERMS, type TermDictionary, type VerticalBrand } from '@/lib/verticals'
 
 interface ContractOfferEmailProps {
   musicianName: string
@@ -45,6 +45,7 @@ interface ContractOfferEmailProps {
   ensembleType?: string | null
   branding?: EmailBranding
   terms?: TermDictionary
+  brand?: VerticalBrand
 }
 
 export function ContractOfferEmail({
@@ -66,6 +67,7 @@ export function ContractOfferEmail({
   ensembleType,
   branding,
   terms,
+  brand,
 }: ContractOfferEmailProps) {
   const t = terms ?? DEFAULT_TERMS
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
@@ -247,6 +249,7 @@ export function ContractOfferEmail({
           <PodiumFooter
             organizationName={organizationName}
             footerText={footerText}
+            brand={brand}
           />
         </Container>
       </Body>

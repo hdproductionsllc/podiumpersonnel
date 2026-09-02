@@ -1,5 +1,6 @@
 import { Hr, Section, Text, Link } from '@react-email/components'
 import * as React from 'react'
+import type { VerticalBrand } from '@/lib/verticals'
 
 export const PODIUM_FOOTER_URL =
   'https://www.podiumpersonnel.com/?utm_source=transactional_email&utm_medium=footer&utm_campaign=recipient_referral'
@@ -8,13 +9,19 @@ interface PodiumFooterProps {
   organizationName: string
   footerText?: string | null
   verb?: 'email' | 'confirmation' | 'notification'
+  /** Optional second-market brand (e.g. Overhire). Omit for Podium. */
+  brand?: VerticalBrand
 }
 
 export function PodiumFooter({
   organizationName,
   footerText,
   verb = 'email',
+  brand,
 }: PodiumFooterProps) {
+  const brandName = brand?.name ?? 'Podium'
+  const brandUrl = brand?.url ?? PODIUM_FOOTER_URL
+
   return (
     <>
       <Hr style={hr} />
@@ -23,8 +30,8 @@ export function PodiumFooter({
         {footerText && <Text style={footerTextStyle}>{footerText}</Text>}
         <Text style={footerTextStyle}>
           This {verb} was sent by {organizationName} via{' '}
-          <Link href={PODIUM_FOOTER_URL} style={podiumLink}>
-            Podium
+          <Link href={brandUrl} style={podiumLink}>
+            {brandName}
           </Link>
           .
         </Text>
