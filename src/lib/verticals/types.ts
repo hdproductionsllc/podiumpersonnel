@@ -18,6 +18,7 @@ export const VERTICAL_KEYS = [
   'dance',
   'church_worship',
   'event_agency',
+  'production_crew',
 ] as const
 
 export type VerticalKey = (typeof VERTICAL_KEYS)[number]
@@ -103,12 +104,24 @@ export type SkillSeed = {
   sort_order: number
 }
 
+/**
+ * Product name and home URL shown in the wordmark, browser tab and email
+ * footers. Absent means Podium (see brand.ts). Lets one deployment wear a
+ * second name for a second market without a second codebase.
+ */
+export type VerticalBrand = {
+  name: string
+  url: string
+}
+
 export type VerticalTemplate = {
   key: VerticalKey
   /** Shown on the onboarding picker card */
   displayName: string
   /** One-liner under the card title */
   description: string
+  /** Optional product brand; omit for Podium */
+  brand?: VerticalBrand
   terms: TermDictionary
   nav: NavConfig
   features: VerticalFeatures

@@ -1,3 +1,17 @@
+# Overhire demo skin (2026-09-02) — branch overhire-demo-skin
+
+Option 2 from the fork discussion: make the existing engine look like a crew-booking tool in 1–2 days, then 5 "show me how you staffed last week's show" interviews. No SMS, no W-9/payment work, no per-call positions, no domain/marketing site.
+Plan: C:\Users\david\.claude\plans\majestic-wibbling-possum.md · Concept: tasks/fork-concept-crew.md
+
+- [ ] 1. production_crew vertical: template + role seeds + registry + VERTICAL_KEYS + migration 084 (+ paste-ready SQL)
+- [ ] 2. Brand hook: brandFor(); logo wordmark, dashboard tab title, email footer "via Overhire", gig page policy label
+- [ ] 3. "Three-call show" project template (Load-in / Show / Strike) for crew orgs
+- [ ] 4. scripts/seed-crew-demo.js: 12 crew (plus-addressed emails), venue, one 3-call show with A1/A2/L1/V1/LED/4 hands
+- [ ] 5. production-crew.test.ts + docs/overhire-demo.md
+- [ ] Verify: tsc/lint/vitest green; local signup as Production Company; seed; send an offer in safe mode; music org unchanged; PR; migration 084 pasted in prod BEFORE merge; demo org in prod
+
+---
+
 # Hardening pass (2026-09-01) — branch hardening-2026-09
 
 No deletions, no core-behaviour changes. Only failure paths change: errors that vanished now get logged / toasted / returned.

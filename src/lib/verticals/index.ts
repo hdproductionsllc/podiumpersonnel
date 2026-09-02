@@ -5,9 +5,11 @@ export type { TermKey, TermOpts } from './terms'
 export { canUseChairs, canInferTitles, canDetectEnsembles, showBooksTab } from './features'
 export { orchestralTitleRules, plainTitleRules } from './title-rules'
 export { VERTICAL_KEYS } from './types'
+export { brandFor, DEFAULT_BRAND } from './brand'
 export type {
   VerticalKey,
   VerticalTemplate,
+  VerticalBrand,
   TermDictionary,
   TermForms,
   VerticalFeatures,

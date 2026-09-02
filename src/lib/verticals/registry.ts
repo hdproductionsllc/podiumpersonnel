@@ -5,6 +5,7 @@ import { theatre } from './templates/theatre'
 import { dance } from './templates/dance'
 import { churchWorship } from './templates/church-worship'
 import { eventAgency } from './templates/event-agency'
+import { productionCrew } from './templates/production-crew'
 import type { VerticalKey, VerticalTemplate } from './types'
 
 export const DEFAULT_VERTICAL: VerticalKey = 'music_contractor'
@@ -17,6 +18,7 @@ export const VERTICALS: Record<VerticalKey, VerticalTemplate> = {
   dance,
   church_worship: churchWorship,
   event_agency: eventAgency,
+  production_crew: productionCrew,
 }
 
 /**
