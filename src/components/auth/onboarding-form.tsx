@@ -46,8 +46,9 @@ function detectTimezone(): string {
     const detected = Intl.DateTimeFormat().resolvedOptions().timeZone
     const supported = TIMEZONE_OPTIONS.map((tz) => tz.value)
     if (supported.includes(detected)) return detected
-  } catch {
-    // Intl not available
+  } catch (err) {
+    // Intl not available — fall back to the default timezone
+    console.warn('onboarding-form: timezone detection failed:', err)
   }
   return DEFAULT_TIMEZONE
 }
@@ -121,8 +122,9 @@ export function OnboardingForm() {
     // (or the SQL-seeded verticals) fills it in.
     try {
       await fetch('/api/organization/seed-skills', { method: 'POST' })
-    } catch {
-      // Ignore — seeding is best-effort and idempotent
+    } catch (err) {
+      // Seeding is best-effort and idempotent — log it, never block onboarding
+      console.warn('onboarding-form: seed-skills request failed:', err)
     }
 
     // Send welcome email (don't await — don't block the redirect)

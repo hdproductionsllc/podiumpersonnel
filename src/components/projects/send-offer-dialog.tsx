@@ -738,12 +738,13 @@ export function SendOfferDialog({
                                         onClick={async () => {
                                           // Auto-link instrument
                                           const supabase = createClient()
-                                          await supabase.from('musician_instruments').insert({
+                                          const { error: linkError } = await supabase.from('musician_instruments').insert({
                                             musician_id: m.id,
                                             instrument_id: instrumentId,
                                             is_primary: false,
                                             proficiency: 'professional',
                                           })
+                                          if (linkError) console.warn('send-offer-dialog: auto-link instrument failed:', linkError)
                                           m.musician_instruments.push({ instrument_id: instrumentId })
                                           toast.success(`Added ${instrumentName || term(terms, 'skill', { case: 'lower' })} to ${m.first_name} ${m.last_name}'s profile`)
                                           setSelectedMusicianId(m.id)
@@ -900,7 +901,7 @@ export function SendOfferDialog({
                             if (insertErr) { setError(insertErr.message); return }
                             // Also link to the current instrument
                             if (newMusician) {
-                              await supabase
+                              const { error: linkError } = await supabase
                                 .from('musician_instruments')
                                 .insert({
                                   musician_id: newMusician.id,
@@ -908,6 +909,7 @@ export function SendOfferDialog({
                                   is_primary: true,
                                   proficiency: 'professional',
                                 })
+                              if (linkError) console.warn('send-offer-dialog: link new musician instrument failed:', linkError)
                               // Add to local list so dropdown and confirmation can find them
                               setLocallyAddedMusicians(prev => [...prev, {
                                 id: newMusician.id,
@@ -1226,8 +1228,9 @@ export function SendOfferDialog({
                   setPreviewHtml(data.html)
                   setShowPreview(true)
                 }
-              } catch {
-                // ignore preview errors
+              } catch (err) {
+                // Preview is optional — the send button still works without it.
+                console.warn('send-offer-dialog: email preview failed:', err)
               }
               setPreviewLoading(false)
             }}

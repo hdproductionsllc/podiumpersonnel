@@ -105,13 +105,19 @@ async function handleDecline(_request: Request, token: string) {
     await vacateChair(supabase, offer.project_position_id)
   }
 
-  // If this is a substitution, update the substitution request and notify original musician
+  // If this is a substitution, update the substitution request and notify original musician.
+  // The decline itself is already committed above, so a failure here is logged
+  // for the contractor rather than reported to the musician as a failed decline.
   if (subRequest) {
     // Update substitution request to sub_declined
-    await supabase
+    const { error: subDeclineError } = await supabase
       .from('substitution_requests')
       .update({ status: 'sub_declined' })
       .eq('id', subRequest.id)
+
+    if (subDeclineError) {
+      console.error(`Failed to mark substitution request ${subRequest.id} sub_declined after decline of offer ${offer.id}:`, subDeclineError)
+    }
 
     // Tell the original musician their sub fell through. Shared with the portal
     // path, which also records it — this route used to send without logging, so

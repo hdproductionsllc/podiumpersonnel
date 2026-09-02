@@ -20,12 +20,16 @@ export async function GET(request: NextRequest) {
   const in72Hours = new Date(now.getTime() + 72 * 60 * 60 * 1000)
 
   // 1. Expire old drafts where trigger_date has passed
-  const { data: expiredRows } = await supabase
+  const { data: expiredRows, error: expireError } = await supabase
     .from('pre_gig_reminders')
     .update({ status: 'expired' })
     .eq('status', 'draft')
     .lt('trigger_date', now.toISOString())
     .select('id')
+  if (expireError) {
+    // Stale drafts linger one more day; the rest of the run is unaffected.
+    console.error('Failed to expire stale pre-gig reminder drafts:', expireError)
+  }
   const expiredCount = expiredRows?.length ?? 0
 
   // 2. Find projects with services 24-72h from now
@@ -183,9 +187,6 @@ export async function GET(request: NextRequest) {
     } catch (emailError) {
       console.error(`Failed to send pre-gig notification for project ${project.id}:`, emailError)
     }
-
-    // Rate limit between projects
-    if (draftsCreated > 0) await new Promise((r) => setTimeout(r, 600))
   }
 
   console.log(`Pre-gig cron: ${draftsCreated} drafts created, ${emailsSent} emails sent, ${expiredCount ?? 0} expired`)

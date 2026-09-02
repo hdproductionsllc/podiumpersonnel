@@ -111,7 +111,8 @@ export async function POST(
     if (updateError) {
       // The row still points at the old file, so clean up the orphan rather than
       // leaving an unreferenced document in the bucket.
-      await supabase.storage.from('w9-documents').remove([storagePath])
+      const { error: orphanError } = await supabase.storage.from('w9-documents').remove([storagePath])
+      if (orphanError) console.warn(`Failed to remove orphaned W-9 upload ${storagePath}:`, orphanError)
       console.error(`W-9 record update failed for musician ${musician.id}:`, updateError)
       return NextResponse.json(
         { error: 'We could not save that file. Please try again.' },
@@ -120,11 +121,14 @@ export async function POST(
     }
 
     // Only once the record is safely repointed is the old file redundant.
+    // Best effort: the new W-9 is already on file either way.
     if (previousPath && previousPath !== storagePath) {
-      await supabase.storage
-        .from('w9-documents')
-        .remove([previousPath])
-        .catch((err) => console.warn('Failed to remove superseded W-9:', err))
+      try {
+        const { error: removeError } = await supabase.storage.from('w9-documents').remove([previousPath])
+        if (removeError) console.warn('Failed to remove superseded W-9:', removeError)
+      } catch (err) {
+        console.warn('Failed to remove superseded W-9:', err)
+      }
     }
 
     notifyAdmins(supabase, musician).catch((err) =>

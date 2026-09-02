@@ -57,8 +57,9 @@ export default async function DashboardLayout({
     if (orgData) {
       org = orgData as unknown as OrgBilling
     }
-  } catch {
+  } catch (err) {
     // Billing columns don't exist yet — use defaults (treats as trial/pro)
+    console.warn('Dashboard layout: billing columns unavailable, using defaults:', err)
   }
 
   const plan = resolveOrgPlan(org)
@@ -73,8 +74,9 @@ export default async function DashboardLayout({
       .eq('id', membership.organization_id)
       .single()
     verticalKey = (verticalData as { vertical?: string } | null)?.vertical ?? null
-  } catch {
+  } catch (err) {
     // Column doesn't exist yet — default template
+    console.warn('Dashboard layout: vertical column unavailable, using default template:', err)
   }
 
   // Fetch the intake feature flag separately so a missing column (migration 073
@@ -87,8 +89,9 @@ export default async function DashboardLayout({
       .eq('id', membership.organization_id)
       .single()
     intakeEnabled = (flagData as { intake_enabled?: boolean } | null)?.intake_enabled === true
-  } catch {
+  } catch (err) {
     // Column doesn't exist yet — feature stays hidden
+    console.warn('Dashboard layout: intake_enabled column unavailable, feature hidden:', err)
   }
 
   return (

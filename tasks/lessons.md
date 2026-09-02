@@ -1,11 +1,12 @@
 # Lessons Learned
 
-## Resend Rate Limit: Always delay between email sends
-**Date:** 2026-02-10
+## Resend Rate Limit: the throttle lives in the email client, never in loops
+**Date:** 2026-02-10, rewritten 2026-09-01
 **Bug:** "1 failed" when sending music reminders to 3 musicians. Third email hit Resend's 2 requests/second rate limit.
 **Root cause:** Sending emails in a tight `for` loop with no delay between iterations.
-**Fix:** Add `if (i > 0) await new Promise((r) => setTimeout(r, 600))` at the start of every email-sending loop.
-**Rule:** ANY time you write a loop that sends emails via Resend, add a 600ms delay between sends. No exceptions. This applies to all API routes — sends, reminders, cron jobs, invitations, etc.
+**First fix (wrong lesson):** a 600ms sleep pasted into every send loop, with a rule to "remember it in every loop". By 2026-09 there were ten copies, and a rule that has to be remembered N times gets forgotten once.
+**Real fix (2026-09-01):** `awaitResendSlot()` in `src/lib/email/client.ts`, called by both send sites in `send.ts`. It reserves the next free 600ms slot, so sequential and concurrent sends are paced in one place. `resend-throttle.test.ts` fails the build if any route grows its own sleep.
+**Rule:** Never add per-loop sleeps around email sends. If a provider limit changes, change `RESEND_MIN_INTERVAL_MS`. More broadly: when a lesson says "do X in every Y", the right fix is to make Y do X itself.
 
 ## logEmail() can throw — don't let it kill the count
 **Date:** 2026-02-10

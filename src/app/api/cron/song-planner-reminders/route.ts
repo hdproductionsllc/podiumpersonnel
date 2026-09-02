@@ -79,6 +79,9 @@ export async function GET(request: NextRequest) {
 
   let sent = 0
   let skipped = 0
+  // Emails that went out but whose "last reminded" stamp failed to save — each
+  // of these will nudge the client again tomorrow unless someone looks.
+  let stampFailed = 0
 
   for (const intake of intakes ?? []) {
     const project = intake.project as unknown as {
@@ -120,9 +123,6 @@ export async function GET(request: NextRequest) {
       : null
     if (lastAt && sameUtcDay(lastAt, now)) { skipped++; continue }
 
-    // Space the sends out, matching the other jobs' pacing against the provider.
-    if (sent > 0) await new Promise((r) => setTimeout(r, 600))
-
     try {
       const result = await sendSongPlannerEmail({
         to: project.client_email,
@@ -142,10 +142,17 @@ export async function GET(request: NextRequest) {
 
       // Stamped only after the send returns, so a failure is retried tomorrow
       // rather than silently swallowed.
-      await supabase
+      const { error: stampError } = await supabase
         .from('intakes')
         .update({ client_last_reminder_at: now.toISOString() })
         .eq('id', intake.id)
+
+      if (stampError) {
+        // The email was sent; only the stamp is missing, so tomorrow's run will
+        // send a duplicate. Counted separately so the summary shows it.
+        console.error(`song-planner-reminders: sent to intake ${intake.id} but failed to stamp client_last_reminder_at (duplicate likely tomorrow)`, stampError)
+        stampFailed++
+      }
 
       await logEmail({
         organizationId: intake.organization_id as string,
@@ -165,5 +172,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ sent, skipped })
+  return NextResponse.json({ sent, skipped, stampFailed })
 }

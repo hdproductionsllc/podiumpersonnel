@@ -170,11 +170,16 @@ export async function POST(
 
     // The restored row is no longer "previous" — drop its history entry so the
     // list doesn't offer to restore what is already live.
-    await service
+    const { error: dropError } = await service
       .from('repertoire_part_versions')
       .delete()
       .eq('id', version.id)
       .eq('organization_id', libraryOrgId)
+
+    if (dropError) {
+      // The restore itself succeeded; the only cost is a redundant history row.
+      console.error(`Failed to drop restored version ${version.id} from history for part ${partId}:`, dropError)
+    }
 
     return NextResponse.json(
       { success: true, restored: version.original_filename },

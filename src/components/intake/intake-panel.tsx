@@ -457,8 +457,9 @@ export function IntakePanel({ projectId, ensembleType, instruments, clientEmail 
             body: JSON.stringify({ aliasText: r.titleRaw, repertoireId: r.matchedRepertoireId }),
           })
           if (res.ok) taught++
-        } catch {
+        } catch (err) {
           /* best-effort */
+          console.warn('intake-panel: teach alias failed:', err)
         }
       })
     )

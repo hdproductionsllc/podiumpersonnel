@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import * as Sentry from '@sentry/nextjs'
 import { sendEmail } from '@/lib/email/send'
 
 /**
@@ -63,6 +64,9 @@ export function cronDisabledResponse(jobName: string): NextResponse | null {
  * original failure.
  */
 export async function notifyOps(jobName: string, error: unknown): Promise<void> {
+  // Sentry first: it needs no env beyond the DSN and never throws.
+  Sentry.captureException(error, { tags: { cron: jobName } })
+
   const to = process.env.PLATFORM_ADMIN_EMAIL
   if (!to) return
   const detail =

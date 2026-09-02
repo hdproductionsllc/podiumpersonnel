@@ -1,0 +1,43 @@
+# Runs on every pull request and every push to master.
+# Vercel builds the app on push, but nothing else ran the type check, lint,
+# or the test suite automatically before this existed (two failing tests
+# reached master unnoticed in August 2026).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  check:
+    name: Typecheck, lint, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint (advisory)
+        # 712 pre-existing lint errors (mostly no-explicit-any) as of 2026-09-01.
+        # Reported, not blocking, until that backlog is paid down. Flip this to
+        # blocking by deleting continue-on-error once "npm run lint" is clean.
+        continue-on-error: true
+        run: npm run lint
+
+      - name: Test
+        # Tests never touch the real database or Resend. The key below only
+        # keeps the Resend SDK from throwing at import time.
+        env:
+          RESEND_API_KEY: re_ci_placeholder
+        run: npm test

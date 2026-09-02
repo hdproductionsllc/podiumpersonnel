@@ -63,6 +63,8 @@ export function BulkEditDialog({
     const supabase = createClient()
     let successCount = 0
     let errorCount = 0
+    // Which step(s) failed, so the final toast can say more than "failed".
+    const failedSteps = new Set<string>()
 
     for (const musician of musicians) {
       try {
@@ -91,6 +93,7 @@ export function BulkEditDialog({
 
           if (updateError) {
             console.error(`Error updating musician ${musician.id}:`, updateError)
+            failedSteps.add('saving details')
             errorCount++
             continue
           }
@@ -100,14 +103,21 @@ export function BulkEditDialog({
         if (updateInstruments) {
           if (instrumentMode === 'replace') {
             // Delete all existing instruments
-            await supabase
+            const { error: clearError } = await supabase
               .from('musician_instruments')
               .delete()
               .eq('musician_id', musician.id)
 
+            if (clearError) {
+              console.error(`Error clearing instruments for musician ${musician.id}:`, clearError)
+              failedSteps.add(`removing existing ${term(terms, 'skill', { plural: true, case: 'lower' })}`)
+              errorCount++
+              continue
+            }
+
             // Insert new instruments
             if (instrumentIds.length > 0) {
-              await supabase
+              const { error: insertError } = await supabase
                 .from('musician_instruments')
                 .insert(
                   instrumentIds.map((instrument_id) => ({
@@ -115,6 +125,13 @@ export function BulkEditDialog({
                     instrument_id,
                   }))
                 )
+
+              if (insertError) {
+                console.error(`Error adding instruments for musician ${musician.id}:`, insertError)
+                failedSteps.add(`adding ${term(terms, 'skill', { plural: true, case: 'lower' })}`)
+                errorCount++
+                continue
+              }
             }
           } else if (instrumentMode === 'add') {
             // Add instruments (ignore duplicates)
@@ -122,7 +139,7 @@ export function BulkEditDialog({
             const newIds = instrumentIds.filter((id) => !existingIds.includes(id))
 
             if (newIds.length > 0) {
-              await supabase
+              const { error: insertError } = await supabase
                 .from('musician_instruments')
                 .insert(
                   newIds.map((instrument_id) => ({
@@ -130,15 +147,29 @@ export function BulkEditDialog({
                     instrument_id,
                   }))
                 )
+
+              if (insertError) {
+                console.error(`Error adding instruments for musician ${musician.id}:`, insertError)
+                failedSteps.add(`adding ${term(terms, 'skill', { plural: true, case: 'lower' })}`)
+                errorCount++
+                continue
+              }
             }
           } else if (instrumentMode === 'remove') {
             // Remove specified instruments
             if (instrumentIds.length > 0) {
-              await supabase
+              const { error: removeError } = await supabase
                 .from('musician_instruments')
                 .delete()
                 .eq('musician_id', musician.id)
                 .in('instrument_id', instrumentIds)
+
+              if (removeError) {
+                console.error(`Error removing instruments for musician ${musician.id}:`, removeError)
+                failedSteps.add(`removing ${term(terms, 'skill', { plural: true, case: 'lower' })}`)
+                errorCount++
+                continue
+              }
             }
           }
         }
@@ -156,7 +187,8 @@ export function BulkEditDialog({
       toast.success(`Updated ${successCount} ${term(terms, 'person', { case: 'lower' })}${successCount !== 1 ? 's' : ''}`)
     }
     if (errorCount > 0) {
-      toast.error(`Failed to update ${errorCount} ${term(terms, 'person', { case: 'lower' })}${errorCount !== 1 ? 's' : ''}`)
+      const stepNote = failedSteps.size > 0 ? ` (${Array.from(failedSteps).join(', ')} failed)` : ''
+      toast.error(`Failed to update ${errorCount} ${term(terms, 'person', { case: 'lower' })}${errorCount !== 1 ? 's' : ''}${stepNote}`)
     }
 
     if (successCount > 0) {

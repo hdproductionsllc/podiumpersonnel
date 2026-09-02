@@ -69,3 +69,7 @@ podium-marketing/node_modules/
 podium-marketing/.next/
 podium-marketing/.vercel
 podium-marketing/tsconfig.tsbuildinfo
+
+# Large local assets and David's local music-prep tooling; never part of the app
+podium.png
+Music Compiler Local System/

@@ -182,9 +182,6 @@ export async function GET(request: NextRequest) {
     } catch (emailError) {
       console.error(`Staffing alert failed for project ${project.id}:`, emailError)
     }
-
-    // Rate limit between sends
-    if (emailsSent > 0) await new Promise((r) => setTimeout(r, 600))
   }
 
   console.log(`Staffing alerts: ${emailsSent} sent, ${skipped} skipped (already notified)`)

@@ -704,13 +704,17 @@ export function MusicianFormDialog({
                             onClick={async () => {
                               const supabase = createClient()
                               const { data: { user } } = await supabase.auth.getUser()
-                              await supabase
+                              const { error: verifyError } = await supabase
                                 .from('musicians')
                                 .update({
                                   w9_verified_at: new Date().toISOString(),
                                   w9_verified_by: user?.id,
                                 })
                                 .eq('id', musician.id)
+                              if (verifyError) {
+                                setError(`Could not mark the W-9 as reviewed: ${verifyError.message}`)
+                                return
+                              }
                               onOpenChange(false)
                               onSuccess()
                             }}
