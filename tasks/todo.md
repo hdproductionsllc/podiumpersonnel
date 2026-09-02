@@ -3,14 +3,15 @@
 No deletions, no core-behaviour changes. Only failure paths change: errors that vanished now get logged / toasted / returned.
 Plan: C:\Users\david\.claude\plans\majestic-wibbling-possum.md
 
-- [ ] 1. Check every discarded DB write (server ~29 sites, client ~26). PRIMARY → serverError/toast; SECONDARY → console.error. Stripe webhook: undo dedup row + 500 so Stripe retries.
-- [ ] 2. Comment-only catch blocks: warn in 13, toast in project-offers.tsx:287, leave request.json() parses alone.
-- [ ] 3. Resend throttle once in email client (awaitResendSlot) + remove the 10 copied sleeps + unit test + lessons.md update.
-- [ ] 4. Sentry wiring, inert without NEXT_PUBLIC_SENTRY_DSN; serverError() + notifyOps() capture.
-- [ ] 5. GitHub Actions CI (tsc, lint, vitest) + fix the 2 pre-existing failing tests.
-- [ ] 6. .gitignore additions, real README, PR template.
-- [ ] Verify: tsc, lint, vitest all green; npm run build; greps clean; PR opened; CI green; merged; deploy live; smoke test.
-- [ ] docs/hardening-2026-09.md written.
+- [x] 1. Check every discarded DB write (server ~29 sites, client ~26). PRIMARY → serverError/toast; SECONDARY → console.error. Stripe webhook: undo dedup row + 500 so Stripe retries.
+- [x] 2. Comment-only catch blocks: warn in 13, toast in project-offers.tsx:287, leave request.json() parses alone.
+- [x] 3. Resend throttle once in email client (awaitResendSlot) + remove the 10 copied sleeps + unit test + lessons.md update.
+- [x] 4. Sentry wiring, inert without NEXT_PUBLIC_SENTRY_DSN; serverError() + notifyOps() capture.
+- [x] 5. GitHub Actions CI (tsc, lint, vitest) + fix the 2 pre-existing failing tests.
+- [x] 6. .gitignore additions, real README, PR template.
+- [x] Verify locally: tsc clean, vitest 714/714, npm run build OK, greps clean (lint = 712 pre-existing errors, advisory in CI)
+- [ ] PR opened → CI green → merged → Vercel deploy live → smoke test
+- [x] docs/hardening-2026-09.md written.
 
 ---
 
