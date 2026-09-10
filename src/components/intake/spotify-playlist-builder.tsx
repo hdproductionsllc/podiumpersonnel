@@ -188,8 +188,9 @@ export function SpotifyPlaylistBuilder({ projectId, currentUrl, onCreated, autoS
       } else if (cr.status !== 409) {
         toast.error(cd.error || 'Auto-create failed — use Build to try again.')
       }
-    } catch {
-      /* silent — the manual Build button remains available */
+    } catch (err) {
+      /* the manual Build button remains available */
+      console.warn('spotify-playlist-builder: auto-create failed:', err)
     } finally {
       setBusy(null)
     }

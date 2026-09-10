@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import * as Sentry from '@sentry/nextjs'
 import { SUPPORT_EMAIL, supportMailto } from '@/lib/constants'
 
 /**
@@ -17,6 +18,7 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error('Root layout error:', error)
+    Sentry.captureException(error, { tags: { boundary: 'global-error' } })
   }, [error])
 
   return (

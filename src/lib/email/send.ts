@@ -1,4 +1,4 @@
-import { resend, EMAIL_FROM_ADDRESS, EMAIL_REPLY_TO, buildFromAddress, filterRecipients } from './client'
+import { resend, EMAIL_FROM_ADDRESS, EMAIL_REPLY_TO, buildFromAddress, filterRecipients, awaitResendSlot } from './client'
 import { getOrgOwnerEmail } from '../supabase/server'
 import type * as React from 'react'
 import { ContractOfferEmail } from './templates/contract-offer'
@@ -139,6 +139,7 @@ async function sendTransactional(args: {
     return { id: null, emailHtml, subject: args.subject }
   }
 
+  await awaitResendSlot()
   const { data, error } = await resend.emails.send({
     from: buildFromAddress(args.fromName),
     to: allowed,
@@ -876,6 +877,7 @@ export async function sendEmail(params: SendEmailParams) {
     return { id: null, emailHtml: html }
   }
 
+  await awaitResendSlot()
   const { data, error } = await resend.emails.send({
     from: buildFromAddress(),
     to: allowed,

@@ -77,13 +77,17 @@ export async function GET(
       }
     }
 
-    // Track download
-    await supabase
+    // Track download (best effort — the musician still gets their file)
+    const { error: trackError } = await supabase
       .from('project_file_downloads')
       .insert({
         file_id: fileId,
         musician_id: confirmation.musician_id,
       })
+
+    if (trackError) {
+      console.error(`Failed to record download of file ${fileId} by musician ${confirmation.musician_id}:`, trackError)
+    }
 
     // Generate signed URL (1 hour)
     const { data: signedUrl, error: signError } = await supabase.storage

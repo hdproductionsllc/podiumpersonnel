@@ -156,19 +156,30 @@ export async function POST(
     // Resolve outstanding offers on this now-filled chair:
     // - the assigned musician's own pending offer → accepted (they said yes off-app)
     // - any other musician's pending offer → expired (the chair is taken)
+    // The chair itself is already assigned above, so these are logged rather
+    // than failing the request.
     const nowIso = new Date().toISOString()
-    await supabase
+    const { error: acceptOwnOfferError } = await supabase
       .from('contract_offers')
       .update({ status: 'accepted', responded_at: nowIso })
       .eq('project_position_id', positionId)
       .eq('musician_id', musicianId)
       .in('status', ['pending', 'viewed'])
-    await supabase
+
+    if (acceptOwnOfferError) {
+      console.error(`Failed to mark musician ${musicianId}'s own offer accepted on position ${positionId}:`, acceptOwnOfferError)
+    }
+
+    const { error: expireOthersError } = await supabase
       .from('contract_offers')
       .update({ status: 'expired', responded_at: nowIso })
       .eq('project_position_id', positionId)
       .neq('musician_id', musicianId)
       .in('status', ['pending', 'viewed'])
+
+    if (expireOthersError) {
+      console.error(`Failed to expire other musicians' offers on position ${positionId}:`, expireOthersError)
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

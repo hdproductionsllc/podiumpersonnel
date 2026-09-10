@@ -337,7 +337,7 @@ export function ProjectFormDialog({
 
         if (perf) {
           // Update existing service
-          await supabase
+          const { error: serviceError } = await supabase
             .from('services')
             .update({
               start_time: stISO,
@@ -345,9 +345,14 @@ export function ProjectFormDialog({
               end_time: etISO,
             })
             .eq('id', perf.id)
+          if (serviceError) {
+            setError(`${term(terms, 'work')} saved, but the performance times could not be updated: ${serviceError.message}`)
+            setIsLoading(false)
+            return
+          }
         } else {
           // No services exist — create a performance service
-          await supabase.from('services').insert({
+          const { error: serviceError } = await supabase.from('services').insert({
             project_id: project.id,
             name: `${data.name} Performance`,
             service_type: 'performance',
@@ -355,6 +360,11 @@ export function ProjectFormDialog({
             call_time: ctISO,
             end_time: etISO,
           })
+          if (serviceError) {
+            setError(`${term(terms, 'work')} saved, but the performance could not be created: ${serviceError.message}`)
+            setIsLoading(false)
+            return
+          }
         }
       }
     } else {

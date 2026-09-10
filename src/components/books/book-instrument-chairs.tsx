@@ -158,12 +158,18 @@ export function BookInstrumentChairs({
               onClick={async () => {
                 if (!confirm(`Remove ${instrument.name} and all its ${term(terms, 'rank', { plural: true, case: 'lower' })} from this ensemble?`)) return
                 setIsLoading(true)
+                setError(null)
                 const supabase = createClient()
-                await supabase
+                const { error: removeError } = await supabase
                   .from('book_entries')
                   .delete()
                   .eq('book_id', bookId)
                   .eq('instrument_id', instrument.id)
+                if (removeError) {
+                  setError(removeError.message)
+                  setIsLoading(false)
+                  return
+                }
                 setIsLoading(false)
                 onEntryChange()
               }}

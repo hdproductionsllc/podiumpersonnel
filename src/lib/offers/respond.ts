@@ -102,10 +102,21 @@ export async function claimChairForAccept(
   if (!updatedPosition || updatedPosition.length === 0) {
     // Chair is no longer available to this musician — undo the acceptance so the
     // offer does not sit "accepted" against a chair someone else holds.
-    await supabase
+    const { error: revertError } = await supabase
       .from('contract_offers')
       .update({ status: 'pending', responded_at: null })
       .eq('id', offer.id)
+
+    if (revertError) {
+      // The offer is now stuck "accepted" against a chair this musician does not
+      // hold. That is the exact state this revert exists to prevent, so report
+      // it as an error rather than a clean position_filled.
+      console.error(
+        `Failed to revert offer ${offer.id} after losing chair ${offer.project_position_id}:`,
+        revertError
+      )
+      return { outcome: 'error', error: revertError }
+    }
 
     return { outcome: 'position_filled' }
   }
@@ -148,15 +159,25 @@ export async function markOfferDeclined(
   return !data || data.length === 0 ? 'already_responded' : 'declined'
 }
 
-/** Free a chair so the contractor can offer it to someone else. */
+/**
+ * Free a chair so the contractor can offer it to someone else.
+ *
+ * Called after the musician's decline has already been recorded, so a failure
+ * here must not turn their successful answer into an error — but it does leave
+ * a declined musician sitting on the chair, so it is logged loudly.
+ */
 export async function vacateChair(
   supabase: SupabaseClient,
   projectPositionId: string
 ): Promise<void> {
-  await supabase
+  const { error } = await supabase
     .from('project_positions')
     .update({ musician_id: null, status: 'vacant' })
     .eq('id', projectPositionId)
+
+  if (error) {
+    console.error(`Failed to vacate chair ${projectPositionId} after decline:`, error)
+  }
 }
 
 /** Context both substitution notifications need, gathered once by the caller. */

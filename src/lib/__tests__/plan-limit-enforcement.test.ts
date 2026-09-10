@@ -21,10 +21,12 @@ import { PLAN_LIMITS, resolveOrgPlan, type OrgBilling } from '@/lib/plan'
  * guard the numbers, which are what drift.
  */
 
+// Normalise line endings: the arm-slicing below matches on LF, and a Windows
+// checkout with core.autocrlf hands us CRLF.
 const sql = readFileSync(
   resolve(__dirname, '../../../supabase/migrations/080_enforce_plan_limits.sql'),
   'utf-8'
-)
+).replace(/\r\n/g, '\n')
 
 /**
  * The CASE arm for one limit inside org_plan_limit(). Sliced between the named
@@ -225,7 +227,9 @@ describe('.env.example matches what the code actually reads', () => {
   it('has no documented var the code never reads', () => {
     // Every entry here should be actionable. A stale one is worse than a
     // missing one: it reads as configured when nothing is listening.
-    const src = ['src/lib', 'src/app', 'src/components']
+    // Sentry is configured outside src/lib: the root sentry.*.config.ts files,
+    // src/instrumentation*.ts and next.config.ts all read its env vars.
+    const src = ['src', 'next.config.ts', 'sentry.server.config.ts', 'sentry.edge.config.ts']
       .map((d) => execSync(`grep -rhoE "process\\.env\\.[A-Z0-9_]+" ${d} || true`, {
         cwd: resolve(__dirname, '../../..'), encoding: 'utf-8',
       }))

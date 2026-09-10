@@ -6,6 +6,7 @@ import { logEmailConfig } from '@/lib/email/client'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
 import { attachVenueDetails } from '@/lib/venue-attach'
+import { serverError } from '@/lib/api-helpers'
 
 export async function POST(request: NextRequest) {
   console.log('📧 Send email API called')
@@ -80,12 +81,17 @@ export async function POST(request: NextRequest) {
     // a chair that's already moved on to (or been given to) someone else.
     if (position?.id) {
       const serviceClient = createServiceClient()
-      await serviceClient
+      const { error: expireError } = await serviceClient
         .from('contract_offers')
         .update({ status: 'expired', responded_at: new Date().toISOString() })
         .eq('project_position_id', position.id)
         .neq('id', offerId)
         .in('status', ['pending', 'viewed'])
+
+      if (expireError) {
+        // Sending anyway would leave two live offers on one chair — stop here.
+        return serverError(`Failed to expire prior offers on position ${position.id} before sending offer ${offerId}`, expireError)
+      }
     }
 
     await attachVenueDetails(services)

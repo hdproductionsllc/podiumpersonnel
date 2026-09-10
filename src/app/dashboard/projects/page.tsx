@@ -113,15 +113,22 @@ export default async function ProjectsPage() {
       (p) => p.status === 'active' && p.end_date && p.end_date < today
     )
     if (pastActive.length) {
-      await supabase
+      const { error: completeError } = await supabase
         .from('projects')
         .update({ status: 'completed' })
         .eq('organization_id', organization!.id)
         .eq('status', 'active')
         .lt('end_date', today)
-      // Update local data so the UI reflects the change immediately
-      for (const p of pastActive) {
-        p.status = 'completed'
+
+      if (completeError) {
+        // Leave the local rows as "active" so the page shows what the database
+        // actually holds; the next load will try again.
+        console.error(`Failed to auto-complete past projects for org ${organization!.id}:`, completeError)
+      } else {
+        // Update local data so the UI reflects the change immediately
+        for (const p of pastActive) {
+          p.status = 'completed'
+        }
       }
     }
   }

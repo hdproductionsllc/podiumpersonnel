@@ -105,22 +105,33 @@ async function handleAccept(_request: Request, token: string) {
     return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
   }
 
-  // If this is a substitution, update the substitution request and notify original musician
+  // If this is a substitution, update the substitution request and notify original musician.
+  // The substitute's accept and the chair transfer are already committed above,
+  // so a failure in either bookkeeping write below must not be reported to the
+  // musician as a failed accept — it is logged loudly for the contractor instead.
   if (subRequest) {
     // Update substitution request to filled
-    await supabase
+    const { error: fillError } = await supabase
       .from('substitution_requests')
       .update({ status: 'filled' })
       .eq('id', subRequest.id)
 
+    if (fillError) {
+      console.error(`Failed to mark substitution request ${subRequest.id} filled after accept of offer ${offer.id}:`, fillError)
+    }
+
     // Release the original musician's prior accepted offer for this chair so
     // they are no longer counted as confirmed.
-    await supabase
+    const { error: releaseError } = await supabase
       .from('contract_offers')
       .update({ status: 'released' })
       .eq('project_position_id', offer.project_position_id)
       .eq('musician_id', subRequest.requesting_musician_id)
       .eq('status', 'accepted')
+
+    if (releaseError) {
+      console.error(`Failed to release original musician ${subRequest.requesting_musician_id} from chair ${offer.project_position_id}:`, releaseError)
+    }
 
     // Tell the original musician they've been released. Shared with the portal
     // path, which also records it — this route used to send without logging, so

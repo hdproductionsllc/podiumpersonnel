@@ -134,10 +134,16 @@ export async function POST(
 
     // Handle substitution case — the original musician still needs another sub
     if (subRequest) {
-      await supabase
+      // The offer is already rescinded above; a retry would find no active
+      // offer, so this is logged rather than failing the request.
+      const { error: subDeclineError } = await supabase
         .from('substitution_requests')
         .update({ status: 'sub_declined' })
         .eq('id', subRequest.id)
+
+      if (subDeclineError) {
+        console.error(`Failed to mark substitution request ${subRequest.id} sub_declined after rescinding offer ${offer.id}:`, subDeclineError)
+      }
 
       const originalMusician = subRequest.requesting_musician as any
       const serviceName = (subRequest.service as any)?.name || null

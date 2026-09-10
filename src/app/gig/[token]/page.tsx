@@ -207,7 +207,8 @@ export default async function GigPage({ params }: GigPageProps) {
         .eq('id', offerData.id)
 
       if (viewedError) {
-        console.warn(`gig page: could not mark offer ${offerData.id} viewed:`, viewedError)
+        // The page still renders; the contractor just won't see "viewed" yet.
+        console.error(`Failed to mark offer ${offerData.id} as viewed:`, viewedError)
       }
     }
   }

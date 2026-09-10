@@ -68,7 +68,7 @@ export async function POST(
     })
 
     // Update the reminder as sent
-    await serviceClient
+    const { error: markSentError } = await serviceClient
       .from('pre_gig_reminders')
       .update({
         status: 'sent',
@@ -78,6 +78,24 @@ export async function POST(
         musician_count: result.sent,
       })
       .eq('id', reminderId)
+
+    if (markSentError) {
+      // The emails have already gone out. The reminder is still "draft", so
+      // approving it again would send them all a second time — say so, and do
+      // not report plain success.
+      console.error(`Failed to mark pre-gig reminder ${reminderId} as sent after emailing ${result.sent} musicians:`, markSentError)
+      return NextResponse.json(
+        {
+          error: `The gig details were emailed to ${result.sent} musician${result.sent === 1 ? '' : 's'}, but the reminder could not be marked as sent. Do not approve it again — that would email everyone twice. Please contact support.`,
+          sent: result.sent,
+          failed: result.failed,
+          failedNames: result.failedNames.length > 0 ? result.failedNames : undefined,
+          total: result.total,
+          sendId: result.sendId,
+        },
+        { status: 500 }
+      )
+    }
 
     return NextResponse.json({
       success: true,
