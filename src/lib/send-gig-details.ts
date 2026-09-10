@@ -210,7 +210,6 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
   let sentCount = 0
   const failedNames: string[] = []
   for (let i = 0; i < roster.length; i++) {
-    if (i > 0) await new Promise((r) => setTimeout(r, 600))
     const member = roster[i]
     const token = tokenMap.get(member.musicianId)
     if (!token) continue

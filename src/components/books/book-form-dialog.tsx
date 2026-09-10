@@ -174,11 +174,14 @@ export function BookFormDialog({
 
     // If setting as default, unset any existing default
     if (data.is_default) {
-      await supabase
+      const { error: unsetDefaultError } = await supabase
         .from('books')
         .update({ is_default: false })
         .eq('organization_id', organizationId)
         .eq('is_default', true)
+      if (unsetDefaultError) {
+        console.warn('book-form-dialog: could not unset the previous default ensemble:', unsetDefaultError)
+      }
     }
 
     if (isEditing) {
@@ -288,7 +291,13 @@ export function BookFormDialog({
           }
 
           if (entries.length > 0) {
-            await supabase.from('book_entries').insert(entries)
+            const { error: entriesError } = await supabase.from('book_entries').insert(entries)
+            if (entriesError) {
+              // The ensemble row exists; only its preset chairs are missing.
+              setError(`Ensemble created, but its ${term(terms, 'skill', { plural: true, case: 'lower' })} could not be added: ${entriesError.message}. Close this dialog and add them from the ensemble page.`)
+              setIsLoading(false)
+              return
+            }
           }
         }
       }

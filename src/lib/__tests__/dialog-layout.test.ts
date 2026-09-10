@@ -52,7 +52,18 @@ describe('the add-work file rows stay readable when narrow', () => {
 
   it('gives the filename its own line below the sm breakpoint', () => {
     // The part select, status and remove button take ~260px of fixed width.
-    expect(src).toContain('w-full sm:w-auto sm:flex-1 min-w-0 truncate')
+    // Tailwind class order is not meaningful, so assert the classes, not the
+    // string. Since PR #14 the filename is split: the head truncates and the
+    // tail (the "- Vln1" that names the part) never does, so `truncate` lives on
+    // the head child rather than on the outer span.
+    const filenameSpan = src.match(/<span\s+className="([^"]*)"\s+title=\{row\.file\.name\}/)
+    expect(filenameSpan, 'filename span with title={row.file.name} not found').not.toBeNull()
+    const classes = filenameSpan![1].split(/\s+/)
+    for (const cls of ['w-full', 'sm:w-auto', 'sm:flex-1', 'min-w-0']) {
+      expect(classes, `filename span is missing ${cls}`).toContain(cls)
+    }
+    expect(src).toContain('<span className="truncate text-muted-foreground">{head}</span>')
+    expect(src).toContain('<span className="shrink-0 font-medium">{tail}</span>')
     expect(src).toContain('flex flex-wrap items-center')
   })
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import * as Sentry from '@sentry/nextjs'
 import { Button } from '@/components/ui/button'
 import { SupportHint } from '@/components/ui/support-link'
 
@@ -13,6 +14,7 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error('Unhandled error:', error)
+    Sentry.captureException(error, { tags: { boundary: 'error' } })
   }, [error])
 
   return (

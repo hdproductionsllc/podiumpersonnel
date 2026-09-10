@@ -74,6 +74,32 @@ export function buildFromAddress(displayName?: string | null): string {
   return `${name} <${EMAIL_FROM_ADDRESS}>`
 }
 
+// ---------------------------------------------------------------------------
+// Resend rate limit — the provider allows 2 requests per second. Every send
+// in the app passes through send.ts, and both send sites there call
+// awaitResendSlot() first, so pacing lives in exactly one place. Callers must
+// NOT add their own per-loop sleeps.
+//
+// Each caller reserves the next free slot synchronously (before any await),
+// so concurrent sends inside one server instance are spaced out too, not just
+// sequential ones. The first send never waits.
+// ---------------------------------------------------------------------------
+export const RESEND_MIN_INTERVAL_MS = 600
+
+let nextResendSlotAt = 0
+
+export async function awaitResendSlot(now: () => number = Date.now): Promise<void> {
+  const slot = Math.max(now(), nextResendSlotAt)
+  nextResendSlotAt = slot + RESEND_MIN_INTERVAL_MS
+  const wait = slot - now()
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait))
+}
+
+/** Test-only: forget the last reserved slot. */
+export function _resetResendSlotForTests() {
+  nextResendSlotAt = 0
+}
+
 export function logEmailConfig() {
   console.log('Email config:', {
     hasApiKey: !!apiKey,

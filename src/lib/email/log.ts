@@ -46,7 +46,9 @@ export async function logEmail(params: LogEmailParams): Promise<void> {
   try {
     const supabase = createServiceClient()
     const plainBody = params.body ? htmlToPlainText(params.body) : null
-    await supabase.from('email_logs').insert({
+    // PostgREST reports failures in the result, not by throwing, so the catch
+    // below alone would never see a rejected insert.
+    const { error } = await supabase.from('email_logs').insert({
       organization_id: params.organizationId,
       recipient_email: params.recipientEmail,
       recipient_name: params.recipientName || null,
@@ -60,6 +62,9 @@ export async function logEmail(params: LogEmailParams): Promise<void> {
       metadata: params.metadata || {},
       body: plainBody,
     })
+    if (error) {
+      console.warn(`Failed to log ${params.emailType} email to ${params.recipientEmail}:`, error)
+    }
   } catch (err) {
     console.warn('Failed to log email:', err)
   }

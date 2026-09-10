@@ -166,8 +166,6 @@ export async function POST(
     const failedNames: string[] = []
     for (let i = 0; i < filledPositions.length; i++) {
       const pos = filledPositions[i]
-      // Delay between sends to avoid Resend rate limit (2 req/sec)
-      if (i > 0) await new Promise((r) => setTimeout(r, 600))
       const musician = pos.musician as any
       const instrumentId = pos.instrument_id
       const token = tokenByMusician[pos.musician_id]

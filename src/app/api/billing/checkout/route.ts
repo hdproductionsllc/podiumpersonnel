@@ -40,10 +40,16 @@ export async function POST(request: Request) {
     })
     customerId = customer.id
 
-    await adminClient
+    const { error: saveCustomerError } = await adminClient
       .from('organizations')
       .update({ stripe_customer_id: customerId })
       .eq('id', org.id)
+
+    if (saveCustomerError) {
+      // Checkout still works with the customer we just made; the cost of not
+      // saving it is a second Stripe customer on the next attempt.
+      console.error(`Failed to save Stripe customer ${customerId} on org ${org.id}:`, saveCustomerError)
+    }
   }
 
   const session = await getStripe().checkout.sessions.create({

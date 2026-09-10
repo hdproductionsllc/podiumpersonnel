@@ -448,6 +448,17 @@ export function ProjectsClient({
       const supabase = (await import('@/lib/supabase/client')).createClient()
       const toISO = (date: string, time: string) => fromZonedTime(`${date}T${time}`, timezone).toISOString()
 
+      // These writes happen after the project row already exists, so a failure
+      // leaves a project with nothing under it. Remember what failed and tell
+      // the admin once at the end instead of silently showing an empty project.
+      const templateFailures = new Set<'services' | 'positions'>()
+      const trackTemplateWrite = (what: 'services' | 'positions', result: { error: { message: string } | null }) => {
+        if (result.error) {
+          console.error(`Failed to add template ${what}:`, result.error)
+          templateFailures.add(what)
+        }
+      }
+
       const venueFields = {
         ...(newProject.venueName ? { venue: newProject.venueName } : {}),
         ...(newProject.venueId ? { venue_id: newProject.venueId } : {}),
@@ -460,7 +471,7 @@ export function ProjectsClient({
           const ct = newProject.callTime || '18:30'
           const st = newProject.startTime || '19:00'
           const et = newProject.endTime || '22:00'
-          await supabase.from('services').insert({
+          trackTemplateWrite('services', await supabase.from('services').insert({
             project_id: newProject.id,
             name: `${newProject.name} Performance`,
             service_type: 'performance',
@@ -468,7 +479,7 @@ export function ProjectsClient({
             end_time: toISO(dateStr, et),
             call_time: toISO(dateStr, ct),
             ...venueFields,
-          })
+          }))
         }
 
         // Create quartet positions: Violin 1, Violin 2, Viola, Cello
@@ -484,14 +495,14 @@ export function ProjectsClient({
           for (const inst of orgInstruments) {
             if (!uniqueByName.has(inst.name)) uniqueByName.set(inst.name, inst)
           }
-          await supabase.from('project_positions').insert(
+          trackTemplateWrite('positions', await supabase.from('project_positions').insert(
             Array.from(uniqueByName.values()).map((inst) => ({
               project_id: newProject.id,
               instrument_id: inst.id,
               chair_number: 1,
               status: 'vacant',
             }))
-          )
+          ))
         }
       } else if (newProject.template === 'string-trio') {
         // Performance only
@@ -500,7 +511,7 @@ export function ProjectsClient({
           const ct = newProject.callTime || '18:30'
           const st = newProject.startTime || '19:00'
           const et = newProject.endTime || '22:00'
-          await supabase.from('services').insert({
+          trackTemplateWrite('services', await supabase.from('services').insert({
             project_id: newProject.id,
             name: `${newProject.name} Performance`,
             service_type: 'performance',
@@ -508,7 +519,7 @@ export function ProjectsClient({
             end_time: toISO(dateStr, et),
             call_time: toISO(dateStr, ct),
             ...venueFields,
-          })
+          }))
         }
 
         // Create trio positions: Violin 1, Violin 2, Cello
@@ -523,14 +534,14 @@ export function ProjectsClient({
           for (const inst of trioInstruments) {
             if (!uniqueByName.has(inst.name)) uniqueByName.set(inst.name, inst)
           }
-          await supabase.from('project_positions').insert(
+          trackTemplateWrite('positions', await supabase.from('project_positions').insert(
             Array.from(uniqueByName.values()).map((inst) => ({
               project_id: newProject.id,
               instrument_id: inst.id,
               chair_number: 1,
               status: 'vacant',
             }))
-          )
+          ))
         }
       } else if (newProject.template === 'duo') {
         // Performance only
@@ -539,7 +550,7 @@ export function ProjectsClient({
           const ct = newProject.callTime || '18:30'
           const st = newProject.startTime || '19:00'
           const et = newProject.endTime || '22:00'
-          await supabase.from('services').insert({
+          trackTemplateWrite('services', await supabase.from('services').insert({
             project_id: newProject.id,
             name: `${newProject.name} Performance`,
             service_type: 'performance',
@@ -547,7 +558,7 @@ export function ProjectsClient({
             end_time: toISO(dateStr, et),
             call_time: toISO(dateStr, ct),
             ...venueFields,
-          })
+          }))
         }
 
         // Create duo positions: Violin 1, Cello
@@ -562,14 +573,14 @@ export function ProjectsClient({
           for (const inst of duoInstruments) {
             if (!uniqueByName.has(inst.name)) uniqueByName.set(inst.name, inst)
           }
-          await supabase.from('project_positions').insert(
+          trackTemplateWrite('positions', await supabase.from('project_positions').insert(
             Array.from(uniqueByName.values()).map((inst) => ({
               project_id: newProject.id,
               instrument_id: inst.id,
               chair_number: 1,
               status: 'vacant',
             }))
-          )
+          ))
         }
       } else if (newProject.template === 'solo') {
         // Performance only — no positions created, admin picks the instrument
@@ -578,7 +589,7 @@ export function ProjectsClient({
           const ct = newProject.callTime || '18:30'
           const st = newProject.startTime || '19:00'
           const et = newProject.endTime || '22:00'
-          await supabase.from('services').insert({
+          trackTemplateWrite('services', await supabase.from('services').insert({
             project_id: newProject.id,
             name: `${newProject.name} Performance`,
             service_type: 'performance',
@@ -586,13 +597,13 @@ export function ProjectsClient({
             end_time: toISO(dateStr, et),
             call_time: toISO(dateStr, ct),
             ...venueFields,
-          })
+          }))
         }
       } else if (newProject.template === 'orchestra') {
         // 2 rehearsals + 1 performance
         const dateStr = newProject.start_date || newProject.end_date
         if (dateStr) {
-          await supabase.from('services').insert([
+          trackTemplateWrite('services', await supabase.from('services').insert([
             {
               project_id: newProject.id,
               name: `${newProject.name} Rehearsal 1`,
@@ -620,13 +631,13 @@ export function ProjectsClient({
               call_time: toISO(dateStr, '18:30'),
               ...venueFields,
             },
-          ])
+          ]))
         }
       } else if (newProject.template === 'custom') {
         // Auto-create a performance with default times
         const dateStr = newProject.start_date || newProject.end_date
         if (dateStr) {
-          await supabase.from('services').insert({
+          trackTemplateWrite('services', await supabase.from('services').insert({
             project_id: newProject.id,
             name: `${newProject.name} Performance`,
             service_type: 'performance',
@@ -634,8 +645,15 @@ export function ProjectsClient({
             end_time: toISO(dateStr, '22:00'),
             call_time: toISO(dateStr, '18:30'),
             ...venueFields,
-          })
+          }))
         }
+      }
+
+      if (templateFailures.size > 0) {
+        const missing = Array.from(templateFailures)
+          .map((what) => (what === 'services' ? term(terms, 'session', { plural: true, case: 'lower' }) : 'positions'))
+          .join(' and ')
+        toast.error(`${term(terms, 'work')} created, but its ${missing} could not be added. Open the ${term(terms, 'work', { case: 'lower' })} and add them.`)
       }
     }
 

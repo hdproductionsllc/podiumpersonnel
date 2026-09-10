@@ -368,8 +368,9 @@ export function BookDownload({
         if (listRes.ok && Array.isArray(listData.files)) {
           existingBooks = (listData.files as ExistingFile[]).filter((f) => f.notes === BOOK_NOTES)
         }
-      } catch {
+      } catch (err) {
         /* listing failure just means no replacement this round */
+        console.warn('book-download: could not list existing books:', err)
       }
 
       let published = 0
@@ -421,8 +422,9 @@ export function BookDownload({
           try {
             const del = await fetch(`/api/projects/${projectId}/files/${f.id}`, { method: 'DELETE' })
             if (del.ok) replaced += 1
-          } catch {
+          } catch (err) {
             /* stale copy remains; harmless, admin can delete by hand */
+            console.warn('book-download: could not delete previous book version:', err)
           }
         }
       }

@@ -267,15 +267,24 @@ export function ProjectOffers({
       if (error) throw error
 
       // Update position status
-      await supabase
+      const { error: positionError } = await supabase
         .from('project_positions')
         .update({ status: 'offered' })
         .eq('id', positionId)
 
+      if (positionError) {
+        // The offer row exists; only the position flag is stale. Refresh so the
+        // admin sees the real state, but don't email or claim success.
+        toast.error('Offer created, but the position could not be marked as offered. Refresh and check the position before re-sending.')
+        onOfferChange()
+        return
+      }
+
       // Send email if offer created
+      let emailSent = false
       if (offerData?.id) {
         try {
-          await fetch('/api/offers/send-email', {
+          const emailRes = await fetch('/api/offers/send-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -284,12 +293,16 @@ export function ProjectOffers({
               leaderFeeAmount: 0,
             }),
           })
-        } catch {
-          // Don't fail if email fails
+          if (!emailRes.ok) throw new Error(`send-email responded ${emailRes.status}`)
+          emailSent = true
+        } catch (err) {
+          // The offer and position are already updated — only the email is missing.
+          console.warn('project-offers: waterfall offer email failed:', err)
+          toast.error('Offer created, but the email to the next candidate could not be sent. Use Send Reminder to try again.')
         }
       }
 
-      toast.success('Offer sent to next candidate')
+      if (emailSent) toast.success('Offer sent to next candidate')
       onOfferChange()
     } catch (err) {
       toast.error('Failed to send offer')

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import * as Sentry from '@sentry/nextjs'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveOrgPlan, isBillingEnabled, type ResolvedPlan, type OrgBilling } from '@/lib/plan'
@@ -13,12 +14,14 @@ export function apiError(message: string, status = 400) {
 }
 
 /**
- * Standard 500 response. Logs the real error server-side (with context) and
+ * Standard 500 response. Logs the real error server-side (with context),
+ * reports it to Sentry (a no-op until NEXT_PUBLIC_SENTRY_DSN is set), and
  * returns a generic, non-leaky message — raw Postgres/RLS text should never
  * reach a user-facing toast.
  */
 export function serverError(context: string, error: unknown, status = 500) {
   console.error(`${context}:`, error)
+  Sentry.captureException(error, { tags: { context } })
   return NextResponse.json(
     { error: 'Something went wrong on our end. Please try again, or contact support if it continues.' },
     { status }

@@ -130,7 +130,7 @@ export function SetupWizard({ userId, organizationId }: SetupWizardProps) {
 
   async function completeWizard() {
     const supabase = createClient()
-    await supabase
+    const { error: saveError } = await supabase
       .from('user_tutorial_state')
       .upsert({
         user_id: userId,
@@ -138,6 +138,8 @@ export function SetupWizard({ userId, organizationId }: SetupWizardProps) {
         wizard_completed: true,
         wizard_step: STEPS.length,
       }, { onConflict: 'user_id,organization_id' })
+    // Worst case the wizard shows again next visit — never block dismissing it.
+    if (saveError) console.warn('setup-wizard: could not save wizard completion:', saveError)
     setDismissed(true)
   }
 

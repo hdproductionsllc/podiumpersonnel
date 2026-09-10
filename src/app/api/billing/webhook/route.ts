@@ -40,6 +40,40 @@ async function resolveOrgId(
   return null
 }
 
+/**
+ * Apply a subscription change to the org row. Returns null on success.
+ *
+ * On failure the event's idempotency row is removed so Stripe's retry is
+ * processed rather than acked as a duplicate, and a 500 is returned so Stripe
+ * actually retries. Without this a failed write would leave the org on the
+ * wrong plan forever while every retry was silently thrown away.
+ */
+async function applyOrgUpdate(
+  adminClient: SupabaseClient,
+  eventId: string,
+  eventType: string,
+  orgId: string,
+  patch: Record<string, unknown>
+): Promise<NextResponse | null> {
+  const { error: updateError } = await adminClient
+    .from('organizations')
+    .update(patch)
+    .eq('id', orgId)
+  if (!updateError) return null
+
+  console.error(`Stripe webhook: failed to apply ${eventType} to org ${orgId}:`, updateError)
+
+  const { error: releaseError } = await adminClient
+    .from('stripe_events')
+    .delete()
+    .eq('id', eventId)
+  if (releaseError) {
+    console.error(`Stripe webhook: failed to release dedup row for ${eventId}:`, releaseError)
+  }
+
+  return NextResponse.json({ error: 'Failed to apply subscription change' }, { status: 500 })
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.text()
   const signature = request.headers.get('stripe-signature')
@@ -88,14 +122,12 @@ export async function POST(request: NextRequest) {
       if (!orgId || !session.subscription) break
 
       const tier = validPaidTier(session.metadata?.tier) ?? 'ensemble'
-      await adminClient
-        .from('organizations')
-        .update({
-          plan_tier: tier,
-          subscription_status: 'active',
-          stripe_subscription_id: session.subscription as string,
-        })
-        .eq('id', orgId)
+      const failed = await applyOrgUpdate(adminClient, event.id, event.type, orgId, {
+        plan_tier: tier,
+        subscription_status: 'active',
+        stripe_subscription_id: session.subscription as string,
+      })
+      if (failed) return failed
       break
     }
 
@@ -114,14 +146,12 @@ export async function POST(request: NextRequest) {
         ? tierFromSubscription(subscription)
         : 'free'
 
-      await adminClient
-        .from('organizations')
-        .update({
-          plan_tier: planTier,
-          subscription_status: status,
-          stripe_subscription_id: subscription.id,
-        })
-        .eq('id', orgId)
+      const failed = await applyOrgUpdate(adminClient, event.id, event.type, orgId, {
+        plan_tier: planTier,
+        subscription_status: status,
+        stripe_subscription_id: subscription.id,
+      })
+      if (failed) return failed
       break
     }
 
@@ -134,14 +164,12 @@ export async function POST(request: NextRequest) {
       )
       if (!orgId) break
 
-      await adminClient
-        .from('organizations')
-        .update({
-          plan_tier: 'free',
-          subscription_status: 'canceled',
-          stripe_subscription_id: null,
-        })
-        .eq('id', orgId)
+      const failed = await applyOrgUpdate(adminClient, event.id, event.type, orgId, {
+        plan_tier: 'free',
+        subscription_status: 'canceled',
+        stripe_subscription_id: null,
+      })
+      if (failed) return failed
       break
     }
 
@@ -152,10 +180,10 @@ export async function POST(request: NextRequest) {
 
       // Enter grace period — resolveOrgPlan keeps past_due at the paid tier while
       // Stripe retries. plan_tier is left untouched so we don't lose the tier.
-      await adminClient
-        .from('organizations')
-        .update({ subscription_status: 'past_due' })
-        .eq('id', orgId)
+      const failed = await applyOrgUpdate(adminClient, event.id, event.type, orgId, {
+        subscription_status: 'past_due',
+      })
+      if (failed) return failed
       break
     }
 
@@ -170,10 +198,14 @@ export async function POST(request: NextRequest) {
       // confirm the status active — never blindly downgrade an existing tier.
       const priceId = (invoice.lines?.data?.[0] as { price?: { id?: string } } | undefined)?.price?.id
       const paidTier = priceIdToTier(priceId)
-      await adminClient
-        .from('organizations')
-        .update(paidTier ? { plan_tier: paidTier, subscription_status: 'active' } : { subscription_status: 'active' })
-        .eq('id', orgId)
+      const failed = await applyOrgUpdate(
+        adminClient,
+        event.id,
+        event.type,
+        orgId,
+        paidTier ? { plan_tier: paidTier, subscription_status: 'active' } : { subscription_status: 'active' }
+      )
+      if (failed) return failed
       break
     }
   }
