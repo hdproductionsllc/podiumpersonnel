@@ -16,7 +16,7 @@ export interface Candidate {
 
 /**
  * Find next available candidates for a position, sorted by call order.
- * Filters out musicians who already have offers, checks service area and conflicts.
+ * Filters out musicians already on the gig, checks service area and conflicts.
  */
 export async function getNextCandidates(
   supabase: SupabaseClient,
@@ -60,12 +60,22 @@ export async function getNextCandidates(
   }
 
   // Get all musicians who have active offers for ANY position in this project (to exclude)
-  const { data: projectPositionIds } = await supabase
+  const { data: projectPositions } = await supabase
     .from('project_positions')
-    .select('id')
+    .select('id, musician_id')
     .eq('project_id', project.id)
 
-  const allPositionIds = (projectPositionIds || []).map(p => p.id)
+  const allPositionIds = (projectPositions || []).map(p => p.id)
+
+  // Anyone already holding a chair on this project is not a candidate for
+  // another one, however they came to hold it. A chair filled by direct
+  // assignment or a book import carries no contract_offer at all, so excluding
+  // on offers alone left those musicians in the running and the list suggested
+  // people already confirmed on the gig. The chair itself is the authority on
+  // who is on it.
+  const seatedMusicianIds = (projectPositions || [])
+    .map((p) => p.musician_id)
+    .filter((id): id is string => !!id)
 
   const { data: existingOffers } = await supabase
     .from('contract_offers')
@@ -87,7 +97,9 @@ export async function getNextCandidates(
     .eq('status', 'declined')
 
   const declinedMusicianIds = (declinedOffers || []).map(o => o.musician_id)
-  const excludedMusicianIds = [...new Set([...offeredMusicianIds, ...declinedMusicianIds])]
+  const excludedMusicianIds = [
+    ...new Set([...seatedMusicianIds, ...offeredMusicianIds, ...declinedMusicianIds]),
+  ]
 
   // Get musicians who play this instrument, sorted by call_order
   const { data: musicians, error: musError } = await supabase
@@ -127,7 +139,7 @@ export async function getNextCandidates(
   // cross-project check does not turn this into N round-trips.
   const eligible: any[] = []
   for (const musician of (musicians || [])) {
-    // Skip if already offered or already declined this position
+    // Skip if already on the gig, already offered, or already declined this position
     if (excludedMusicianIds.includes(musician.id)) continue
 
     // Check service area

@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { GigPageClient } from '@/components/gig/gig-page-client'
 import { getOrgPlan, getOrgVertical } from '@/lib/api-helpers'
 import { term } from '@/lib/verticals'
@@ -8,6 +8,57 @@ import { DEFAULT_TIMEZONE } from '@/lib/utils'
 
 interface GigPageProps {
   params: Promise<{ token: string }>
+}
+
+/**
+ * Whether this request is the organization's own staff looking at the offer
+ * rather than the musician it was sent to.
+ *
+ * The dashboard's "View" button ("View offer as musician sees it") opens this
+ * very page, and opening it used to stamp the offer "viewed" exactly as the
+ * musician would. Every offer an admin previewed then read as seen, which left
+ * the status unable to answer the only question it exists for: has the musician
+ * read their call yet?
+ *
+ * The page is public and normally reached over a token link with no session at
+ * all, so this is a cheap miss in the ordinary case. A staff member who is also
+ * the musician on the offer is the genuine reader, and still marks it viewed.
+ */
+async function isOrgStaffPreviewing(
+  organizationId: string | null | undefined,
+  musicianUserId: string | null | undefined
+): Promise<boolean> {
+  if (!organizationId) return false
+
+  try {
+    const userClient = await createClient()
+    const {
+      data: { user },
+    } = await userClient.auth.getUser()
+
+    if (!user) return false
+    if (musicianUserId && user.id === musicianUserId) return false
+
+    const serviceClient = createServiceClient()
+    const { data: membership, error } = await serviceClient
+      .from('organization_members')
+      .select('user_id')
+      .eq('organization_id', organizationId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (error) {
+      console.warn('gig page: could not check organization membership:', error)
+      return false
+    }
+
+    return !!membership
+  } catch (err) {
+    // Never let this check stop the page rendering. Falling through to marking
+    // the offer viewed is the behaviour that was already in place.
+    console.warn('gig page: could not determine whether staff is previewing:', err)
+    return false
+  }
 }
 
 export default async function GigPage({ params }: GigPageProps) {
@@ -138,19 +189,27 @@ export default async function GigPage({ params }: GigPageProps) {
     }
   }
 
-  // Mark as viewed if pending
+  // Mark as viewed if pending, unless this is the organization's own staff
+  // previewing the offer rather than the musician reading it.
   if (offerData.status === 'pending') {
-    const { error: viewedError } = await supabase
-      .from('contract_offers')
-      .update({
-        status: 'viewed',
-        viewed_at: new Date().toISOString(),
-      })
-      .eq('id', offerData.id)
+    const staffPreview = await isOrgStaffPreviewing(
+      position?.project?.organization_id,
+      musician?.user_id
+    )
 
-    if (viewedError) {
-      // The page still renders; the contractor just won't see "viewed" yet.
-      console.error(`Failed to mark offer ${offerData.id} as viewed:`, viewedError)
+    if (!staffPreview) {
+      const { error: viewedError } = await supabase
+        .from('contract_offers')
+        .update({
+          status: 'viewed',
+          viewed_at: new Date().toISOString(),
+        })
+        .eq('id', offerData.id)
+
+      if (viewedError) {
+        // The page still renders; the contractor just won't see "viewed" yet.
+        console.error(`Failed to mark offer ${offerData.id} as viewed:`, viewedError)
+      }
     }
   }
 
