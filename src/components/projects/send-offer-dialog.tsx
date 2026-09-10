@@ -44,6 +44,12 @@ interface SendOfferDialogProps {
   nextVacantCount?: number
   nextInstrumentName?: string
   preSelectedMusicianId?: string | null
+  /**
+   * Whether to pre-pick the top call-order musician when nothing is
+   * pre-selected. False when the admin chose "Someone else", where landing on a
+   * pre-picked name is exactly what they were trying to get away from.
+   */
+  autoSelect?: boolean
   isFollowUp?: boolean
   onSuccess: (applyPayToRemaining?: { customPay: string }) => void
   onSendNext?: () => void
@@ -68,6 +74,7 @@ export function SendOfferDialog({
   nextVacantCount,
   nextInstrumentName,
   preSelectedMusicianId,
+  autoSelect = true,
   isFollowUp,
   onSuccess,
   onSendNext,
@@ -153,6 +160,8 @@ export function SendOfferDialog({
         return
       }
 
+      if (!autoSelect) return
+
       const available = allMusicians
         .filter((m) => !existingOfferMusicianIds.includes(m.id))
         .filter((m) => m.musician_instruments.some((mi) => mi.instrument_id === instrumentId))
@@ -173,7 +182,7 @@ export function SendOfferDialog({
         }
       }
     }
-  }, [open, instrumentId, preSelectedMusicianId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, instrumentId, preSelectedMusicianId, autoSelect]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Check for declined offers and cross-project conflicts when musician is selected
   useEffect(() => {
@@ -302,6 +311,43 @@ export function SendOfferDialog({
     checkWarnings()
     return () => { cancelled = true }
   }, [open, selectedMusicianId, positionId])
+
+  /**
+   * Re-read the selected musician's email address.
+   *
+   * `musicians` is fetched server-side when the Projects page renders and never
+   * refreshes, so an address added after that — on the Musicians page, or in
+   * another tab — is missing from this copy. Deciding from the stale copy is how
+   * an offer went out with no email sent, nothing in Resend and no row in the
+   * email log: `hasEmail` was false, so the send was skipped in silence.
+   */
+  useEffect(() => {
+    if (!open || !selectedMusicianId) return
+
+    let cancelled = false
+    async function refreshEmail() {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('musicians')
+        .select('email')
+        .eq('id', selectedMusicianId)
+        .maybeSingle()
+
+      if (cancelled) return
+      if (error) {
+        console.warn('send-offer-dialog: could not re-read musician email:', error)
+        return
+      }
+      const email = data?.email
+      if (!email) return
+      setUpdatedEmails((prev) =>
+        prev[selectedMusicianId] === email ? prev : { ...prev, [selectedMusicianId]: email }
+      )
+    }
+
+    refreshEmail()
+    return () => { cancelled = true }
+  }, [open, selectedMusicianId])
 
   // Click-outside for search dropdown
   useEffect(() => {
@@ -476,8 +522,14 @@ export function SendOfferDialog({
       console.error('Failed to update position status:', posUpdateError)
     }
 
-    // Send email notification if enabled and musician has email
-    if (sendEmail && hasEmail && offerData?.id) {
+    // Ask the server to send whenever email is switched on — including when our
+    // copy of the musician looks address-less. The route reads the musician's
+    // current address and is the only honest authority on whether a send is
+    // possible; gating on this page's stale copy skipped the call entirely.
+    let emailSent = false
+    let emailFailure: string | null = null
+
+    if (sendEmail && offerData?.id) {
       try {
         const response = await fetch('/api/offers/send-email', {
           method: 'POST',
@@ -489,11 +541,14 @@ export function SendOfferDialog({
           }),
         })
 
-        if (!response.ok) {
-          toast.error(`Offer created but email failed to send. Contact the ${term(terms, 'person', { case: 'lower' })} manually.`)
+        if (response.ok) {
+          emailSent = true
+        } else {
+          const detail = await response.json().catch(() => null)
+          emailFailure = detail?.error || `the server responded ${response.status}`
         }
       } catch {
-        toast.error(`Offer created but email failed to send. Contact the ${term(terms, 'person', { case: 'lower' })} manually.`)
+        emailFailure = 'the request never reached the server'
       }
     }
 
@@ -501,11 +556,26 @@ export function SendOfferDialog({
 
     const musicianName = `${selectedMusician?.first_name} ${selectedMusician?.last_name}`
 
-    // Show celebration toast
-    if (sendEmail && hasEmail) {
+    // Never claim a call was sent unless the send actually happened: a false
+    // "Call sent!" is what let a dropped offer email go unnoticed.
+    if (emailSent) {
       toast.success(`Call sent to ${musicianName}! They'll receive the email in seconds.`)
+    } else if (emailFailure) {
+      toast.error(
+        `Offer created for ${musicianName}, but NO email was sent: ${emailFailure}. Contact the ${term(terms, 'person', { case: 'lower' })} directly.`,
+        { duration: 12000 }
+      )
     } else {
-      toast.success(`Offer created for ${musicianName}.`)
+      toast.success(`Offer created for ${musicianName}. No email was sent.`)
+    }
+
+    // A failed send must not reach the celebration view, which states outright
+    // that the offer has been sent.
+    if (emailFailure) {
+      setSelectedMusicianId('')
+      onOpenChange(false)
+      onSuccess()
+      return
     }
 
     // If there are more vacant positions, show success view with "Send Next"

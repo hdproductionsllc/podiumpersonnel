@@ -330,7 +330,8 @@ export function ProjectsClient({
   // Waterfall trigger state — allows ProjectOffers to open SendOfferDialog via ProjectPositions
   const [waterfallTrigger, setWaterfallTrigger] = useState<{
     positionId: string
-    musicianId: string
+    /** Null when the admin chose "Someone else" and wants to pick for themselves. */
+    musicianId: string | null
     customPay: number | null
     isFollowUp?: boolean
   } | null>(null)

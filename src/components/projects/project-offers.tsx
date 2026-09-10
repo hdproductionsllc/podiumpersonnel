@@ -50,7 +50,8 @@ interface ProjectOffersProps {
   timezone: string
   canManage: boolean
   onOfferChange: () => void
-  onSendWaterfall?: (positionId: string, musicianId: string, customPay: number | null, isFollowUp?: boolean) => void
+  /** `musicianId` is null when the admin picked "Someone else" and wants to choose. */
+  onSendWaterfall?: (positionId: string, musicianId: string | null, customPay: number | null, isFollowUp?: boolean) => void
 }
 
 const OFFER_STATUS_COLORS: Record<string, string> = {
@@ -483,14 +484,16 @@ export function ProjectOffers({
                   )}
                 </tr>
                 {/* Waterfall suggestion for declined/expired offers */}
-                {canManage && (offer.status === 'declined' || offer.status === 'expired' || displayStatus === 'expired') && waterfallCandidates[offer.project_position_id]?.length > 0 && (
+                {canManage && (offer.status === 'declined' || offer.status === 'expired' || displayStatus === 'expired') && onSendWaterfall && (
                   <tr className="bg-amber-50/50 dark:bg-amber-950/20">
                     <td colSpan={canManage ? 9 : 7} className="px-3 py-2">
                       <div className="flex items-center gap-3 text-sm">
                         <span className="text-amber-700 dark:text-amber-300 font-medium">
-                          Next in line:
+                          {waterfallCandidates[offer.project_position_id]?.length > 0
+                            ? 'Next in line:'
+                            : 'No one left in the call order for this chair:'}
                         </span>
-                        {waterfallCandidates[offer.project_position_id].map((candidate, idx) => (
+                        {(waterfallCandidates[offer.project_position_id] || []).map((candidate, idx) => (
                           <div key={candidate.id} className="flex items-center gap-2">
                             {idx > 0 && <span className="text-muted-foreground">or</span>}
                             <span
@@ -517,6 +520,16 @@ export function ProjectOffers({
                             </Button>
                           </div>
                         ))}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs underline"
+                          onClick={() => onSendWaterfall(offer.project_position_id, null, offer.custom_pay)}
+                        >
+                          {waterfallCandidates[offer.project_position_id]?.length > 0
+                            ? 'Someone else…'
+                            : 'Choose someone…'}
+                        </Button>
                       </div>
                     </td>
                   </tr>

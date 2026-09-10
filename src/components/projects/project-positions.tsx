@@ -93,7 +93,8 @@ export type BookForImport = {
 
 export type WaterfallTrigger = {
   positionId: string
-  musicianId: string
+  /** Null when the admin chose "Someone else" and wants to pick for themselves. */
+  musicianId: string | null
   customPay: number | null
   isFollowUp?: boolean
 }
@@ -203,6 +204,8 @@ export function ProjectPositions({
   const [rescindPosition, setRescindPosition] = useState<PositionJoined | null>(null)
   const [rescinding, setRescinding] = useState(false)
   const [preSelectedMusicianId, setPreSelectedMusicianId] = useState<string | null>(null)
+  /** False once "Someone else" opened the dialog, so it does not pre-pick a name. */
+  const [offerAutoSelect, setOfferAutoSelect] = useState(true)
   const [isFollowUp, setIsFollowUp] = useState(false)
   const [ensembleDriftOpen, setEnsembleDriftOpen] = useState(false)
   const [ensembleDriftSuggestion, setEnsembleDriftSuggestion] = useState<string | null>(null)
@@ -239,6 +242,7 @@ export function ProjectPositions({
         setOfferChairNumber(position.chair_number)
         setOfferExistingIds(uniqueProjectOfferIds)
         setPreSelectedMusicianId(waterfallTrigger.musicianId)
+        setOfferAutoSelect(waterfallTrigger.musicianId !== null)
         setIsFollowUp(!!waterfallTrigger.isFollowUp)
         if (waterfallTrigger.customPay != null) {
           setSuggestedCustomPay(waterfallTrigger.customPay.toString())
@@ -823,7 +827,7 @@ export function ProjectPositions({
 
       <SendOfferDialog
         open={offerPositionId !== null}
-        onOpenChange={(open) => { if (!open) { setOfferPositionId(null); setOfferInstrumentId(null); setOfferChairNumber(1); setOfferExistingIds([]); setPreSelectedMusicianId(null); setIsFollowUp(false) } }}
+        onOpenChange={(open) => { if (!open) { setOfferPositionId(null); setOfferInstrumentId(null); setOfferChairNumber(1); setOfferExistingIds([]); setPreSelectedMusicianId(null); setOfferAutoSelect(true); setIsFollowUp(false) } }}
         positionId={offerPositionId ?? ''}
         instrumentId={offerInstrumentId ?? ''}
         instrumentName={offerInstrumentId ? positions.find(p => p.instrument_id === offerInstrumentId)?.instrument?.name : undefined}
@@ -838,6 +842,7 @@ export function ProjectPositions({
         nextVacantCount={offerInstrumentId ? positions.filter(p => p.instrument_id === offerInstrumentId && p.status === 'vacant' && p.id !== offerPositionId).length : 0}
         nextInstrumentName={offerInstrumentId ? positions.find(p => p.instrument_id === offerInstrumentId)?.instrument?.name : undefined}
         preSelectedMusicianId={preSelectedMusicianId}
+        autoSelect={offerAutoSelect}
         isFollowUp={isFollowUp}
         onSuccess={(applyPayToRemaining) => {
           if (applyPayToRemaining?.customPay) {
