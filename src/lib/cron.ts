@@ -58,6 +58,42 @@ export function cronDisabledResponse(jobName: string): NextResponse | null {
 }
 
 /**
+ * Render a thrown value for an ops alert.
+ *
+ * `String(error)` is only useful for an Error. The failures these jobs actually
+ * hit come from Supabase, and a PostgREST failure is a plain object —
+ * `{ message, details, hint, code }` — so `String()` rendered it "[object
+ * Object]" and every alert email named a job but no cause. Four alerts could
+ * arrive saying nothing beyond "expire-offers failed".
+ *
+ * Prefer the named PostgREST fields, which are the diagnosis; fall back to JSON
+ * for any other object, guarded because a circular value would otherwise throw
+ * inside the alert and lose the failure entirely.
+ */
+export function describeError(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.message}\n\n${error.stack ?? ''}`
+  }
+
+  if (error !== null && typeof error === 'object') {
+    const record = error as Record<string, unknown>
+    const named = ['message', 'code', 'details', 'hint']
+      .filter((key) => record[key] != null && record[key] !== '')
+      .map((key) => `${key}: ${String(record[key])}`)
+
+    if (named.length > 0) return named.join('\n')
+
+    try {
+      return JSON.stringify(error, null, 2)
+    } catch {
+      return String(error)
+    }
+  }
+
+  return String(error)
+}
+
+/**
  * Best-effort ops alert when a scheduled job fails fatally. Goes through the
  * normal email path so EMAIL_SAFE_MODE applies (allowlist PLATFORM_ADMIN_EMAIL
  * to receive these during testing). Never throws — alerting must not mask the
@@ -69,8 +105,7 @@ export async function notifyOps(jobName: string, error: unknown): Promise<void> 
 
   const to = process.env.PLATFORM_ADMIN_EMAIL
   if (!to) return
-  const detail =
-    error instanceof Error ? `${error.message}\n\n${error.stack ?? ''}` : String(error)
+  const detail = describeError(error)
   try {
     await sendEmail({
       to,
