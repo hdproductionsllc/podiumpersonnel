@@ -169,3 +169,10 @@ test. Investigating instead uncovered a live bug: INSTRUCTION_MARKERS was matche
 with `includes()` against the whole line, so ANY song line containing "please" was
 dropped with no warning — and "Canon in D - please start at bar 8" is exactly how
 clients write. Two songs vanished in a three-line fixture.
+
+## Delegate the clicking; keep the judgement (2026-09-13)
+Spent the top model's context driving Supabase dashboard pages one screenshot at a
+time (each page takes 10-20 s to load). David's standing rule already says to use
+Sonnet/Haiku subagents for exploration and mechanical work. Log-reading, page-scraping
+and "go look at X and report the numbers" belong in a cheap subagent with a precise
+brief; the main thread should only see the conclusions and decide what they mean.
