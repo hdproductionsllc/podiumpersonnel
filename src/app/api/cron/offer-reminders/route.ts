@@ -3,7 +3,7 @@ import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferReminderEmail, sendOfferExpiringSoonEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
-import { cronDisabledResponse, notifyOps, requireCronAuth } from '@/lib/cron'
+import { cronDisabledResponse, notifyOps, requireCronAuth, withCronRetry } from '@/lib/cron'
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request)
@@ -19,46 +19,49 @@ export async function GET(request: NextRequest) {
   const in24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000)
 
   // Find offers expiring within the next 24 hours that haven't been reminded yet
-  const { data: expiringOffers, error: fetchError } = await supabase
-    .from('contract_offers')
-    .select(`
-      id,
-      expires_at,
-      token,
-      custom_pay,
-      project_position_id,
-      musician:musicians(
+  const { data: expiringOffers, error: fetchError } = await withCronRetry(
+    'offer-reminders: fetch expiring offers',
+    () => supabase
+      .from('contract_offers')
+      .select(`
         id,
-        first_name,
-        last_name,
-        email
-      ),
-      project_position:project_positions(
-        id,
-        chair_number,
-        instrument_id,
-        instrument:instruments(id, name),
-        project:projects(
+        expires_at,
+        token,
+        custom_pay,
+        project_position_id,
+        musician:musicians(
           id,
-          name,
-          organization_id,
-          organization:organizations(
+          first_name,
+          last_name,
+          email
+        ),
+        project_position:project_positions(
+          id,
+          chair_number,
+          instrument_id,
+          instrument:instruments(id, name),
+          project:projects(
             id,
             name,
-            timezone,
-            email_logo_url,
-            email_brand_color,
-            email_footer_text
-          ),
-          services(start_time)
+            organization_id,
+            organization:organizations(
+              id,
+              name,
+              timezone,
+              email_logo_url,
+              email_brand_color,
+              email_footer_text
+            ),
+            services(start_time)
+          )
         )
-      )
-    `)
-    .in('status', ['pending', 'viewed'])
-    .not('expires_at', 'is', null)
-    .gt('expires_at', now.toISOString())
-    .lte('expires_at', in24Hours.toISOString())
-    .is('reminder_sent_at', null)
+      `)
+      .in('status', ['pending', 'viewed'])
+      .not('expires_at', 'is', null)
+      .gt('expires_at', now.toISOString())
+      .lte('expires_at', in24Hours.toISOString())
+      .is('reminder_sent_at', null),
+  )
 
   if (fetchError) {
     console.error('Failed to fetch expiring offers:', fetchError)

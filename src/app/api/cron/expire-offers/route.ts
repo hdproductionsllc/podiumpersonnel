@@ -4,7 +4,7 @@ import { getNextCandidates } from '@/lib/next-candidate'
 import { sendOfferExpiredEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
-import { cronDisabledResponse, notifyOps, requireCronAuth } from '@/lib/cron'
+import { cronDisabledResponse, notifyOps, requireCronAuth, withCronRetry } from '@/lib/cron'
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request)
@@ -17,34 +17,37 @@ export async function GET(request: NextRequest) {
   const baseUrl = getAppUrl()
 
   // Find all offers that have expired but haven't been marked as such
-  const { data: expiredOffers, error: fetchError } = await supabase
-    .from('contract_offers')
-    .select(`
-      id,
-      project_position_id,
-      musician:musicians(
+  const { data: expiredOffers, error: fetchError } = await withCronRetry(
+    'expire-offers: fetch expired offers',
+    () => supabase
+      .from('contract_offers')
+      .select(`
         id,
-        first_name,
-        last_name,
-        email
-      ),
-      project_position:project_positions(
-        id,
-        chair_number,
-        instrument_id,
-        instrument:instruments(id, name),
-        project:projects(
+        project_position_id,
+        musician:musicians(
           id,
-          name,
-          organization_id,
-          organization:organizations(id, name, timezone),
-          services(start_time)
+          first_name,
+          last_name,
+          email
+        ),
+        project_position:project_positions(
+          id,
+          chair_number,
+          instrument_id,
+          instrument:instruments(id, name),
+          project:projects(
+            id,
+            name,
+            organization_id,
+            organization:organizations(id, name, timezone),
+            services(start_time)
+          )
         )
-      )
-    `)
-    .in('status', ['pending', 'viewed'])
-    .not('expires_at', 'is', null)
-    .lt('expires_at', new Date().toISOString())
+      `)
+      .in('status', ['pending', 'viewed'])
+      .not('expires_at', 'is', null)
+      .lt('expires_at', new Date().toISOString()),
+  )
 
   if (fetchError) {
     console.error('Failed to fetch expired offers:', fetchError)

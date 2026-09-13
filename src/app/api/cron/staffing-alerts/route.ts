@@ -4,7 +4,7 @@ import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendStaffingAlertEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
-import { cronDisabledResponse, requireCronAuth } from '@/lib/cron'
+import { cronDisabledResponse, notifyOps, requireCronAuth, withCronRetry } from '@/lib/cron'
 
 // Alert thresholds in days — one email per project per threshold
 const THRESHOLDS = [14, 7, 3]
@@ -21,39 +21,43 @@ export async function GET(request: NextRequest) {
   const now = new Date()
 
   // Fetch active projects with upcoming services and their positions
-  const { data: projects, error: fetchError } = await supabase
-    .from('projects')
-    .select(`
-      id,
-      name,
-      organization_id,
-      organization:organizations(
+  const { data: projects, error: fetchError } = await withCronRetry(
+    'staffing-alerts: fetch active projects',
+    () => supabase
+      .from('projects')
+      .select(`
         id,
         name,
-        timezone,
-        disable_staffing_alerts,
-        email_logo_url,
-        email_brand_color,
-        email_footer_text
-      ),
-      services(
-        id,
-        start_time,
-        venue,
-        venue_id,
-        venue_details:venues!services_venue_id_fkey(name)
-      ),
-      project_positions(
-        id,
-        status,
-        chair_number,
-        instrument:instruments(name)
-      )
-    `)
-    .eq('status', 'active')
+        organization_id,
+        organization:organizations(
+          id,
+          name,
+          timezone,
+          disable_staffing_alerts,
+          email_logo_url,
+          email_brand_color,
+          email_footer_text
+        ),
+        services(
+          id,
+          start_time,
+          venue,
+          venue_id,
+          venue_details:venues!services_venue_id_fkey(name)
+        ),
+        project_positions(
+          id,
+          status,
+          chair_number,
+          instrument:instruments(name)
+        )
+      `)
+      .eq('status', 'active'),
+  )
 
   if (fetchError) {
     console.error('Staffing alerts: failed to fetch projects:', fetchError)
+    await notifyOps('staffing-alerts', fetchError)
     return NextResponse.json({ error: fetchError.message }, { status: 500 })
   }
 

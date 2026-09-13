@@ -16,7 +16,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { sendSongPlannerEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
-import { cronDisabledResponse, notifyOps, requireCronAuth } from '@/lib/cron'
+import { cronDisabledResponse, notifyOps, requireCronAuth, withCronRetry } from '@/lib/cron'
 import { PLANNER_REMINDER_OFFSETS } from '@/lib/intake/planner'
 import { plannerEmailsEnabled } from '@/lib/intake/planner-email'
 
@@ -49,22 +49,25 @@ export async function GET(request: NextRequest) {
 
   // Live link, nothing submitted, a deadline to nudge toward. An intake with no
   // due date gets no reminders at all — better silent than inventing a deadline.
-  const { data: intakes, error } = await supabase
-    .from('intakes')
-    .select(`
-      id,
-      organization_id,
-      project_id,
-      client_token,
-      client_token_expires_at,
-      client_due_at,
-      client_last_reminder_at,
-      project:projects(name, start_date, client_name, client_email, status),
-      organization:organizations(name, intake_enabled, email_logo_url, email_brand_color, email_footer_text)
-    `)
-    .not('client_token', 'is', null)
-    .is('client_submitted_at', null)
-    .not('client_due_at', 'is', null)
+  const { data: intakes, error } = await withCronRetry(
+    'song-planner-reminders: fetch live intakes',
+    () => supabase
+      .from('intakes')
+      .select(`
+        id,
+        organization_id,
+        project_id,
+        client_token,
+        client_token_expires_at,
+        client_due_at,
+        client_last_reminder_at,
+        project:projects(name, start_date, client_name, client_email, status),
+        organization:organizations(name, intake_enabled, email_logo_url, email_brand_color, email_footer_text)
+      `)
+      .not('client_token', 'is', null)
+      .is('client_submitted_at', null)
+      .not('client_due_at', 'is', null),
+  )
 
   if (error) {
     // A missing column means 082 hasn't been applied — that is a deployment

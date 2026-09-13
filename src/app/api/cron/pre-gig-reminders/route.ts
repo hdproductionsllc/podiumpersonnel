@@ -4,7 +4,7 @@ import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendPreGigNotificationEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
-import { cronDisabledResponse, requireCronAuth } from '@/lib/cron'
+import { cronDisabledResponse, notifyOps, requireCronAuth, withCronRetry } from '@/lib/cron'
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request)
@@ -20,12 +20,15 @@ export async function GET(request: NextRequest) {
   const in72Hours = new Date(now.getTime() + 72 * 60 * 60 * 1000)
 
   // 1. Expire old drafts where trigger_date has passed
-  const { data: expiredRows, error: expireError } = await supabase
-    .from('pre_gig_reminders')
-    .update({ status: 'expired' })
-    .eq('status', 'draft')
-    .lt('trigger_date', now.toISOString())
-    .select('id')
+  const { data: expiredRows, error: expireError } = await withCronRetry(
+    'pre-gig-reminders: expire stale drafts',
+    () => supabase
+      .from('pre_gig_reminders')
+      .update({ status: 'expired' })
+      .eq('status', 'draft')
+      .lt('trigger_date', now.toISOString())
+      .select('id'),
+  )
   if (expireError) {
     // Stale drafts linger one more day; the rest of the run is unaffected.
     console.error('Failed to expire stale pre-gig reminder drafts:', expireError)
@@ -33,43 +36,47 @@ export async function GET(request: NextRequest) {
   const expiredCount = expiredRows?.length ?? 0
 
   // 2. Find projects with services 24-72h from now
-  const { data: upcomingProjects, error: fetchError } = await supabase
-    .from('projects')
-    .select(`
-      id,
-      name,
-      organization_id,
-      status,
-      ensemble_type,
-      organization:organizations(
+  const { data: upcomingProjects, error: fetchError } = await withCronRetry(
+    'pre-gig-reminders: fetch upcoming projects',
+    () => supabase
+      .from('projects')
+      .select(`
         id,
         name,
-        timezone,
-        email_logo_url,
-        email_brand_color,
-        email_footer_text
-      ),
-      services(
-        id,
-        name,
-        start_time,
-        venue,
-        venue_id,
-        venue_details:venues!services_venue_id_fkey(name)
-      ),
-      project_positions(
-        id,
+        organization_id,
         status,
-        musician_id,
-        musician:musicians(id, email)
-      ),
-      gig_detail_sends(id),
-      music_sends(id)
-    `)
-    .eq('status', 'active')
+        ensemble_type,
+        organization:organizations(
+          id,
+          name,
+          timezone,
+          email_logo_url,
+          email_brand_color,
+          email_footer_text
+        ),
+        services(
+          id,
+          name,
+          start_time,
+          venue,
+          venue_id,
+          venue_details:venues!services_venue_id_fkey(name)
+        ),
+        project_positions(
+          id,
+          status,
+          musician_id,
+          musician:musicians(id, email)
+        ),
+        gig_detail_sends(id),
+        music_sends(id)
+      `)
+      .eq('status', 'active'),
+  )
 
   if (fetchError) {
     console.error('Failed to fetch upcoming projects:', fetchError)
+    await notifyOps('pre-gig-reminders', fetchError)
     return NextResponse.json({ error: fetchError.message }, { status: 500 })
   }
 

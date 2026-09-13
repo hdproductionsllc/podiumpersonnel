@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { cronDisabledResponse, requireCronAuth } from '@/lib/cron'
+import { cronDisabledResponse, notifyOps, requireCronAuth, withCronRetry } from '@/lib/cron'
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request)
@@ -13,15 +13,19 @@ export async function GET(request: NextRequest) {
   const today = new Date().toISOString().split('T')[0]
 
   // Mark active projects with past end_date as completed
-  const { data, error } = await supabase
-    .from('projects')
-    .update({ status: 'completed' })
-    .eq('status', 'active')
-    .lt('end_date', today)
-    .select('id, name')
+  const { data, error } = await withCronRetry(
+    'complete-projects: mark active projects past end_date as completed',
+    () => supabase
+      .from('projects')
+      .update({ status: 'completed' })
+      .eq('status', 'active')
+      .lt('end_date', today)
+      .select('id, name'),
+  )
 
   if (error) {
     console.error('Failed to auto-complete projects:', error)
+    await notifyOps('complete-projects', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 

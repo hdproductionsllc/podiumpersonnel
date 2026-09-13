@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireCronAuth } from '@/lib/cron'
+import { notifyOps, requireCronAuth, withCronRetry } from '@/lib/cron'
 import { createServiceClient } from '@/lib/supabase/server'
 
 export async function GET(request: NextRequest) {
@@ -9,13 +9,17 @@ export async function GET(request: NextRequest) {
   const supabase = createServiceClient()
 
   // Lightweight query to keep Supabase from pausing on free tier
-  const { error } = await supabase
-    .from('organizations')
-    .select('id')
-    .limit(1)
+  const { error } = await withCronRetry(
+    'keepalive: ping organizations',
+    () => supabase
+      .from('organizations')
+      .select('id')
+      .limit(1),
+  )
 
   if (error) {
     console.error('Keepalive ping failed:', error)
+    await notifyOps('keepalive', error)
     return NextResponse.json({ error: 'Ping failed' }, { status: 500 })
   }
 
