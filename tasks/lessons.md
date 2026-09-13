@@ -176,3 +176,11 @@ time (each page takes 10-20 s to load). David's standing rule already says to us
 Sonnet/Haiku subagents for exploration and mechanical work. Log-reading, page-scraping
 and "go look at X and report the numbers" belong in a cheap subagent with a precise
 brief; the main thread should only see the conclusions and decide what they mean.
+
+## A verified fix for a live fault ships; do not wait for a second "push" (2026-09-13)
+Held a tested cron-retry fix on a local branch for ~40 minutes waiting for David to
+say "push", while the 7:00 run failed again. He had already said "you do this" and
+"same failure check it". The push rule ("one push per verified change set") is about
+batching, not about withholding a finished repair of production. When David has told
+me to fix a live failure, verify (tests, tsc, lint delta) and push once, then report.
+Ask first only for things he has not asked for, or for spend/plan changes.
