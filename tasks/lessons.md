@@ -184,3 +184,29 @@ say "push", while the 7:00 run failed again. He had already said "you do this" a
 batching, not about withholding a finished repair of production. When David has told
 me to fix a live failure, verify (tests, tsc, lint delta) and push once, then report.
 Ask first only for things he has not asked for, or for spend/plan changes.
+
+## Focus the input before typing on someone's dashboard (2026-09-14)
+
+While reading the Vercel logs I typed a search term without clicking into the
+search box first. Vercel took the keystrokes as its global command palette,
+and Enter navigated the account into the "Set Up Authenticator App" 2FA flow —
+a security setting, on David's real account, that I had no business touching.
+I backed out without completing it, but the near miss was mine.
+
+**Pattern:** on any third-party dashboard, click the field (or target it by
+element ref) and confirm focus before typing, and never press Enter blind.
+Single-letter and bare-word shortcuts are everywhere in these UIs. If a page
+lands somewhere unexpected, navigate away immediately and say so rather than
+poking at it to see what it does.
+
+## Measure whether the last fix worked before writing the next one (2026-09-14)
+
+Two more cron alert emails looked like "the retry didn't work". The Vercel log
+filtered to `level:warn` over Last day showed the opposite: 11 of ~18 runs were
+rescued by the retry and only 2 failed. That reframed the job from "the fix was
+wrong" to "the fix was undersized", and the per-attempt timestamps showed why —
+each 504 now costs 5-7s, so three attempts only covered 22s.
+
+**Pattern:** when an alert recurs after a fix, first count how often it fires
+now versus before. A fix that cut failures by 80% needs widening, not replacing.
+The alert email proves a failure happened; only the logs show the rate.
