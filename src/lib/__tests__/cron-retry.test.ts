@@ -43,14 +43,14 @@ describe('withCronRetry', () => {
     })
 
     const promise = withCronRetry('expire-offers: fetch', make)
-    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(1000)
     const result = await promise
 
     expect(result).toEqual({ data: [{ id: 1 }], error: null, status: 200 })
     expect(make).toHaveBeenCalledTimes(2)
     expect(warnSpy).toHaveBeenCalledTimes(1)
     expect(warnSpy.mock.calls[0][0]).toContain(
-      '[cron retry] expire-offers: fetch: attempt 1 failed (504 Gateway Timeout), retrying in 2000ms',
+      '[cron retry] expire-offers: fetch: attempt 1 failed (504 Gateway Timeout), retrying in 1000ms',
     )
   })
 
@@ -65,7 +65,7 @@ describe('withCronRetry', () => {
     })
 
     const promise = withCronRetry('keepalive: ping', make)
-    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(1000)
     const result = await promise
 
     expect(result.error).toBeNull()
@@ -87,7 +87,7 @@ describe('withCronRetry', () => {
     expect(warnSpy).not.toHaveBeenCalled()
   })
 
-  it('gives up after 3 attempts and returns the last failed result without throwing', async () => {
+  it('gives up after 5 attempts and returns the last failed result without throwing', async () => {
     const make = vi.fn(async () => ({
       data: null,
       error: { message: 'Gateway Timeout' },
@@ -95,14 +95,50 @@ describe('withCronRetry', () => {
     }))
 
     const promise = withCronRetry('staffing-alerts: fetch', make)
-    // 2s then 4s between the three attempts.
-    await vi.advanceTimersByTimeAsync(2000)
-    await vi.advanceTimersByTimeAsync(4000)
+    // 1s, 2s, 4s, 8s between the five attempts.
+    await vi.advanceTimersByTimeAsync(1000 + 2000 + 4000 + 8000)
     const result = await promise
 
-    expect(make).toHaveBeenCalledTimes(3)
+    expect(make).toHaveBeenCalledTimes(5)
     expect(result.error).toEqual({ message: 'Gateway Timeout' })
-    expect(warnSpy).toHaveBeenCalledTimes(2)
+    expect(warnSpy).toHaveBeenCalledTimes(4)
+  })
+
+  /**
+   * The 2026-09-14 outage outlived a 22s retry window, so the sizing of the
+   * backoff is a fact about production, not a style choice — pin it.
+   */
+  it('backs off 1s, 2s, 4s, 8s so a blip lasting ~30s is still survivable', async () => {
+    const waits: number[] = []
+    const make = vi.fn(async () => ({
+      data: null,
+      error: { message: 'Gateway Timeout' },
+      status: 504,
+    }))
+
+    await withCronRetry('expire-offers: fetch', make, {
+      sleep: async (ms) => {
+        waits.push(ms)
+      },
+    })
+
+    expect(waits).toEqual([1000, 2000, 4000, 8000])
+  })
+
+  it('stops early the moment an attempt succeeds', async () => {
+    let calls = 0
+    const make = vi.fn(async () => {
+      calls++
+      if (calls < 3) return { data: null, error: { message: 'Gateway Timeout' }, status: 504 }
+      return { data: [{ id: 7 }], error: null, status: 200 }
+    })
+
+    const result = await withCronRetry('expire-offers: fetch', make, {
+      sleep: async () => {},
+    })
+
+    expect(make).toHaveBeenCalledTimes(3)
+    expect(result.data).toEqual([{ id: 7 }])
   })
 })
 

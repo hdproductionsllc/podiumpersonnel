@@ -144,17 +144,24 @@ export function isTransientSupabaseFailure(result: { error: unknown; status?: nu
  * Run a Supabase query builder (or any thenable that resolves to
  * { error, status }) and re-run it on transient gateway failures. `make` must
  * build a FRESH builder each call — a supabase-js builder can only be awaited
- * once. Default 3 attempts, 2s then 4s between them (exponential). Returns
- * the last result unchanged (never throws on its own), so callers keep their
- * existing `if (error)` handling.
+ * once. Returns the last result unchanged (never throws on its own), so callers
+ * keep their existing `if (error)` handling.
+ *
+ * Sizing comes from the 2026-09-14 production trace. The gateway no longer
+ * answers instantly: each 504 costs 5-7s on the wire before it comes back, so
+ * three attempts with 2s/4s pauses spanned 22s — and the fault outlasted it
+ * twice in one night. Five attempts with 1/2/4/8s pauses cover roughly 45s of
+ * wall clock, against a 300s function limit. The delays start SHORTER than
+ * before on purpose: most blips clear on the second try, and the waiting is
+ * now dominated by the calls themselves, not by the sleeps.
  */
 export async function withCronRetry<T extends { error: unknown; status?: number }>(
   label: string,
   make: () => PromiseLike<T>,
   opts?: CronRetryOptions,
 ): Promise<T> {
-  const attempts = opts?.attempts ?? 3
-  const delayMs = opts?.delayMs ?? 2000
+  const attempts = opts?.attempts ?? 5
+  const delayMs = opts?.delayMs ?? 1000
   const sleep = opts?.sleep ?? defaultSleep
 
   let result: T = await make()
