@@ -27,7 +27,7 @@ import type { MusicianForOffer } from './send-offer-dialog'
 import type { Project, Service } from '@/types'
 import { toast } from 'sonner'
 import { AddressLink } from '@/components/ui/address-link'
-import { getVenueMapsUrl, getVenueDisplay } from '@/lib/venue-helpers'
+import { getVenueMapsUrl, getVenueDisplay, type ServiceWithVenue } from '@/lib/venue-helpers'
 import { ContextualTooltip } from '@/components/onboarding/contextual-tooltip'
 import { TOOLTIP_DEFINITIONS } from '@/lib/tooltips'
 import {
@@ -46,11 +46,9 @@ import { canCreateProject, canUseEmailFeatures, PLAN_LIMITS } from '@/lib/plan'
 import { UpgradePrompt } from '@/components/billing/upgrade-prompt'
 
 export type ProjectWithServices = Project & {
-  services: Service[]
+  services: ServiceWithVenue[]
   project_positions: PositionJoined[]
 }
-
-export type VenueUrlMap = Record<string, { display: string; mapsUrl: string | null; display2?: string; mapsUrl2?: string | null }>
 
 interface ProjectsClientProps {
   projects: ProjectWithServices[]
@@ -62,7 +60,6 @@ interface ProjectsClientProps {
   userRole: string
   userId?: string
   dismissedTooltips?: string[]
-  venueUrlMap?: VenueUrlMap
 }
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
@@ -125,16 +122,14 @@ function ServicesList({
   projectId,
   canManage,
   timezone,
-  venueUrlMap,
   onAddService,
   onEditService,
   onDeleteService,
 }: {
-  services: Service[]
+  services: ServiceWithVenue[]
   projectId: string
   canManage: boolean
   timezone: string
-  venueUrlMap?: VenueUrlMap
   onAddService: (projectId: string) => void
   onEditService: (projectId: string, service: Service) => void
   onDeleteService: (service: Service) => void
@@ -190,21 +185,21 @@ function ServicesList({
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">
                     {(() => {
-                      const venueInfo = venueUrlMap?.[service.id]
-                      const display = venueInfo?.display || service.venue
-                      const mapsUrl = venueInfo?.mapsUrl || null
+                      const display = getVenueDisplay(service)
+                      const venue2 = { venue: service.venue_2, venue_details: service.venue_2_details }
+                      const display2 = getVenueDisplay(venue2)
                       if (!display) return '—'
                       return (
                         <div className="space-y-0.5">
                           <AddressLink
                             address={display}
-                            googleMapsUrl={mapsUrl}
+                            googleMapsUrl={getVenueMapsUrl(service)}
                             className="text-sm"
                           />
-                          {venueInfo?.display2 && (
+                          {display2 && (
                             <AddressLink
-                              address={venueInfo.display2}
-                              googleMapsUrl={venueInfo.mapsUrl2}
+                              address={display2}
+                              googleMapsUrl={getVenueMapsUrl(venue2)}
                               className="text-sm"
                             />
                           )}
@@ -253,7 +248,6 @@ export function ProjectsClient({
   userRole,
   userId,
   dismissedTooltips = [],
-  venueUrlMap,
 }: ProjectsClientProps) {
   const router = useRouter()
   const plan = usePlan()
@@ -825,14 +819,13 @@ export function ProjectsClient({
                         {(() => {
                           const primary = project.services?.find((s) => s.service_type === 'performance')
                             || project.services?.[0]
-                          const info = primary ? venueUrlMap?.[primary.id] : undefined
-                          const display = info?.display || primary?.venue || ''
-                          if (!display) return <span className="text-muted-foreground">—</span>
+                          const display = primary ? getVenueDisplay(primary) : ''
+                          if (!primary || !display) return <span className="text-muted-foreground">—</span>
                           return (
                             <div className="max-w-xs truncate">
                               <AddressLink
                                 address={display}
-                                googleMapsUrl={info?.mapsUrl ?? null}
+                                googleMapsUrl={getVenueMapsUrl(primary)}
                                 className="text-xs"
                               />
                             </div>
@@ -933,7 +926,6 @@ export function ProjectsClient({
                             projectId={project.id}
                             canManage={canManage}
                             timezone={timezone}
-                            venueUrlMap={venueUrlMap}
                             onAddService={handleAddService}
                             onEditService={handleEditService}
                             onDeleteService={handleDeleteService}

@@ -1,13 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
+import type { VenueDetails } from '@/lib/venue-helpers'
 
-export type VenueDetails = {
-  name: string
-  address: string | null
-  city: string | null
-  state: string | null
-  zip: string | null
-  google_maps_url: string | null
-}
+export type { VenueDetails }
 
 type ServiceLike = {
   venue_id?: string | null
@@ -16,9 +10,10 @@ type ServiceLike = {
   venue_2_details?: VenueDetails | null
 }
 
-// PostgREST nested embed `services → venues!services_venue_id_fkey` silently
-// returns null under user-session RLS for deeply-nested queries. Look the
-// venues up separately with the service role and attach in code.
+// Under the user-session client the `services → venues` embed comes back null
+// (the venues RLS policy denies org admins — see scripts/venue-policies-2026-09-17.sql).
+// Look the venues up with the service role and attach in code so every page and
+// email that shows a venue sees the same record.
 export async function attachVenueDetails<T extends ServiceLike>(services: T[]): Promise<T[]> {
   const venueIds = new Set<string>()
   for (const s of services) {
@@ -30,7 +25,7 @@ export async function attachVenueDetails<T extends ServiceLike>(services: T[]): 
   const db = createServiceClient()
   const { data: venues } = await db
     .from('venues')
-    .select('id, name, address, city, state, zip, google_maps_url')
+    .select('id, name, address, city, state, zip, google_maps_url, parking_info, directions')
     .in('id', [...venueIds])
 
   const map = new Map<string, VenueDetails>((venues || []).map((v: VenueDetails & { id: string }) => [v.id, v]))

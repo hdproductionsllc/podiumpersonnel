@@ -14,8 +14,8 @@ import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
 import { useTerms } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
-import type { Service } from '@/types'
 import type { PositionJoined } from './project-positions'
+import { formatVenueFields, type ServiceWithVenue } from '@/lib/venue-helpers'
 
 interface GigDetailConfirmationStatus {
   id: string
@@ -26,18 +26,6 @@ interface GigDetailConfirmationStatus {
     first_name: string
     last_name: string
   }
-}
-
-interface ServiceWithVenue extends Service {
-  venue_details?: {
-    name: string
-    address?: string | null
-    city?: string | null
-    state?: string | null
-    zip?: string | null
-    parking_info?: string | null
-    directions?: string | null
-  } | null
 }
 
 interface SendGigDetailsDialogProps {
@@ -174,15 +162,6 @@ export function SendGigDetailsDialog({
   const unconfirmedCount = totalCount - confirmedCount
   const allConfirmed = totalCount > 0 && confirmedCount === totalCount
 
-  // Build venue display string (matching what the email will show)
-  function getVenueDisplay(service: ServiceWithVenue): string | null {
-    if (service.venue_details) {
-      const v = service.venue_details
-      return [v.name, v.address, v.city, v.state, v.zip].filter(Boolean).join(', ')
-    }
-    return service.venue || null
-  }
-
   const formattedServices = services
     .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
     .map((s) => ({
@@ -213,9 +192,7 @@ export function SendGigDetailsDialog({
             timeZone: timezone,
           })
         : null,
-      venue: getVenueDisplay(s),
-      parkingInfo: s.venue_details?.parking_info || null,
-      directions: s.venue_details?.directions || null,
+      ...formatVenueFields(s),
     }))
 
   // Sort roster by instrument then chair number (matching the email)
@@ -382,24 +359,8 @@ export function SendGigDetailsDialog({
                             </span>
                           )}
                         </div>
-                        {s.venue && (
-                          <p className="text-sm">
-                            <span className="font-medium">Venue:</span>{' '}
-                            <span className="text-muted-foreground">{s.venue}</span>
-                          </p>
-                        )}
-                        {s.parkingInfo && (
-                          <p className="text-sm">
-                            <span className="font-medium">Parking:</span>{' '}
-                            <span className="text-muted-foreground">{s.parkingInfo}</span>
-                          </p>
-                        )}
-                        {s.directions && (
-                          <p className="text-sm">
-                            <span className="font-medium">Access:</span>{' '}
-                            <span className="text-muted-foreground">{s.directions}</span>
-                          </p>
-                        )}
+                        <VenuePreview label="Venue" name={s.venue} url={s.venueUrl} address={s.venueAddress} parking={s.parkingInfo} directions={s.directions} />
+                        <VenuePreview label="Venue 2" name={s.venue2} url={s.venue2Url} address={s.venue2Address} parking={s.parkingInfo2} directions={s.directions2} />
                       </div>
                     ))}
                   </div>
@@ -474,5 +435,50 @@ export function SendGigDetailsDialog({
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+function VenuePreview({
+  label,
+  name,
+  url,
+  address,
+  parking,
+  directions,
+}: {
+  label: string
+  name: string | null
+  url: string | null
+  address: string | null
+  parking: string | null
+  directions: string | null
+}) {
+  if (!name) return null
+  return (
+    <>
+      <p className="text-sm">
+        <span className="font-medium">{label}:</span>{' '}
+        {url ? (
+          <a href={url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground underline">
+            {name}
+          </a>
+        ) : (
+          <span className="text-muted-foreground">{name}</span>
+        )}
+        {address && <span className="block text-muted-foreground">{address}</span>}
+      </p>
+      {parking && (
+        <p className="text-sm">
+          <span className="font-medium">Parking:</span>{' '}
+          <span className="text-muted-foreground">{parking}</span>
+        </p>
+      )}
+      {directions && (
+        <p className="text-sm">
+          <span className="font-medium">Access:</span>{' '}
+          <span className="text-muted-foreground">{directions}</span>
+        </p>
+      )}
+    </>
   )
 }

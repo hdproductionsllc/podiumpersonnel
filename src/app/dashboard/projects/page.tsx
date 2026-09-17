@@ -1,8 +1,9 @@
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { ProjectsClient, type ProjectWithServices } from '@/components/projects/projects-client'
 import type { BookForImport } from '@/components/projects/project-positions'
 import type { MusicianForOffer } from '@/components/projects/send-offer-dialog'
 import { DEFAULT_TIMEZONE } from '@/lib/utils'
+import { attachVenueDetails } from '@/lib/venue-attach'
 
 export default async function ProjectsPage() {
   const supabase = await createClient()
@@ -39,7 +40,7 @@ export default async function ProjectsPage() {
     .from('projects')
     .select(`
       *,
-      services(*, venue_details:venues!services_venue_id_fkey(name, address, city, state, zip, google_maps_url, parking_info, directions), venue_2_details:venues!services_venue_id_2_fkey(name, address, city, state, zip, google_maps_url, parking_info, directions)),
+      services(*),
       gig_detail_sends(id, sent_at, musician_count, gig_detail_confirmations(id, musician_id, confirmed_at)),
       project_files(id, file_name, file_size, scope, uploaded_at, project_file_instruments(instrument_id, instrument:instruments(id, name))),
       music_sends(id, sent_at, musician_count, music_confirmations(id, musician_id, confirmed_at)),
@@ -61,49 +62,11 @@ export default async function ProjectsPage() {
     .order('start_date', { ascending: true, nullsFirst: false })
     .order('name', { ascending: true })
 
-  // Build a flat map of service_id -> venue display info for the client.
-  // The nested Supabase join (services -> venues) doesn't reliably pass through
-  // the Next.js server/client boundary, so we compute everything server-side.
-  const venueUrlMap: Record<string, { display: string; mapsUrl: string | null; display2?: string; mapsUrl2?: string | null }> = {}
+  // Attach each service's venue record (name, address, map link, parking) with the
+  // service role, so the project rows and the gig-details preview show the same
+  // venue the email will carry.
   if (projects?.length) {
-    const venueIds = new Set<string>()
-    for (const p of projects as any[]) {
-      for (const s of p.services || []) {
-        if (s.venue_id) venueIds.add(s.venue_id)
-        if (s.venue_id_2) venueIds.add(s.venue_id_2)
-      }
-    }
-    if (venueIds.size > 0) {
-      // Use service role to bypass RLS — we've already verified the user is authenticated
-      const serviceDb = createServiceClient()
-      const { data: venues } = await serviceDb
-        .from('venues')
-        .select('id, name, address, city, state, zip, google_maps_url')
-        .in('id', [...venueIds])
-      const venueMap = new Map((venues || []).map(v => [v.id, v]))
-      for (const p of projects as any[]) {
-        for (const s of p.services || []) {
-          const entry: typeof venueUrlMap[string] = { display: '', mapsUrl: null }
-          if (s.venue_id) {
-            const v = venueMap.get(s.venue_id)
-            if (v) {
-              entry.display = [v.name, v.address, v.city, v.state, v.zip].filter(Boolean).join(', ')
-              entry.mapsUrl = v.google_maps_url || null
-            }
-          }
-          if (s.venue_id_2) {
-            const v2 = venueMap.get(s.venue_id_2)
-            if (v2) {
-              entry.display2 = [v2.name, v2.address, v2.city, v2.state, v2.zip].filter(Boolean).join(', ')
-              entry.mapsUrl2 = v2.google_maps_url || null
-            }
-          }
-          if (entry.display || entry.display2) {
-            venueUrlMap[s.id] = entry
-          }
-        }
-      }
-    }
+    await attachVenueDetails(projects.flatMap((p) => p.services || []))
   }
 
   // Auto-complete active projects whose end_date has passed
@@ -176,7 +139,6 @@ export default async function ProjectsPage() {
       userRole={membership!.role}
       userId={user!.id}
       dismissedTooltips={tutorialState?.dismissed_tooltips ?? []}
-      venueUrlMap={venueUrlMap}
     />
   )
 }

@@ -1,3 +1,22 @@
+import type { Service } from '@/types'
+
+/** The venue columns every page and email reads. Attached by attachVenueDetails(). */
+export type VenueDetails = {
+  name: string
+  address: string | null
+  city: string | null
+  state: string | null
+  zip: string | null
+  google_maps_url: string | null
+  parking_info: string | null
+  directions: string | null
+}
+
+export type ServiceWithVenue = Service & {
+  venue_details?: VenueDetails | null
+  venue_2_details?: VenueDetails | null
+}
+
 /**
  * Get the display name for a venue, preferring the FK-joined venue data
  * over the legacy text field.
@@ -79,4 +98,33 @@ export function getVenueMapsUrl(service: {
   // No reliable data available — return null rather than a name-only search
   // that could resolve to the wrong location (e.g. wrong "Our Lady of Solitude")
   return null
+}
+
+/**
+ * The venue fields the gig-details email renders for one service. Both the
+ * email builder (src/lib/send-gig-details.ts) and the admin preview dialog call
+ * this, so what the admin sees before sending is what the musician receives.
+ * A gig with venue text but no linked venue record yields the bare name with no
+ * address and no map link — that is what would go out, so that is what we show.
+ */
+export function formatVenueFields(service: {
+  venue?: string | null
+  venue_2?: string | null
+  venue_details?: VenueDetails | null
+  venue_2_details?: VenueDetails | null
+}) {
+  const venue2 = { venue: service.venue_2, venue_details: service.venue_2_details }
+  const hasVenue2 = Boolean(service.venue_2_details || service.venue_2)
+  return {
+    venue: getVenueName(service) || null,
+    venueUrl: getVenueMapsUrl(service),
+    venueAddress: getVenueAddress(service),
+    parkingInfo: service.venue_details?.parking_info || null,
+    directions: service.venue_details?.directions || null,
+    venue2: hasVenue2 ? getVenueName(venue2) || null : null,
+    venue2Url: hasVenue2 ? getVenueMapsUrl(venue2) : null,
+    venue2Address: hasVenue2 ? getVenueAddress(venue2) : null,
+    parkingInfo2: service.venue_2_details?.parking_info || null,
+    directions2: service.venue_2_details?.directions || null,
+  }
 }
