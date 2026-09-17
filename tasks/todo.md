@@ -1,4 +1,4 @@
-# Venue address missing from gig emails (2026-09-16)
+# Venue address missing from gig emails — SHIPPED 2026-09-17 (2aa0d070)
 
 Emails show a venue address + Google Maps link only when the gig is LINKED to a saved
 venue record (`services.venue_id`). Typing a venue name — even one already saved —
@@ -38,9 +38,11 @@ Decisions: warn (never block) on an unlinked venue; relink existing data but sen
 
 - [x] `npm test` green, incl. the existing `venue-maps-url.test.ts` no-name-only-URL guard
 - [x] script dry run shows exactly 6 / 6 / 0
-- [ ] BLOCKED — needs a browser: mouse-click a dropdown venue still works; tab-away has
-      no flicker; two same-name venues do not auto-link; editing a venue does not clobber
-      notes. Chrome extension was not connected. Dev server runs at localhost:3000.
+- [~] NOT VERIFIED IN A BROWSER — David chose to ship without the manual pass (2026-09-17).
+      Unwatched: mouse-click a dropdown venue sticks; tab-away has no flicker; editing a
+      venue does not clobber notes. If the picker misbehaves, the tell is a dropdown click
+      that does not stick. `git revert 2aa0d070` restores the old picker; the relinked data
+      is independent and stays fixed.
 - [x] `npm run build` + `npm run lint` clean
 - [x] `--apply` run 2026-09-16: 6 linked, backup in scripts/backups/. Kurtz gig now renders
       "4344 Shaw Boulevard, St. Louis, MO, 63110" + a place-ID map link. No emails sent.
