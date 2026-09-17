@@ -22,7 +22,17 @@ interface VenueFormDialogProps {
   onOpenChange: (open: boolean) => void
   venue: Venue | null
   organizationId: string
-  onSuccess: () => void
+  /**
+   * Receives the newly created row so a caller that opened this dialog to fix an
+   * unlinked gig can attach the venue immediately. Absent when editing.
+   */
+  onSuccess: (created?: Venue) => void
+  /**
+   * Prefill the name when creating. Kept separate from `venue` on purpose — a
+   * truthy `venue` puts the dialog in edit mode and would try to update a row
+   * that does not exist yet.
+   */
+  initialName?: string
 }
 
 export function VenueFormDialog({
@@ -31,6 +41,7 @@ export function VenueFormDialog({
   venue,
   organizationId,
   onSuccess,
+  initialName,
 }: VenueFormDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -70,7 +81,7 @@ export function VenueFormDialog({
         setDirections(venue.directions || '')
         setNotes(venue.notes || '')
       } else {
-        setName('')
+        setName(initialName || '')
         setAddress('')
         setCity('')
         setState('')
@@ -83,7 +94,7 @@ export function VenueFormDialog({
       }
       setError(null)
     }
-  }, [open, venue])
+  }, [open, venue, initialName])
 
   function handleVenueSearchChange(
     venueName: string,
@@ -171,15 +182,22 @@ export function VenueFormDialog({
         return
       }
     } else {
-      const { error: insertError } = await supabase
+      // Read the row back so the caller can link a gig to it straight away.
+      const { data: created, error: insertError } = await supabase
         .from('venues')
         .insert({ organization_id: organizationId, ...payload })
+        .select()
+        .single()
 
       if (insertError) {
         setError(insertError.message)
         setIsLoading(false)
         return
       }
+
+      setIsLoading(false)
+      onSuccess(created as Venue)
+      return
     }
 
     setIsLoading(false)

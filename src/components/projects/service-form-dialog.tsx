@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DateTimePicker } from '@/components/ui/datetime-picker'
 import { TimePicker } from '@/components/ui/time-picker'
-import { VenueSearch, type GooglePlaceData } from '@/components/ui/venue-search'
+import { VenueField } from '@/components/ui/venue-field'
 import {
   Form,
   FormControl,
@@ -477,39 +477,13 @@ export function ServiceFormDialog({
                 <FormItem>
                   <FormLabel>Venue</FormLabel>
                   <FormControl>
-                    <VenueSearch
+                    <VenueField
                       value={field.value || ''}
                       venueId={form.watch('venue_id') ?? null}
                       organizationId={organizationId}
-                      onChange={async (venueName, venueId, _venueData, placeId, googlePlaceData) => {
+                      onChange={(venueName, venueId) => {
                         field.onChange(venueName)
                         form.setValue('venue_id', venueId)
-
-                        // Auto-create venue when a Google Place is selected
-                        if (!venueId && (googlePlaceData || placeId)) {
-                          try {
-                            const res = await fetch('/api/venues', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                organization_id: organizationId,
-                                name: googlePlaceData?.name || venueName,
-                                address: googlePlaceData?.address || null,
-                                city: googlePlaceData?.city || null,
-                                state: googlePlaceData?.state || null,
-                                zip: googlePlaceData?.zip || null,
-                                google_place_id: googlePlaceData?.placeId || placeId,
-                                google_maps_url: googlePlaceData?.googleMapsUrl || null,
-                              }),
-                            })
-                            const data = await res.json()
-                            if (data.id) {
-                              form.setValue('venue_id', data.id)
-                            }
-                          } catch (err) {
-                            console.error('Failed to auto-create venue:', err)
-                          }
-                        }
                       }}
                       placeholder="Search saved venues or enter address..."
                     />
@@ -548,38 +522,13 @@ export function ServiceFormDialog({
                       </button>
                     </div>
                     <FormControl>
-                      <VenueSearch
+                      <VenueField
                         value={field.value || ''}
                         venueId={form.watch('venue_id_2') ?? null}
                         organizationId={organizationId}
-                        onChange={async (venueName, venueId, _venueData, placeId, googlePlaceData) => {
+                        onChange={(venueName, venueId) => {
                           field.onChange(venueName)
                           form.setValue('venue_id_2', venueId)
-
-                          if (!venueId && (googlePlaceData || placeId)) {
-                            try {
-                              const res = await fetch('/api/venues', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                  organization_id: organizationId,
-                                  name: googlePlaceData?.name || venueName,
-                                  address: googlePlaceData?.address || null,
-                                  city: googlePlaceData?.city || null,
-                                  state: googlePlaceData?.state || null,
-                                  zip: googlePlaceData?.zip || null,
-                                  google_place_id: googlePlaceData?.placeId || placeId,
-                                  google_maps_url: googlePlaceData?.googleMapsUrl || null,
-                                }),
-                              })
-                              const data = await res.json()
-                              if (data.id) {
-                                form.setValue('venue_id_2', data.id)
-                              }
-                            } catch (err) {
-                              console.error('Failed to auto-create venue:', err)
-                            }
-                          }
                         }}
                         placeholder="e.g. reception venue..."
                       />

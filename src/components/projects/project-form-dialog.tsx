@@ -25,7 +25,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { TimePicker } from '@/components/ui/time-picker'
-import { VenueSearch } from '@/components/ui/venue-search'
+import { VenueField } from '@/components/ui/venue-field'
 import {
   Form,
   FormControl,
@@ -672,39 +672,13 @@ export function ProjectFormDialog({
                 <label className="text-sm font-medium leading-none">
                   Performance Venue <span className="text-destructive">*</span>
                 </label>
-                <VenueSearch
+                <VenueField
                   value={venueName}
                   venueId={venueId}
                   organizationId={organizationId}
-                  onChange={async (name, id, _venueData, placeId, googlePlaceData) => {
+                  onChange={(name, id) => {
                     setVenueName(name)
                     setVenueId(id)
-
-                    // Auto-create venue when a Google Place is selected (no saved id yet)
-                    if (!id && (googlePlaceData || placeId)) {
-                      try {
-                        const res = await fetch('/api/venues', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            organization_id: organizationId,
-                            name: googlePlaceData?.name || name,
-                            address: googlePlaceData?.address || null,
-                            city: googlePlaceData?.city || null,
-                            state: googlePlaceData?.state || null,
-                            zip: googlePlaceData?.zip || null,
-                            google_place_id: googlePlaceData?.placeId || placeId,
-                            google_maps_url: googlePlaceData?.googleMapsUrl || null,
-                          }),
-                        })
-                        const data = await res.json()
-                        if (data.id) {
-                          setVenueId(data.id)
-                        }
-                      } catch (err) {
-                        console.error('Failed to auto-create venue:', err)
-                      }
-                    }
                   }}
                   placeholder="Search saved venues or enter address..."
                 />
