@@ -14,8 +14,6 @@ import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
 import { useTerms } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
-import { getVenueDisplay } from '@/lib/venue-helpers'
-import { venueIsMissingLocation } from '@/lib/venue-resolution'
 import type { Service } from '@/types'
 import type { PositionJoined } from './project-positions'
 
@@ -37,7 +35,6 @@ interface ServiceWithVenue extends Service {
     city?: string | null
     state?: string | null
     zip?: string | null
-    google_maps_url?: string | null
     parking_info?: string | null
     directions?: string | null
   } | null
@@ -177,6 +174,15 @@ export function SendGigDetailsDialog({
   const unconfirmedCount = totalCount - confirmedCount
   const allConfirmed = totalCount > 0 && confirmedCount === totalCount
 
+  // Build venue display string (matching what the email will show)
+  function getVenueDisplay(service: ServiceWithVenue): string | null {
+    if (service.venue_details) {
+      const v = service.venue_details
+      return [v.name, v.address, v.city, v.state, v.zip].filter(Boolean).join(', ')
+    }
+    return service.venue || null
+  }
+
   const formattedServices = services
     .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
     .map((s) => ({
@@ -207,9 +213,7 @@ export function SendGigDetailsDialog({
             timeZone: timezone,
           })
         : null,
-      venue: getVenueDisplay(s) || null,
-      // What musicians will actually be able to navigate to.
-      missingLocation: venueIsMissingLocation(s),
+      venue: getVenueDisplay(s),
       parkingInfo: s.venue_details?.parking_info || null,
       directions: s.venue_details?.directions || null,
     }))
@@ -382,12 +386,6 @@ export function SendGigDetailsDialog({
                           <p className="text-sm">
                             <span className="font-medium">Venue:</span>{' '}
                             <span className="text-muted-foreground">{s.venue}</span>
-                          </p>
-                        )}
-                        {s.missingLocation && (
-                          <p className="text-xs text-amber-700 dark:text-amber-400">
-                            No address on file — this email will show the venue name
-                            only, with no map link. Add an address to the venue first.
                           </p>
                         )}
                         {s.parkingInfo && (

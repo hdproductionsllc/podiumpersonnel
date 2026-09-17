@@ -460,12 +460,10 @@ export function ProjectsClient({
         }
       }
 
-      // The name and its link move together. Spreading them independently let a
-      // venue reach every service of a new project with no venue_id, which is what
-      // strips the address and the map link out of the gig-details email.
-      const venueFields = newProject.venueName
-        ? { venue: newProject.venueName, venue_id: newProject.venueId ?? null }
-        : {}
+      const venueFields = {
+        ...(newProject.venueName ? { venue: newProject.venueName } : {}),
+        ...(newProject.venueId ? { venue_id: newProject.venueId } : {}),
+      }
 
       if (newProject.template === 'string-quartet') {
         // Performance only — most gigs are straight performances

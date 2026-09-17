@@ -4,13 +4,19 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLoadScript } from '@react-google-maps/api'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from './input'
-import { matchSavedVenue } from '@/lib/venue-match'
 import type { Venue } from '@/types'
-import type { GooglePlaceData } from '@/lib/venue-resolution'
 
 const libraries: ('places')[] = ['places']
 
-export type { GooglePlaceData }
+export interface GooglePlaceData {
+  placeId: string
+  name: string
+  address: string
+  city: string
+  state: string
+  zip: string
+  googleMapsUrl: string
+}
 
 interface VenueSearchProps {
   value: string
@@ -19,21 +25,6 @@ interface VenueSearchProps {
   onChange: (venue: string, venueId: string | null, venueData?: Venue | null, placeId?: string | null, googlePlaceData?: GooglePlaceData | null) => void
   placeholder?: string
   className?: string
-  /**
-   * Adopt a saved venue when the typed text unambiguously names one, on blur.
-   *
-   * Opt-in. The gig dialogs want it — typing a venue you already have should not
-   * silently strip the address from the email. The Venues settings form must NOT
-   * enable it: there the field names the venue being edited, so it would match
-   * that venue against itself and overwrite the admin's in-progress parking and
-   * directions with stale values.
-   */
-  autoMatchSavedVenue?: boolean
-  /**
-   * Fired on commit when the typed name answers to more than one saved venue, so
-   * the caller can ask the admin which one. We never pick for them.
-   */
-  onAmbiguousMatch?: (candidates: Venue[]) => void
 }
 
 export function VenueSearch({
@@ -43,8 +34,6 @@ export function VenueSearch({
   onChange,
   placeholder = 'Search saved venues or enter address...',
   className,
-  autoMatchSavedVenue = false,
-  onAmbiguousMatch,
 }: VenueSearchProps) {
   const [inputValue, setInputValue] = useState(value)
   const [venues, setVenues] = useState<Venue[]>([])
@@ -71,17 +60,7 @@ export function VenueSearch({
     }
   }, [isLoaded, apiKey])
 
-  // Fetch the org's venues once. Deliberately NOT keyed on venueId: re-fetching
-  // whenever the selection changes re-disables the input (it is disabled while
-  // loading), which makes the field flicker every time a venue is picked or
-  // auto-matched on tab-away.
-  // Read through a ref so the already-selected venue can be resolved after the
-  // fetch without making venueId a dependency of the fetch itself.
-  const venueIdRef = useRef(venueId)
-  useEffect(() => {
-    venueIdRef.current = venueId
-  }, [venueId])
-
+  // Fetch venues on mount
   useEffect(() => {
     async function fetchVenues() {
       setIsLoading(true)
@@ -95,10 +74,9 @@ export function VenueSearch({
       setVenues(data || [])
       setIsLoading(false)
 
-      // Show the venue this field already points at.
-      const currentId = venueIdRef.current
-      if (currentId && data) {
-        const found = data.find((v) => v.id === currentId)
+      // If we have a venueId, find and set the selected venue
+      if (venueId && data) {
+        const found = data.find((v) => v.id === venueId)
         if (found) {
           setSelectedVenue(found)
           setInputValue(found.name)
@@ -107,7 +85,7 @@ export function VenueSearch({
     }
 
     fetchVenues()
-  }, [organizationId])
+  }, [organizationId, venueId])
 
   // Sync external value changes
   useEffect(() => {
@@ -189,34 +167,6 @@ export function VenueSearch({
     fetchPredictions(newValue)
   }
 
-  /**
-   * On leaving the field, adopt a saved venue when the typed text names exactly one.
-   *
-   * Wired to the real blur event on purpose. As an effect keyed on `inputValue` it
-   * would fight handleInputChange — which clears the id on every keystroke — and the
-   * link would flap between null and matched while the admin is still typing.
-   */
-  function handleBlur(e: React.FocusEvent<HTMLInputElement>) {
-    if (!autoMatchSavedVenue) return
-    // A click on a dropdown option blurs the input before the click lands. Let the
-    // explicit choice win instead of resolving against half-typed text.
-    if (wrapperRef.current?.contains(e.relatedTarget as Node | null)) return
-    if (venueId || !inputValue.trim()) return
-
-    const { venue: match, candidates } = matchSavedVenue(inputValue, venues)
-    if (candidates.length > 1) {
-      onAmbiguousMatch?.(candidates)
-      return
-    }
-    if (!match || match.id === venueId) return
-
-    // Store the record's own spelling so the text and the link agree.
-    setInputValue(match.name)
-    setSelectedVenue(match)
-    setPredictions([])
-    onChange(match.name, match.id, match)
-  }
-
   function handleVenueSelect(venue: Venue) {
     setInputValue(venue.name)
     setSelectedVenue(venue)
@@ -292,7 +242,6 @@ export function VenueSearch({
           value={inputValue}
           onChange={handleInputChange}
           onFocus={() => setIsOpen(true)}
-          onBlur={handleBlur}
           placeholder={isLoading ? 'Loading venues...' : placeholder}
           className={className}
           disabled={isLoading}
@@ -324,8 +273,6 @@ export function VenueSearch({
                   key={venue.id}
                   type="button"
                   className="w-full px-3 py-2 text-left hover:bg-muted flex flex-col gap-0.5"
-                  // Keep focus in the input so blur never pre-empts this click.
-                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => handleVenueSelect(venue)}
                 >
                   <span className="font-medium text-sm">{venue.name}</span>
@@ -350,8 +297,6 @@ export function VenueSearch({
                   key={prediction.place_id}
                   type="button"
                   className="w-full px-3 py-2 text-left hover:bg-muted flex flex-col gap-0.5"
-                  // Keep focus in the input so blur never pre-empts this click.
-                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => handlePredictionSelect(prediction)}
                 >
                   <span className="font-medium text-sm">
