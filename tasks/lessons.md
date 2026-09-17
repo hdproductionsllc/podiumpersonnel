@@ -235,3 +235,21 @@ exists in the round trip between a component and its parent.
    path the user touches daily, "I couldn't test it in a browser" is a blocker, not a
    caveat to note in the summary. Offer to hold the push, or build the harness — do
    not let the strength of the other evidence stand in for the one test that mattered.
+
+## Prove the permission before blaming the plumbing (2026-09-17)
+
+For months the missing venue address was filed as a "PostgREST nested-embed quirk" and
+patched around in three places (page.tsx venueUrlMap, venue-attach.ts, the offer routes).
+A two-minute probe with a real user session — `GET /rest/v1/venues` — returned 0 rows
+while the admin key returned 16. Admins could not read venues at all; the "quirk" was an
+ordinary RLS policy failing. Every workaround was built on a misdiagnosis nobody tested.
+
+**Pattern:** when a join "mysteriously" comes back null, query the joined table DIRECTLY
+under the same credentials before theorising about the join. Mint a throwaway session
+(admin generate_link → verify) and read the table; a zero-row answer ends the debate.
+And write the diagnosis in David's words: "your login can't see the venues list", not
+"nested embed RLS".
+
+**Also:** verifying in the browser found a second real bug (dialog state leaking between
+projects) that no unit test or typecheck could see. The browser pass is where the bugs
+are, not a formality after the tests.

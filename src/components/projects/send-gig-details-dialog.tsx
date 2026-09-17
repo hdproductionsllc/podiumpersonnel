@@ -82,6 +82,13 @@ export function SendGigDetailsDialog({
           setSendId(data.sendId)
           setSent(true)
           setConfirmations(data.confirmations || [])
+        } else {
+          // This dialog instance is shared across projects. Without an explicit
+          // reset, opening it for a project that has never been sent would keep
+          // showing the previous project's "everyone confirmed" list.
+          setSendId(null)
+          setSent(false)
+          setConfirmations([])
         }
       }
     } catch (err) {
