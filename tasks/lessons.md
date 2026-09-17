@@ -210,3 +210,28 @@ each 504 now costs 5-7s, so three attempts only covered 22s.
 **Pattern:** when an alert recurs after a fix, first count how often it fires
 now versus before. A fix that cut failures by 80% needs widening, not replacing.
 The alert email proves a failure happened; only the logs show the rate.
+
+## Don't ship UI I couldn't watch run — and never round-trip a normalised value (2026-09-17)
+
+I rewrote the venue picker to stop gigs losing their address, verified it hard on
+every axis I *could* reach — 768 unit tests, typecheck, clean build, zero new lint
+errors, an adversarial review that caught three real breakages — and shipped it
+without ever seeing the field work, because the Chrome extension wasn't connected.
+David lost Google Places autosuggest, which is how venues actually get added. I had
+named that exact risk and shipped anyway when he said go.
+
+The defect: `resolveVenue()` returned `typedName.trim()`, and `VenueField` fed that
+back into `VenueSearch`'s controlled `value` prop on every keystroke. The sync effect
+then wrote the trimmed text back into the input, so a trailing space was deleted as it
+was typed. Multi-word venue names became untypeable, which starved the Places lookup
+and left the "not linked" warning stuck on. No unit test could have caught it; it only
+exists in the round trip between a component and its parent.
+
+**Pattern — two separate things:**
+1. Never write a transformed copy of an input's value back into its own `value` prop.
+   Keep user text verbatim; derive links, ids and normalised forms alongside it, never
+   in place of it.
+2. Passing every check I can run is not the same as verifying. For a component on a
+   path the user touches daily, "I couldn't test it in a browser" is a blocker, not a
+   caveat to note in the summary. Offer to hold the push, or build the harness — do
+   not let the strength of the other evidence stand in for the one test that mattered.
