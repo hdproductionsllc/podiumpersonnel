@@ -16,7 +16,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { sendSongPlannerEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
-import { cronDisabledResponse, notifyOps, requireCronAuth, withCronRetry } from '@/lib/cron'
+import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
 import { PLANNER_REMINDER_OFFSETS } from '@/lib/intake/planner'
 import { plannerEmailsEnabled } from '@/lib/intake/planner-email'
 
@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ skipped: true, reason: 'SONG_PLANNER_EMAILS is not enabled' })
   }
 
+  return runCronJob('song-planner-reminders', async () => {
   const supabase = createServiceClient()
   const now = new Date()
   const baseUrl = getAppUrl()
@@ -76,8 +77,7 @@ export async function GET(request: NextRequest) {
     if (error.code === '42703') {
       return NextResponse.json({ skipped: true, reason: 'migration 082 not applied' })
     }
-    await notifyOps('song-planner-reminders', error)
-    return NextResponse.json({ error: 'Failed to load planners' }, { status: 500 })
+    throw error
   }
 
   let sent = 0
@@ -85,6 +85,8 @@ export async function GET(request: NextRequest) {
   // Emails that went out but whose "last reminded" stamp failed to save — each
   // of these will nudge the client again tomorrow unless someone looks.
   let stampFailed = 0
+  // Distinct from `skipped` (a business-rule skip): the send itself threw.
+  let sendFailures = 0
 
   for (const intake of intakes ?? []) {
     const project = intake.project as unknown as {
@@ -171,9 +173,10 @@ export async function GET(request: NextRequest) {
       sent++
     } catch (err) {
       console.error(`song-planner-reminders: send failed for intake ${intake.id}`, err)
-      skipped++
+      sendFailures++
     }
   }
 
-  return NextResponse.json({ sent, skipped, stampFailed })
+  return NextResponse.json({ sent, skipped, stampFailed, sendFailures })
+  })
 }

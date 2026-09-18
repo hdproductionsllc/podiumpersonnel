@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import * as Sentry from '@sentry/nextjs'
 import { sendEmail } from '@/lib/email/send'
+import { serverError } from '@/lib/api-helpers'
 
 /**
  * Defense-in-depth switch for scheduled jobs. Email safety is already enforced
@@ -114,6 +115,38 @@ export async function notifyOps(jobName: string, error: unknown): Promise<void> 
     })
   } catch (e) {
     console.error(`notifyOps failed for ${jobName}:`, e)
+  }
+}
+
+/**
+ * Job-level failure reporting, in ONE place instead of each route hand-rolling
+ * `notifyOps(...); return NextResponse.json({ error }, { status: 500 })` at
+ * every fatal fetch site (A8, 2026-09-18 hardening).
+ *
+ * Runs `fn`. Anything it throws — including a Supabase/PostgREST error object
+ * a route deliberately `throw`s after a fatal `withCronRetry` failure — is
+ * reported to ops twice, on purpose:
+ *   - `notifyOps`: Sentry + a best-effort email to PLATFORM_ADMIN_EMAIL, so a
+ *     human actually hears about a broken cron job, not just an APM dashboard.
+ *   - `serverError`: the same generic-500 shape every other API route uses,
+ *     so cron failures show up in Sentry with the same `context` tagging as
+ *     the rest of the app and never leak raw Postgres/RLS text into the
+ *     response body.
+ *
+ * A route that wants a per-recipient loop to keep going through partial
+ * failures should NOT throw from inside the loop — count the failures and
+ * return them in the 200 response instead. Only throw for a failure that
+ * makes the whole run meaningless (the initial fetch failing, for example).
+ */
+export async function runCronJob(
+  jobName: string,
+  fn: () => Promise<NextResponse>,
+): Promise<NextResponse> {
+  try {
+    return await fn()
+  } catch (error) {
+    await notifyOps(jobName, error)
+    return serverError(`cron:${jobName}`, error)
   }
 }
 

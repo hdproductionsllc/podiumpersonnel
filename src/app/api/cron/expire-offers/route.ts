@@ -4,7 +4,7 @@ import { getNextCandidates } from '@/lib/next-candidate'
 import { sendOfferExpiredEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
-import { cronDisabledResponse, notifyOps, requireCronAuth, withCronRetry } from '@/lib/cron'
+import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request)
@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
   const disabled = cronDisabledResponse('expire-offers')
   if (disabled) return disabled
 
+  return runCronJob('expire-offers', async () => {
   const supabase = createServiceClient()
   const baseUrl = getAppUrl()
 
@@ -50,9 +51,8 @@ export async function GET(request: NextRequest) {
   )
 
   if (fetchError) {
-    console.error('Failed to fetch expired offers:', fetchError)
-    await notifyOps('expire-offers', fetchError)
-    return NextResponse.json({ error: 'Failed to fetch expired offers' }, { status: 500 })
+    // Fatal — let runCronJob report it once (ops alert + Sentry) and 500.
+    throw fetchError
   }
 
   if (!expiredOffers || expiredOffers.length === 0) {
@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
 
   let processed = 0
   let emailsSent = 0
+  let emailFailures = 0
 
   for (let i = 0; i < expiredOffers.length; i++) {
     const offer = expiredOffers[i]
@@ -180,13 +181,16 @@ export async function GET(request: NextRequest) {
       }
     } catch (emailError) {
       console.error(`Failed to send expiration email for offer ${offer.id}:`, emailError)
+      emailFailures++
     }
   }
 
-  console.log(`Cron: expired ${processed} offers, sent ${emailsSent} notification emails`)
+  console.log(`Cron: expired ${processed} offers, sent ${emailsSent} notification emails, ${emailFailures} failed`)
 
   return NextResponse.json({
     expired: processed,
     emailsSent,
+    emailFailures,
+  })
   })
 }

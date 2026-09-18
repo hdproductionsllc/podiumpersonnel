@@ -4,6 +4,7 @@ import { useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { EmptyState } from '@/components/ui/empty-state'
 import { MusicianFormDialog } from './musician-form-dialog'
@@ -51,6 +52,9 @@ export type MusicianInstrumentJoin = {
 export type MusicianWithInstruments = Musician & {
   musician_instruments: MusicianInstrumentJoin[]
   tags?: string[]
+  // migration 087 — not yet in the generated database.ts Row type.
+  email_status?: 'ok' | 'bounced' | 'complained'
+  email_status_at?: string | null
   street_address?: string | null
   city?: string | null
   state?: string | null
@@ -499,13 +503,28 @@ export function MusiciansClient({
         </td>
         <td className="hidden md:table-cell px-4 py-2 text-muted-foreground">
           {musician.email ? (
-            <a
-              href={`mailto:${musician.email}`}
-              className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {musician.email}
-            </a>
+            <div className="flex items-center gap-1.5">
+              <a
+                href={`mailto:${musician.email}`}
+                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {musician.email}
+              </a>
+              {musician.email_status && musician.email_status !== 'ok' && (
+                <Badge
+                  variant="destructive"
+                  className="shrink-0"
+                  title={
+                    musician.email_status === 'bounced'
+                      ? 'Recent emails to this address bounced \u2014 it may be undeliverable.'
+                      : 'This musician marked a Podium email as spam.'
+                  }
+                >
+                  {musician.email_status === 'bounced' ? 'Email bouncing' : 'Complained'}
+                </Badge>
+              )}
+            </div>
           ) : '\u2014'}
         </td>
         <td className="hidden md:table-cell px-4 py-2 text-muted-foreground whitespace-nowrap">

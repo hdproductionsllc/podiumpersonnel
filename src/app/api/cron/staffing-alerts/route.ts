@@ -4,7 +4,7 @@ import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendStaffingAlertEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
-import { cronDisabledResponse, notifyOps, requireCronAuth, withCronRetry } from '@/lib/cron'
+import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
 
 // Alert thresholds in days — one email per project per threshold
 const THRESHOLDS = [14, 7, 3]
@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
   const disabled = cronDisabledResponse('staffing-alerts')
   if (disabled) return disabled
 
+  return runCronJob('staffing-alerts', async () => {
   const supabase = createServiceClient()
   const baseUrl = getAppUrl()
   const now = new Date()
@@ -56,13 +57,12 @@ export async function GET(request: NextRequest) {
   )
 
   if (fetchError) {
-    console.error('Staffing alerts: failed to fetch projects:', fetchError)
-    await notifyOps('staffing-alerts', fetchError)
-    return NextResponse.json({ error: fetchError.message }, { status: 500 })
+    throw fetchError
   }
 
   let emailsSent = 0
   let skipped = 0
+  let emailFailures = 0
 
   for (const project of projects || []) {
     const services = (project.services as any[]) || []
@@ -185,10 +185,12 @@ export async function GET(request: NextRequest) {
       emailsSent++
     } catch (emailError) {
       console.error(`Staffing alert failed for project ${project.id}:`, emailError)
+      emailFailures++
     }
   }
 
-  console.log(`Staffing alerts: ${emailsSent} sent, ${skipped} skipped (already notified)`)
+  console.log(`Staffing alerts: ${emailsSent} sent, ${skipped} skipped (already notified), ${emailFailures} failed`)
 
-  return NextResponse.json({ emailsSent, skipped })
+  return NextResponse.json({ emailsSent, skipped, emailFailures })
+  })
 }

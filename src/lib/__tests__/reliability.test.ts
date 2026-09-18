@@ -19,7 +19,10 @@ describe('offer-reminders is duplicate-safe', () => {
     expect(src).toMatch(/claimed\.length === 0/)
   })
   it('alerts ops on a fatal fetch failure', () => {
-    expect(src).toContain("notifyOps('offer-reminders'")
+    // 2026-09-18 (A8): job-level alerting moved into the shared runCronJob
+    // wrapper — the route throws the fetch error and the wrapper is what
+    // calls notifyOps, exactly once, for every cron job.
+    expect(src).toContain("runCronJob('offer-reminders'")
   })
 })
 
@@ -29,9 +32,15 @@ describe('cron failure alerting', () => {
     expect(src).toContain('PLATFORM_ADMIN_EMAIL')
     expect(src).toContain('sendEmail')
   })
+  it('runCronJob reports a job failure via notifyOps AND serverError', () => {
+    const src = read('src/lib/cron.ts')
+    expect(src).toContain('export async function runCronJob')
+    expect(src).toContain('await notifyOps(jobName, error)')
+    expect(src).toContain('serverError(`cron:${jobName}`, error)')
+  })
   it('expire-offers alerts ops on a fatal fetch failure', () => {
     const src = read('src/app/api/cron/expire-offers/route.ts')
-    expect(src).toContain("notifyOps('expire-offers'")
+    expect(src).toContain("runCronJob('expire-offers'")
   })
 })
 

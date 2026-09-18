@@ -3,7 +3,7 @@ import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferReminderEmail, sendOfferExpiringSoonEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
-import { cronDisabledResponse, notifyOps, requireCronAuth, withCronRetry } from '@/lib/cron'
+import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request)
@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
   const disabled = cronDisabledResponse('offer-reminders')
   if (disabled) return disabled
 
+  return runCronJob('offer-reminders', async () => {
   const supabase = createServiceClient()
   const baseUrl = getAppUrl()
 
@@ -64,9 +65,7 @@ export async function GET(request: NextRequest) {
   )
 
   if (fetchError) {
-    console.error('Failed to fetch expiring offers:', fetchError)
-    await notifyOps('offer-reminders', fetchError)
-    return NextResponse.json({ error: 'Failed to fetch expiring offers' }, { status: 500 })
+    throw fetchError
   }
 
   if (!expiringOffers || expiringOffers.length === 0) {
@@ -75,6 +74,7 @@ export async function GET(request: NextRequest) {
 
   let musicianEmails = 0
   let adminEmails = 0
+  let emailFailures = 0
 
   for (let i = 0; i < expiringOffers.length; i++) {
     const offer = expiringOffers[i]
@@ -170,6 +170,7 @@ export async function GET(request: NextRequest) {
         musicianEmails++
       } catch (emailError) {
         console.error(`Failed to send reminder to musician ${musician.email}:`, emailError)
+        emailFailures++
       }
     }
 
@@ -209,16 +210,19 @@ export async function GET(request: NextRequest) {
       }
     } catch (emailError) {
       console.error(`Failed to send admin heads-up for offer ${offer.id}:`, emailError)
+      emailFailures++
     }
 
     // reminder_sent_at was already stamped atomically when we claimed the offer above.
   }
 
-  console.log(`Cron: sent ${musicianEmails} musician reminders, ${adminEmails} admin heads-ups`)
+  console.log(`Cron: sent ${musicianEmails} musician reminders, ${adminEmails} admin heads-ups, ${emailFailures} failed`)
 
   return NextResponse.json({
     offersProcessed: expiringOffers.length,
     musicianEmails,
     adminEmails,
+    emailFailures,
+  })
   })
 }

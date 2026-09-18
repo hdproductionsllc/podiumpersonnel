@@ -4,7 +4,7 @@ import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendPreGigNotificationEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
-import { cronDisabledResponse, notifyOps, requireCronAuth, withCronRetry } from '@/lib/cron'
+import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request)
@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
   const disabled = cronDisabledResponse('pre-gig-reminders')
   if (disabled) return disabled
 
+  return runCronJob('pre-gig-reminders', async () => {
   const supabase = createServiceClient()
   const baseUrl = getAppUrl()
   const now = new Date()
@@ -75,13 +76,12 @@ export async function GET(request: NextRequest) {
   )
 
   if (fetchError) {
-    console.error('Failed to fetch upcoming projects:', fetchError)
-    await notifyOps('pre-gig-reminders', fetchError)
-    return NextResponse.json({ error: fetchError.message }, { status: 500 })
+    throw fetchError
   }
 
   let draftsCreated = 0
   let emailsSent = 0
+  let emailFailures = 0
 
   for (const project of upcomingProjects || []) {
     const services = (project.services as any[]) || []
@@ -193,14 +193,17 @@ export async function GET(request: NextRequest) {
       emailsSent++
     } catch (emailError) {
       console.error(`Failed to send pre-gig notification for project ${project.id}:`, emailError)
+      emailFailures++
     }
   }
 
-  console.log(`Pre-gig cron: ${draftsCreated} drafts created, ${emailsSent} emails sent, ${expiredCount ?? 0} expired`)
+  console.log(`Pre-gig cron: ${draftsCreated} drafts created, ${emailsSent} emails sent, ${emailFailures} failed, ${expiredCount ?? 0} expired`)
 
   return NextResponse.json({
     draftsCreated,
     emailsSent,
+    emailFailures,
     expired: expiredCount ?? 0,
+  })
   })
 }

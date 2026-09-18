@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getStripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { priceIdToTier, type PaidTier } from '@/lib/plan'
+import { sendPaymentFailedEmail } from '@/lib/email/billing-notices'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type Stripe from 'stripe'
 
@@ -184,6 +185,15 @@ export async function POST(request: NextRequest) {
         subscription_status: 'past_due',
       })
       if (failed) return failed
+
+      // Dunning email — AFTER the durable DB write, never before. Never throws
+      // (see billing-notices.ts) — an email hiccup must not fail this webhook.
+      await sendPaymentFailedEmail(orgId, {
+        amountDue: invoice.amount_due ?? null,
+        currency: invoice.currency ?? null,
+        nextPaymentAttempt: invoice.next_payment_attempt ?? null,
+        hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
+      })
       break
     }
 
