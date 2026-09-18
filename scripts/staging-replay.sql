@@ -223,9 +223,17 @@ create policy "Members can view org members"
   on organization_members for select
   using (is_org_member(organization_id));
 
-create policy "Users can insert their own membership"
-  on organization_members for insert
-  with check (user_id = auth.uid());
+-- DELIBERATELY NOT CREATED — migration 084 drops it.
+--   001 had: create policy "Users can insert their own membership"
+--              on organization_members for insert
+--              with check (user_id = auth.uid());
+--   No organization_id binding, so any signed-up account could insert itself as
+--   'owner' of any org straight from the browser. Memberships are created only by
+--   create_organization_with_owner() (SECURITY DEFINER) and by
+--   /api/settings/members using the service role; admins keep the org-bound
+--   "Admins can manage organization members" policy from 019. Recreating this
+--   policy on a fresh environment would reopen the hole, so this replay leaves it
+--   out rather than creating and dropping it.
 
 -- RLS Policies: Instruments
 create policy "Members can view instruments"
@@ -2839,3 +2847,81 @@ END $$;
 -- verify: constraint exists
 -- SELECT conname FROM pg_constraint WHERE conname = 'organizations_vertical_check';
 
+
+
+-- ============================================================
+-- SECURITY CATCH-UP — migrations 085 and 086 (added 2026-09-18)
+-- ============================================================
+-- This bundle was generated from migrations 001-065, so it still replays two
+-- policy sets that were later found to be wrong. Rather than regenerate the
+-- whole bundle, the corrected versions are re-applied here, at the end, where
+-- they win. (084 needs nothing: the policy it drops is simply never created
+-- above.) Keep this section in step with supabase/migrations/085 and /086.
+
+-- 085 — project-files storage objects must be scoped to the owning org, not to
+-- "any logged-in user". First path folder is the organization id.
+DROP POLICY IF EXISTS "Org admins upload project files"          ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users read project files"   ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users delete project files" ON storage.objects;
+DROP POLICY IF EXISTS "Org members read project files"           ON storage.objects;
+DROP POLICY IF EXISTS "Org admins delete project files"          ON storage.objects;
+
+CREATE POLICY "Org admins upload project files"
+ON storage.objects FOR INSERT
+WITH CHECK (
+  bucket_id = 'project-files'
+  AND is_org_admin(
+    (CASE
+       WHEN (storage.foldername(name))[1] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+       THEN (storage.foldername(name))[1]
+     END)::uuid
+  )
+);
+
+CREATE POLICY "Org members read project files"
+ON storage.objects FOR SELECT
+USING (
+  bucket_id = 'project-files'
+  AND is_org_member(
+    (CASE
+       WHEN (storage.foldername(name))[1] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+       THEN (storage.foldername(name))[1]
+     END)::uuid
+  )
+);
+
+CREATE POLICY "Org admins delete project files"
+ON storage.objects FOR DELETE
+USING (
+  bucket_id = 'project-files'
+  AND is_org_admin(
+    (CASE
+       WHEN (storage.foldername(name))[1] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+       THEN (storage.foldername(name))[1]
+     END)::uuid
+  )
+);
+
+-- 086 — venues policies on the helpers (003's raw sub-select makes venues
+-- unreadable under a user session).
+DROP POLICY IF EXISTS "Users can view venues in their organization" ON venues;
+DROP POLICY IF EXISTS "Admins can insert venues"                    ON venues;
+DROP POLICY IF EXISTS "Admins can update venues"                    ON venues;
+DROP POLICY IF EXISTS "Admins can delete venues"                    ON venues;
+
+CREATE POLICY "Users can view venues in their organization"
+  ON venues FOR SELECT
+  USING (is_org_member(organization_id));
+
+CREATE POLICY "Admins can insert venues"
+  ON venues FOR INSERT
+  WITH CHECK (is_org_admin(organization_id));
+
+CREATE POLICY "Admins can update venues"
+  ON venues FOR UPDATE
+  USING (is_org_admin(organization_id))
+  WITH CHECK (is_org_admin(organization_id));
+
+CREATE POLICY "Admins can delete venues"
+  ON venues FOR DELETE
+  USING (is_org_admin(organization_id));

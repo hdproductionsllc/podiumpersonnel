@@ -1,0 +1,75 @@
+-- 084: Remove the self-service membership INSERT policy (privilege escalation)
+--
+-- THE HOLE
+--   Migration 001 (lines 216-218) created:
+--
+--     create policy "Users can insert their own membership"
+--       on organization_members for insert
+--       with check (user_id = auth.uid());
+--
+--   The WITH CHECK constrains WHICH USER the row is for, but says nothing about
+--   WHICH ORGANIZATION. Any signed-up account could therefore POST, straight from
+--   a browser with the publishable anon key:
+--
+--     insert into organization_members
+--       (organization_id, user_id, role)
+--     values ('<some other tenant''s org id>', auth.uid(), 'owner');
+--
+--   and become an owner of a tenant they have nothing to do with — full read and
+--   write of that org's musicians, projects, offers, pay rates and W-9 data.
+--   Organization ids are not secret (they travel in URLs, emails and payloads),
+--   and even without one, ids are guessable in bulk given time.
+--
+--   Migration 077's UNIQUE(user_id) narrowed the blast radius but did not close
+--   it: an account with NO membership yet — which is exactly what a fresh signup
+--   is, before onboarding runs — can still insert its one row into any org. No
+--   migration from 001 to 083 dropped the policy.
+--
+-- WHY DROPPING IT BREAKS NOTHING
+--   Grepped the whole of src/: there is not a single insert into
+--   organization_members from application code under a user session. The two
+--   paths that create a membership both bypass RLS:
+--
+--   1. Onboarding — create_organization_with_owner() (latest definition in
+--      migration 067) is `LANGUAGE plpgsql SECURITY DEFINER`, owned by the
+--      migration role, and inserts the owner row itself. SECURITY DEFINER
+--      functions run as their owner, which is not subject to these policies.
+--      It is the only membership-creating path a normal signup takes.
+--
+--   2. Adding a team member — POST /api/settings/members
+--      (src/app/api/settings/members/route.ts). It authenticates the caller,
+--      requires role 'owner', enforces the plan's seat limit and
+--      checkInviteEligibility(), and then performs the insert with
+--      createAdminClient() (service role). The service role bypasses RLS
+--      entirely, so this policy is not what lets it through. There is no
+--      pending-invitation table or accept-invite flow in the schema; the
+--      "invitation" is this direct, owner-authorized insert.
+--
+--   Admins keep the org-bound write path they already had: migration 019's
+--   "Admins can manage organization members" is FOR ALL USING
+--   (is_org_admin(organization_id)), which Postgres also applies as the WITH
+--   CHECK for INSERT. An admin can therefore still add a row to THEIR OWN org,
+--   and to no one else's. That is the correct shape, and it is what this policy
+--   should have been in the first place.
+--
+-- Idempotent and safe to re-run.
+
+DROP POLICY IF EXISTS "Users can insert their own membership" ON organization_members;
+
+-- RLS must stay on: with the permissive policy gone, an unmatched INSERT is
+-- denied by default, which is the point.
+ALTER TABLE organization_members ENABLE ROW LEVEL SECURITY;
+
+-- verify: the policy is gone. Expect 0 rows.
+-- SELECT policyname FROM pg_policies
+-- WHERE tablename = 'organization_members'
+--   AND policyname = 'Users can insert their own membership';
+
+-- verify: every surviving policy on the table is bound to an organization.
+-- Expect "Members can view org members" (is_org_member) and
+-- "Admins can manage organization members" (is_org_admin), nothing else.
+-- SELECT policyname, cmd, qual, with_check FROM pg_policies
+-- WHERE tablename = 'organization_members' ORDER BY policyname;
+
+-- verify: row security is on. Expect true.
+-- SELECT relrowsecurity FROM pg_class WHERE relname = 'organization_members';

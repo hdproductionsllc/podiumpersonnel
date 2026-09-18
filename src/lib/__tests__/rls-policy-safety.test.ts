@@ -166,6 +166,101 @@ describe('RLS policy safety (migrations)', () => {
     expect(offenders.map((p) => `${p.file}: "${p.name}" on ${p.table}`)).toEqual([])
   })
 
+  it('keeps the membership table bound to an organization (regression: 001 → 084)', () => {
+    // Migration 001 shipped "Users can insert their own membership" with
+    // WITH CHECK (user_id = auth.uid()) — it pins the USER but not the ORG, so a
+    // fresh signup could insert itself as 'owner' of any tenant with the anon
+    // key. 084 drops it. Every surviving policy on the table must name an
+    // organization; there is no legitimate membership write that does not.
+    const live = policies.filter((p) => p.table === 'organization_members')
+
+    expect(live.map((p) => p.name)).not.toContain('Users can insert their own membership')
+    expect(live.length, 'expected the membership policies to be parsed').toBeGreaterThan(0)
+
+    const unbound = live.filter(
+      (p) => !/organization_id/i.test(`${p.usingExpr ?? ''} ${p.withCheckExpr ?? ''}`)
+    )
+
+    expect(
+      unbound.map((p) => `${p.file}: "${p.name}" on ${p.table} FOR ${p.command}`)
+    ).toEqual([])
+  })
+
+  it('scopes the project-files bucket to the owning org (regression: 041 → 085)', () => {
+    // 041's three storage.objects policies asked only
+    // `bucket_id = 'project-files' AND auth.uid() IS NOT NULL`, so any logged-in
+    // account in any tenant could read — or DELETE — another org's parts by
+    // driving the Storage SDK directly at a path the API routes never saw.
+    // Keys are minted as `${organization_id}/${projectId}/${uuid}.pdf`, so the
+    // first path folder is the gate.
+    const bucketPolicies = policies.filter((p) => /'project-files'/.test(p.raw))
+
+    expect(
+      bucketPolicies.map((p) => `${p.name} FOR ${p.command}`).sort(),
+      'expected exactly one SELECT, one INSERT and one DELETE policy'
+    ).toEqual([
+      'Org admins delete project files FOR DELETE',
+      'Org admins upload project files FOR INSERT',
+      'Org members read project files FOR SELECT',
+    ])
+
+    for (const policy of bucketPolicies) {
+      const predicate = `${policy.usingExpr ?? ''} ${policy.withCheckExpr ?? ''}`
+
+      expect(
+        /storage\.foldername\s*\(\s*name\s*\)/i.test(predicate),
+        `${policy.file}: "${policy.name}" does not key on the first path folder`
+      ).toBe(true)
+
+      // Authentication alone is what made 041 exploitable.
+      expect(
+        /auth\.uid\(\)\s+IS\s+NOT\s+NULL/i.test(predicate),
+        `${policy.file}: "${policy.name}" is satisfied by being logged in`
+      ).toBe(false)
+
+      const helper = policy.command === 'SELECT' ? 'is_org_member' : 'is_org_admin'
+      expect(
+        new RegExp(`${helper}\\s*\\(`, 'i').test(predicate),
+        `${policy.file}: "${policy.name}" FOR ${policy.command} must use ${helper}()`
+      ).toBe(true)
+    }
+  })
+
+  it('reads venues through the org helpers, not a raw sub-select (regression: 003 → 086)', () => {
+    // 003 wrote the venues policies as a sub-select on organization_members.
+    // That table has RLS of its own, so under a user session the inner read
+    // returns nothing and an admin sees ZERO venues (verified in prod
+    // 2026-09-17). is_org_member/is_org_admin are SECURITY DEFINER and are what
+    // every table since 001 uses.
+    const live = policies.filter((p) => p.table === 'venues')
+    const orgPolicies = live.filter((p) => p.name !== 'Musicians can view venues')
+
+    expect(orgPolicies.map((p) => p.command).sort()).toEqual([
+      'DELETE',
+      'INSERT',
+      'SELECT',
+      'UPDATE',
+    ])
+
+    for (const policy of orgPolicies) {
+      const predicate = `${policy.usingExpr ?? ''} ${policy.withCheckExpr ?? ''}`
+      const helper = policy.command === 'SELECT' ? 'is_org_member' : 'is_org_admin'
+
+      expect(
+        new RegExp(`${helper}\\s*\\(organization_id\\)`, 'i').test(predicate),
+        `${policy.file}: venues "${policy.name}" must use ${helper}(organization_id)`
+      ).toBe(true)
+
+      expect(
+        /organization_members/i.test(predicate),
+        `${policy.file}: venues "${policy.name}" still carries the raw sub-select`
+      ).toBe(false)
+    }
+
+    // The musician-portal read from 034 is deliberately untouched.
+    expect(live.map((p) => p.name)).toContain('Musicians can view venues')
+  })
+
   it('keeps the gig-detail tables free of public policies (regression: 039 → 076)', () => {
     const gigDetailTables = ['gig_detail_sends', 'gig_detail_confirmations']
 
@@ -184,5 +279,40 @@ describe('RLS policy safety (migrations)', () => {
         `${policy.file}: policy "${policy.name}" on ${policy.table} is not scoped to an org or role`
       ).toBe(true)
     }
+  })
+})
+
+describe('launch-hardening migrations are present (084-086)', () => {
+  const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql'))
+
+  const expected = [
+    ['084', 'drops the org-unbound membership insert policy'],
+    ['085', 'scopes the project-files bucket to the owning org'],
+    ['086', 'lands the venues policy fix as a migration'],
+  ] as const
+
+  for (const [number, purpose] of expected) {
+    it(`ships migration ${number} — ${purpose}`, () => {
+      // A missing file means a rebuilt environment (staging, disaster recovery)
+      // silently comes back with the hole open, which is exactly how the venues
+      // fix stayed a paste script for a day.
+      expect(files.filter((f) => f.startsWith(`${number}_`))).toHaveLength(1)
+    })
+  }
+
+  it('applies all three in the paste-ready script', () => {
+    // scripts/launch-hardening-2026-09-18.sql is what actually gets run against
+    // production; a migration that is not in it never reaches the database.
+    const script = readFileSync(
+      join(process.cwd(), 'scripts', 'launch-hardening-2026-09-18.sql'),
+      'utf8'
+    )
+
+    expect(script).toContain('DROP POLICY IF EXISTS "Users can insert their own membership"')
+    expect(script).toContain('storage.foldername')
+    expect(script).toContain('is_org_member(organization_id)')
+    // Every check prints PASS or FAIL under a check_name column.
+    expect(script).toContain('AS check_name')
+    expect(script.match(/'PASS'/g)?.length ?? 0).toBeGreaterThan(10)
   })
 })
