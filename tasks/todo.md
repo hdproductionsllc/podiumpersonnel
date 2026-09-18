@@ -37,13 +37,13 @@ pasted the migrations (data before code).
 ## Verification gate (before push)
 - [x] `npx tsc --noEmit`, `npm test`, `npm run build` green
 - [x] polish pass: each finding in the assessment marked fixed / deferred with evidence
-- [ ] David pastes `scripts/launch-hardening-2026-09-18.sql`, all RESULTS rows PASS
-- [ ] merge to master, ONE push, confirm Vercel deploy landed
+- [x] David pastes `scripts/launch-hardening-2026-09-18.sql`, all RESULTS rows PASS (2026-09-18)
+- [x] merged, pushed 02fe51b2 + 9b692b40 (marketing build had been skipped by the HEAD^ ignore rule; fixed), both projects live, pricing page verified
 
 ## On David (not code)
-- [ ] Enable Supabase PITR (A7)
-- [ ] Set `NEXT_PUBLIC_SENTRY_DSN` in Vercel Production (A8)
-- [ ] Set `RESEND_WEBHOOK_SECRET` in Vercel + create the webhook in Resend (A8)
+- [ ] Supabase PITR (A7) — DECLINED for now ($125/mo on free plan). Next: free GitHub Actions backup job to R2, Pro at first paying customer
+- [x] `NEXT_PUBLIC_SENTRY_DSN` set in Vercel Production, verified in deployed bundle (A8)
+- [x] `RESEND_WEBHOOK_SECRET` set + Resend webhook created (A8); route verified 401 on unsigned calls
 - [ ] `select * from app_settings;` → confirm billing_enforced (section B)
 
 ---
