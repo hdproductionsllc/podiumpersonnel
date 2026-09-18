@@ -527,6 +527,7 @@ export function SendOfferDialog({
     // current address and is the only honest authority on whether a send is
     // possible; gating on this page's stale copy skipped the call entirely.
     let emailSent = false
+    let emailSuppressed = false
     let emailFailure: string | null = null
 
     if (sendEmail && offerData?.id) {
@@ -542,7 +543,16 @@ export function SendOfferDialog({
         })
 
         if (response.ok) {
-          emailSent = true
+          const detail = await response.json().catch(() => null)
+          // Safe mode can return 200 with nothing actually sent — that is NOT
+          // the same as a successful send. Read the flag rather than trusting
+          // response.ok alone, or the dialog repeats the exact "looks sent but
+          // wasn't" bug this route now reports honestly.
+          if (detail?.suppressed) {
+            emailSuppressed = true
+          } else {
+            emailSent = true
+          }
         } else {
           const detail = await response.json().catch(() => null)
           emailFailure = detail?.error || `the server responded ${response.status}`
@@ -560,6 +570,11 @@ export function SendOfferDialog({
     // "Call sent!" is what let a dropped offer email go unnoticed.
     if (emailSent) {
       toast.success(`Call sent to ${musicianName}! They'll receive the email in seconds.`)
+    } else if (emailSuppressed) {
+      toast.warning(
+        `Offer created for ${musicianName}, but no email went out: safe mode is on, so this recipient was suppressed.`,
+        { duration: 10000 }
+      )
     } else if (emailFailure) {
       toast.error(
         `Offer created for ${musicianName}, but NO email was sent: ${emailFailure}. Contact the ${term(terms, 'person', { case: 'lower' })} directly.`,

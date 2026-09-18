@@ -129,14 +129,23 @@ async function sendTransactional(args: {
   }
 
   // Safe-mode gate: suppress non-allowlisted recipients during testing.
-  const { allowed, suppressed } = filterRecipients(args.to)
-  if (suppressed.length > 0) {
+  const { allowed, suppressed: suppressedRecipients } = filterRecipients(args.to)
+  if (suppressedRecipients.length > 0) {
     console.log(
-      `[EMAIL SUPPRESSED] (${args.errorContext}) "${args.subject}" → ${suppressed.join(', ')}`
+      `[EMAIL SUPPRESSED] (${args.errorContext}) "${args.subject}" → ${suppressedRecipients.join(', ')}`
     )
   }
+  // Nothing to send: every recipient was suppressed. This is NOT a success —
+  // callers must not treat a suppressed send as delivered. See email_logs
+  // status 'suppressed' and the honesty check in send-offer-dialog.tsx.
   if (allowed.length === 0) {
-    return { id: null, emailHtml, subject: args.subject }
+    return {
+      id: null,
+      emailHtml,
+      subject: args.subject,
+      suppressed: true as const,
+      suppressedRecipients,
+    }
   }
 
   await awaitResendSlot()
@@ -158,7 +167,7 @@ async function sendTransactional(args: {
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return { ...data, emailHtml, subject: args.subject }
+  return { ...data, emailHtml, subject: args.subject, suppressed: false as const, suppressedRecipients: [] as string[] }
 }
 
 // Contract Offer Email
@@ -869,12 +878,12 @@ export async function sendEmail(params: SendEmailParams) {
   const { to, subject, html, text } = params
 
   // Safe-mode gate: suppress non-allowlisted recipients during testing.
-  const { allowed, suppressed } = filterRecipients(to)
-  if (suppressed.length > 0) {
-    console.log(`[EMAIL SUPPRESSED] (generic) "${subject}" → ${suppressed.join(', ')}`)
+  const { allowed, suppressed: suppressedRecipients } = filterRecipients(to)
+  if (suppressedRecipients.length > 0) {
+    console.log(`[EMAIL SUPPRESSED] (generic) "${subject}" → ${suppressedRecipients.join(', ')}`)
   }
   if (allowed.length === 0) {
-    return { id: null, emailHtml: html }
+    return { id: null, emailHtml: html, suppressed: true as const, suppressedRecipients }
   }
 
   await awaitResendSlot()
@@ -896,7 +905,7 @@ export async function sendEmail(params: SendEmailParams) {
     throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return { ...data, emailHtml: html }
+  return { ...data, emailHtml: html, suppressed: false as const, suppressedRecipients: [] as string[] }
 }
 
 // Admin Welcome Email (sent after org creation)

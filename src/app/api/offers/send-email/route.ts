@@ -210,7 +210,18 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    console.log('📧 Email sent successfully:', result)
+    // A suppressed send is NOT a success shape: safe mode blocked every
+    // recipient (id: null, no Resend call made). Logging it as 'sent' and
+    // telling the dialog to say "Call sent!" is exactly the bug this guards
+    // against — the offer row sits pending with no email ever delivered.
+    const suppressed = result?.suppressed === true
+
+    console.log(
+      suppressed
+        ? '📧 Email suppressed by safe mode (not sent):'
+        : '📧 Email sent successfully:',
+      result
+    )
 
     // Log to email audit trail
     await logEmail({
@@ -223,50 +234,64 @@ export async function POST(request: NextRequest) {
       projectId: project?.id,
       offerId: offerId,
       resendEmailId: result?.id || null,
+      status: suppressed ? 'suppressed' : 'sent',
       metadata: {
         instrument: instrument?.name,
         chairNumber: position?.chair_number,
         payAmount,
         ensembleType: project?.ensemble_type,
+        ...(suppressed ? { suppressedRecipients: result?.suppressedRecipients || [musician.email] } : {}),
       },
       body: result?.emailHtml,
     })
 
-    // Send notification to organization admins
-    try {
-      const adminEmails = await getOrgAdminEmails(organization?.id)
+    // A suppressed send never reached the musician, so an admin "Offer Sent"
+    // notification would be the same false-positive one layer up. Skip it.
+    if (!suppressed) {
+      try {
+        const adminEmails = await getOrgAdminEmails(organization?.id)
 
-      if (adminEmails.length > 0) {
-        const baseUrl = getAppUrl()
-        await sendAdminOfferSentEmail({
-          to: adminEmails,
-          organizationName: organization?.name || 'Orchestra',
-          projectName: project?.name || 'Project',
-          musicianName: `${musician.first_name} ${musician.last_name}`,
-          musicianEmail: musician.email,
-          instrument: instrument?.name || 'Instrument',
-          chairNumber: position?.chair_number || 1,
-          totalChairs,
-          services: formattedServices,
-          dashboardUrl: `${baseUrl}/dashboard/projects`,
-          payAmount,
-          leaderFee: isLeader ? leaderFee : null,
-          isLeader,
-          personalMessage: (offer as any).personal_message || null,
-          expiresAt: offer.expires_at,
-          ensembleType: project?.ensemble_type || null,
-          timezone,
-        }).catch((err) => console.warn('Failed to send admin notification:', err))
-        console.log('📧 Admin notification sent to:', adminEmails)
-      } else {
-        console.log('📧 No admin emails found for organization')
+        if (adminEmails.length > 0) {
+          const baseUrl = getAppUrl()
+          await sendAdminOfferSentEmail({
+            to: adminEmails,
+            organizationName: organization?.name || 'Orchestra',
+            projectName: project?.name || 'Project',
+            musicianName: `${musician.first_name} ${musician.last_name}`,
+            musicianEmail: musician.email,
+            instrument: instrument?.name || 'Instrument',
+            chairNumber: position?.chair_number || 1,
+            totalChairs,
+            services: formattedServices,
+            dashboardUrl: `${baseUrl}/dashboard/projects`,
+            payAmount,
+            leaderFee: isLeader ? leaderFee : null,
+            isLeader,
+            personalMessage: (offer as any).personal_message || null,
+            expiresAt: offer.expires_at,
+            ensembleType: project?.ensemble_type || null,
+            timezone,
+          }).catch((err) => console.warn('Failed to send admin notification:', err))
+          console.log('📧 Admin notification sent to:', adminEmails)
+        } else {
+          console.log('📧 No admin emails found for organization')
+        }
+      } catch (adminEmailError) {
+        console.warn('Failed to send admin notification:', adminEmailError)
+        // Don't fail the request if admin notification fails
       }
-    } catch (adminEmailError) {
-      console.warn('Failed to send admin notification:', adminEmailError)
-      // Don't fail the request if admin notification fails
     }
 
-    return NextResponse.json({ success: true })
+    if (suppressed) {
+      return NextResponse.json({
+        success: true,
+        emailSent: false,
+        suppressed: true,
+        message: 'Email suppressed by safe mode — offer created but nothing was sent',
+      })
+    }
+
+    return NextResponse.json({ success: true, emailSent: true, suppressed: false })
   } catch (error) {
     console.error('Failed to send offer email:', error)
     return NextResponse.json(

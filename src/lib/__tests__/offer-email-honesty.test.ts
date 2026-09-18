@@ -72,6 +72,48 @@ describe('the dialog never claims a call it did not send', () => {
   })
 })
 
+describe('A6: a suppressed send is never reported as sent', () => {
+  const routeSrc = read('src/app/api/offers/send-email/route.ts')
+  const dialogSrc = read('src/components/projects/send-offer-dialog.tsx')
+
+  it('route reads suppression off the send result, not off an error', () => {
+    expect(routeSrc).toContain('result?.suppressed === true')
+  })
+
+  it('route logs the email_logs row as suppressed, not sent', () => {
+    expect(routeSrc).toContain("status: suppressed ? 'suppressed' : 'sent'")
+  })
+
+  it('route tells the caller nothing was actually delivered', () => {
+    expect(routeSrc).toContain('emailSent: false')
+    expect(routeSrc).toContain('suppressed: true')
+    expect(routeSrc).toContain('Email suppressed by safe mode')
+  })
+
+  it('route skips the admin "offer sent" notification when the send was suppressed', () => {
+    const guard = routeSrc.indexOf('if (!suppressed) {')
+    const adminSend = routeSrc.indexOf('sendAdminOfferSentEmail({')
+    expect(guard, 'suppressed guard not found').toBeGreaterThan(-1)
+    expect(adminSend, 'admin notification call not found').toBeGreaterThan(guard)
+  })
+
+  it('dialog reads the suppressed flag instead of trusting response.ok alone', () => {
+    expect(dialogSrc).toContain('detail?.suppressed')
+    expect(dialogSrc).toContain('emailSuppressed = true')
+  })
+
+  it('warns instead of claiming "Call sent!" when the send was suppressed', () => {
+    const sentBranch = dialogSrc.indexOf('if (emailSent) {')
+    const suppressedBranch = dialogSrc.indexOf('} else if (emailSuppressed) {')
+    const failureBranch = dialogSrc.indexOf('} else if (emailFailure) {')
+    expect(sentBranch, 'emailSent branch not found').toBeGreaterThan(-1)
+    expect(suppressedBranch, 'emailSuppressed branch not found').toBeGreaterThan(sentBranch)
+    expect(failureBranch, 'emailFailure branch not found').toBeGreaterThan(suppressedBranch)
+    expect(dialogSrc.slice(suppressedBranch, failureBranch)).toContain('toast.warning(')
+    expect(dialogSrc.slice(suppressedBranch, failureBranch)).toContain('safe mode is on')
+  })
+})
+
 describe('a declined chair can be re-offered to someone not suggested', () => {
   const src = read('src/components/projects/project-offers.tsx')
 

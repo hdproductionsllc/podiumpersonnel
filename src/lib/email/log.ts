@@ -12,6 +12,8 @@ interface LogEmailParams {
   resendEmailId?: string | null
   metadata?: Record<string, unknown>
   body?: string | null
+  /** Defaults to 'sent'. Pass 'suppressed' when safe mode blocked every recipient. */
+  status?: string
 }
 
 /** Convert HTML email to readable plain text for storage */
@@ -58,7 +60,7 @@ export async function logEmail(params: LogEmailParams): Promise<void> {
       project_id: params.projectId || null,
       offer_id: params.offerId || null,
       resend_email_id: params.resendEmailId || null,
-      status: 'sent',
+      status: params.status || 'sent',
       metadata: params.metadata || {},
       body: plainBody,
     })

@@ -29,6 +29,77 @@ afterEach(() => {
   process.env = { ...ORIG }
 })
 
+// ---------------------------------------------------------------------------
+// A6: a suppressed send must never look like a sent one. `resend` is mocked
+// so these tests can assert on whether the provider was actually called,
+// not just on what filterRecipients decided.
+// ---------------------------------------------------------------------------
+
+const resendState = vi.hoisted(() => ({ sendMock: undefined as any }))
+
+vi.mock('resend', () => {
+  // A real class, not an arrow function/object literal: vi.fn's constructor
+  // proxying uses Reflect.construct, which throws on anything without a
+  // [[Construct]] slot. `new Resend(...)` in client.ts requires this shape.
+  class MockResend {
+    emails = { send: (...args: unknown[]) => resendState.sendMock(...args) }
+  }
+  return { Resend: MockResend }
+})
+
+async function loadSend(env: Record<string, string | undefined>) {
+  vi.resetModules()
+  process.env.RESEND_API_KEY = process.env.RESEND_API_KEY || 're_test_dummy'
+  for (const [k, v] of Object.entries(env)) {
+    if (v === undefined) delete process.env[k]
+    else process.env[k] = v
+  }
+  resendState.sendMock = vi.fn(async () => ({ data: { id: 'resend-id-1' }, error: null }))
+  return import('../email/send')
+}
+
+const adminWelcomeParams = {
+  userName: 'Jamie',
+  organizationName: 'Test Orchestra',
+  dashboardUrl: 'https://app.example.com/dashboard',
+}
+
+describe('a suppressed send is reported honestly, not as a success (A6)', () => {
+  it('suppressed: returns suppressed=true, id=null, and never calls Resend', async () => {
+    const { sendAdminWelcomeEmail } = await loadSend({
+      EMAIL_SAFE_MODE: 'true',
+      EMAIL_ALLOWLIST: 'team@podium.com',
+    })
+    const result: any = await sendAdminWelcomeEmail({ to: 'real-user@gmail.com', ...adminWelcomeParams })
+    expect(result.suppressed).toBe(true)
+    expect(result.suppressedRecipients).toEqual(['real-user@gmail.com'])
+    expect(result.id).toBeNull()
+    expect(resendState.sendMock).not.toHaveBeenCalled()
+    // The FIRST import of send.ts also cold-compiles ~26 React-email templates;
+    // the default 5s test timeout is too tight for that one-time cost.
+  }, 20000)
+
+  it('allowlisted recipient in safe mode: returns suppressed=false and calls Resend once', async () => {
+    const { sendAdminWelcomeEmail } = await loadSend({
+      EMAIL_SAFE_MODE: 'true',
+      EMAIL_ALLOWLIST: 'team@podium.com',
+    })
+    const result: any = await sendAdminWelcomeEmail({ to: 'team@podium.com', ...adminWelcomeParams })
+    expect(result.suppressed).toBe(false)
+    expect(result.suppressedRecipients).toEqual([])
+    expect(result.id).toBe('resend-id-1')
+    expect(resendState.sendMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('safe mode off: a real send still returns suppressed=false', async () => {
+    const { sendAdminWelcomeEmail } = await loadSend({ EMAIL_SAFE_MODE: 'false' })
+    const result: any = await sendAdminWelcomeEmail({ to: 'anyone@gmail.com', ...adminWelcomeParams })
+    expect(result.suppressed).toBe(false)
+    expect(result.suppressedRecipients).toEqual([])
+    expect(resendState.sendMock).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('filterRecipients (the kill switch)', () => {
   it('FAIL-SAFE: defaults to safe mode ON when EMAIL_SAFE_MODE is unset', async () => {
     const { isEmailSafeMode, filterRecipients } = await loadClient({
