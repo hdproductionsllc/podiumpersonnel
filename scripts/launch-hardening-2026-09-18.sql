@@ -139,9 +139,32 @@ ALTER TABLE venues ENABLE ROW LEVEL SECURITY;
 
 
 -- ============================================================================
+-- PART 4 — 087: remember when a musician's address bounces
+-- (fed by the Resend webhook at /api/webhooks/resend; additive, no data change)
+-- ============================================================================
+
+ALTER TABLE musicians
+  ADD COLUMN IF NOT EXISTS email_status TEXT NOT NULL DEFAULT 'ok'
+    CHECK (email_status IN ('ok', 'bounced', 'complained')),
+  ADD COLUMN IF NOT EXISTS email_status_at TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_musicians_email_status
+  ON musicians(email_status)
+  WHERE email_status <> 'ok';
+
+
+-- ============================================================================
 -- RESULTS — read this table. Every row should say PASS.
 -- ============================================================================
 
+-- 087
+SELECT
+  'musicians remember a bouncing address (087)' AS check_name,
+  CASE WHEN EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'musicians' AND column_name = 'email_status'
+  ) THEN 'PASS' ELSE 'FAIL - tell Claude' END
+UNION ALL
 -- 084
 SELECT
   'nobody can add themselves to an org (084)' AS check_name,
