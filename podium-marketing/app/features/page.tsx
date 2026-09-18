@@ -199,7 +199,7 @@ const features = [
         icon: Download,
         title: "Calendar Sync",
         description:
-          "Auto-sync to Google Calendar, Apple, or Outlook with one click.",
+          "One tap adds a confirmed gig to Google Calendar, Apple Calendar, or Outlook.",
       },
       {
         icon: Settings,

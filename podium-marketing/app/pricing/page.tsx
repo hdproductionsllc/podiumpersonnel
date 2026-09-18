@@ -85,7 +85,6 @@ const TIERS: Tier[] = [
     features: [
       "Unlimited performers",
       "Unlimited admin seats",
-      "Multi-ensemble management",
       "Dedicated onboarding",
     ],
   },
@@ -141,7 +140,6 @@ const comparison: {
   {
     group: "Institution",
     rows: [
-      { name: "Multi-ensemble management", values: [false, false, false, true] },
       { name: "Dedicated onboarding", values: [false, false, false, true] },
     ],
   },
