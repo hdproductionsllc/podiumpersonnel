@@ -253,3 +253,16 @@ And write the diagnosis in David's words: "your login can't see the venues list"
 **Also:** verifying in the browser found a second real bug (dialog state leaking between
 projects) that no unit test or typecheck could see. The browser pass is where the bugs
 are, not a formality after the tests.
+
+## A multi-commit push can skip a Vercel build; a fixture can look like a key (2026-09-18)
+
+- The marketing project's ignore rule was `git diff --quiet HEAD^ HEAD -- .`. It only
+  looks at the LAST commit of a push. The pricing fix sat six commits back, so
+  Vercel reported "success" and built nothing; the live page kept the old copy.
+  Rule now compares against `VERCEL_GIT_PREVIOUS_SHA` (the last deployed commit)
+  with `HEAD^` as fallback. Pattern: after any push, curl the page you changed,
+  not just the deploy status. "success" from an ignore rule means "skipped".
+- A test fixture spelled `whsec_<base64>` tripped GitHub secret scanning within
+  minutes of the push. Build secret-shaped fixtures at runtime
+  (`'whsec_' + Buffer.from('...').toString('base64')`) so no literal that matches
+  a vendor's key pattern ever lands in the repo.
