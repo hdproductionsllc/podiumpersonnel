@@ -47,13 +47,9 @@ export async function POST(
     return NextResponse.json({ error: 'Substitution request not found' }, { status: 404 })
   }
 
-  // Check if request is in pending_approval status
-  if (subRequest.status !== 'pending_approval') {
-    return NextResponse.json(
-      { error: 'This request is not pending approval' },
-      { status: 400 }
-    )
-  }
+  // Whether this request is still open is decided by the conditional claim
+  // below, not by the status read here — a check at fetch time is exactly the
+  // one a concurrent approval slips past.
 
   // Verify user is an admin of this organization
   // Type the nested data - eslint-disable needed for Supabase join queries
@@ -85,6 +81,47 @@ export async function POST(
 
   if (!membership || !['owner', 'admin'].includes(membership.role)) {
     return NextResponse.json({ error: 'Unauthorized - admin access required' }, { status: 403 })
+  }
+
+  // Claim the request BEFORE any side effect. The status check above was read at
+  // fetch time; a double-click or a second admin used to run the whole body
+  // twice, creating two musicians, two offers and two emails for one request.
+  // Only one caller can move the row out of pending_approval, and the loser
+  // gets zero rows back and stops here.
+  const { data: claimedRequests, error: claimError } = await supabase
+    .from('substitution_requests')
+    .update({ status: 'approved' })
+    .eq('id', requestId)
+    .eq('status', 'pending_approval')
+    .select('id')
+
+  if (claimError) {
+    console.error('Failed to claim substitution request:', claimError)
+    return NextResponse.json({ error: 'Failed to update request' }, { status: 500 })
+  }
+
+  if (!claimedRequests || claimedRequests.length === 0) {
+    return NextResponse.json(
+      { error: 'This request has already been answered' },
+      { status: 409 }
+    )
+  }
+
+  /**
+   * Hand the claim back if the approval cannot be completed, so the request
+   * returns to the admin's queue instead of sitting 'approved' with no offer
+   * against it. Mirrors the revert in claimChairForAccept().
+   */
+  const releaseClaim = async (reason: string) => {
+    const { error: revertError } = await supabase
+      .from('substitution_requests')
+      .update({ status: 'pending_approval' })
+      .eq('id', requestId)
+      .eq('status', 'approved')
+
+    if (revertError) {
+      console.error(`Failed to revert substitution request ${requestId} to pending_approval after ${reason}:`, revertError)
+    }
   }
 
   // Fetch the suggested sub's instrument
@@ -128,6 +165,7 @@ export async function POST(
 
     if (createMusicianError) {
       console.error('Failed to create musician:', createMusicianError)
+      await releaseClaim('the substitute musician record could not be created')
       return NextResponse.json({ error: 'Failed to create musician record' }, { status: 500 })
     }
 
@@ -156,6 +194,24 @@ export async function POST(
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + 7)
 
+  // Retire any outstanding offer this substitute already holds on this chair
+  // before writing a new one — the same "one active offer per chair" step the
+  // send-email route runs. Without it, a retried approval (first attempt failed
+  // after the insert, or the admin re-approved a request that was reverted)
+  // leaves two live offers on one chair, either of which could be accepted.
+  const { error: supersedeError } = await supabase
+    .from('contract_offers')
+    .update({ status: 'expired', responded_at: new Date().toISOString() })
+    .eq('project_position_id', subRequest.project_position_id)
+    .eq('musician_id', substituteMusician.id)
+    .in('status', ['pending', 'viewed'])
+
+  if (supersedeError) {
+    console.error('Failed to supersede prior offers for substitute:', supersedeError)
+    await releaseClaim(`prior offers for substitute ${substituteMusician.id} could not be superseded`)
+    return NextResponse.json({ error: 'Failed to create contract offer' }, { status: 500 })
+  }
+
   // Create contract offer for the substitute
   const { data: contractOffer, error: offerError } = await supabase
     .from('contract_offers')
@@ -172,22 +228,26 @@ export async function POST(
 
   if (offerError) {
     console.error('Failed to create contract offer:', offerError)
+    await releaseClaim(`the contract offer for substitute ${substituteMusician.id} could not be created`)
     return NextResponse.json({ error: 'Failed to create contract offer' }, { status: 500 })
   }
 
-  // Update substitution request
+  // Record who the substitute is and which offer went out. The status was
+  // already claimed above, so this only fills in the two references.
   const { error: updateError } = await supabase
     .from('substitution_requests')
     .update({
-      status: 'approved',
       substitute_musician_id: substituteMusician.id,
       offer_id: contractOffer.id,
     })
     .eq('id', requestId)
 
   if (updateError) {
-    console.error('Failed to update substitution request:', updateError)
-    return NextResponse.json({ error: 'Failed to update request' }, { status: 500 })
+    // The offer exists and is live, so the substitution really is approved —
+    // failing the request here would invite a retry that the claim now rejects
+    // with a 409. Logged loudly instead; the link between request and offer is
+    // what suffers, not the booking.
+    console.error(`Failed to attach substitute ${substituteMusician.id} and offer ${contractOffer.id} to substitution request ${requestId}:`, updateError)
   }
 
   // Get service name if specific service

@@ -52,13 +52,9 @@ export async function POST(
     return NextResponse.json({ error: 'Substitution request not found' }, { status: 404 })
   }
 
-  // Check if request is in pending_approval status
-  if (subRequest.status !== 'pending_approval') {
-    return NextResponse.json(
-      { error: 'This request is not pending approval' },
-      { status: 400 }
-    )
-  }
+  // Whether this request is still open is decided by the conditional update
+  // below, not by the status read here — a check at fetch time is exactly the
+  // one a concurrent approval slips past.
 
   // Verify user is an admin of this organization
   // Type the nested data - eslint-disable needed for Supabase join queries
@@ -87,18 +83,31 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized - admin access required' }, { status: 403 })
   }
 
-  // Update substitution request
-  const { error: updateError } = await supabase
+  // Claim the request before anything else happens. The status check above was
+  // read at fetch time; a second admin (or a double-click) can approve or
+  // decline in the gap, and an unguarded update would overwrite that answer and
+  // email the musician a decline for a substitution that is already approved.
+  // Zero rows means somebody else answered first, so nothing below runs.
+  const { data: declinedRequests, error: updateError } = await supabase
     .from('substitution_requests')
     .update({
       status: 'declined',
       admin_notes: adminNotes,
     })
     .eq('id', requestId)
+    .eq('status', 'pending_approval')
+    .select('id')
 
   if (updateError) {
     console.error('Failed to update substitution request:', updateError)
     return NextResponse.json({ error: 'Failed to update request' }, { status: 500 })
+  }
+
+  if (!declinedRequests || declinedRequests.length === 0) {
+    return NextResponse.json(
+      { error: 'This request has already been answered' },
+      { status: 409 }
+    )
   }
 
   // Get service name if specific service

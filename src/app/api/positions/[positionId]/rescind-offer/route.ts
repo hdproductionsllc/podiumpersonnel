@@ -106,7 +106,11 @@ export async function POST(
       .eq('status', 'approved')
       .maybeSingle()
 
-    const { error: offerUpdateError } = await supabase
+    // Optimistic lock, same as the accept/decline paths and the expire cron:
+    // repeat the status filter the fetch above used. The musician can answer in
+    // the gap between that fetch and this write, and an unguarded update would
+    // flip their acceptance to 'rescinded' while the chair stays confirmed.
+    const { data: rescindedOffers, error: offerUpdateError } = await supabase
       .from('contract_offers')
       .update({
         status: 'rescinded',
@@ -114,21 +118,40 @@ export async function POST(
         response_notes: rescindReason,
       })
       .eq('id', offer.id)
+      .in('status', ['pending', 'viewed'])
+      .select('id')
 
     if (offerUpdateError) {
       console.error('Failed to update offer status:', offerUpdateError)
       return NextResponse.json({ error: 'Failed to rescind offer' }, { status: 500 })
     }
 
-    // Reset position to vacant (unless substitution — position stays with original musician)
+    if (!rescindedOffers || rescindedOffers.length === 0) {
+      // The musician got there first. Nothing has been written or emailed yet,
+      // so their answer and the chair are both left exactly as they are.
+      return NextResponse.json(
+        { error: 'This offer was already answered' },
+        { status: 409 }
+      )
+    }
+
+    // Reset position to vacant (unless substitution — position stays with original musician).
+    // Guarded on the chair still being empty: a different musician may have
+    // claimed it (or an admin assigned it) since the fetch, and marking a
+    // held chair 'vacant' would leave musician_id pointing at someone the
+    // dashboard no longer shows as seated.
     if (!subRequest) {
-      const { error: positionUpdateError } = await supabase
+      const { data: vacatedPositions, error: positionUpdateError } = await supabase
         .from('project_positions')
         .update({ status: 'vacant' })
         .eq('id', positionId)
+        .is('musician_id', null)
+        .select('id')
 
       if (positionUpdateError) {
         console.error('Failed to update position:', positionUpdateError)
+      } else if (!vacatedPositions || vacatedPositions.length === 0) {
+        console.warn(`Position ${positionId} was not vacated after rescinding offer ${offer.id}: the chair is held by someone else`)
       }
     }
 

@@ -83,14 +83,40 @@ export async function POST(
       totalChairs = count || 1
     }
 
-    // Delete any contract offers for this position
-    const { error: deleteOffersError } = await supabase
+    // Retire this chair's offers rather than deleting them. An accepted offer is
+    // the only record that the musician ever said yes, and a pay dispute turns on
+    // exactly that; every other transition in the app preserves history.
+    //
+    // Two terminal statuses, matching what actually happened:
+    //  - 'accepted' → 'released'  (migration 063: no longer counted as confirmed
+    //                              for this chair — same word the substitution
+    //                              flow uses when a sub takes the seat).
+    //                 responded_at is left alone so the acceptance keeps its
+    //                 timestamp.
+    //  - 'pending'/'viewed' → 'rescinded' (the admin withdrew an unanswered offer,
+    //                 same as the rescind route).
+    // Neither status reads as active anywhere — next-candidate, the expire cron,
+    // the offers table and the send-offer dialog all count only pending/viewed/
+    // accepted — so the chair reads vacant afterwards. Both updates are
+    // idempotent, so a retry after a later failure is a no-op.
+    const { error: releaseOffersError } = await supabase
       .from('contract_offers')
-      .delete()
+      .update({ status: 'released' })
       .eq('project_position_id', positionId)
+      .eq('status', 'accepted')
 
-    if (deleteOffersError) {
-      return serverError(`Failed to delete offers for position ${positionId}`, deleteOffersError)
+    if (releaseOffersError) {
+      return serverError(`Failed to release accepted offers for position ${positionId}`, releaseOffersError)
+    }
+
+    const { error: rescindOffersError } = await supabase
+      .from('contract_offers')
+      .update({ status: 'rescinded', responded_at: new Date().toISOString() })
+      .eq('project_position_id', positionId)
+      .in('status', ['pending', 'viewed'])
+
+    if (rescindOffersError) {
+      return serverError(`Failed to rescind outstanding offers for position ${positionId}`, rescindOffersError)
     }
 
     // Reset the position to vacant
@@ -100,8 +126,8 @@ export async function POST(
       .eq('id', positionId)
 
     if (vacateError) {
-      // Nothing has been emailed yet; the admin can retry and the delete above
-      // is a no-op the second time.
+      // Nothing has been emailed yet; the admin can retry and the two status
+      // updates above are no-ops the second time.
       return serverError(`Failed to vacate position ${positionId}`, vacateError)
     }
 
