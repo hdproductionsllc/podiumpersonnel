@@ -25,10 +25,15 @@ function sign(svixId: string, svixTimestamp: string, body: string, secret = SECR
 const fake = vi.hoisted(() => ({
   // resend_email_id -> logged row
   emailLogs: {} as Record<string, { musician_id: string | null }>,
+  // musician id -> current row state, so a chained .eq('email_status', 'bounced')
+  // can be honored (or not) the way PostgREST would honor it — a real WHERE
+  // clause, not just a recorded call.
+  musicians: {} as Record<string, { email_status: string }>,
   logStatusUpdates: [] as Array<{ resendEmailId: string; status: string }>,
   musicianUpdates: [] as Array<{ musicianId: string; status: string }>,
   reset() {
     this.emailLogs = {}
+    this.musicians = {}
     this.logStatusUpdates = []
     this.musicianUpdates = []
   },
@@ -39,6 +44,48 @@ vi.mock('@/lib/supabase/admin', () => ({
     from(table: string) {
       let op: 'select' | 'update' = 'select'
       let patch: any
+      // Filters chained onto the current musicians update, e.g. .eq('id', x)
+      // followed by .eq('email_status', 'bounced') — collected so the write
+      // only actually applies once every chained condition matches the row.
+      let musicianFilters: Array<[string, any]> = []
+
+      const eq = (column: string, value: any): any => {
+        if (table === 'email_logs' && op === 'select' && column === 'resend_email_id') {
+          const row = fake.emailLogs[value]
+          return {
+            maybeSingle: () =>
+              Promise.resolve({ data: row ? { musician_id: row.musician_id } : null, error: null }),
+          }
+        }
+        if (table === 'email_logs' && op === 'update' && column === 'resend_email_id') {
+          fake.logStatusUpdates.push({ resendEmailId: value, status: patch.status })
+          return Promise.resolve({ error: null })
+        }
+        if (table === 'musicians' && op === 'update') {
+          musicianFilters.push([column, value])
+          return {
+            eq,
+            then: (onfulfilled: any, onrejected?: any) => {
+              const musicianId = musicianFilters.find(([c]) => c === 'id')?.[1] as string | undefined
+              const matches =
+                musicianId != null &&
+                musicianFilters.every(([c, v]) => {
+                  if (c === 'id') return true
+                  const row = fake.musicians[musicianId]
+                  return row ? row[c as keyof typeof row] === v : false
+                })
+              if (matches && musicianId) {
+                const row = fake.musicians[musicianId]
+                if (row) row.email_status = patch.email_status
+                fake.musicianUpdates.push({ musicianId, status: patch.email_status })
+              }
+              return Promise.resolve({ error: null }).then(onfulfilled, onrejected)
+            },
+          }
+        }
+        return Promise.resolve({ data: null, error: null })
+      }
+
       const builder: any = {
         select() {
           op = 'select'
@@ -47,26 +94,10 @@ vi.mock('@/lib/supabase/admin', () => ({
         update(p: any) {
           op = 'update'
           patch = p
+          musicianFilters = []
           return builder
         },
-        eq(column: string, value: any) {
-          if (table === 'email_logs' && op === 'select' && column === 'resend_email_id') {
-            const row = fake.emailLogs[value]
-            return {
-              maybeSingle: () =>
-                Promise.resolve({ data: row ? { musician_id: row.musician_id } : null, error: null }),
-            }
-          }
-          if (table === 'email_logs' && op === 'update' && column === 'resend_email_id') {
-            fake.logStatusUpdates.push({ resendEmailId: value, status: patch.status })
-            return Promise.resolve({ error: null })
-          }
-          if (table === 'musicians' && op === 'update' && column === 'id') {
-            fake.musicianUpdates.push({ musicianId: value, status: patch.email_status })
-            return Promise.resolve({ error: null })
-          }
-          return Promise.resolve({ data: null, error: null })
-        },
+        eq,
       }
       return builder
     },
@@ -210,16 +241,32 @@ describe('email.bounced / email.complained', () => {
 })
 
 describe('email.delivered', () => {
-  it('resets a previously bounced musician back to ok', async () => {
+  it('a delivery clears an earlier bounce', async () => {
     fake.emailLogs['em-3'] = { musician_id: 'mus-3' }
+    fake.musicians['mus-3'] = { email_status: 'bounced' }
     const body = JSON.stringify({ type: 'email.delivered', data: { email_id: 'em-3' } })
 
     const res = await post(body, validHeaders(body))
 
     expect(res.status).toBe(200)
     expect(fake.musicianUpdates).toEqual([{ musicianId: 'mus-3', status: 'ok' }])
+    expect(fake.musicians['mus-3'].email_status).toBe('ok')
     // Delivered never touches email_logs.status — only bounced/complained does.
     expect(fake.logStatusUpdates).toEqual([])
+  })
+
+  it('a delivery does not clear a spam complaint', async () => {
+    fake.emailLogs['em-comp'] = { musician_id: 'mus-comp' }
+    fake.musicians['mus-comp'] = { email_status: 'complained' }
+    const body = JSON.stringify({ type: 'email.delivered', data: { email_id: 'em-comp' } })
+
+    const res = await post(body, validHeaders(body))
+
+    expect(res.status).toBe(200)
+    // The update's .eq('email_status', 'bounced') excludes a 'complained' row,
+    // so no write ever lands and the complaint stands.
+    expect(fake.musicianUpdates).toEqual([])
+    expect(fake.musicians['mus-comp'].email_status).toBe('complained')
   })
 })
 

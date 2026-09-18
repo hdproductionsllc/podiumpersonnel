@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync } from 'fs'
 import { join, resolve } from 'path'
 import {
@@ -14,7 +14,7 @@ import {
  * INVITING org, so inviting someone who owned another org gave them a second
  * membership. That silently broke the invitee: ~38 routes resolve the caller's
  * org with .single(), which returns nothing for two rows, while the hardened
- * dashboard shell still rendered â€” a healthy-looking UI where every action
+ * dashboard shell still rendered — a healthy-looking UI where every action
  * failed.
  */
 
@@ -53,7 +53,7 @@ describe('checkInviteEligibility', () => {
   })
 
   it('distinguishes "already here" from "belongs elsewhere"', () => {
-    // Same 409, different meaning â€” the inviter needs to know which it is.
+    // Same 409, different meaning — the inviter needs to know which it is.
     const here = checkInviteEligibility([{ organization_id: ORG_A }], ORG_A)
     const elsewhere = checkInviteEligibility([{ organization_id: ORG_B }], ORG_A)
 
@@ -100,7 +100,7 @@ describe('members route wiring', () => {
   )
 
   /**
-   * The membership lookup statement only â€” from its declaration to the call
+   * The membership lookup statement only — from its declaration to the call
    * that consumes it. Anchored on the CALL, found after the declaration, since
    * `checkInviteEligibility` also appears in the import line at the top.
    */
@@ -126,7 +126,7 @@ describe('members route wiring', () => {
   it('reads memberships with the admin client, not the caller-scoped one', () => {
     // The SELECT policy is USING (is_org_member(organization_id)), so a
     // caller-scoped read cannot see the invitee's own org and would hand the
-    // check an empty list â€” silently allowing every cross-org invite.
+    // check an empty list — silently allowing every cross-org invite.
     const lookup = membershipLookupSource()
 
     expect(lookup).toContain('adminClient')

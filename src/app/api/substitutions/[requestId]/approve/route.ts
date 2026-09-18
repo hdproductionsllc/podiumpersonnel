@@ -243,11 +243,21 @@ export async function POST(
     .eq('id', requestId)
 
   if (updateError) {
-    // The offer exists and is live, so the substitution really is approved —
-    // failing the request here would invite a retry that the claim now rejects
-    // with a 409. Logged loudly instead; the link between request and offer is
-    // what suffers, not the booking.
+    // Without offer_id on the request, the rescind route cannot find this
+    // substitution and the original musician would never hear "find another
+    // sub". Retire the offer we just made (nothing has been emailed yet),
+    // hand the request back to pending_approval, and let the admin retry.
     console.error(`Failed to attach substitute ${substituteMusician.id} and offer ${contractOffer.id} to substitution request ${requestId}:`, updateError)
+    const { error: retireError } = await supabase
+      .from('contract_offers')
+      .update({ status: 'rescinded', responded_at: new Date().toISOString() })
+      .eq('id', contractOffer.id)
+      .in('status', ['pending', 'viewed'])
+    if (retireError) {
+      console.error(`Failed to retire offer ${contractOffer.id} after the attach failed:`, retireError)
+    }
+    await releaseClaim(`the substitute and offer could not be attached to request ${requestId}`)
+    return NextResponse.json({ error: 'Failed to record the substitution; please try again' }, { status: 500 })
   }
 
   // Get service name if specific service

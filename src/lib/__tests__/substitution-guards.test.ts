@@ -16,7 +16,7 @@ import { MockSupabaseDb, type Row } from './helpers/supabase-mock'
  * gets a 409 and does nothing.
  */
 
-const state = vi.hoisted(() => ({ db: undefined as any, user: undefined as any }))
+const state = vi.hoisted(() => ({ db: undefined as any, user: undefined as any, failAttachUpdate: false }))
 
 let insertSeq = 0
 
@@ -27,6 +27,12 @@ let insertSeq = 0
  * (the database's job in production) and resolves the chain with it. It also
  * adds `ilike`, which the route uses for the case-insensitive musician lookup,
  * as a plain equality match.
+ *
+ * `state.failAttachUpdate` is a one-shot fault hook: when set, the very next
+ * `substitution_requests` update whose payload carries `offer_id` (the "attach
+ * the substitute and offer to the request" write) resolves with a PostgREST-shaped
+ * error instead of touching the table, so tests can exercise the route's
+ * failure-recovery path without a way to force an error out of the shared mock.
  */
 function client(db: MockSupabaseDb, user: unknown) {
   return {
@@ -46,6 +52,24 @@ function client(db: MockSupabaseDb, user: unknown) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         builder.then = (onfulfilled: any, onrejected: any) =>
           inner((result: Row) => (result.error ? result : { data: stamped, error: null }), onrejected).then(onfulfilled)
+        return builder
+      }
+
+      const update = builder.update.bind(builder)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      builder.update = (patch: Row) => {
+        update(patch)
+        if (
+          state.failAttachUpdate &&
+          table === 'substitution_requests' &&
+          patch &&
+          Object.prototype.hasOwnProperty.call(patch, 'offer_id')
+        ) {
+          state.failAttachUpdate = false // one-shot — the release/retry writes that follow must still succeed
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          builder.then = (onfulfilled: any, onrejected: any) =>
+            Promise.resolve({ data: null, error: { message: 'induced failure for test' } }).then(onfulfilled, onrejected)
+        }
         return builder
       }
 
@@ -161,6 +185,7 @@ let warnSpy: MockInstance
 beforeEach(() => {
   state.db = makeDb()
   state.user = { id: 'user-1', email: 'admin@example.com' }
+  state.failAttachUpdate = false
   insertSeq = 0
   vi.clearAllMocks()
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -314,5 +339,30 @@ describe('approve — retry safety (A5)', () => {
 
     expect(state.db.row('contract_offers', 'offer-orig')!.status).toBe('accepted')
     expect(state.db.row('project_positions', 'pos-1')!.musician_id).toBe('mus-orig')
+  })
+})
+
+describe('approve — attach failure (A5)', () => {
+  it('hands the request back and retires the offer when the attach fails', async () => {
+    // The offer and substitute were created fine; only the write that records
+    // them onto the request fails. The route must not leave the request
+    // 'approved' with no offer_id, and must not leave a live offer dangling.
+    state.failAttachUpdate = true
+
+    const res = await approvePOST(approveRequest(), routeParams)
+
+    expect(res.status).toBe(500)
+    expect((await res.json()).error).toBe('Failed to record the substitution; please try again')
+
+    expect(state.db.row('substitution_requests', 'sub-1')!.status).toBe('pending_approval')
+
+    const newOffer = state.db.tables.contract_offers.find((o: Row) => o.id !== 'offer-orig')
+    expect(newOffer).toBeTruthy()
+    expect(newOffer!.status).toBe('rescinded')
+    expect(liveOffers(state.db)).toHaveLength(0)
+
+    expect(sendContractOfferEmail).not.toHaveBeenCalled()
+    expect(sendSubRequestApprovedEmail).not.toHaveBeenCalled()
+    expect(sendAdminOfferSentEmail).not.toHaveBeenCalled()
   })
 })

@@ -27,7 +27,7 @@ five customer conversations recommended on Sept 1 have not happened.
 | Check | Result |
 |---|---|
 | `npx tsc --noEmit` | clean |
-| `npx vitest run` | 723 pass, 34 skipped; 2 files (cron-auth, cron-retry) time out only under load and pass alone. Cause: 10s default hookTimeout on the dynamic `@/lib/cron` import |
+| `npx vitest run` | before: 723 pass, 2 files timing out under load. After the hardening branch: 856 pass, 52 files, no timeouts |
 | `npx eslint .` | 717 errors, 4055 warnings, advisory in CI |
 | Overhire branch (PR #17) | 6 commits, 17 behind master, needs a rebase |
 
@@ -202,3 +202,33 @@ Only after 3 of 5 "would pay": performer pre-gig reminder, change notifications,
 
 Not now: multi-ensemble management (remove it from the pricing page instead),
 calendar subscription feeds, a portal, dance studios.
+
+
+## G. Polish-pass status (2026-09-18, branch launch-hardening-2026-09-18)
+
+Independent reviewer checked every finding against the branch diff, then the
+defects it raised were fixed on the same branch. Status per finding:
+
+| Finding | Status | Evidence |
+|---|---|---|
+| A1 membership self-insert | FIXED (code) / PASTE PENDING | migration 084; staging-replay no longer recreates it; tests fail if any migration brings it back |
+| A2 project-files bucket | FIXED (code) / PASTE PENDING | migration 085, org-folder check via is_org_member / is_org_admin; shared library confirmed on R2, unaffected |
+| A3 rescind race | FIXED | rescind-offer route: status-conditioned update, 409 before any chair write or email; chair vacated only if still empty (musician_id is null while an offer is out, so the normal path still vacates) |
+| A4 unassign history | FIXED | accepted → released, unanswered → rescinded, no DELETE; every reader of contract_offers is an allow-list of pending/viewed/accepted. Also: the Offers panel "Revoke" button no longer deletes the row client-side, it calls the rescind route |
+| A5 substitution guards | FIXED | claim-first conditional update, revert on failure, supersede stale offers; a failed attach now retires the offer and hands the request back (was logged-only) |
+| A6 suppressed ≠ sent | FIXED | send.ts returns suppressed; send-email route logs status suppressed; send-offer dialog AND the waterfall re-offer path read the flag; dunning email uses the same safe-mode gate and never logs as sent |
+| A7 PITR | DAVID | Supabase dashboard |
+| A8 alerting | FIXED (code) / DAVID (DSN, webhook secret) | runCronJob in all 7 crons → notifyOps + Sentry; payment-failed email after the durable write, never fails the webhook; Resend webhook Svix-verified, fails closed, delivery clears a bounce but never a complaint; migration 087 + roster badge |
+| A9 venues migration | FIXED (code) / PASTE PENDING | migration 086, same SQL as the 09-17 script |
+
+Deferred on purpose (section F says after the customer conversations): the
+freelancer pre-gig reminder, change notifications, the terminology leaks in C,
+SMS. Not touched.
+
+Verification at the end of the pass: `npx tsc --noEmit` clean; `npx vitest run`
+green (count in tasks/todo.md verification log); `npx next build` green for the
+app and for podium-marketing.
+
+Push discipline: this branch touches podium-marketing too, so the one push
+builds two Vercel projects. Paste `scripts/launch-hardening-2026-09-18.sql`
+first and confirm every RESULTS row is PASS, then merge and push once.

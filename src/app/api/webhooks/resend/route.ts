@@ -170,12 +170,14 @@ export async function POST(request: NextRequest) {
         }
       }
     } else if (type === 'email.delivered' && musicianId) {
-      // A later successful delivery clears an earlier bounce/complaint flag —
-      // the address is reachable again.
+      // A later successful delivery clears an earlier bounce: the address is
+      // reachable again. A complaint is the musician saying "stop", and a
+      // delivery does not take that back, so it is never reset here.
       const { error: musicianError } = await supabase
         .from('musicians')
         .update({ email_status: 'ok', email_status_at: new Date().toISOString() })
         .eq('id', musicianId)
+        .eq('email_status', 'bounced')
       if (musicianError) {
         console.warn(`resend webhook: failed to reset musicians.email_status for ${musicianId}:`, musicianError)
       }

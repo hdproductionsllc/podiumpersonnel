@@ -295,7 +295,17 @@ export function ProjectOffers({
             }),
           })
           if (!emailRes.ok) throw new Error(`send-email responded ${emailRes.status}`)
-          emailSent = true
+          // A 200 can also mean "suppressed by safe mode": the route reports
+          // that honestly, so read the flag rather than calling it sent.
+          const detail = await emailRes.json().catch(() => null)
+          if (detail?.suppressed) {
+            toast.warning(
+              'Offer created for the next candidate, but no email went out: safe mode is on, so this recipient was suppressed.',
+              { duration: 10000 }
+            )
+          } else {
+            emailSent = true
+          }
         } catch (err) {
           // The offer and position are already updated — only the email is missing.
           console.warn('project-offers: waterfall offer email failed:', err)
@@ -314,13 +324,25 @@ export function ProjectOffers({
 
   if (offers.length === 0) return null
 
-  async function handleRevoke(offerId: string) {
+  async function handleRevoke(offer: OfferJoined) {
     if (!confirm('Revoke this offer?')) return
-    const supabase = createClient()
-    const { error } = await supabase.from('contract_offers').delete().eq('id', offerId)
-    if (error) {
+    // The rescind route is the one place an outstanding offer is withdrawn: it
+    // moves the offer to 'rescinded' (history kept), vacates the chair only if
+    // it is still empty, and tells the musician. A client-side DELETE did none
+    // of that and could erase an acceptance that landed a moment earlier.
+    try {
+      const response = await fetch(`/api/positions/${offer.project_position_id}/rescind-offer`, {
+        method: 'POST',
+      })
+      const result = await response.json().catch(() => null)
+      if (!response.ok) {
+        toast.error(result?.error || 'Failed to revoke offer')
+        onOfferChange()
+        return
+      }
+      toast.success('Offer revoked')
+    } catch {
       toast.error('Failed to revoke offer')
-      return
     }
     onOfferChange()
   }
@@ -477,7 +499,7 @@ export function ProjectOffers({
                             variant="ghost"
                             size="sm"
                             className="text-destructive hover:text-destructive"
-                            onClick={() => handleRevoke(offer.id)}
+                            onClick={() => handleRevoke(offer)}
                           >
                             Revoke
                           </Button>

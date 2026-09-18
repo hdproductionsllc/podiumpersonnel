@@ -1,6 +1,6 @@
 -- ============================================================================
 -- PODIUM — LAUNCH HARDENING (2026-09-18)
--- Applies migrations 084, 085 and 086 in one paste.
+-- Applies migrations 084, 085, 086 and 087 in one paste.
 --
 -- HOW TO RUN
 --   1. Supabase Dashboard -> SQL Editor -> New query
@@ -33,6 +33,10 @@
 --   086 — The venues fix from 2026-09-17, landed permanently. Same SQL you
 --         already pasted; running it again is a no-op. Without it, any rebuilt
 --         environment would come back with an empty Venues page.
+--
+--   087 — Two new columns on musicians so the app can remember when someone's
+--         email address bounced or they marked us as spam (fed by the Resend
+--         webhook). Adds columns only; every existing row reads 'ok'.
 -- ============================================================================
 
 
@@ -163,7 +167,7 @@ SELECT
   CASE WHEN EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'musicians' AND column_name = 'email_status'
-  ) THEN 'PASS' ELSE 'FAIL - tell Claude' END
+  ) THEN 'PASS' ELSE 'FAIL - tell Claude' END AS result
 UNION ALL
 -- 084
 SELECT
