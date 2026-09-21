@@ -176,12 +176,19 @@ export function canonicalEnsemble(raw: string | null | undefined): EnsembleCanon
  * score-only, and keeps its existing behaviour (the score never silently covers
  * one absent part). One definition, shared by the matcher, the book builder and
  * the website export, so the three can't drift apart.
+ *
+ * The same holds for a work whose only file is filed as "other". The July import
+ * had no notion of a duo score, so every violin-and-cello duo in the library — a
+ * single two-line document the two players read together — landed as "other",
+ * and 96 works reached nobody. There is nothing else to hand out, so that one
+ * document IS the score. (David, 2026-09-21: the two-line scores are readable by
+ * the duos.) Still narrow: an "other" file next to real parts changes nothing.
  */
 export function isScoreOnly(parts: PartAvailability | undefined): boolean {
   if (!parts) return false
   const have = new Set(parts.available)
-  if (!have.has('score')) return false
-  return !CORE_PARTS.some((p) => have.has(p))
+  if (CORE_PARTS.some((p) => have.has(p))) return false
+  return have.has('score') || have.has('other')
 }
 
 /** The individual lines a string ensemble splits into. */

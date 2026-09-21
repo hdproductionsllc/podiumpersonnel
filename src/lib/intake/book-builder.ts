@@ -207,7 +207,10 @@ export function pickFileForPart(rows: PartFileRow[], part: string, workTitle: st
     }
   }
 
-  // Score-only work: no individual parts exist, so everyone reads the score.
+  // Score-only work: no individual parts exist, so everyone reads the score. A
+  // work whose only file is filed as "other" is the same case — the library's
+  // violin-and-cello duos are one two-line document each, and the July import
+  // filed every one of them as "other" (see isScoreOnly in the matcher).
   const hasAnyCorePart = usable.some((r) => CORE_PARTS.includes(r.part) && !r.substitute)
   if (!hasAnyCorePart) {
     const score = usable.find((r) => r.part === 'score')
@@ -216,6 +219,14 @@ export function pickFileForPart(rows: PartFileRow[], part: string, workTitle: st
         row: score,
         fileLabel: 'score',
         warning: `"${workTitle}": no individual parts — every player reads the score`,
+      }
+    }
+    const only = usable.find((r) => r.part === 'other')
+    if (only) {
+      return {
+        row: only,
+        fileLabel: 'score',
+        warning: `"${workTitle}": no individual parts — every player reads its one file ("${only.original_filename}") as the score`,
       }
     }
   }

@@ -99,3 +99,47 @@ describe('pickFileForPart — score is the LAST rung', () => {
     expect(pickFileForPart([file('bass')], 'vln1', 'W')).toBeNull()
   })
 })
+
+// ---------------------------------------------------------------------------
+// A work whose only file is filed as "other" (2026-09-21)
+//
+// The July import had no notion of a duo score, so every violin-and-cello duo
+// — one two-line document — landed as "other" and 96 works reached nobody. It
+// is the same case as a score-only work: there is nothing else to hand out.
+// Still narrow: an "other" file next to real parts changes nothing.
+// ---------------------------------------------------------------------------
+describe('a lone "other" file is the score', () => {
+  it('isScoreOnly is true when the only file is "other"', () => {
+    expect(isScoreOnly(avail(['other']))).toBe(true)
+    expect(isScoreOnly(avail(['other', 'bass']))).toBe(true)
+  })
+
+  it('isScoreOnly stays false when any real part exists', () => {
+    expect(isScoreOnly(avail(['other', 'vln1']))).toBe(false)
+    expect(isScoreOnly(avail(['other', 'vc']))).toBe(false)
+  })
+
+  it('partGap reports no gaps for such a work', () => {
+    expect(partGap(avail(['other']), 'duo')).toEqual([])
+  })
+
+  it('gives every player the one file, labelled as the score', () => {
+    const rows = [file('other', { original_filename: 'Glass Animals VC Duo.pdf' })]
+    for (const part of ['vln1', 'vc']) {
+      const picked = pickFileForPart(rows, part, 'Gooey')
+      expect(picked, `${part} should get the duo file`).not.toBeNull()
+      expect(picked!.row.original_filename).toBe('Glass Animals VC Duo.pdf')
+      expect(picked!.fileLabel).toBe('score')
+      expect(picked!.warning).toMatch(/every player reads its one file/)
+    }
+  })
+
+  it('prefers a real score over an "other" file', () => {
+    const picked = pickFileForPart([file('other'), file('score')], 'vln1', 'X')
+    expect(picked!.row.part).toBe('score')
+  })
+
+  it('does NOT paper over a missing part with an "other" file', () => {
+    expect(pickFileForPart([file('other'), file('vln1')], 'vc', 'X')).toBeNull()
+  })
+})

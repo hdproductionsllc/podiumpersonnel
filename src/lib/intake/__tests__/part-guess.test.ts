@@ -110,3 +110,16 @@ describe('splitPartFilename', () => {
     expect(splitPartFilename('Vln1.pdf')).toEqual({ head: '', tail: 'Vln1.pdf' })
   })
 })
+
+describe('guessPartFromFilename — a duo file is a score', () => {
+  it('reads the library\'s "VC Duo" naming as a two-line score, not a cello part', () => {
+    expect(guessPartFromFilename('Glass Animals VC Duo.pdf')).toBe('score')
+    expect(guessPartFromFilename('Serenade - Schubert - VC Duo.pdf')).toBe('score')
+    expect(guessPartFromFilename('Le_Cygne_The_Swan Duo.pdf')).toBe('score')
+    expect(guessPartFromFilename('Dvorak_Humoresque_Violin_and_Cello_Duet.pdf')).toBe('score')
+  })
+
+  it('still reads a plain cello part as cello', () => {
+    expect(guessPartFromFilename('Ave Maria - Bach-Gounod - vc.pdf')).toBe('vc')
+  })
+})

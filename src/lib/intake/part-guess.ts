@@ -39,6 +39,10 @@ export const PART_KEYS: ReadonlySet<string> = new Set(PART_OPTIONS.map((o) => o.
 // Ordered most-specific-first; first hit wins.
 const PART_PATTERNS: Array<[RegExp, PartKey]> = [
   [/\bscore\b/i, 'score'],
+  // A duo file is one two-line document both players read — a score. It sits
+  // ABOVE the instrument words because the library names these "VC Duo" (violin
+  // and cello), which would otherwise read as a cello part.
+  [/\b(?:duo|duet)\b/i, 'score'],
   [/\b(?:vln\.?\s*1|violin\s*1|violin\s*i(?![a-z1-9])|1st\s*violin)\b/i, 'vln1'],
   [/\b(?:vln\.?\s*2|violin\s*2|violin\s*ii(?![a-z1-9])|2nd\s*violin)\b/i, 'vln2'],
   [/\b(?:vla\.?\s*|viola)\b/i, 'vla'],
@@ -50,7 +54,9 @@ const PART_PATTERNS: Array<[RegExp, PartKey]> = [
 
 /** Guess the part a PDF filename holds. Falls back to 'other'. */
 export function guessPartFromFilename(filename: string): PartKey {
-  const base = filename.replace(/\.pdf$/i, '')
+  // Underscores are separators too ("Violin_and_Cello_Duet.pdf"); a regex \b
+  // sees them as word characters and misses the token.
+  const base = filename.replace(/\.pdf$/i, '').replace(/_/g, ' ')
   for (const [re, part] of PART_PATTERNS) {
     if (re.test(base)) return part
   }
