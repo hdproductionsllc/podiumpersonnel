@@ -7,12 +7,12 @@ typo is permanent once imported.
 
 ## Tasks
 - [x] Data: rename both rows now (title "Gooey", norm_title "gooey"; artist unchanged)
-- [ ] Pure validator `src/lib/repertoire/work-patch.ts` (title/artist/archived → column patch)
-- [ ] PATCH /api/library/works/[workId] accepts title + artist; unique-index clash → 409
-- [ ] Library page: Rename action → inline title/artist editor (table + card views)
-- [ ] Tests: validator + route/client lock-ins
-- [ ] `npx tsc --noEmit`, `npm test`, `npm run build`
-- [ ] ONE push to master
+- [x] Pure validator `src/lib/repertoire/work-patch.ts` (title/artist/archived → column patch)
+- [x] PATCH /api/library/works/[workId] accepts title + artist; unique-index clash → 409
+- [x] Library page: Rename action → inline title/artist editor (table + card views)
+- [x] Tests: validator + route/client lock-ins
+- [x] `npx tsc --noEmit`, `npm test`, `npm run build`
+- [x] ONE push to master
 
 # Intake parser: ceremony lines read as songs (2026-09-21)
 
@@ -42,7 +42,7 @@ rows and an empty cue/contact.
 - [x] "Ensemble - Name" header → contact name, not a warning
 - [x] Tests: full Madelyn fixture + narrow guards (song titles stay songs)
 - [x] `npm test`, `npx tsc --noEmit`
-- [ ] ONE push to master; verify with Re-parse on the live project
+- [x] ONE push to master; verify with Re-parse on the live project
 - [x] Lessons entry
 
 # Launch hardening (2026-09-18)
