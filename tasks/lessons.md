@@ -266,3 +266,17 @@ are, not a formality after the tests.
   minutes of the push. Build secret-shaped fixtures at runtime
   (`'whsec_' + Buffer.from('...').toString('base64')`) so no literal that matches
   a vendor's key pattern ever lands in the repo.
+
+## A vocabulary gate has to speak the client's language, not the template's (2026-09-21)
+
+- The walking-order check was built from 17hats-style fragments ("Parents, 2 pairs")
+  and could not read a hand-typed sentence ("Officiant, groom, and best man walk in
+  from the side"), a count noun it didn't list ("5 groups") or an abbreviation
+  ("Jr."). Every miss became a red "not in library" row. Pattern: when a heuristic
+  is gated on an ANCHOR that songs never carry, widen the words allowed after it
+  freely (movement, grouping); the anchor is the safety, not the vocabulary.
+- A label the section patterns don't know ("Presentation to Mary:") fell through to
+  the generic title/artist split and became an ARTIST under the previous role. In a
+  ceremony, "Label: Song" is always a moment. Read structure before credits.
+- Quoted words in a trailing parenthetical are someone's speech (the officiant's
+  cue), never a title. Strip them before section detection and keep them verbatim.

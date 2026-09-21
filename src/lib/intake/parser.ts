@@ -252,23 +252,40 @@ const WALKING_ORDER_WEAK = new Set([
   'honor', 'honour', 'maid', 'matron', 'bearer', 'bearers',
 ])
 
-// Connectors and counts: "Parents, 2 pairs", "Bride with FoB", "Bridal party x5".
+// Connectors, counts and STAGING: "Parents, 2 pairs", "Bride with FoB", "Bridal
+// party x5", "Officiant, groom, and best man walk in from the side", "Jr.
+// groomsmen and flower girl". A walking order says who walks and how they get
+// there, so the words that may follow an anchor are the words of movement and
+// grouping — never a title's. This vocabulary only ever runs AFTER an anchor has
+// been found, so widening it cannot promote a song that has none.
 const WALKING_ORDER_CONNECTORS = new Set([
   'and', 'with', 'of', 'the', 'a', 'then', 'by', 'in', 'to', 'plus', 'followed',
   'pair', 'pairs', 'x', 'each', 'total', 'people', 'person', 'couples',
+  // movement and staging
+  'walk', 'walks', 'walking', 'enter', 'enters', 'entering', 'come', 'comes',
+  'coming', 'from', 'side', 'sides', 'down', 'up', 'out', 'aisle', 'front', 'back',
+  'left', 'right', 'together', 'alone', 'separately', 'first', 'last', 'next',
+  'after', 'before', 'via', 'through', 'stage', 'altar', 'arch',
+  // grouping and qualifiers
+  'group', 'groups', 'set', 'sets', 'row', 'rows', 'both', 'all', 'jr', 'sr',
+  'junior', 'senior', 'little', 'kid', 'kids', 'child', 'children',
 ])
 
 // A HEADCOUNT is the other reliable tell, and it needs no vocabulary at all: a
 // walking order says how many of each party walk ("Officiants, 2", "Bridemaids, 3",
-// "Incense carrier, 1", "Grandparents, 2 pairs"). Songs do not carry headcounts.
-// This is what makes the check survive roles no list could enumerate — an incense
-// carrier in a Persian ceremony — and plain misspellings.
+// "Incense carrier, 1", "Grandparents, 2 pairs", "Wedding party, 5 groups"). Songs
+// do not carry headcounts. This is what makes the check survive roles no list
+// could enumerate — an incense carrier in a Persian ceremony — and plain
+// misspellings.
 //
 // The count must be introduced by a COMMA, or be followed by a counting noun. A
 // bare trailing digit is not enough: "Spring 1" and "Christmas Medley 3" are real
 // works in the library and must stay songs.
-const HEADCOUNT_RE =
-  /,\s*\d{1,2}\s*(?:pairs?|people|persons?|couples?)?\s*$|\b\d{1,2}\s+(?:pairs?|people|persons?|couples?)\s*$/i
+const HEADCOUNT_NOUN = '(?:pairs?|people|persons?|couples?|groups?|sets?|rows?|kids|children)'
+const HEADCOUNT_RE = new RegExp(
+  `,\\s*\\d{1,2}\\s*${HEADCOUNT_NOUN}?\\s*$|\\b\\d{1,2}\\s+${HEADCOUNT_NOUN}\\s*$`,
+  'i'
+)
 
 /** Is this line a processional participant rather than a song? See the note above. */
 function isWalkingOrderStep(line: string): boolean {
@@ -351,6 +368,10 @@ function readNoMusicAnswer(title: string, trailing: string): string | null {
 const DATE_LIKE_RE =
   /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s*\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?\b|\b\d{1,2}\s*[/.-]\s*\d{1,2}(?:\s*[/.-]\s*\d{2,4})?\b|\b\d{1,2}(?:st|nd|rd|th)\s+(?:of\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b/i
 
+// The other half of the event header: an ensemble label ("PSQ Duo", "String
+// Quartet", "Trio") on one side of the dash and the client's name on the other.
+const ENSEMBLE_LIKE_RE = /\b(?:duo|trio|quartet|quintet|solo(?:ist)?|ensemble|strings?)\b/i
+
 // Inline special-request marker on a SONG line: "(*special request*)",
 // "(special request)", "*special request*". The phrase must be wrapped in
 // parens or asterisks — a bare section header like "Special Requests" never
@@ -367,6 +388,23 @@ function extractSpecialRequestMarker(line: string): { line: string; special: boo
   if (!SPECIAL_REQUEST_MARKER_RE.test(line)) return { line, special: false }
   const stripped = line.replace(SPECIAL_REQUEST_MARKER_RE, ' ').replace(/\s{2,}/g, ' ').trim()
   return { line: stripped, special: true }
+}
+
+// --- quoted parenthetical = someone's words, not part of the title ------------
+// "Recessional: New York, New York (“Go in Peace” “Thanks be to God”)". The bit
+// in parentheses is what the officiant says — the players' cue to start — and
+// it was landing INSIDE the title, title-cased ("Go In Peace Thanks Be To God")
+// and unfindable in the library. Only a parenthetical that is itself QUOTED is
+// read this way: "Time (Clock of the Heart)" is a title and stays one. The text
+// is kept verbatim (a cue is exact words) and stripped before section detection
+// so nothing inside the quotes can masquerade as a header.
+const QUOTED_PARENTHETICAL_RE = /\s*\(\s*([“"‘][^()]*[”"’])\s*\)\s*$/
+
+/** Split a trailing quoted parenthetical off a line; the quote is returned verbatim. */
+function extractQuotedParenthetical(line: string): { line: string; quote: string | null } {
+  const m = QUOTED_PARENTHETICAL_RE.exec(line)
+  if (!m) return { line, quote: null }
+  return { line: line.slice(0, m.index).trim(), quote: m[1].trim() }
 }
 
 const sectionMatches = (lower: string): boolean => SECTION_PATTERNS.some((p) => p.re.test(lower))
@@ -426,6 +464,12 @@ function parseCeremonyOther(line: string): [string, string] {
   }
   return ['', smartTitleCase(line.trim())]
 }
+
+// A ceremony line of the shape "Label: Song" where the label is a short run of
+// words ("Presentation to Mary", "Unity Candle", "Sand Ceremony"). Up to four
+// words, letters only — a URL ("https://...") or a lyric with a colon does not
+// qualify. The colon is the same one every known ceremony header uses.
+const CEREMONY_LABEL_RE = /^([A-Za-z'’]+(?:\s+[A-Za-z'’]+){0,3}):\s*(?!\/\/)(\S.*)$/
 
 /** Extract (title, artist) from "Title - Artist" / "Title by Artist" / "Title". */
 function extractTitleAndArtist(line: string): [string, string] {
@@ -530,13 +574,31 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
   let officiant: string | null = null // consumed for line-accounting; not persisted / not in output
 
   // `special` = the current line carried an inline special-request marker.
-  const addSong = (section: string, titleRaw: string, artistRaw: string, role: string | null, special = false) => {
+  // `quote` = a quoted parenthetical that rode on the line — someone's words.
+  const addSong = (
+    section: string,
+    titleRaw: string,
+    artistRaw: string,
+    role: string | null,
+    special = false,
+    quote: string | null = null
+  ) => {
     const pos = sectionCounts.get(section) ?? 0
     // Every "Title - Artist" split funnels through here, so this is the one place
     // that has to tell a credit from a direction to the players — or from an answer
     // that says we are not playing at all.
     const noMusicNote = readNoMusicAnswer(titleRaw, artistRaw)
     const direction = !noMusicNote && artistRaw && isPerformanceDirection(artistRaw)
+    // Quoted words on the recessional line are the officiant's cue — the one
+    // field that has a verbatim home. Anywhere else they are a note for the row.
+    let songQuote = quote
+    if (songQuote && section === 'recessional' && !recessionalCue) {
+      recessionalCue = songQuote
+      songQuote = null
+    }
+    const notes = [noMusicNote ?? (direction ? artistRaw.trim() : null), songQuote]
+      .filter((n): n is string => Boolean(n))
+      .join(' — ')
     songs.push({
       section,
       position: pos,
@@ -544,7 +606,7 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
       artistRaw: noMusicNote || direction ? null : artistRaw || null,
       role,
       specialRequest: special,
-      notes: noMusicNote ?? (direction ? artistRaw.trim() : null),
+      notes: notes || null,
       noMusic: noMusicNote !== null,
     })
     sectionCounts.set(section, pos + 1)
@@ -565,7 +627,11 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
     // so "(*special request*)" on a song line can't hijack the section machine
     // (SECTION_PATTERNS matches "special request" anywhere in a line). The flag
     // rides along to addSong for whatever song this line yields.
-    const { line, special: lineSpecial } = extractSpecialRequestMarker(lines[i])
+    const { line: lineSansMarker, special: lineSpecial } = extractSpecialRequestMarker(lines[i])
+    // Likewise a trailing quoted parenthetical — the officiant's words on a
+    // recessional line — comes off here so it can neither hijack section
+    // detection nor end up inside a title. It rides along to addSong as `lineQuote`.
+    const { line, quote: lineQuote } = extractQuotedParenthetical(lineSansMarker)
     const lower = line.toLowerCase().trim()
 
     if (!line) {
@@ -805,7 +871,7 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
           const rawSong = songOnLine[1].trim().replace(/\s*\((?:CONFIRMED|confirmed)\)\s*$/, '')
           const [st0, sa] = extractTitleAndArtist(rawSong)
           if (st0) {
-            addSong(currentSection, cleanSongTitle(st0), sa, currentRole, lineSpecial)
+            addSong(currentSection, cleanSongTitle(st0), sa, currentRole, lineSpecial, lineQuote)
             if (expectSingleSong) expectSingleSong = false
           }
         } else {
@@ -847,7 +913,7 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
           if (rawSong) {
             const [st0, sa] = extractTitleAndArtist(rawSong)
             if (st0) {
-              addSong(currentSection, cleanSongTitle(st0), sa, currentRole, lineSpecial)
+              addSong(currentSection, cleanSongTitle(st0), sa, currentRole, lineSpecial, lineQuote)
               if (expectSingleSong) expectSingleSong = false
             }
           }
@@ -889,14 +955,16 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
       // is a date, the other a short name — that is the gig, not a song and not an
       // error. The name fills the contact field only when it is still empty, so a
       // bad guess lands in a visible, editable box instead of a red warning.
+      // "PSQ Duo - Madelyn Intagliata" is the same header with the ensemble in
+      // place of the date — how the office's own template opens every list.
       const headerM = /^(.+?)\s+[-–—]\s+(.+)$/.exec(line)
       if (headerM) {
         const left = headerM[1].trim()
         const right = headerM[2].trim()
-        const leftIsDate = DATE_LIKE_RE.test(left)
-        const rightIsDate = DATE_LIKE_RE.test(right)
-        if (leftIsDate !== rightIsDate) {
-          const name = leftIsDate ? right : left
+        const leftIsEvent = DATE_LIKE_RE.test(left) || ENSEMBLE_LIKE_RE.test(left)
+        const rightIsEvent = DATE_LIKE_RE.test(right) || ENSEMBLE_LIKE_RE.test(right)
+        if (leftIsEvent !== rightIsEvent) {
+          const name = leftIsEvent ? right : left
           if (!contactName && name.split(/\s+/).length <= 5) contactName = name
           disp[i] = 'meta'; i += 1; continue
         }
@@ -921,7 +989,7 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
           if (after && after.length >= 2 && after.length < 120) {
             const [st0, sa] = extractTitleAndArtist(after)
             if (st0) {
-              addSong(currentSection, cleanSongTitle(st0), sa, currentRole, lineSpecial)
+              addSong(currentSection, cleanSongTitle(st0), sa, currentRole, lineSpecial, lineQuote)
               disp[i] = 'song'; i += 1; continue
             }
           }
@@ -959,7 +1027,19 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
           songTitle = t ? cleanSongTitle(t) : null
         }
       } else if (!isInstruction) {
-        if (currentSection === 'ceremony' && currentRole === null) {
+        // "Presentation to Mary: Ave Maria" — a ceremony moment the section
+        // patterns don't know, labelled with a colon the way every known one is
+        // ("Bride's Entrance: The Swan"). The label is the ROLE. Read as a plain
+        // song line it became artist "Presentation to Mary" under whatever role
+        // was last active. Applies whatever the active role: a new label always
+        // starts a new moment.
+        const ceremonyLabel = currentSection === 'ceremony' ? CEREMONY_LABEL_RE.exec(songLine) : null
+        if (ceremonyLabel) {
+          songRole = smartTitleCase(ceremonyLabel[1])
+          const [t, a] = extractTitleAndArtist(ceremonyLabel[2])
+          songArtist = a
+          songTitle = t ? cleanSongTitle(t) : null
+        } else if (currentSection === 'ceremony' && currentRole === null) {
           if (/\w\s*[-–—]\s*\w/.test(songLine) && !songLine.startsWith('-')) {
             const [rolePart, titlePart] = parseCeremonyOther(songLine)
             songRole = rolePart
@@ -977,7 +1057,7 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
       }
 
       if (songTitle) {
-        addSong(currentSection, songTitle, songArtist, songRole, lineSpecial)
+        addSong(currentSection, songTitle, songArtist, songRole, lineSpecial, lineQuote)
         // Reset a custom ceremony role after use.
         if (currentSection === 'ceremony' && songRole && !['Processional', 'Bride Entrance', 'Recessional'].includes(songRole)) {
           currentRole = null

@@ -1,3 +1,50 @@
+# Library: rename a work (2026-09-21)
+
+Source: "Glass Animals" by Glass Animals in the library is really "Gooey" by
+Glass Animals (quartet + duo rows). The library page can Archive, Replace,
+Remove and Add parts, but never edit a work's title or artist, so a filename
+typo is permanent once imported.
+
+## Tasks
+- [x] Data: rename both rows now (title "Gooey", norm_title "gooey"; artist unchanged)
+- [ ] Pure validator `src/lib/repertoire/work-patch.ts` (title/artist/archived → column patch)
+- [ ] PATCH /api/library/works/[workId] accepts title + artist; unique-index clash → 409
+- [ ] Library page: Rename action → inline title/artist editor (table + card views)
+- [ ] Tests: validator + route/client lock-ins
+- [ ] `npx tsc --noEmit`, `npm test`, `npm run build`
+- [ ] ONE push to master
+
+# Intake parser: ceremony lines read as songs (2026-09-21)
+
+Source: Madelyn Intagliata duo questionnaire. Four misreads on one list, all in
+`src/lib/intake/parser.ts`; the review screen showed them as red "not in library"
+rows and an empty cue/contact.
+
+1. Walking-order lines became songs ("Officiant, groom, and best man walk in from
+   the side", "Wedding party, 5 groups", "Jr. groomsmen and flower girl") while
+   "Family, 4 pairs" was routed correctly. Cause: the participant check only allows
+   role words + counts after an anchor; movement words ("walk in from the side"),
+   "groups" and "Jr." are not in its vocabulary.
+2. "Presentation to Mary: Ave Maria" → artist "Presentation to Mary", role "Bride
+   Entrance" (leaked from the line above). Cause: the "Role: Song" form is only
+   understood on the dash ("Unity soil pour- Unchained melody") and only when no
+   role is active.
+3. "Recessional: New York, New York (“Go in Peace” “Thanks be to God”)" kept the
+   officiant's words inside the title (and title-cased them). Cause: nothing reads
+   a quoted parenthetical as a cue.
+4. "PSQ Duo - Madelyn Intagliata" warned as unrecognized preamble. Cause: the event
+   header rule only knows "date - name"; PSQ's template opens "ensemble - name".
+
+## Tasks
+- [x] Walking order: add staging/movement vocabulary + "groups/sets/rows" headcount nouns
+- [x] Ceremony "Role: Song" (colon) → custom role, regardless of the active role
+- [x] Quoted trailing parenthetical → recessional cue (verbatim) or row note
+- [x] "Ensemble - Name" header → contact name, not a warning
+- [x] Tests: full Madelyn fixture + narrow guards (song titles stay songs)
+- [x] `npm test`, `npx tsc --noEmit`
+- [ ] ONE push to master; verify with Re-parse on the live project
+- [x] Lessons entry
+
 # Launch hardening (2026-09-18)
 
 Source of truth: `tasks/launch-assessment-2026-09-18.md` (committed on master before

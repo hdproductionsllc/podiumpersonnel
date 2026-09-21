@@ -741,3 +741,144 @@ describe('parser — an instruction WORD does not make a song line an instructio
     expect(t.lineDispositions.slice(1, 4)).toEqual(['skip', 'skip', 'skip'])
   })
 })
+
+// ---------------------------------------------------------------------------
+// Hand-typed list, round three (Madelyn Intagliata duo, 2026-09-21)
+//
+// Four misreads on one list. Walking-order lines written as SENTENCES ("...walk
+// in from the side"), with a count noun the headcount rule didn't know
+// ("5 groups") and an abbreviation ("Jr.") all became red "not in library" rows.
+// A ceremony moment the section patterns don't know ("Presentation to Mary:")
+// became an ARTIST under the previous role. The officiant's quoted words on the
+// recessional line were title-cased into the song title. And the office's own
+// header ("PSQ Duo - Name") was warned as unrecognized text.
+// ---------------------------------------------------------------------------
+
+const MADELYN_RAW = `PSQ Duo - Madelyn Intagliata
+
+Prelude: 
+At Last
+Ain’t No Mountain High Enough
+Kashmir
+Bicycle Race
+Dreams
+Linger
+Gooey
+Stand By Me
+Yellow
+Fade Into You
+
+CEREMONY
+
+Processional: Concerning Hobbits
+Officiant, groom, and best man walk in from the side
+Family, 4 pairs
+Wedding party, 5 groups
+Jr. groomsmen and flower girl
+
+Bride’s Entrance: The Swan
+Presentation to Mary: Ave Maria
+Recessional: New York, New York (“Go in Peace” “Thanks be to God”)`
+
+describe('parseQuestionnaire — hand-typed list (Madelyn Intagliata)', () => {
+  const traced = parseQuestionnaireTraced(MADELYN_RAW)
+
+  it('accounts for every line and raises no warnings', () => {
+    assertEveryLineAccountedFor(MADELYN_RAW, traced)
+    expect(traced.warnings).toEqual([])
+  })
+
+  it('reads "PSQ Duo - Madelyn Intagliata" as the event header, not an error', () => {
+    expect(traced.contactName).toBe('Madelyn Intagliata')
+    expect(traced.lineDispositions[0]).toBe('meta')
+  })
+
+  it('keeps all ten prelude songs', () => {
+    expect(bySection(traced.songs, 'prelude').map((s) => s.titleRaw)).toEqual([
+      'At Last', 'Ain’t No Mountain High Enough', 'Kashmir', 'Bicycle Race', 'Dreams',
+      'Linger', 'Gooey', 'Stand By Me', 'Yellow', 'Fade Into You',
+    ])
+  })
+
+  it('routes sentence-style walking-order lines to processionalOrder, in order', () => {
+    expect(traced.processionalOrder).toEqual([
+      'Officiant, groom, and best man walk in from the side',
+      'Family, 4 pairs',
+      'Wedding party, 5 groups',
+      'Jr. groomsmen and flower girl',
+    ])
+  })
+
+  it('reads "Presentation to Mary: Ave Maria" as a ceremony moment, not an artist', () => {
+    const ceremony = bySection(traced.songs, 'ceremony')
+    expect(ceremony.map((s) => [s.titleRaw, s.role, s.artistRaw])).toEqual([
+      ['Concerning Hobbits', 'Processional', null],
+      ['The Swan', 'Bride Entrance', null],
+      ['Ave Maria', 'Presentation To Mary', null],
+    ])
+  })
+
+  it('takes the quoted words on the recessional line as the cue, verbatim', () => {
+    const [recessional] = bySection(traced.songs, 'recessional')
+    expect(recessional.titleRaw).toBe('New York, New York')
+    expect(recessional.artistRaw).toBeNull()
+    expect(recessional.notes).toBeNull()
+    expect(traced.recessionalCue).toBe('“Go in Peace” “Thanks be to God”')
+  })
+})
+
+describe('parser — the round-three rules stay narrow', () => {
+  const underCeremony = (line: string) => parseQuestionnaireTraced(['CEREMONY', line].join('\n'))
+
+  it('still needs an anchor: movement words alone do not make a walking-order step', () => {
+    for (const title of ['Walk In The Sun', 'Come Together', 'Down By The Side', 'First Last']) {
+      const t = underCeremony(title)
+      expect(t.processionalOrder, `"${title}" was read as a walking-order step`).toEqual([])
+      expect(t.songs).toHaveLength(1)
+    }
+  })
+
+  it('keeps a title-like parenthetical inside the title', () => {
+    const t = parseQuestionnaireTraced(['Prelude', 'Time (Clock of the Heart)'].join('\n'))
+    expect(t.songs[0].titleRaw).toBe('Time (Clock Of The Heart)')
+    expect(t.songs[0].notes).toBeNull()
+  })
+
+  it('files quoted words outside the recessional as a row note', () => {
+    const t = parseQuestionnaireTraced(['Prelude', 'Yellow (“our song”)'].join('\n'))
+    expect(t.songs[0].titleRaw).toBe('Yellow')
+    expect(t.songs[0].notes).toBe('“our song”')
+    expect(t.recessionalCue).toBeNull()
+  })
+
+  it('does not let a labelled recessional line overwrite a cue already captured', () => {
+    const t = parseQuestionnaireTraced(
+      [
+        'CEREMONY',
+        'Last words the officiant will say before the recessional',
+        'You may kiss the bride',
+        'Recessional: Signed Sealed Delivered (“go in peace”)',
+      ].join('\n')
+    )
+    expect(t.recessionalCue).toBe('You may kiss the bride')
+    expect(t.songs.find((s) => s.section === 'recessional')?.notes).toBe('“go in peace”')
+  })
+
+  it('reads a "Label: Song - Artist" ceremony line with the artist intact', () => {
+    const t = underCeremony('Unity Candle: Hallelujah - Leonard Cohen')
+    expect(t.songs.map((s) => [s.titleRaw, s.role, s.artistRaw])).toEqual([
+      ['Hallelujah', 'Unity Candle', 'Leonard Cohen'],
+    ])
+  })
+
+  it('does not read a long colon prefix as a ceremony label', () => {
+    // Five words before the colon is a sentence, not a label.
+    const t = underCeremony('Song we would really love: Hallelujah')
+    expect(t.songs[0].role).not.toBe('Song We Would Really Love')
+  })
+
+  it('does not read a plain date header as an ensemble header', () => {
+    const t = parseQuestionnaireTraced(['August 28th - Megan Graves', 'Prelude', 'Yellow'].join('\n'))
+    expect(t.contactName).toBe('Megan Graves')
+  })
+})
