@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { buildWorkPatch } from '@/lib/repertoire/work-patch'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { sanitizeFilename, makeR2Client } from '@/lib/storage/r2'
@@ -218,11 +219,13 @@ describe('archiving a work instead of deleting it', () => {
   })
 
   it('rejects anything other than a boolean', () => {
-    expect(src).toContain("typeof body.archived !== 'boolean'")
+    expect(buildWorkPatch({ archived: 'yes' }).ok).toBe(false)
+    expect(buildWorkPatch({ archived: 1 }).ok).toBe(false)
   })
 
   it('is reversible — the same route restores', () => {
-    expect(src).toContain('is_active: !body.archived')
+    expect(buildWorkPatch({ archived: false })).toEqual({ ok: true, patch: { is_active: true } })
+    expect(buildWorkPatch({ archived: true })).toEqual({ ok: true, patch: { is_active: false } })
   })
 })
 

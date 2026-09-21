@@ -1,8 +1,14 @@
 import { requireIntakeEnabled, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
 import { createServiceClient } from '@/lib/supabase/server'
+import { buildWorkPatch } from '@/lib/repertoire/work-patch'
 
 /**
- * PATCH /api/library/works/[workId] — archive or restore a work.
+ * PATCH /api/library/works/[workId] — edit a work's title/artist, or archive
+ * and restore it.
+ *
+ * Body: `{ title?, artist?, archived? }`. Validation and the title →
+ * norm_title rule live in buildWorkPatch(); this route only owns the org
+ * scoping and the database round-trip.
  *
  * "Delete" here is an archive (is_active = false), not a row removal, and that
  * is deliberate:
@@ -18,6 +24,11 @@ import { createServiceClient } from '@/lib/supabase/server'
  *
  * Archiving hides the work from the library and from matching, and it is
  * reversible from the same screen.
+ *
+ * A rename keeps every part, version, alias and matched intake attached: only
+ * the display columns change. If the new title+artist already exists for the
+ * same ensemble, the unique index refuses it and the caller gets a 409 naming
+ * the clash rather than a quiet second copy.
  */
 export async function PATCH(
   request: Request,
@@ -27,16 +38,16 @@ export async function PATCH(
   const { libraryOrgId, error } = await requireIntakeEnabled()
   if (error || !libraryOrgId) return error ?? apiError('Not found', 404)
 
-  let body: { archived?: unknown }
+  let body: Parameters<typeof buildWorkPatch>[0]
   try {
     body = await request.json()
   } catch {
     return apiError('Invalid JSON body')
   }
+  if (!body || typeof body !== 'object') return apiError('Invalid JSON body')
 
-  if (typeof body.archived !== 'boolean') {
-    return apiError('archived must be true or false')
-  }
+  const built = buildWorkPatch(body)
+  if (!built.ok) return apiError(built.error)
 
   try {
     const service = createServiceClient()
@@ -45,16 +56,25 @@ export async function PATCH(
     // rather than being quietly mutated.
     const { data: updated, error: updateError } = await service
       .from('repertoire')
-      .update({ is_active: !body.archived, updated_at: new Date().toISOString() })
+      .update({ ...built.patch, updated_at: new Date().toISOString() })
       .eq('id', workId)
       .eq('organization_id', libraryOrgId)
-      .select('id, title, is_active')
+      .select('id, title, artist, ensemble, is_active')
 
-    if (updateError) return serverError('Library archive failed', updateError)
+    if (updateError) {
+      if ((updateError as { code?: string }).code === '23505') {
+        return apiError(
+          'A work with that title and artist already exists for this ensemble. ' +
+            'Search for it — you may want to add these parts to it instead.',
+          409
+        )
+      }
+      return serverError('Library update failed', updateError)
+    }
     if (!updated || updated.length === 0) return apiError('Not found', 404)
 
     return apiSuccess({ work: updated[0] })
   } catch (err) {
-    return serverError('Library archive failed', err)
+    return serverError('Library update failed', err)
   }
 }

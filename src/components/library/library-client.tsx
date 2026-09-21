@@ -450,6 +450,66 @@ function AddPartsForm({
   )
 }
 
+/**
+ * Inline title/artist editor. Ensemble is not editable on purpose: the parts
+ * under a work were engraved for one ensemble, so a "quartet" that becomes a
+ * "trio" would be a different work with the wrong files.
+ */
+function RenameWorkForm({
+  work,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  work: LibraryWork
+  busy: boolean
+  onSave: (title: string, artist: string) => void
+  onCancel: () => void
+}) {
+  const [title, setTitle] = useState(work.title)
+  const [artist, setArtist] = useState(work.artist ?? '')
+  const unchanged = title.trim() === work.title && artist.trim() === (work.artist ?? '')
+
+  return (
+    <form
+      className="flex flex-wrap items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (!title.trim() || unchanged) return
+        onSave(title, artist)
+      }}
+    >
+      <Input
+        autoFocus
+        aria-label="Title"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Title"
+        className="h-8 w-full sm:w-56"
+        disabled={busy}
+        onKeyDown={(e) => { if (e.key === 'Escape') onCancel() }}
+      />
+      <Input
+        aria-label="Artist"
+        value={artist}
+        onChange={(e) => setArtist(e.target.value)}
+        placeholder="Artist (optional)"
+        className="h-8 w-full sm:w-48"
+        disabled={busy}
+        onKeyDown={(e) => { if (e.key === 'Escape') onCancel() }}
+      />
+      <span className="flex gap-1">
+        <Button type="submit" size="sm" className="h-8 text-xs" disabled={busy || !title.trim() || unchanged}>
+          {busy ? 'Saving…' : 'Save'}
+        </Button>
+        <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" disabled={busy} onClick={onCancel}>
+          Cancel
+        </Button>
+      </span>
+    </form>
+  )
+}
+
 export function LibraryClient({ totalWorks }: { totalWorks: number }) {
   const [query, setQuery] = useState('')
   const [ensemble, setEnsemble] = useState('')
@@ -466,6 +526,8 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  /** The work whose title/artist are open in the inline editor. */
+  const [editingId, setEditingId] = useState<string | null>(null)
   /** The work currently receiving new part files (separate from busyId, which
    *  tracks per-part work — a work can be uploading while nothing else is). */
   const [addingId, setAddingId] = useState<string | null>(null)
@@ -567,6 +629,36 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
         return next
       })
       load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function renameWork(work: LibraryWork, title: string, artist: string) {
+    setBusyId(work.id)
+    setNotice(null)
+    setError(null)
+    try {
+      const res = await fetch(`/api/library/works/${work.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, artist }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not rename that work.')
+
+      const saved = data.work as { title: string; artist: string | null }
+      setWorks((prev) =>
+        prev.map((w) => (w.id === work.id ? { ...w, title: saved.title, artist: saved.artist } : w))
+      )
+      setEditingId(null)
+      setNotice(
+        `Renamed "${work.title}" to "${saved.title}"${saved.artist ? ` by ${saved.artist}` : ''}. ` +
+          `Parts, history and projects already matched to it are unchanged; new questionnaires ` +
+          `match the new name.`
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {
@@ -860,15 +952,31 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
                   {works.map((work) => (
                     <Fragment key={work.id}>
                     <tr className={`border-t ${!work.is_active ? 'opacity-50' : ''}`}>
-                      <td className="px-3 py-2">
-                        {work.title}
-                        {!work.is_active && (
-                          <span className="ml-2 text-xs text-muted-foreground">(archived)</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground hidden sm:table-cell">
-                        {work.artist || '—'}
-                      </td>
+                      {editingId === work.id ? (
+                        <>
+                          <td className="px-3 py-2">
+                            <RenameWorkForm
+                              work={work}
+                              busy={busyId === work.id}
+                              onSave={(t, a) => renameWork(work, t, a)}
+                              onCancel={() => setEditingId(null)}
+                            />
+                          </td>
+                          <td className="hidden sm:table-cell" />
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-3 py-2">
+                            {work.title}
+                            {!work.is_active && (
+                              <span className="ml-2 text-xs text-muted-foreground">(archived)</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground hidden sm:table-cell">
+                            {work.artist || '—'}
+                          </td>
+                        </>
+                      )}
                       <td className="px-3 py-2 text-muted-foreground hidden md:table-cell">
                         {work.ensemble}
                       </td>
@@ -909,6 +1017,15 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
                           onClick={() => setExpanded((e) => ({ ...e, [work.id]: !e[work.id] }))}
                         >
                           {expanded[work.id] ? 'Close' : 'Manage'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={busyId === work.id || editingId === work.id}
+                          onClick={() => setEditingId(work.id)}
+                        >
+                          Rename
                         </Button>
                         <Button
                           variant="ghost"
@@ -962,29 +1079,49 @@ export function LibraryClient({ totalWorks }: { totalWorks: number }) {
               {works.map((work) => (
                 <div key={work.id} className={`rounded-lg border p-4 ${!work.is_active ? 'opacity-60' : ''}`}>
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <div className="flex flex-wrap items-baseline gap-x-2">
-                      <h2 className="font-medium">{work.title}</h2>
-                      {work.artist && (
-                        <span className="text-sm text-muted-foreground">— {work.artist}</span>
-                      )}
-                      <span className="text-xs rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
-                        {work.ensemble}
-                      </span>
-                      {!work.is_active && (
-                        <span className="text-xs rounded-full bg-amber-100 dark:bg-amber-950 px-2 py-0.5 text-amber-800 dark:text-amber-200">
-                          Archived
+                    {editingId === work.id ? (
+                      <RenameWorkForm
+                        work={work}
+                        busy={busyId === work.id}
+                        onSave={(t, a) => renameWork(work, t, a)}
+                        onCancel={() => setEditingId(null)}
+                      />
+                    ) : (
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <h2 className="font-medium">{work.title}</h2>
+                        {work.artist && (
+                          <span className="text-sm text-muted-foreground">— {work.artist}</span>
+                        )}
+                        <span className="text-xs rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+                          {work.ensemble}
                         </span>
-                      )}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs"
-                      disabled={busyId === work.id}
-                      onClick={() => setArchived(work, work.is_active)}
-                    >
-                      {work.is_active ? 'Archive' : 'Restore'}
-                    </Button>
+                        {!work.is_active && (
+                          <span className="text-xs rounded-full bg-amber-100 dark:bg-amber-950 px-2 py-0.5 text-amber-800 dark:text-amber-200">
+                            Archived
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <span className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={busyId === work.id || editingId === work.id}
+                        onClick={() => setEditingId(work.id)}
+                      >
+                        Rename
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={busyId === work.id}
+                        onClick={() => setArchived(work, work.is_active)}
+                      >
+                        {work.is_active ? 'Archive' : 'Restore'}
+                      </Button>
+                    </span>
                   </div>
 
                   {work.parts.length === 0 ? (
