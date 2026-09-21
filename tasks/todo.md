@@ -1,3 +1,32 @@
+# Duo books: "no file" for The Swan and Gooey (2026-09-21, same day as the parser fix)
+
+Madelyn Intagliata's confirmed list built books with "no file for vln1, vc" on The
+Swan and Gooey. Cause: every violin-and-cello duo in the library is ONE two-line
+score, and the July import filed each as part "other", which neither the review
+screen nor the book builder hands out. 96 active works (75 duos) were unreachable.
+David: "the two line scores are readable by our duos" — so a lone "other" file IS
+the score. Ave Maria: David chose the Schubert quartet arrangement (vln1 + vc);
+the duo files in the library are Bach-Gounod (arr. Latham), verified by eye.
+
+## Tasks
+- [x] isScoreOnly + pickFileForPart: a work whose only file is "other" is score-only (67b25e0d, live 17:30Z)
+- [x] guessPartFromFilename: "Duo"/"Duet" → score; underscores are separators
+- [x] Tests (score-only.test.ts +6, part-guess.test.ts +2); tsc clean
+- [x] Chrome: Reopen as Draft → Ave Maria → Schubert quartet → Confirm
+- [x] Chrome: Download all books → reviewed (Swan two-line score p27–28, Schubert Ave Maria p29, Gooey p14–19) → Approve → Send to Music / Parts
+- [x] Verified: project_files has VIOLIN Book (Violin 1) + CELLO Book (Cello), 17:41Z
+- [ ] David: email the players from Music / Parts → Send Music (not done — sending is your call)
+
+## Notes
+- The first Publish attempt sat on "Combining VIOLIN…" for 4 minutes while the tab was
+  in the background; a reload + retry in the foreground finished in ~60s. Not
+  reproduced in the foreground, so no code change; watch for it.
+- Library has a real Schubert violin-cello duo under the raw title
+  "vln-vc_schubert--ave-maria" (duo, active). Rename it "Ave Maria — Franz Schubert" in
+  the Music Library and the matcher will offer it next time.
+- Cosmetic: the Books panel lists score-only notes under "won't have files" and
+  repeats them per player. David said it's fine as is.
+
 # Library: rename a work (2026-09-21)
 
 Source: "Glass Animals" by Glass Animals in the library is really "Gooey" by

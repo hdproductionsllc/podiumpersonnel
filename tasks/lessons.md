@@ -280,3 +280,18 @@ are, not a formality after the tests.
   ceremony, "Label: Song" is always a moment. Read structure before credits.
 - Quoted words in a trailing parenthetical are someone's speech (the officiant's
   cue), never a title. Strip them before section detection and keep them verbatim.
+
+## Inspect the file YOU produced, and keep the working tab in front (2026-09-21)
+
+- I analysed "Books.zip" from Downloads and concluded the fix hadn't taken. It was
+  David's own download from before the fix; mine had landed as "Books (1).zip".
+  Pattern: when a browser action produces a file, identify it by timestamp (or a
+  unique name) before drawing any conclusion from its contents.
+- The in-browser book build (pdf-lib merge + upload) stalled for four minutes while
+  the app tab sat behind a PDF viewer tab, and finished in a minute once the tab was
+  in front. Pattern: for long client-side work driven through Chrome, keep that tab
+  foregrounded and poll the page's progress text rather than waiting blind.
+- A whole class of library files ("other") was invisible to the book builder for two
+  months; the first duo gig to build books found it. Pattern: after an import,
+  audit "works whose files can reach nobody" — the query is in this session's
+  todo — not just "works with no files".
