@@ -295,3 +295,12 @@ are, not a formality after the tests.
   months; the first duo gig to build books found it. Pattern: after an import,
   audit "works whose files can reach nobody" — the query is in this session's
   todo — not just "works with no files".
+
+## A library's "encoded" is not always fully encoded (2026-09-22)
+
+- supabase-js builds `?download=<name>` with encodeURI: spaces become %20 but "&",
+  "#", "+" and "=" pass through, so any client name with an ampersand truncates the
+  saved filename and drops the extension. Pattern: when a filename or free text is
+  placed in a query string by a library, check what it does with "&" — and put user
+  text on the URL yourself with encodeURIComponent through one helper, so every
+  route behaves the same.

@@ -1,3 +1,19 @@
+# Music / Parts downloads had no extension (2026-09-22)
+
+Clicking a book in Music / Parts saved "Madelyn Intagliata Violin " — no ".pdf".
+Cause: the storage client's `download` option encodes the filename with encodeURI,
+which leaves "&" alone, so "Violin & Cello Duo" split the query string. Fix
+(c8c2b92b, live 10:21Z): both signing routes (admin download + musician
+/api/music-download) go through `src/lib/storage/signed-download.ts`, which signs
+without the option and appends the name with encodeURIComponent. Verified by
+clicking the cello book after the deploy: "… - CELLO Book.pdf", 3,031,766 bytes,
+matches the stored file.
+
+- [x] helper + 5 tests, both routes, tsc clean, ONE push
+- [x] live click test in Chrome
+- Note: the three "Madelyn Intagliata Violin_" files in Downloads are the broken
+  downloads from before the fix — safe to delete.
+
 # Duo books: "no file" for The Swan and Gooey (2026-09-21, same day as the parser fix)
 
 Madelyn Intagliata's confirmed list built books with "no file for vln1, vc" on The
