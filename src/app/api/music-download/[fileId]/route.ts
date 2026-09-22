@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { createSignedDownloadUrl } from '@/lib/storage/signed-download'
 
 export async function GET(
   request: NextRequest,
@@ -89,20 +90,22 @@ export async function GET(
       console.error(`Failed to record download of file ${fileId} by musician ${confirmation.musician_id}:`, trackError)
     }
 
-    // Generate signed URL (1 hour)
-    const { data: signedUrl, error: signError } = await supabase.storage
-      .from('project-files')
-      .createSignedUrl(fileRecord.storage_path, 3600, {
-        download: fileRecord.file_name,
-      })
+    // Generate signed URL (1 hour). The filename is attached by the helper —
+    // the client's own `download` option drops everything after an "&".
+    const { url, error: signError } = await createSignedDownloadUrl(
+      supabase.storage.from('project-files'),
+      fileRecord.storage_path,
+      fileRecord.file_name,
+      3600
+    )
 
-    if (signError || !signedUrl) {
+    if (signError || !url) {
       console.error('Failed to create signed URL:', signError)
       return NextResponse.json({ error: 'Failed to generate download link' }, { status: 500 })
     }
 
     // Redirect to the signed URL
-    return NextResponse.redirect(signedUrl.signedUrl)
+    return NextResponse.redirect(url)
   } catch (error) {
     console.error('Music download error:', error)
     return NextResponse.json(

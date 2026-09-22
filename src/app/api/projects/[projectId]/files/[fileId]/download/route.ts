@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createSignedDownloadUrl } from '@/lib/storage/signed-download'
 
 export async function POST(
   request: Request,
@@ -72,19 +73,21 @@ export async function POST(
       }
     }
 
-    // Generate signed URL (1 hour)
-    const { data: signedUrl, error: signError } = await supabase.storage
-      .from('project-files')
-      .createSignedUrl(fileRecord.storage_path, 3600, {
-        download: fileRecord.file_name,
-      })
+    // Generate signed URL (1 hour). The filename is attached by the helper —
+    // the client's own `download` option drops everything after an "&".
+    const { url, error: signError } = await createSignedDownloadUrl(
+      supabase.storage.from('project-files'),
+      fileRecord.storage_path,
+      fileRecord.file_name,
+      3600
+    )
 
-    if (signError || !signedUrl) {
+    if (signError || !url) {
       console.error('Failed to create signed URL:', signError)
       return NextResponse.json({ error: 'Failed to generate download link' }, { status: 500 })
     }
 
-    return NextResponse.json({ url: signedUrl.signedUrl })
+    return NextResponse.json({ url })
   } catch (error) {
     console.error('Failed to generate download URL:', error)
     return NextResponse.json(
