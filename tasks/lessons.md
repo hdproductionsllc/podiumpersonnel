@@ -321,3 +321,16 @@ are, not a formality after the tests.
   feeds an automatic choice needs retry + per-call failure isolation.
 - Writing TS through Python heredocs turned `\b` into a backspace byte twice. Use raw
   strings (r"""…""") or the Edit tool for regex-bearing code, and grep for \x08 after.
+
+## A correction the system ignores is worse than none (2026-09-25)
+
+- David had taught "married life" → the quartet chart on Aug 26, but the alias tier
+  only ran when the exact tier found nothing, and a SOLO chart is titled exactly
+  "Married Life" — so his fix never fired, on a project whose blank ensemble label
+  also hid that a solo chart can't seat four. Pattern: a human's recorded decision
+  must outrank a coincidental automatic hit; and when a hint is blank (ensemble
+  label), derive it from data we already have (positions) before going neutral.
+- The custom first page "did nothing" because migration 088 wasn't run; the only
+  signal was a toast that vanished with the file dialog. Pattern: when a feature
+  depends on an unapplied migration, the UI detects it and says so BEFORE the
+  action, and any failure of a save stays on screen next to the control.

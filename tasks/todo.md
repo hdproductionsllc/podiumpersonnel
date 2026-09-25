@@ -186,3 +186,9 @@ pasted the migrations (data before code).
 - [ ] David: Rebuild the Spotify playlist on the Lonestar/Subito Strings intake (0gYJ3a…) — the existing one still has the 11 wrong tracks
 - [ ] v2: "Ordinary (Alex Warren) - Must Play!" — parenthetical artist not split out and "Must Play!" dropped rather than kept as a note
 - [ ] Pre-existing: 3 failing org-membership (084) tests
+
+## 2026-09-25 (b) — Married Life + first-page upload
+- [x] Taught aliases outrank exact-title hits (unless the alias target is too small for the gig → amber). Dry run over every colliding alias in the library: all resolve to the taught work; 3 small-arrangement aliases go amber on bigger gigs.
+- [x] Blank project ensemble → derived from positions (review screen + book route)
+- [x] Books panel: shows "needs migration 088" instead of a dead upload button; upload failures stay on screen
+- [ ] David: paste 088 (still pending) — then re-upload the first page (two earlier attempts reached storage but weren't saved)

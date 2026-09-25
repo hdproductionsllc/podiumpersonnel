@@ -12,6 +12,7 @@ import { describe, it, expect } from 'vitest'
 import {
   matchSong,
   canonicalEnsemble,
+  ensembleFromInstruments,
   partGap,
   type MatchIndex,
   type RepertoireRow,
@@ -434,5 +435,58 @@ describe('matchSong — a subtitle-only keyword hit is a lead, not a match', () 
     const rows = [work('This Will Be (An Everlasting Love)', 'Natalie Cole')]
     const res = matchSong({ titleRaw: 'This Will Be (An Everlasting Love)' }, index(rows))
     expect(res.status).toBe('matched')
+  })
+})
+
+// --- a taught alias overrules an exact-title hit (2026-09-25) ----------------
+// "Married Life" matched the SOLO chart titled exactly that (cello part only),
+// though the owner had already taught "married life" → the quartet "Married Life
+// from UP". The alias tier only ran when exact found nothing, so it never did.
+
+describe('matchSong — a taught alias beats a coincidental exact title', () => {
+  const solo = work('Married Life', 'Michael Giacchino', 'solo')
+  const quartet = work('Married Life from UP', 'Giacchino', 'quartet')
+  const idx = index([solo, quartet], [{ alias_norm: 'married life', repertoire_id: quartet.id }])
+
+  it('matches the alias target, with or without a gig ensemble', () => {
+    for (const gig of [undefined, 'quartet', 'trio'] as const) {
+      const res = matchSong({ titleRaw: 'Married Life' }, idx, gig)
+      expect(res.status).toBe('matched')
+      expect(res.candidates[0].repertoireId).toBe(quartet.id)
+      // The exact hit stays listed as the alternative.
+      expect(res.candidates.map((c) => c.repertoireId)).toContain(solo.id)
+    }
+  })
+
+  it('an alias target too small for the gig is a choice, not an auto-match', () => {
+    const duo = work('Ave Maria', null, 'duo')
+    const quintet = work('Ave Maria Bb', null, 'quintet')
+    const i = index([duo, quintet], [{ alias_norm: 'ave maria bb', repertoire_id: duo.id }])
+    expect(matchSong({ titleRaw: 'Ave Maria Bb' }, i, 'quartet').status).toBe('ambiguous')
+    expect(matchSong({ titleRaw: 'Ave Maria Bb' }, i, 'duo').status).toBe('matched')
+  })
+
+  it('an alias with no exact hit behaves as before (alias tier)', () => {
+    const res = matchSong({ titleRaw: 'Up Theme' }, index([quartet], [{ alias_norm: 'up theme', repertoire_id: quartet.id }]))
+    expect(res.status).toBe('matched')
+    expect(res.candidates[0].via).toBe('alias')
+    expect(res.candidates[0].score).toBe(85)
+  })
+})
+
+describe('ensembleFromInstruments — a blank ensemble label read off the positions', () => {
+  it('recognizes the string layouts', () => {
+    expect(ensembleFromInstruments(['Violin 1', 'Violin 2', 'Viola', 'Cello'])).toBe('quartet')
+    expect(ensembleFromInstruments(['Violin 1', 'Violin 2', 'Viola', 'Cello', 'Double Bass'])).toBe('quintet')
+    expect(ensembleFromInstruments(['Violin 1', 'Violin 2', 'Cello'])).toBe('trio')
+    expect(ensembleFromInstruments(['Violin', 'Viola', 'Cello'])).toBe('viola-trio')
+    expect(ensembleFromInstruments(['Violin', 'Violin', 'Viola', 'Cello'])).toBe('quartet')
+    expect(ensembleFromInstruments(['Violin', 'Cello'])).toBe('duo')
+  })
+
+  it('never guesses: other instruments or a lone player stay unknown', () => {
+    expect(ensembleFromInstruments(['Violin 1', 'Violin 2', 'Viola', 'Cello', 'Piano'])).toBeUndefined()
+    expect(ensembleFromInstruments(['Cello'])).toBeUndefined()
+    expect(ensembleFromInstruments([])).toBeUndefined()
   })
 })

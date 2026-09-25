@@ -49,7 +49,7 @@ import { ClientPlannerCard } from './client-planner-card'
 import { SpotifyPlaylistBuilder } from './spotify-playlist-builder'
 import type { ProposedSong } from '@/app/api/intake/parse/route'
 import type { IntakeRecord, IntakeSong, IntakePlannerFields } from '@/lib/intake/types'
-import { canonicalEnsemble, type MatchCandidate } from '@/lib/intake/matcher'
+import { canonicalEnsemble, ensembleFromInstruments, type MatchCandidate } from '@/lib/intake/matcher'
 
 // --- section vocabulary (matches migration 069's CHECK set) ------------------
 
@@ -223,11 +223,22 @@ interface IntakePanelProps {
   /** The project's position instruments — lets "Send to Music / Parts" assign
    *  each book to the right chair. Optional. */
   instruments?: Array<{ id: string; name: string }>
+  /** One instrument name per position (NOT de-duplicated: two "Violin" chairs
+   *  are two players) — the ensemble fallback when ensembleType is blank. */
+  positionInstruments?: string[]
 }
 
-export function IntakePanel({ projectId, ensembleType, instruments, clientEmail }: IntakePanelProps) {
-  // Fold the project's free-text ensemble label to the repertoire canon once.
-  const gigEnsemble = canonicalEnsemble(ensembleType)
+export function IntakePanel({
+  projectId,
+  ensembleType,
+  instruments,
+  positionInstruments,
+  clientEmail,
+}: IntakePanelProps) {
+  // Fold the project's free-text ensemble label to the repertoire canon once;
+  // a project with no label is read off its positions instead.
+  const gigEnsemble =
+    canonicalEnsemble(ensembleType) ?? ensembleFromInstruments(positionInstruments ?? [])
   const [open, setOpen] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [loading, setLoading] = useState(false)

@@ -105,6 +105,11 @@ const STOPWORDS = new Set(['the', 'a', 'of'])
 // `similarity` is a placeholder (0) — those candidates get a Dice-derived score
 // assigned after build; the base map only needs the real tiers.
 const SCORE = { exact: 100, alias: 85, loose: 80, keyword: 60, similarity: 0 } as const
+// A title_alias that points somewhere OTHER than an exact-title hit is a person
+// overruling that hit ("married life" → the quartet "Married Life from UP", not
+// the solo chart titled exactly "Married Life"). It has to outrank the exact tier
+// or the correction is dead on arrival — which it was, until 2026-09-25.
+const ALIAS_OVER_EXACT = SCORE.exact + 5
 const ARTIST_AGREE_BOOST = 15
 const MAX_KEYWORD_CANDIDATES = 10
 
@@ -155,6 +160,41 @@ export function canonicalEnsemble(raw: string | null | undefined): EnsembleCanon
   if (s.includes('duo') || s.includes('duet')) return 'duo'
   if (s.includes('solo')) return 'solo'
   return undefined
+}
+
+/**
+ * The gig's ensemble read off its positions, for a project whose ensemble label
+ * was never filled in. A blank label left the matcher blind: it happily settled
+ * a quartet gig on the SOLO "Married Life" (cello part only), because nothing
+ * said the gig had four players. The positions say it plainly — Violin 1,
+ * Violin 2, Viola, Cello is a quartet.
+ *
+ * Only the string layouts the library is organized by are recognized, and only
+ * when EVERY position is one of them; anything else (a pianist, a lone cellist)
+ * returns undefined — neutral, exactly as before — rather than a guess.
+ */
+export function ensembleFromInstruments(names: string[]): EnsembleCanon | undefined {
+  const seats = { vln1: 0, vln2: 0, vln: 0, vla: 0, vc: 0, bass: 0 }
+  for (const raw of names) {
+    const n = raw.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+    if (/^(?:violin|vln) ?(?:1|i)$/.test(n)) seats.vln1 += 1
+    else if (/^(?:violin|vln) ?(?:2|ii)$/.test(n)) seats.vln2 += 1
+    else if (/^(?:violin|vln)$/.test(n)) seats.vln += 1
+    else if (/^(?:viola|vla)$/.test(n)) seats.vla += 1
+    else if (/^(?:cello|violoncello|vc)$/.test(n)) seats.vc += 1
+    else if (/^(?:double bass|string bass|contrabass|upright bass|bass)$/.test(n)) seats.bass += 1
+    else return undefined
+  }
+  const violins = seats.vln1 + seats.vln2 + seats.vln
+  const key = `${violins}-${seats.vla}-${seats.vc}-${seats.bass}`
+  const LAYOUTS: Record<string, EnsembleCanon> = {
+    '2-1-1-1': 'quintet',
+    '2-1-1-0': 'quartet',
+    '2-0-1-0': 'trio',
+    '1-1-1-0': 'viola-trio',
+    '1-0-1-0': 'duo',
+  }
+  return LAYOUTS[key]
 }
 
 /**
@@ -381,13 +421,21 @@ export function matchSong(
     .filter((r) => r.norm_title === nt)
     .map((r) => build(r, 'exact'))
 
-  // --- Tier 2: title_aliases (only if exact found nothing) ---
-  if (candidates.length === 0) {
-    const repIds = new Set(aliases.filter((al) => al.alias_norm === nt).map((al) => al.repertoire_id))
-    if (repIds.size > 0) {
-      candidates = repertoire.filter((r) => repIds.has(r.id)).map((r) => build(r, 'alias'))
-    }
+  // --- Tier 2: title_aliases ---
+  // A taught alias is someone's decision about what this title means, so it is
+  // consulted even when the exact tier hit. Alone it is the alias tier as ever;
+  // beside an exact hit it is an OVERRULING and leads (see ALIAS_OVER_EXACT and
+  // the resolution below).
+  const aliasIds = new Set(aliases.filter((al) => al.alias_norm === nt).map((al) => al.repertoire_id))
+  const exactIds = new Set(candidates.map((c) => c.repertoireId))
+  const aliasHits = repertoire
+    .filter((r) => aliasIds.has(r.id) && !exactIds.has(r.id))
+    .map((r) => build(r, 'alias'))
+  const overruling = candidates.length > 0 && aliasHits.length > 0
+  if (overruling) {
+    for (const c of aliasHits) c.score += ALIAS_OVER_EXACT - SCORE.alias
   }
+  candidates = [...aliasHits, ...candidates]
 
   // --- Tier 3: match-time loose fold (only if alias found nothing) ---
   // Bridges client spellings the base norm can't (e.g. "Love & Marriage" vs
@@ -538,6 +586,17 @@ export function matchSong(
 
   if (autoMatchable.length === 1 && !subtitleOnly && !escalated) {
     return { status: 'matched', candidates }
+  }
+
+  // A person overruled an exact-title hit with an alias: honour it — unless the
+  // work they pointed at is too small for THIS gig while an exact hit is not
+  // (an alias taught on a duo gig must not seat a quartet on a duo chart). Then
+  // it's a real choice, and the human makes it.
+  if (overruling && !escalated) {
+    const taught = autoMatchable.filter((c) => c.via === 'alias')
+    if (taught.length === 1 && !leavesPlayersIdle(taught[0])) {
+      return { status: 'matched', candidates }
+    }
   }
 
   if (subtitleOnly) {

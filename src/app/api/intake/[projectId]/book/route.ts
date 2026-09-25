@@ -17,7 +17,7 @@
 import { requireIntakeEnabled, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getR2Client, isR2Configured } from '@/lib/storage/r2'
-import { canonicalEnsemble } from '@/lib/intake/matcher'
+import { canonicalEnsemble, ensembleFromInstruments } from '@/lib/intake/matcher'
 import {
   bookParts,
   destFilename,
@@ -115,7 +115,22 @@ export async function GET(
     }
   }
 
-  const gigEnsemble = canonicalEnsemble(project.ensemble_type)
+  // A project with no ensemble label is read off its positions — the same
+  // fallback the review screen matches with, so the books built are the books
+  // the matches were chosen for (a blank label used to mean "quartet" here).
+  let gigEnsemble = canonicalEnsemble(project.ensemble_type)
+  if (!gigEnsemble) {
+    const { data: positions, error: posErr } = await service
+      .from('project_positions')
+      .select('instrument:instruments(name)')
+      .eq('project_id', projectId)
+    if (posErr) return serverError('book: load positions', posErr)
+    gigEnsemble = ensembleFromInstruments(
+      (positions ?? [])
+        .map((p) => (p.instrument as unknown as { name: string } | null)?.name)
+        .filter((n): n is string => !!n)
+    )
+  }
   const parts = bookParts(gigEnsemble)
 
   const r2 = getR2Client()
@@ -261,5 +276,8 @@ export async function GET(
     songs,
     warnings,
     cover,
+    // False until migration 088 adds the column — the panel says so up front
+    // instead of letting an upload fail after the fact.
+    coverSupported: 'book_cover_path' in intake,
   })
 }

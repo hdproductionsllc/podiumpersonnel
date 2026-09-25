@@ -66,6 +66,8 @@ interface Manifest {
   warnings: string[]
   /** The owner's own first page for every book (088); null = generated page. */
   cover: { url: string; name: string } | null
+  /** False while migration 088 hasn't been run — custom first pages can't be saved. */
+  coverSupported: boolean
 }
 
 function saveBlob(bytes: Uint8Array, filename: string, type: string) {
@@ -123,6 +125,10 @@ export function BookDownload({
   // works. Nobody should get one unless they ask.
   const [includeScore, setIncludeScore] = useState(false)
   const coverInput = useRef<HTMLInputElement>(null)
+  // Why the last first-page change failed. Kept on screen (not just a toast):
+  // a toast that vanished while the file dialog closed is how a failed upload
+  // looked like "nothing happened" and the generated page quietly stayed.
+  const [coverError, setCoverError] = useState<string | null>(null)
   // The publish confirmation step: book → instrument routing awaiting approval.
   const [publishPlan, setPublishPlan] = useState<PublishRow[] | null>(null)
 
@@ -334,6 +340,7 @@ export function BookDownload({
       toast.error('The first page has to be a PDF.')
       return
     }
+    setCoverError(null)
     setBuilding('cover')
     setProgress('Checking your PDF…')
     try {
@@ -367,7 +374,9 @@ export function BookDownload({
         `Every book now opens with ${file.name}.` + (wasApproved ? ' Rebuild and approve the books again.' : '')
       )
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not use that PDF.')
+      const msg = e instanceof Error ? e.message : 'Could not use that PDF.'
+      setCoverError(msg)
+      toast.error(msg)
     } finally {
       setBuilding(null)
       setProgress('')
@@ -377,6 +386,7 @@ export function BookDownload({
 
   /** Go back to the generated playlist page. */
   async function removeCover() {
+    setCoverError(null)
     setBuilding('cover')
     try {
       const res = await fetch(`/api/intake/${projectId}/book-cover`, { method: 'DELETE' })
@@ -386,7 +396,9 @@ export function BookDownload({
       await loadManifest(true)
       toast.success('Books are back to the generated playlist page.')
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not remove your first page.')
+      const msg = e instanceof Error ? e.message : 'Could not remove your first page.'
+      setCoverError(msg)
+      toast.error(msg)
     } finally {
       setBuilding(null)
     }
@@ -646,6 +658,11 @@ export function BookDownload({
               Use generated playlist page
             </Button>
           </>
+        ) : manifest && !manifest.coverSupported ? (
+          <span className="text-amber-800 dark:text-amber-300">
+            generated playlist page — using your own PDF needs a one-time database update
+            (migration 088) before it can be saved.
+          </span>
         ) : (
           <>
             <span className="text-muted-foreground">generated playlist page</span>
@@ -671,6 +688,11 @@ export function BookDownload({
           }}
         />
       </div>
+      {coverError && (
+        <p className="text-xs text-red-700 dark:text-red-400">
+          Your first page was not saved — books still use the generated playlist page. {coverError}
+        </p>
+      )}
 
       {/* Missing parts, shown up front (the manifest loads on mount) so the
           admin can fix the library or accept the gap BEFORE building. */}

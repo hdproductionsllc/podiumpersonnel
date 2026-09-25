@@ -1010,6 +1010,9 @@ export function ProjectsClient({
                             <IntakePanel
                               projectId={project.id}
                               ensembleType={project.ensemble_type}
+                              positionInstruments={project.project_positions
+                                .map((p) => p.instrument?.name)
+                                .filter((n): n is string => !!n)}
                               clientEmail={(project as any).client_email as string | null | undefined}
                               instruments={Array.from(
                                 new Map(
