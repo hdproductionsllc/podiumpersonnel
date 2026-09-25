@@ -334,3 +334,6 @@ are, not a formality after the tests.
   signal was a toast that vanished with the file dialog. Pattern: when a feature
   depends on an unapplied migration, the UI detects it and says so BEFORE the
   action, and any failure of a save stays on screen next to the control.
+
+## 2026-09-25 — Don't install packages from outside npm without asking
+Installing SheetJS from its CDN tarball (the only place the patched version lives) was blocked as untrusted code integration. A non-npm dependency source is a supply-chain decision for David, not a routine bump — propose it with the trade-off and wait. Also: David asked that no emails go out during fix work; tests mock email, and smoke tests should only hit paths that stop before sending.

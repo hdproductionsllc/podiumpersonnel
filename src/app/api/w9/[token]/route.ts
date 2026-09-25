@@ -94,7 +94,10 @@ export async function POST(
     // Point the record at the new file and burn the token — the link is for one
     // successful submission. Re-uploading a correction needs a fresh request,
     // which the contractor can send in one click.
-    const { error: updateError } = await supabase
+    //
+    // The token is re-checked in the WHERE clause: two simultaneous submissions
+    // both pass the lookup above, and only the first to land here may win.
+    const { data: claimed, error: updateError } = await supabase
       .from('musicians')
       .update({
         w9_on_file: true,
@@ -107,6 +110,19 @@ export async function POST(
         w9_request_expires_at: null,
       })
       .eq('id', musician.id)
+      .eq('w9_request_token', token)
+      .select('id')
+
+    if (!updateError && (!claimed || claimed.length === 0)) {
+      // Lost the race — another submission already used this link. Our file
+      // was never referenced, so remove it.
+      const { error: orphanError } = await supabase.storage.from('w9-documents').remove([storagePath])
+      if (orphanError) console.warn(`Failed to remove orphaned W-9 upload ${storagePath}:`, orphanError)
+      return NextResponse.json(
+        { error: 'This upload link has already been used. Ask the organization to send a new one if you need to replace it.' },
+        { status: 409 }
+      )
+    }
 
     if (updateError) {
       // The row still points at the old file, so clean up the orphan rather than

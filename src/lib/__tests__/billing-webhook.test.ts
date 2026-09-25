@@ -302,6 +302,59 @@ describe('Stripe webhook — payment-failed dunning email (A8, behavioral)', () 
     expect(paymentFailedEmail).not.toHaveBeenCalled()
   })
 
+  describe('invoice.paid payload shapes', () => {
+    const paidWith = (object: Record<string, unknown>) => ({
+      id: 'evt_paid_shape',
+      type: 'invoice.paid',
+      data: { object: { id: 'in_3', customer: 'cus_1', ...object } },
+    })
+
+    beforeEach(() => {
+      vi.stubEnv('STRIPE_ORCHESTRA_PRICE_ID', 'price_orch')
+    })
+
+    afterEach(() => {
+      vi.unstubAllEnvs()
+    })
+
+    it('restores active + tier from a basil-era payload (parent.subscription_details, line pricing)', async () => {
+      fake.event = paidWith({
+        parent: { type: 'subscription_details', subscription_details: { subscription: 'sub_1' } },
+        lines: { data: [{ pricing: { type: 'price_details', price_details: { price: 'price_orch' } } }] },
+      })
+
+      const res = await post()
+
+      expect(res.status).toBe(200)
+      expect(fake.orgUpdates).toEqual([
+        { orgId: 'org-1', patch: { plan_tier: 'orchestra', subscription_status: 'active' } },
+      ])
+    })
+
+    it('restores active + tier from a legacy payload (invoice.subscription, line.price)', async () => {
+      fake.event = paidWith({
+        subscription: 'sub_1',
+        lines: { data: [{ price: { id: 'price_orch' } }] },
+      })
+
+      const res = await post()
+
+      expect(res.status).toBe(200)
+      expect(fake.orgUpdates).toEqual([
+        { orgId: 'org-1', patch: { plan_tier: 'orchestra', subscription_status: 'active' } },
+      ])
+    })
+
+    it('ignores a one-off invoice with no subscription in either shape', async () => {
+      fake.event = paidWith({ parent: null, lines: { data: [] } })
+
+      const res = await post()
+
+      expect(res.status).toBe(200)
+      expect(fake.orgUpdates).toHaveLength(0)
+    })
+  })
+
   it('does not send the dunning email when the past_due write itself fails', async () => {
     // The route returns 500 before reaching the email call in this branch —
     // an email must never imply the DB write succeeded when it didn't.

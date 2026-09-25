@@ -16,6 +16,33 @@ function tierFromSubscription(sub: Stripe.Subscription): PaidTier {
   return priceIdToTier(priceId) ?? validPaidTier(sub.metadata?.tier) ?? 'ensemble'
 }
 
+/** An id from a field Stripe sends either as a bare id or an expanded object. */
+function idOf(ref: string | { id?: string } | null | undefined): string | null {
+  if (!ref) return null
+  return typeof ref === 'string' ? ref : ref.id ?? null
+}
+
+// Stripe's 2025-03-31 ("basil") API moved these invoice fields. The payload
+// shape follows the webhook endpoint's API version, not this SDK's, so read
+// the current location first and fall back to the legacy one.
+type LegacyInvoice = { subscription?: string | { id?: string } | null }
+type LegacyLine = { price?: { id?: string } | null }
+
+/** The subscription an invoice bills, or null for a one-off invoice. */
+function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  return (
+    idOf(invoice.parent?.subscription_details?.subscription) ??
+    idOf((invoice as unknown as LegacyInvoice).subscription)
+  )
+}
+
+/** The price on an invoice's first line — what the customer is paying for. */
+function invoicePriceId(invoice: Stripe.Invoice): string | null {
+  const line = invoice.lines?.data?.[0]
+  if (!line) return null
+  return idOf(line.pricing?.price_details?.price) ?? idOf((line as unknown as LegacyLine).price)
+}
+
 /**
  * Resolve which org an event belongs to. Subscription/checkout events carry
  * organization_id in metadata; invoice events don't, so fall back to looking up
@@ -200,14 +227,13 @@ export async function POST(request: NextRequest) {
     case 'invoice.paid': {
       const invoice = event.data.object as Stripe.Invoice
       // Only subscription invoices affect plan state.
-      if (!(invoice as { subscription?: unknown }).subscription) break
+      if (!invoiceSubscriptionId(invoice)) break
       const orgId = await resolveOrgId(adminClient, undefined, (invoice.customer as string) ?? null)
       if (!orgId) break
 
       // Map the invoiced price to a tier. If we can't (unknown price), only
       // confirm the status active — never blindly downgrade an existing tier.
-      const priceId = (invoice.lines?.data?.[0] as { price?: { id?: string } } | undefined)?.price?.id
-      const paidTier = priceIdToTier(priceId)
+      const paidTier = priceIdToTier(invoicePriceId(invoice))
       const failed = await applyOrgUpdate(
         adminClient,
         event.id,

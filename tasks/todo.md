@@ -191,4 +191,15 @@ pasted the migrations (data before code).
 - [x] Taught aliases outrank exact-title hits (unless the alias target is too small for the gig → amber). Dry run over every colliding alias in the library: all resolve to the taught work; 3 small-arrangement aliases go amber on bigger gigs.
 - [x] Blank project ensemble → derived from positions (review screen + book route)
 - [x] Books panel: shows "needs migration 088" instead of a dead upload button; upload failures stay on screen
-- [ ] David: paste 088 (still pending) — then re-upload the first page (two earlier attempts reached storage but weren't saved)
+- [x] David: paste 088 — confirmed live 2026-09-25 (intakes.book_cover_path answers over REST) — then re-upload the first page (two earlier attempts reached storage but weren't saved)
+
+## 2026-09-25 (c) — Codex audit fixes
+- [x] DB protections: 084–087 PASS on 2026-09-18 (David pasted); 088 confirmed live via REST. No paste needed.
+- [x] Next.js 16.1.3 → 16.3.6 (+ eslint-config-next); ws/@babel/browserslist bumped in range. Audit: 12 → 3 moderate (uuid inside svix/resend — only v3/v5/v6 with a buffer, not used) + xlsx
+- [x] W-9 upload: final save guarded on the token; the loser removes its own file, gets 409 "already been used" (w9-upload-race.test.ts)
+- [x] Billing `invoice.paid`: reads parent.subscription_details / line pricing.price_details, falls back to legacy fields (3 new tests; basil test fails on old code)
+- [ ] Spreadsheet import: size cap + move xlsx 0.18.5 → 0.20.3 (only published on cdn.sheetjs.com, not npm) — WAITING on David's OK to take a non-npm dependency
+- [x] Windows test baseline: org-membership sqlCode() split on /?
+/ (CRLF kept comments alive → 3 false failures)
+- [x] Gate: tsc clean, 911/911 tests, `next build` green, `next start` smoke (/login 200, bad W-9 link 404, unsigned webhook 400) → one push
+- [ ] Later: 328 lint errors / CI lint non-blocking; marketing site's own Next 14 audit

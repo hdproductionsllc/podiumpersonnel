@@ -169,7 +169,9 @@ function readMigration(file: string): string {
 /** SQL with its comments removed, so prose about a policy cannot satisfy a check. */
 function sqlCode(sql: string): string {
   return sql
-    .split('\n')
+    // CRLF too: on a Windows checkout a trailing \r stops `.*$` matching, so
+    // comments survived and prose about the policy tripped these checks.
+    .split(/\r?\n/)
     .map((line) => line.replace(/--.*$/, ''))
     .join('\n')
 }
