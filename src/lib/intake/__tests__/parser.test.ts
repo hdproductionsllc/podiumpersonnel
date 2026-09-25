@@ -882,3 +882,89 @@ describe('parser — the round-three rules stay narrow', () => {
     expect(t.contactName).toBe('Megan Graves')
   })
 })
+
+// A hand-typed list where the groom walks by role alone and the officiant's last
+// words arrive as a quoted direction (2026-09-25). Both were read as songs.
+const GROOM_AND_CUE = `Prelude:
+Perfect
+All of Me
+Married Life
+In My Life
+Marry You
+What a Wonderful World
+A Thousand Years
+Grow Old With You
+Ode to Joy
+Isn’t She Lovely
+
+CEREMONY
+
+Bridal Party: La vie en rose
+Officiant
+Groom
+Bridal party, 7 pairs
+Ring bearers, 2
+Flower girl
+Bride’s Entrance: Canon Bridal Chorus Mashup
+Recessional: Forever After All
+Play just after Officiant: “You have kissed a thousand times, maybe more. But today, the feeling is new. You are no longer simply partners and best friends; you are now husband and wife, and you can seal your agreement with a kiss. Today, your kiss is a promise. You may kiss the bride.”
+
+Cocktail Hour:
+I Want It That Way
+All you need is love
+Basket case
+Bittersweet Symphony
+Bohemian
+Counting Stars
+Despacito
+Havana
+Rolling in the deep
+Shape of you
+Til there was you
+Fireflies
+Dream on
+Ordinary (Alex Warren) - Must Play!
+Crazy in love
+Anyway you want it
+`
+
+describe('parseQuestionnaire — bare "Groom" walker and a quoted officiant cue', () => {
+  const r = parseIntake(GROOM_AND_CUE)
+  const titles = r.songs.map((s) => s.titleRaw)
+
+  it('"Groom" between walking-order lines is a walker, in order', () => {
+    expect(titles).not.toContain('Groom')
+    expect(r.processionalOrder).toEqual([
+      'Officiant',
+      'Groom',
+      'Bridal party, 7 pairs',
+      'Ring bearers, 2',
+      'Flower girl',
+    ])
+  })
+
+  it('the quoted "Play just after Officiant" line is the recessional cue, not a song', () => {
+    expect(r.recessionalCue).toMatch(/^Play just after Officiant: “You have kissed/)
+    expect(r.recessionalCue).toMatch(/You may kiss the bride\.”$/)
+    expect(r.songs.filter((s) => s.section === 'recessional').map((s) => s.titleRaw)).toEqual([
+      'Forever After All',
+    ])
+  })
+
+  it('every real song survives (29)', () => {
+    expect(r.songs).toHaveLength(29)
+  })
+})
+
+describe('parser — bare role lines and cue lines stay narrow', () => {
+  it('a bare "Groom" with no walking step beside it is left alone', () => {
+    const r = parseQuestionnaire('CEREMONY\nProcessional: Canon in D\nGroom\nRecessional: Signed Sealed Delivered')
+    expect(r.processionalOrder).not.toContain('Groom')
+  })
+
+  it('a song line with a short quoted title is still a song', () => {
+    const r = parseQuestionnaire('CEREMONY\nProcessional: “Perfect” by Ed Sheeran\nRecessional: Happy')
+    expect(r.recessionalCue).toBeNull()
+    expect(r.songs.length).toBe(2)
+  })
+})

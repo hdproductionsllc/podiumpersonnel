@@ -12,12 +12,15 @@
  *   ZIP — "00 - Playlist.pdf" + every song as "NN - Title - Artist - part.pdf"
  *     (byte-identical originals, STORE), for combining by hand.
  *
+ * The first page is the generated playlist page, unless the owner uploaded
+ * their own PDF (088) — then that opens every book instead, pages copied as-is.
+ *
  * Assembly happens entirely in the browser: the manifest API returns presigned
  * R2 URLs; bytes are fetched straight from R2; nothing passes through a
  * serverless route.
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { zipSync, type Zippable } from 'fflate'
 import { Button } from '@/components/ui/button'
 import {
@@ -61,6 +64,8 @@ interface Manifest {
   scoreCount: number
   songs: ManifestSong[]
   warnings: string[]
+  /** The owner's own first page for every book (088); null = generated page. */
+  cover: { url: string; name: string } | null
 }
 
 function saveBlob(bytes: Uint8Array, filename: string, type: string) {
@@ -117,6 +122,7 @@ export function BookDownload({
   // something any player is waiting on, and the library has scores for only some
   // works. Nobody should get one unless they ask.
   const [includeScore, setIncludeScore] = useState(false)
+  const coverInput = useRef<HTMLInputElement>(null)
   // The publish confirmation step: book → instrument routing awaiting approval.
   const [publishPlan, setPublishPlan] = useState<PublishRow[] | null>(null)
 
@@ -151,6 +157,16 @@ export function BookDownload({
     }
   }
 
+  // Check the books the moment the panel appears, not on the first build click.
+  // Missing parts and the score option have to be visible BEFORE anyone builds
+  // — a warning that only shows up after "Download all books" is too late. The
+  // panel only renders for a confirmed (read-only) intake, so what it finds here
+  // can't drift before the build; builds still re-fetch for fresh R2 links.
+  useEffect(() => {
+    void loadManifest()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
+
   /**
    * The books this build produces. The score is appended only when the admin
    * asked for it AND the manifest actually has one, so a stale checkbox on a
@@ -163,6 +179,7 @@ export function BookDownload({
   /** Fetch every unique file url once; return bytes keyed by url. */
   async function fetchFiles(m: Manifest, parts: BookPart[]): Promise<Map<string, Uint8Array>> {
     const urls = new Set<string>()
+    if (m.cover) urls.add(m.cover.url)
     for (const song of m.songs) {
       for (const bp of parts) {
         const f = song.files[bp.part]
@@ -178,7 +195,13 @@ export function BookDownload({
       await Promise.all(
         list.slice(i, i + CONCURRENCY).map(async (url) => {
           const res = await fetch(url)
-          if (!res.ok) throw new Error(`A part file failed to download (${res.status}).`)
+          if (!res.ok) {
+            throw new Error(
+              url === m.cover?.url
+                ? `Your first-page PDF failed to download (${res.status}).`
+                : `A part file failed to download (${res.status}).`
+            )
+          }
           bytesByUrl.set(url, new Uint8Array(await res.arrayBuffer()))
           done += 1
           setProgress(`Downloading parts… ${done}/${list.length}`)
@@ -188,14 +211,35 @@ export function BookDownload({
     return bytesByUrl
   }
 
-  /** The merge inputs for one instrument's book: playlist first, then songs in order. */
+  /**
+   * The page that opens a book: the owner's own PDF when they uploaded one,
+   * otherwise the generated playlist page (labelled with the instrument, or
+   * none for the printable copy). Same "00 - Playlist.pdf" name either way, so
+   * zips still sort it first.
+   */
+  async function firstPage(
+    m: Manifest,
+    label: string | null,
+    bytesByUrl: Map<string, Uint8Array>
+  ): Promise<Uint8Array> {
+    if (m.cover) {
+      const bytes = bytesByUrl.get(m.cover.url)
+      // fetchFiles always pulls the cover; a gap here is a bug, never a reason
+      // to slip the generated page in behind the owner's back.
+      if (!bytes) throw new Error('Your first-page PDF was not downloaded.')
+      return bytes
+    }
+    return buildPlaylistPdf(m.header, m.songs, label)
+  }
+
+  /** The merge inputs for one instrument's book: first page, then songs in order. */
   async function bookSources(
     m: Manifest,
     bp: BookPart,
     bytesByUrl: Map<string, Uint8Array>
   ): Promise<MergeSource[]> {
     const sources: MergeSource[] = [
-      { name: '00 - Playlist.pdf', bytes: await buildPlaylistPdf(m.header, m.songs, bp.label) },
+      { name: '00 - Playlist.pdf', bytes: await firstPage(m, bp.label, bytesByUrl) },
     ]
     for (const song of m.songs) {
       const f = song.files[bp.part]
@@ -266,7 +310,7 @@ export function BookDownload({
         }
       }
       // Instrument-agnostic printable playlist at the top level (Mac layout).
-      root[`00 - ${client} Playlist.pdf`] = [await buildPlaylistPdf(m.header, m.songs, null), { level: 0 }]
+      root[`00 - ${client} Playlist.pdf`] = [await firstPage(m, null, bytesByUrl), { level: 0 }]
       const zip = zipSync(root as Parameters<typeof zipSync>[0])
       saveBlob(zip, `${client} - Books.zip`, 'application/zip')
       toast.success('All books downloaded.')
@@ -275,6 +319,76 @@ export function BookDownload({
     } finally {
       setBuilding(null)
       setProgress('')
+    }
+  }
+
+  /**
+   * Use the owner's own PDF as the first page of every book. Rides the same
+   * rails as a Music / Parts upload (signed upload straight to storage, so a
+   * big file never passes through a serverless route), then records it on the
+   * intake. The PDF is opened first, exactly as the build will open it, so a
+   * damaged or unreadable file is refused here rather than at build time.
+   */
+  async function uploadCover(file: File) {
+    if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) {
+      toast.error('The first page has to be a PDF.')
+      return
+    }
+    setBuilding('cover')
+    setProgress('Checking your PDF…')
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      await mergePdfs([{ name: file.name, bytes }])
+
+      setProgress('Uploading your first page…')
+      const urlRes = await fetch(`/api/projects/${projectId}/files/upload-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: file.name, fileSize: file.size, mimeType: 'application/pdf' }),
+      })
+      const urlData = await urlRes.json()
+      if (!urlRes.ok) throw new Error(urlData.error || 'Could not start the upload.')
+      const up = await createClient()
+        .storage.from('project-files')
+        .uploadToSignedUrl(urlData.path, urlData.token, new Blob([bytes as BlobPart], { type: 'application/pdf' }))
+      if (up.error) throw new Error(`Upload failed: ${up.error.message}`)
+
+      const res = await fetch(`/api/intake/${projectId}/book-cover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storagePath: urlData.path, fileName: file.name }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not save your first page.')
+      const wasApproved = !!booksApprovedAt
+      onApprovalChange(null)
+      await loadManifest(true)
+      toast.success(
+        `Every book now opens with ${file.name}.` + (wasApproved ? ' Rebuild and approve the books again.' : '')
+      )
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not use that PDF.')
+    } finally {
+      setBuilding(null)
+      setProgress('')
+      if (coverInput.current) coverInput.current.value = ''
+    }
+  }
+
+  /** Go back to the generated playlist page. */
+  async function removeCover() {
+    setBuilding('cover')
+    try {
+      const res = await fetch(`/api/intake/${projectId}/book-cover`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not remove your first page.')
+      onApprovalChange(null)
+      await loadManifest(true)
+      toast.success('Books are back to the generated playlist page.')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not remove your first page.')
+    } finally {
+      setBuilding(null)
     }
   }
 
@@ -496,7 +610,7 @@ export function BookDownload({
           is exactly what happened in real use: books downloaded with no link,
           playlist created, books built all over again. Say so before the build,
           not after. Not a block: a rush job with no playlist is legitimate. */}
-      {!playlistUrl && (
+      {!playlistUrl && !manifest?.cover && (
         <div className="rounded-md border border-amber-300 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 p-2">
           <p className="text-xs text-amber-800 dark:text-amber-300">
             <span className="font-semibold">No Spotify playlist yet.</span> The playlist link is
@@ -504,6 +618,72 @@ export function BookDownload({
             you&rsquo;d have to build them again after creating it. Create the playlist just above
             first — or carry on if you don&rsquo;t need the link.
           </p>
+        </div>
+      )}
+
+      {/* First page: generated, or the owner's own PDF (088). */}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="font-medium text-muted-foreground">First page:</span>
+        {manifest?.cover ? (
+          <>
+            <span className="rounded border px-1.5 py-0.5">Your PDF — {manifest.cover.name}</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7"
+              onClick={() => coverInput.current?.click()}
+              disabled={building !== null}
+            >
+              {building === 'cover' ? 'Working…' : 'Replace'}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7"
+              onClick={() => void removeCover()}
+              disabled={building !== null}
+            >
+              Use generated playlist page
+            </Button>
+          </>
+        ) : (
+          <>
+            <span className="text-muted-foreground">generated playlist page</span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7"
+              onClick={() => coverInput.current?.click()}
+              disabled={building !== null || loading || !manifest}
+            >
+              {building === 'cover' ? 'Uploading…' : 'Use my own PDF…'}
+            </Button>
+          </>
+        )}
+        <input
+          ref={coverInput}
+          type="file"
+          accept="application/pdf,.pdf"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) void uploadCover(f)
+          }}
+        />
+      </div>
+
+      {/* Missing parts, shown up front (the manifest loads on mount) so the
+          admin can fix the library or accept the gap BEFORE building. */}
+      {manifest && manifest.warnings.length > 0 && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 p-2">
+          <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-0.5">
+            Before you build — these songs are missing parts, so they&apos;ll be left out of those books:
+          </p>
+          <ul className="list-disc pl-5 space-y-0.5">
+            {manifest.warnings.map((w, i) => (
+              <li key={i} className="text-xs text-amber-800 dark:text-amber-300">{w}</li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -526,7 +706,7 @@ export function BookDownload({
         ))}
         {!manifest && (
           <Button size="sm" variant="ghost" onClick={() => void loadManifest()} disabled={loading}>
-            {loading ? 'Checking…' : 'Show per-musician downloads'}
+            {loading ? 'Checking the books…' : 'Check the books again'}
           </Button>
         )}
       </div>
@@ -611,18 +791,6 @@ export function BookDownload({
               Cancel
             </Button>
           </div>
-        </div>
-      )}
-      {manifest && manifest.warnings.length > 0 && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 p-2">
-          <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-0.5">
-            Heads up — these songs won&apos;t have files in the books:
-          </p>
-          <ul className="list-disc pl-5 space-y-0.5">
-            {manifest.warnings.map((w, i) => (
-              <li key={i} className="text-xs text-amber-800 dark:text-amber-300">{w}</li>
-            ))}
-          </ul>
         </div>
       )}
     </div>

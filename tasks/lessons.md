@@ -304,3 +304,20 @@ are, not a formality after the tests.
   placed in a query string by a library, check what it does with "&" — and put user
   text on the URL yourself with encodeURIComponent through one helper, so every
   route behaves the same.
+
+## Warnings belong before the action; search results need a title check (2026-09-25)
+
+- The Books panel only fetched its manifest on the first build click, so "these songs
+  have no files" appeared AFTER David had clicked Download. Pattern: anything the
+  admin must know before acting (missing parts, score availability) loads on mount
+  and renders ABOVE the button it concerns.
+- The Spotify auto-playlist shipped 11 wrong songs of 29 ("Bones" for "Til There Was
+  You"). Spotify pads searches with unrelated popular tracks, and the ranking used
+  popularity with no title check; it also searched the client's raw words instead of
+  the library match. Pattern: any external search result is scored on agreement with
+  what was asked (title first), and an auto-pick requires that agreement — skip
+  rather than guess. Dry-run against the real intake before calling it fixed.
+- Spotify search returns bursts of 502s for valid queries; every external call that
+  feeds an automatic choice needs retry + per-call failure isolation.
+- Writing TS through Python heredocs turned `\b` into a backspace byte twice. Use raw
+  strings (r"""…""") or the Edit tool for regex-bearing code, and grep for \x08 after.

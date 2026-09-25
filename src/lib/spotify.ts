@@ -130,13 +130,17 @@ export async function getConnection(orgId: string): Promise<SpotifyConnection | 
 }
 
 export type { TrackCandidate } from '@/lib/spotify-ranking'
-import { rankTracks, type RawTrack, type TrackCandidate as Candidate } from '@/lib/spotify-ranking'
+import { rankTracks, titleAgrees, type RawTrack, type TrackCandidate as Candidate } from '@/lib/spotify-ranking'
 
 /**
  * Search tracks for one song; top results become PROPOSALS for the review UI.
- * Tries a precise field-filtered search (track:"…" artist:"…") first, falls
- * back to a loose search, then ranks everything by original-ness (the owner's
- * "no weird cover versions" rule — see spotify-ranking.ts).
+ *
+ * Runs up to three searches and pools them: title + artist field-filtered, then
+ * title-only field-filtered, then loose. Pooling (not fall-back-on-empty) is
+ * what makes a WRONG artist harmless: the library credits "What a Wonderful
+ * World" to its songwriters (Weiss/Thiele), whose name finds nothing, and the
+ * title-only search still reaches Louis Armstrong. Ranking then puts title
+ * agreement first and original-ness second (see spotify-ranking.ts).
  */
 export async function searchTracks(
   accessToken: string,
@@ -144,20 +148,49 @@ export async function searchTracks(
   artist: string | null,
   limit = 5
 ): Promise<Candidate[]> {
+  // Spotify search answers the SAME query with a 502 one moment and results the
+  // next (observed 2026-09-25, roughly one call in three). Without a retry a
+  // song silently loses its match to a coin flip. 429s say how long to wait.
   const run = async (q: string): Promise<RawTrack[]> => {
     const params = new URLSearchParams({ q, type: 'track', limit: '10', market: 'US' })
-    const res = await fetch(`${API}/search?${params}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-    const data = await res.json()
-    if (!res.ok) throw new Error(`Spotify search failed: ${data.error?.message || res.status}`)
-    return (data.tracks?.items ?? []) as RawTrack[]
+    for (let attempt = 0; ; attempt += 1) {
+      const res = await fetch(`${API}/search?${params}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) return (data.tracks?.items ?? []) as RawTrack[]
+      const retryable = res.status === 429 || res.status >= 500
+      if (!retryable || attempt >= 3) {
+        throw new Error(`Spotify search failed: ${data.error?.message || res.status}`)
+      }
+      const retryAfter = Number(res.headers.get('retry-after'))
+      const waitMs = retryAfter > 0 ? Math.min(retryAfter, 5) * 1000 : 400 * 2 ** attempt
+      await new Promise((r) => setTimeout(r, waitMs))
+    }
   }
 
-  let items = artist ? await run(`track:"${title}" artist:"${artist}"`) : []
-  if (items.length === 0) items = await run(artist ? `${title} ${artist}` : title)
+  // Quotes inside a field filter end it early — drop them from the query only.
+  const q = (s: string) => s.replace(/["“”]/g, '')
+  const pool: RawTrack[] = []
+  // One failed search must not throw away what the others found; only a song
+  // where EVERY attempted search failed is reported as a failure.
+  let lastError: unknown = null
+  let succeeded = 0
+  const add = async (query: string) => {
+    try {
+      pool.push(...(await run(query)))
+      succeeded += 1
+    } catch (e) {
+      lastError = e
+    }
+  }
+  const agreeing = () => pool.filter((t) => titleAgrees(t.name, title)).length
+  if (artist) await add(`track:"${q(title)}" artist:"${q(artist)}"`)
+  if (agreeing() < limit) await add(`track:"${q(title)}"`)
+  if (agreeing() === 0) await add(artist ? `${title} ${artist}` : title)
+  if (succeeded === 0 && lastError) throw lastError
 
-  return rankTracks(items, artist, limit)
+  return rankTracks(pool, artist, limit, title)
 }
 
 /** Create a playlist and add tracks (in order). Returns the public URL. */

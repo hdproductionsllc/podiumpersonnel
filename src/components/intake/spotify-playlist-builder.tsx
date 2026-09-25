@@ -28,6 +28,8 @@ interface Candidate {
   album: string
   imageUrl: string | null
   durationMs: number
+  /** Title agrees with the song — false = a Spotify padding result. */
+  titleMatch: boolean
 }
 
 interface Proposal {
@@ -53,6 +55,13 @@ interface SpotifyPlaylistBuilderProps {
    *  top track per song — no clicks. Fires on the Confirm action only (not on
    *  viewing old intakes). */
   autoSignal?: number
+}
+
+/** The track to pick without asking: the best one whose title is the song's.
+ *  A padding result is never picked for the admin — leaving a song off the
+ *  playlist is recoverable at a glance; a wrong song gets sent to the couple. */
+function autoPick(p: Proposal): string | null {
+  return p.candidates.find((c) => c.titleMatch)?.uri ?? null
 }
 
 function fmtDuration(ms: number): string {
@@ -113,9 +122,9 @@ export function SpotifyPlaylistBuilder({ projectId, currentUrl, onCreated, autoS
       }
       const props = data.proposals as Proposal[]
       setProposals(props)
-      // Default pick = top hit; no hit = skip. The admin reviews every row.
+      // Default pick = best title-matching hit; none = skip. The admin reviews every row.
       const defaults: Record<number, string> = {}
-      for (const p of props) defaults[p.num] = p.candidates[0]?.uri ?? 'skip'
+      for (const p of props) defaults[p.num] = autoPick(p) ?? 'skip'
       setPicks(defaults)
     } catch {
       toast.error('Could not search Spotify.')
@@ -170,7 +179,8 @@ export function SpotifyPlaylistBuilder({ projectId, currentUrl, onCreated, autoS
       const pd = await pr.json()
       if (!pr.ok) return
       const props = (pd.proposals as Proposal[]) || []
-      const trackUris = props.map((p) => p.candidates[0]?.uri).filter((u): u is string => !!u)
+      const trackUris = props.map(autoPick).filter((u): u is string => !!u)
+      const leftOff = props.length - trackUris.length
       if (trackUris.length === 0) return
       setBusy('create')
       const cr = await fetch(`/api/intake/${projectId}/spotify-playlist`, {
@@ -184,7 +194,11 @@ export function SpotifyPlaylistBuilder({ projectId, currentUrl, onCreated, autoS
         // Auto-create runs off a Confirm effect, so a popup blocker may stop the
         // new tab — fall back to the prominent link/button below.
         const opened = openPlaylist(cd.url as string)
-        toast.success(`Spotify playlist auto-created (${trackUris.length} tracks).${opened ? ' Opening it now.' : ' Click “Open playlist” to view it.'} Rebuild to swap any track.`)
+        toast.success(
+          `Spotify playlist auto-created (${trackUris.length} tracks).` +
+            (leftOff > 0 ? ` ${leftOff} song${leftOff === 1 ? '' : 's'} had no confident match and ${leftOff === 1 ? 'was' : 'were'} left off — Rebuild to pick ${leftOff === 1 ? 'it' : 'them'}.` : ' Rebuild to swap any track.') +
+            (opened ? ' Opening it now.' : ' Click “Open playlist” to view it.')
+        )
       } else if (cr.status !== 409) {
         toast.error(cd.error || 'Auto-create failed — use Build to try again.')
       }
@@ -277,10 +291,17 @@ export function SpotifyPlaylistBuilder({ projectId, currentUrl, onCreated, autoS
                   <SelectContent>
                     {p.candidates.map((c) => (
                       <SelectItem key={c.uri} value={c.uri}>
+                        {c.titleMatch ? '' : '⚠ different song? '}
                         {c.name} — {c.artists} ({c.album}, {fmtDuration(c.durationMs)})
                       </SelectItem>
                     ))}
-                    <SelectItem value="skip">{p.candidates.length === 0 ? 'No matches — skip' : 'Skip this song'}</SelectItem>
+                    <SelectItem value="skip">
+                      {p.candidates.length === 0
+                        ? 'No matches — skip'
+                        : autoPick(p)
+                          ? 'Skip this song'
+                          : 'No confident match — skip'}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </li>

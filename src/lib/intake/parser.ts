@@ -287,6 +287,41 @@ const HEADCOUNT_RE = new RegExp(
   'i'
 )
 
+// A walker named by role alone — "Groom", "Bride", "Bride and Groom" — has no
+// anchor, and on its own could be anything. Between other walking-order lines it
+// is one of them: in "Officiant / Groom / Bridal party, 7 pairs" the groom is a
+// person walking, not a song. So these count only NEXT TO a confirmed step.
+const WALKING_ORDER_PEOPLE = new Set([
+  'bride', 'brides', 'groom', 'grooms', 'couple', 'family', 'families', 'mother',
+  'mothers', 'father', 'fathers', 'mom', 'moms', 'dad', 'dads', 'grandmother',
+  'grandmothers', 'grandfather', 'grandfathers',
+])
+
+/** A line made only of role words with at least one person in it ("Groom"). */
+function isBareRoleLine(line: string): boolean {
+  const words = foldForWalkingOrder(line).split(/\s+/).filter(Boolean)
+  return (
+    words.some((w) => WALKING_ORDER_PEOPLE.has(w)) &&
+    words.every((w) => /^\d+$/.test(w) || WALKING_ORDER_WEAK.has(w) || WALKING_ORDER_CONNECTORS.has(w))
+  )
+}
+
+// --- the officiant's cue, given as a direction ----------------------------------
+// "Play just after Officiant: “You have kissed a thousand times … You may kiss the
+// bride.”" is the recessional cue — the one field that holds words verbatim — not
+// a song. The tell is a QUOTED passage of several words, led in by the wording of
+// a cue. A song line quoting a title ("“Perfect” by Ed Sheeran") has no lead-in
+// and a short quote, so it is never caught.
+const CUE_QUOTE_RE = /[“"]([^”"]{20,})[”"]/
+const CUE_LEAD_IN_RE = /\b(?:officiant|pronounce|kiss|after|when|once|cue|play|start|begin)\b/i
+
+/** Is this line the officiant's words for the recessional cue? See above. */
+function isOfficiantCueLine(line: string): boolean {
+  const m = CUE_QUOTE_RE.exec(line)
+  if (!m || m[1].trim().split(/\s+/).length < 6) return false
+  return CUE_LEAD_IN_RE.test(line.slice(0, m.index)) || /\bkiss\b/i.test(m[1])
+}
+
 /** Is this line a processional participant rather than a song? See the note above. */
 function isWalkingOrderStep(line: string): boolean {
   const folded = foldForWalkingOrder(line)
@@ -612,6 +647,18 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
     sectionCounts.set(section, pos + 1)
   }
 
+  /** Is the nearest non-empty line before or after `idx` a walking-order step?
+   *  Neighbours are judged by the anchored test only, so two bare role lines
+   *  ("Bride" / "Groom") can never vouch for each other. */
+  const besideWalkingStep = (idx: number): boolean => {
+    for (const dir of [-1, 1]) {
+      let k = idx + dir
+      while (k >= 0 && k < lines.length && !lines[k].trim()) k += dir
+      if (k >= 0 && k < lines.length && isWalkingOrderStep(lines[k])) return true
+    }
+    return false
+  }
+
   let currentSection: string | null = null
   let currentRole: string | null = null
   // Tracked for parity with the reference parser (set on "select one" / ceremony-
@@ -653,9 +700,19 @@ export function parseQuestionnaireTraced(rawText: string): ParsedQuestionnaireTr
     // it as the 17hats "Officiant (Name)" field and swallows the FOLLOWING line as
     // the name — which silently ate "Parents, 2 pairs" (no song, no walking-order
     // step, no warning) and broke this parser's never-drop-a-line contract.
-    if (currentSection === 'ceremony' && isWalkingOrderStep(line)) {
+    if (currentSection === 'ceremony' && (isWalkingOrderStep(line) || (isBareRoleLine(line) && besideWalkingStep(i)))) {
       const entry = line.replace(/^[-•*]\s*/, '').replace(/^\d{1,2}[.)]\s*/, '').trim()
       if (entry) processionalOrder.push(entry)
+      disp[i] = 'meta'; i += 1; continue
+    }
+
+    // --- the officiant's cue, written as a direction (see isOfficiantCueLine) ---
+    if (
+      (currentSection === 'ceremony' || currentSection === 'recessional') &&
+      isOfficiantCueLine(lines[i])
+    ) {
+      const cue = lines[i].replace(/^[-•*]\s*/, '').trim()
+      recessionalCue = recessionalCue ? `${recessionalCue}\n${cue}` : cue
       disp[i] = 'meta'; i += 1; continue
     }
 

@@ -4,7 +4,7 @@
  * raw search order puts them first.
  */
 import { describe, it, expect } from 'vitest'
-import { rankTracks, scoreTrack, type RawTrack } from '../spotify-ranking'
+import { rankTracks, scoreTrack, titleAgrees, type RawTrack } from '../spotify-ranking'
 
 function track(
   name: string,
@@ -66,3 +66,40 @@ describe('scoreTrack / rankTracks', () => {
     expect(ranked[0].name).toBe('Something')
   })
 })
+
+// Real failures from an auto-built playlist (2026-09-25): Spotify pads each
+// search with unrelated popular tracks, and ranking on popularity shipped them.
+describe('title agreement', () => {
+  it('a padding hit never beats the song, however popular', () => {
+    const song = track('Till There Was You - Remastered 2009', 'The Beatles', 67)
+    const padding = track('Bones', 'Imagine Dragons', 83)
+    const ranked = rankTracks([padding, song], null, 5, 'Til There Was You')
+    expect(ranked[0].name).toBe('Till There Was You - Remastered 2009')
+    expect(ranked[0].titleMatch).toBe(true)
+    expect(ranked[1].titleMatch).toBe(false)
+  })
+
+  it('the wrong song by the right artist loses to the right song', () => {
+    const right = track('Rolling in the Deep', 'Adele', 70)
+    const wrong = track('Set Fire to the Rain', 'Adele', 88)
+    expect(rankTracks([wrong, right], 'Adele', 5, 'Rolling In The Deep')[0].name).toBe('Rolling in the Deep')
+  })
+
+  it('titles agree across spelling, version tags and features', () => {
+    expect(titleAgrees('Any Way You Want It', 'Anyway You Want It')).toBe(true)
+    expect(titleAgrees("Isn't She Lovely", 'Isn’t She Lovely')).toBe(true)
+    expect(titleAgrees('Havana (feat. Young Thug)', 'Havana')).toBe(true)
+    expect(titleAgrees('Bitter Sweet Symphony - Remastered 2016', 'Bittersweet Symphony')).toBe(true)
+    expect(titleAgrees('Symphony No. 9: IV. Ode to Joy', 'Ode to Joy')).toBe(true)
+  })
+
+  it('different songs do not agree', () => {
+    expect(titleAgrees('Just the Way You Are', 'Marry You')).toBe(false)
+    expect(titleAgrees('Gasolina', 'Despacito')).toBe(false)
+    expect(titleAgrees('Love On The Brain', 'All You Need Is Love')).toBe(false)
+    expect(titleAgrees('Lava', 'Grow Old With You')).toBe(false)
+    // Too short to trust containment: "Love" is inside a thousand titles.
+    expect(titleAgrees('Love Story', 'Love')).toBe(false)
+  })
+})
+

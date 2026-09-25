@@ -227,6 +227,21 @@ export async function GET(
 
   const { data: org } = await service.from('organizations').select('name').eq('id', orgId).maybeSingle()
 
+  // The owner's own first page (088), replacing the generated playlist page in
+  // every book. `intake` is select('*'), so before 088 runs this is simply
+  // undefined and every book keeps the generated page.
+  let cover: { url: string; name: string } | null = null
+  const coverPath = (intake.book_cover_path as string | null | undefined) ?? null
+  if (coverPath) {
+    const { data: signed, error: signErr } = await service.storage
+      .from('project-files')
+      .createSignedUrl(coverPath, SIGNED_GET_TTL_SECONDS)
+    // Never fall back silently: books built without the cover the owner chose
+    // are the wrong books. Fail the manifest so the build stops and says why.
+    if (signErr || !signed) return serverError('book: sign cover url', signErr)
+    cover = { url: signed.signedUrl, name: (intake.book_cover_name as string | null) ?? 'Custom first page.pdf' }
+  }
+
   return apiSuccess({
     header: {
       client: project.client_name || project.name,
@@ -245,5 +260,6 @@ export async function GET(
     scoreCount,
     songs,
     warnings,
+    cover,
   })
 }

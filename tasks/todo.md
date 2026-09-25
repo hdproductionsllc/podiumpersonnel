@@ -176,3 +176,13 @@ pasted the migrations (data before code).
 ## Still on David
 - Paste `scripts/venue-policies-2026-09-17.sql` into the Supabase SQL editor (unlocks
   Saved Venues in the picker + the Venues page). All RESULTS rows should say PASS.
+
+## 2026-09-25 — Books/Spotify/parser fixes + custom first page
+- [x] Books panel loads the manifest on open; missing-parts warning sits above step 1
+- [x] Spotify: search by matched library title/artist; title agreement gates ranking + auto-pick; retry 502/429; per-search isolation. Dry run on the reported intake: 29/29 correct (was 18/29)
+- [x] Parser: bare "Groom" beside walking-order steps → processional order; quoted "Play just after Officiant: “…”" → recessional cue (tests with the exact questionnaire)
+- [x] Custom first page for every book (migration 088 + /api/intake/[id]/book-cover + Books panel upload)
+- [ ] David: paste supabase/migrations/088_intake_book_cover.sql in Supabase SQL editor (feature shows an error until then; everything else works without it)
+- [ ] David: Rebuild the Spotify playlist on the Lonestar/Subito Strings intake (0gYJ3a…) — the existing one still has the 11 wrong tracks
+- [ ] v2: "Ordinary (Alex Warren) - Must Play!" — parenthetical artist not split out and "Must Play!" dropped rather than kept as a note
+- [ ] Pre-existing: 3 failing org-membership (084) tests

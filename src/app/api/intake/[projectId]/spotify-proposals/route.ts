@@ -4,7 +4,12 @@
  *
  * Same philosophy as the repertoire matcher: this only searches and ranks —
  * the admin confirms every track before a playlist is created (the
- * spotify-playlist route). Songs are returned in book order with up to five
+ * spotify-playlist route).
+ *
+ * A row the admin matched to a library work is searched by THAT work's title
+ * and artist, not the client's wording: "Bohemian" is Bohemian Rhapsody by
+ * Queen, and "Marry You" is the Bruno Mars song — the match already says so.
+ * The client's text is only the search for unmatched rows. Songs are returned in book order with up to five
  * candidates each; a song with no results simply has an empty list.
  */
 
@@ -18,8 +23,8 @@ export async function GET(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params
-  const { membership, error } = await requireIntakeEnabled()
-  if (error || !membership) return error!
+  const { membership, libraryOrgId, error } = await requireIntakeEnabled()
+  if (error || !membership || !libraryOrgId) return error ?? apiError('Not found', 404)
   const orgId = membership.organization_id
 
   if (!isSpotifyConfigured()) return apiError('Spotify is not configured on this server.', 503)
@@ -50,12 +55,28 @@ export async function GET(
 
   const { data: songRows, error: songsErr } = await service
     .from('intake_songs')
-    .select('section, position, title_raw, artist_raw')
+    .select('section, position, title_raw, artist_raw, matched_repertoire_id')
     .eq('intake_id', intake.id)
     .eq('organization_id', orgId)
   if (songsErr) return serverError('spotify-proposals: load songs', songsErr)
 
   const ordered = orderForBook(songRows ?? [])
+
+  // Matched works live in the (possibly shared) library — scope to it, as the
+  // book route does.
+  const workIds = [...new Set(ordered.map((r) => r.matched_repertoire_id).filter((v): v is string => !!v))]
+  const works = new Map<string, { title: string; artist: string | null }>()
+  if (workIds.length > 0) {
+    const { data: workRows, error: worksErr } = await service
+      .from('repertoire')
+      .select('id, title, artist')
+      .eq('organization_id', libraryOrgId)
+      .in('id', workIds)
+    if (worksErr) return serverError('spotify-proposals: load matched works', worksErr)
+    for (const w of workRows ?? []) {
+      works.set(w.id as string, { title: w.title as string, artist: (w.artist as string | null) ?? null })
+    }
+  }
 
   const proposals: Array<{
     num: number
@@ -73,8 +94,13 @@ export async function GET(
       proposals.push({ num, title: row.title_raw ?? '(untitled)', artist: row.artist_raw ?? null, candidates: [] })
       continue
     }
+    const work = row.matched_repertoire_id ? works.get(row.matched_repertoire_id) : undefined
+    // A bracketed aside is not part of the recorded title: the library's
+    // "Grow Old With You (The Wedding Singer)", the client's "Ordinary (Alex Warren)".
+    const searchTitle = (work?.title ?? title).replace(/\s*[([][^)\]]*[)\]]/g, '').trim() || title
+    const searchArtist = work?.artist ?? row.artist_raw ?? null
     try {
-      const candidates = await searchTracks(conn.accessToken, title, row.artist_raw ?? null)
+      const candidates = await searchTracks(conn.accessToken, searchTitle, searchArtist)
       proposals.push({ num, title, artist: row.artist_raw ?? null, candidates })
     } catch {
       // One failed search shouldn't kill the whole proposal set.
