@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { createSignedDownloadUrl } from '@/lib/storage/signed-download'
+import { confirmMusicReceipt } from '@/lib/music/confirm-receipt'
 
 export async function GET(
   request: NextRequest,
@@ -19,7 +20,7 @@ export async function GET(
     // Look up the confirmation by token
     const { data: confirmation, error: confError } = await supabase
       .from('music_confirmations')
-      .select('id, musician_id, send_id')
+      .select('id, musician_id, send_id, confirmed_at')
       .eq('token', token)
       .single()
 
@@ -88,6 +89,18 @@ export async function GET(
 
     if (trackError) {
       console.error(`Failed to record download of file ${fileId} by musician ${confirmation.musician_id}:`, trackError)
+    }
+
+    // A first download counts as "received": mark it and tell the admins, once.
+    // Runs after the response so the PDF is never slowed or blocked by email.
+    if (!confirmation.confirmed_at) {
+      after(async () => {
+        try {
+          await confirmMusicReceipt(supabase, confirmation.id, 'download')
+        } catch (err) {
+          console.error(`Failed to mark music received on download (confirmation ${confirmation.id}):`, err)
+        }
+      })
     }
 
     // Generate signed URL (1 hour). The filename is attached by the helper —

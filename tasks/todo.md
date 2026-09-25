@@ -199,7 +199,18 @@ pasted the migrations (data before code).
 - [x] W-9 upload: final save guarded on the token; the loser removes its own file, gets 409 "already been used" (w9-upload-race.test.ts)
 - [x] Billing `invoice.paid`: reads parent.subscription_details / line pricing.price_details, falls back to legacy fields (3 new tests; basil test fails on old code)
 - [ ] Spreadsheet import: size cap + move xlsx 0.18.5 → 0.20.3 (only published on cdn.sheetjs.com, not npm) — WAITING on David's OK to take a non-npm dependency
-- [x] Windows test baseline: org-membership sqlCode() split on /?
+- [x] Windows test baseline: org-membership sqlCode() split on /
+?
 / (CRLF kept comments alive → 3 false failures)
 - [x] Gate: tsc clean, 911/911 tests, `next build` green, `next start` smoke (/login 200, bad W-9 link 404, unsigned webhook 400) → one push
 - [ ] Later: 328 lint errors / CI lint non-blocking; marketing site's own Next 14 audit
+
+## 2026-09-25 (d) — Tell admins when a musician downloads their music
+Decisions (David): email, all admins, once per musician; the first download COUNTS AS "received" (one email total, not download + confirm).
+No migration: `music_confirmations.confirmed_at` already exists; a download just stamps it.
+- [x] `src/lib/music/confirm-receipt.ts` — one shared "mark received + tell admins": atomic claim (`UPDATE … WHERE confirmed_at IS NULL RETURNING`), so a double-click / several simultaneous file downloads send exactly ONE email. Wording varies by how: "downloaded their music" vs "confirmed receipt"; keeps the "All N musicians now have their music" line
+- [x] Enforcement point 1: `/api/music-download/[fileId]` — after the access checks pass, claim via `after()` so the PDF redirect is never slowed or failed by email
+- [x] Enforcement point 2: `/api/confirm-music/[token]` — the button uses the same helper (also fixes its check-then-update double-email race)
+- [x] Readers traced: music-status dashboard, projects list, project-files-section, send-music-reminder (now skips downloaders — intended), confirm-music page (shows received on revisit)
+- [x] Tests: first download emails once; second download/button emails nothing; race (claim returns 0 rows) emails nothing; failed access check never marks received; email failure never blocks the download. No real emails (all mocked)
+- [x] Gate: tsc, full suite, build → one push
