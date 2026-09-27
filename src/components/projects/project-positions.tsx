@@ -648,17 +648,6 @@ export function ProjectPositions({
                                   <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[position.status] || ''}`}>
                                     {STATUS_LABELS[position.status] || position.status}
                                   </span>
-                                  {position.status === 'confirmed' && canManage && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 text-xs text-muted-foreground"
-                                      onClick={() => handleUnassign(position)}
-                                      title="Release this musician from the position"
-                                    >
-                                      Unassign
-                                    </Button>
-                                  )}
                                   {position.status === 'offered' && canManage && pendingOffer && (
                                     <Button
                                       variant="ghost"
@@ -685,7 +674,11 @@ export function ProjectPositions({
                             // Show pay from the relevant offer based on position status
                             if (position.status === 'confirmed') {
                               const acceptedOffer = position.contract_offers.find(o => o.status === 'accepted')
-                              return acceptedOffer?.custom_pay != null ? `$${acceptedOffer.custom_pay}` : '—'
+                              if (acceptedOffer?.custom_pay != null) return `$${acceptedOffer.custom_pay}`
+                              const basePay = services.reduce((sum, s) => sum + (s.base_pay ?? 0), 0)
+                              return basePay > 0
+                                ? <span title="The gig's base pay (no custom amount on the offer)">${basePay.toLocaleString()} <span className="text-xs">base</span></span>
+                                : '—'
                             }
                             if (position.status === 'offered') {
                               const pendingOffer = position.contract_offers.find(o => o.status === 'pending' || o.status === 'viewed')
@@ -731,7 +724,7 @@ export function ProjectPositions({
                                 onClick={() => handleDuplicatePosition(position)}
                                 title={`Add another ${term(terms, 'rank', { case: 'lower' })} for this ${term(terms, 'skill', { case: 'lower' })}`}
                               >
-                                +
+                                + {term(terms, 'rank')}
                               </Button>
                               {position.status !== 'confirmed' && !position.musician_id && (
                                 <Button

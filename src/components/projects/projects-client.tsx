@@ -33,10 +33,8 @@ import { TOOLTIP_DEFINITIONS } from '@/lib/tooltips'
 import {
   PROJECT_STATUS_LABELS,
   SERVICE_TYPE_LABELS,
-  PAYMENT_STATUS_LABELS,
   type ProjectStatus,
   type ServiceType,
-  type PaymentStatus,
 } from '@/lib/validations/projects'
 import { usePlan } from '@/components/providers/plan-provider'
 import { useOrgFlags } from '@/components/providers/org-flags-provider'
@@ -45,6 +43,14 @@ import { term } from '@/lib/verticals'
 import { canCreateProject, canUseEmailFeatures, PLAN_LIMITS } from '@/lib/plan'
 import { UpgradePrompt } from '@/components/billing/upgrade-prompt'
 import { GigReportPanel, type GigReportRow } from '@/components/projects/gig-report-panel'
+import { localDate } from '@/lib/projects/archive'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 export type ProjectWithServices = Project & {
   services: ServiceWithVenue[]
@@ -93,31 +99,68 @@ function StatusBadge({ status }: { status: ProjectStatus }) {
   )
 }
 
-function PaymentStatusBadge({ status }: { status: string | null }) {
-  if (!status || status === 'pending') {
-    return <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">Pending</span>
+/**
+ * "Sat, Oct 11" (year only when it is not this year), and for a range
+ * "Sat, Oct 11 – Sun, Oct 12". Date-only strings get T12:00 so a US time zone
+ * never shifts them back a day.
+ */
+function formatGigDates(start: string | null, end: string | null): string {
+  const parse = (d: string) => new Date(d + 'T12:00:00')
+  const thisYear = new Date().getFullYear()
+  const fmt = (d: string) => {
+    const date = parse(d)
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      ...(date.getFullYear() !== thisYear ? { year: 'numeric' } : {}),
+    })
   }
-  const colors: Record<string, string> = {
-    deposit_paid: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-    fully_paid: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300',
-  }
+  if (!start && !end) return '—'
+  if (start && (!end || start === end)) return fmt(start)
+  if (!start && end) return `until ${fmt(end)}`
+  return `${fmt(start!)} – ${fmt(end!)}`
+}
+
+/** "today", "tomorrow", "in 12 days", "3 days ago", counted in the org's time zone. */
+function relativeDays(date: string | null, timeZone: string): string | null {
+  if (!date) return null
+  const today = localDate(new Date(), timeZone)
+  const days = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000)
+  if (days === 0) return 'today'
+  if (days === 1) return 'tomorrow'
+  if (days === -1) return 'yesterday'
+  if (days > 1 && days <= 60) return `in ${days} days`
+  if (days < -1 && days >= -60) return `${-days} days ago`
+  return null
+}
+
+/** One block of the opened gig: a white card, optionally titled. */
+function GigSection({ title, hint, children }: { title?: string; hint?: string; children: React.ReactNode }) {
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${colors[status] || ''}`}>
-      {PAYMENT_STATUS_LABELS[status as PaymentStatus] || status}
-    </span>
+    <section className="rounded-lg border bg-background p-4 shadow-sm space-y-4">
+      {title && (
+        <div>
+          <h4 className="text-sm font-semibold">{title}</h4>
+          {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+        </div>
+      )}
+      {children}
+    </section>
   )
 }
 
-function formatDateRange(start: string | null, end: string | null): string {
-  // Append T12:00:00 to date strings to avoid timezone shifting issues
-  // (date-only strings are interpreted as midnight UTC, which shifts back a day in US timezones)
-  const parseDate = (d: string) => new Date(d + 'T12:00:00')
-
-  if (!start && !end) return '—'
-  if (start && !end) return parseDate(start).toLocaleDateString()
-  if (!start && end) return `until ${parseDate(end).toLocaleDateString()}`
-  if (start === end) return parseDate(start!).toLocaleDateString()
-  return `${parseDate(start!).toLocaleDateString()} – ${parseDate(end!).toLocaleDateString()}`
+/**
+ * Chairs that still need someone: vacant or declined, with no offer out that
+ * is still waiting on an answer. Next-in-line suggestions only appear for these.
+ */
+function openChairIds(positions: PositionJoined[]): string[] {
+  const now = Date.now()
+  return positions
+    .filter((p) => p.status === 'vacant' || p.status === 'declined')
+    .filter((p) => !(p.contract_offers || []).some((o) =>
+      (o.status === 'pending' || o.status === 'viewed') && (!o.expires_at || Date.parse(o.expires_at) > now)))
+    .map((p) => p.id)
 }
 
 function ServicesList({
@@ -677,7 +720,7 @@ export function ProjectsClient({
     }
   }
 
-  const colCount = canManage ? 12 : 11
+  const colCount = canManage ? 6 : 5
 
   return (
     <div className="space-y-6">
@@ -785,205 +828,177 @@ export function ProjectsClient({
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
-            <thead className="border-b bg-muted/50">
+            <thead className="border-b bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="w-10 px-2 py-3"></th>
-                <th className="px-3 py-3 text-left font-medium">Name</th>
-                <th className="px-3 py-3 text-left font-medium">Dates</th>
-                <th className="px-3 py-3 text-left font-medium">Venue</th>
-                <th className="px-3 py-3 text-left font-medium">Client</th>
-                <th className="px-3 py-3 text-left font-medium">Status</th>
-                <th className="px-3 py-3 text-right font-medium">Contract</th>
-                <th className="px-3 py-3 text-right font-medium">Deposit</th>
-                <th className="px-3 py-3 text-left font-medium">Payment</th>
-                <th className="px-3 py-3 text-left font-medium">{term(terms, 'person', { plural: true })}</th>
-                <th className="px-3 py-3 text-left font-medium">{term(terms, 'session', { plural: true })}</th>
-                {canManage && (
-                  <th className="px-3 py-3 text-right font-medium">Actions</th>
-                )}
+                <th className="w-10 px-2 py-2.5"></th>
+                <th className="px-3 py-2.5 text-left font-medium">{term(terms, 'work')}</th>
+                <th className="px-3 py-2.5 text-left font-medium">When</th>
+                <th className="px-3 py-2.5 text-left font-medium">Staffed</th>
+                <th className="hidden md:table-cell px-3 py-2.5 text-right font-medium">Contract</th>
+                {canManage && <th className="w-12 px-2 py-2.5"><span className="sr-only">Actions</span></th>}
               </tr>
             </thead>
             <tbody className="divide-y">
               {filteredProjects.map((project) => {
                 const isExpanded = expandedRows.has(project.id)
+                const primary = project.services?.find((s) => s.service_type === 'performance') || project.services?.[0]
+                const venue = primary ? getVenueDisplay(primary) : ''
+                const venueName = venue ? venue.split(',')[0] : ''
+                const confirmedCount = project.project_positions.filter((p) => p.status === 'confirmed').length
+                const totalChairs = project.project_positions.length
+                const fullyStaffed = totalChairs > 0 && confirmedCount === totalChairs
+                const relative = relativeDays(project.start_date, timezone)
+                const subline = [project.client_name, project.event_type, venueName].filter(Boolean).join(' · ')
                 return (
                   <Fragment key={project.id}>
                     <tr
                       id={`project-${project.id}`}
-                      className="hover:bg-muted/50 cursor-pointer"
+                      className={`cursor-pointer transition-colors hover:bg-muted/50 ${isExpanded ? 'bg-muted/40' : ''}`}
                       onClick={() => toggleRow(project.id)}
                     >
-                      <td className="px-2 py-3 text-center">
+                      <td className="px-2 py-3.5 text-center align-top">
                         <ChevronIcon expanded={isExpanded} />
                       </td>
-                      <td className="px-3 py-3 font-medium whitespace-nowrap">{project.name}</td>
-                      <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
-                        {formatDateRange(project.start_date, project.end_date)}
-                      </td>
-                      <td className="px-3 py-3 text-muted-foreground">
-                        {(() => {
-                          const primary = project.services?.find((s) => s.service_type === 'performance')
-                            || project.services?.[0]
-                          const display = primary ? getVenueDisplay(primary) : ''
-                          if (!primary || !display) return <span className="text-muted-foreground">—</span>
-                          return (
-                            <div className="max-w-xs truncate">
-                              <AddressLink
-                                address={display}
-                                googleMapsUrl={getVenueMapsUrl(primary)}
-                                className="text-xs"
-                              />
-                            </div>
-                          )
-                        })()}
-                      </td>
-                      <td className="px-3 py-3">
-                        {project.client_name ? (
-                          <div>
-                            <div className="font-medium">{project.client_name}</div>
-                            {project.event_type && (
-                              <div className="text-xs text-muted-foreground">{project.event_type}</div>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
+                      <td className="px-3 py-3 align-top">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[15px] font-semibold leading-snug">{project.name}</span>
+                          {project.status !== 'active' && <StatusBadge status={project.status} />}
+                        </div>
+                        {subline && (
+                          <div className="mt-0.5 text-xs text-muted-foreground">{subline}</div>
                         )}
                       </td>
-                      <td className="px-3 py-3">
-                        <StatusBadge status={project.status} />
+                      <td className="px-3 py-3 align-top whitespace-nowrap">
+                        <div className="font-medium">{formatGigDates(project.start_date, project.end_date)}</div>
+                        {relative && <div className="mt-0.5 text-xs text-muted-foreground">{relative}</div>}
                       </td>
-                      <td className="px-3 py-3 text-right whitespace-nowrap tabular-nums">
-                        {project.contract_amount != null
-                          ? `$${Number(project.contract_amount).toLocaleString()}`
-                          : <span className="text-muted-foreground">—</span>}
-                      </td>
-                      <td className="px-3 py-3 text-right whitespace-nowrap">
-                        {project.deposit_amount != null ? (
-                          <div>
-                            <div className="tabular-nums">${Number(project.deposit_amount).toLocaleString()}</div>
-                            {project.deposit_paid_at ? (
-                              <div className="text-xs text-green-600 dark:text-green-400">
-                                Paid {new Date(project.deposit_paid_at + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                              </div>
-                            ) : (
-                              <div className="text-xs text-amber-600 dark:text-amber-400">Due</div>
-                            )}
-                          </div>
-                        ) : <span className="text-muted-foreground">—</span>}
-                      </td>
-                      <td className="px-3 py-3">
-                        <PaymentStatusBadge status={project.payment_status} />
-                      </td>
-                      <td className="px-3 py-3 whitespace-nowrap">
-                        {project.project_positions.length > 0 ? (
-                          <span className={
-                            project.project_positions.filter((p) => p.status === 'confirmed').length === project.project_positions.length
-                              ? 'text-green-700 dark:text-green-400'
-                              : 'text-amber-700 dark:text-amber-400'
-                          }>
-                            {project.project_positions.filter((p) => p.status === 'confirmed').length}/{project.project_positions.length}
+                      <td className="px-3 py-3 align-top whitespace-nowrap">
+                        {totalChairs > 0 ? (
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                              fullyStaffed
+                                ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
+                                : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300'
+                            }`}
+                          >
+                            <span className={`h-1.5 w-1.5 rounded-full ${fullyStaffed ? 'bg-green-600' : 'bg-amber-600'}`} aria-hidden />
+                            {confirmedCount}/{totalChairs}
                           </span>
                         ) : <span className="text-muted-foreground">—</span>}
                       </td>
-                      <td className="px-3 py-3 text-muted-foreground">
-                        {project.services.length}
+                      <td className="hidden md:table-cell px-3 py-3 align-top text-right whitespace-nowrap">
+                        {project.contract_amount != null ? (
+                          <>
+                            <div className="font-medium tabular-nums">${Number(project.contract_amount).toLocaleString()}</div>
+                            <div className="mt-0.5 text-xs">
+                              {project.payment_status === 'fully_paid' ? (
+                                <span className="text-green-700 dark:text-green-400">Paid in full</span>
+                              ) : project.deposit_amount != null && project.deposit_paid_at ? (
+                                <span className="text-green-700 dark:text-green-400">
+                                  Deposit paid {new Date(project.deposit_paid_at + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </span>
+                              ) : project.deposit_amount != null ? (
+                                <span className="text-amber-700 dark:text-amber-400">Deposit ${Number(project.deposit_amount).toLocaleString()} due</span>
+                              ) : null}
+                            </div>
+                          </>
+                        ) : <span className="text-muted-foreground">—</span>}
                       </td>
                       {canManage && (
-                        <td className="px-3 py-3 text-right">
-                          <div
-                            className="flex items-center justify-end gap-1"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditProject(project)}
-                            >
-                              Edit
-                            </Button>
-                            {project.status === 'active' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleMarkComplete(project)}
-                              >
-                                Complete
+                        <td className="px-2 py-2.5 text-right align-top" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={`Actions for ${project.name}`}>
+                                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                                  <circle cx="5" cy="12" r="1.75" /><circle cx="12" cy="12" r="1.75" /><circle cx="19" cy="12" r="1.75" />
+                                </svg>
                               </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-destructive hover:text-destructive"
-                              onClick={() => handleDeleteProject(project)}
-                            >
-                              Delete
-                            </Button>
-                          </div>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleEditProject(project)}>Edit</DropdownMenuItem>
+                              {project.status === 'active' && (
+                                <DropdownMenuItem onClick={() => handleMarkComplete(project)}>Mark complete</DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => handleDeleteProject(project)}
+                              >
+                                Delete…
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </td>
                       )}
                     </tr>
 
                     {isExpanded && (
                       <tr>
-                        <td colSpan={colCount} className="bg-muted/20 px-4 py-4 space-y-6">
-                          <ServicesList
-                            services={project.services}
-                            projectId={project.id}
-                            canManage={canManage}
-                            timezone={timezone}
-                            onAddService={handleAddService}
-                            onEditService={handleEditService}
-                            onDeleteService={handleDeleteService}
-                          />
-                          <ProjectPositions
-                            positions={project.project_positions}
-                            projectId={project.id}
-                            organizationId={organizationId}
-                            books={books}
-                            musicians={musicians}
-                            services={project.services}
-                            canManage={canManage}
-                            timezone={timezone}
-                            ensembleType={project.ensemble_type}
-                            onPositionChange={handleSuccess}
-                            waterfallTrigger={waterfallTrigger}
-                            onWaterfallHandled={() => setWaterfallTrigger(null)}
-                          />
-                          <ProjectOffers
-                            offers={project.project_positions.flatMap((p) =>
-                              (p.contract_offers || []).map((o) => ({
-                                ...o,
-                                project_position_id: p.id,
-                                position_instrument: p.instrument?.name ?? '',
-                                position_chair: p.chair_number,
-                              }))
-                            )}
-                            organizationName={organizationName}
-                            timezone={timezone}
-                            canManage={canManage}
-                            onOfferChange={handleSuccess}
-                            onSendWaterfall={(positionId, musicianId, customPay, isFollowUp) => {
-                              setWaterfallTrigger({ positionId, musicianId, customPay, isFollowUp })
-                            }}
-                          />
-                          <SubRequests
-                            requests={project.project_positions.flatMap((p) =>
-                              (p.substitution_requests || []).map((r) => ({
-                                ...r,
-                                project_position_id: p.id,
-                                position_instrument: p.instrument?.name ?? '',
-                                position_chair: p.chair_number,
-                                position_instrument_id: p.instrument_id,
-                              }))
-                            )}
-                            timezone={timezone}
-                            canManage={canManage}
-                            onRequestChange={handleSuccess}
-                          />
-                          <ConflictsSummary
-                            timezone={timezone}
-                            conflicts={detectConflicts(project.project_positions, musicians, project.services)}
-                          />
+                        <td colSpan={colCount} className="bg-muted/30 px-3 py-4 sm:px-5 space-y-4">
+                          {/* The gig, top to bottom in the order the work happens. */}
+                          <GigSection>
+                            <ServicesList
+                              services={project.services}
+                              projectId={project.id}
+                              canManage={canManage}
+                              timezone={timezone}
+                              onAddService={handleAddService}
+                              onEditService={handleEditService}
+                              onDeleteService={handleDeleteService}
+                            />
+                          </GigSection>
+                          <GigSection>
+                            <ProjectPositions
+                              positions={project.project_positions}
+                              projectId={project.id}
+                              organizationId={organizationId}
+                              books={books}
+                              musicians={musicians}
+                              services={project.services}
+                              canManage={canManage}
+                              timezone={timezone}
+                              ensembleType={project.ensemble_type}
+                              onPositionChange={handleSuccess}
+                              waterfallTrigger={waterfallTrigger}
+                              onWaterfallHandled={() => setWaterfallTrigger(null)}
+                            />
+                            <SubRequests
+                              requests={project.project_positions.flatMap((p) =>
+                                (p.substitution_requests || []).map((r) => ({
+                                  ...r,
+                                  project_position_id: p.id,
+                                  position_instrument: p.instrument?.name ?? '',
+                                  position_chair: p.chair_number,
+                                  position_instrument_id: p.instrument_id,
+                                }))
+                              )}
+                              timezone={timezone}
+                              canManage={canManage}
+                              onRequestChange={handleSuccess}
+                            />
+                            <ConflictsSummary
+                              timezone={timezone}
+                              conflicts={detectConflicts(project.project_positions, musicians, project.services)}
+                            />
+                            <ProjectOffers
+                              offers={project.project_positions.flatMap((p) =>
+                                (p.contract_offers || []).map((o) => ({
+                                  ...o,
+                                  project_position_id: p.id,
+                                  position_instrument: p.instrument?.name ?? '',
+                                  position_chair: p.chair_number,
+                                }))
+                              )}
+                              organizationName={organizationName}
+                              timezone={timezone}
+                              canManage={canManage}
+                              onOfferChange={handleSuccess}
+                              openPositionIds={openChairIds(project.project_positions)}
+                              onSendWaterfall={(positionId, musicianId, customPay, isFollowUp) => {
+                                setWaterfallTrigger({ positionId, musicianId, customPay, isFollowUp })
+                              }}
+                            />
+                          </GigSection>
                           {/* Prepare Gig Music (client selections -> matched songs -> books). First,
                               because it is the main job on a booked gig. */}
                           {canManage && intakeEnabled && (
@@ -1002,128 +1017,140 @@ export function ProjectsClient({
                               )}
                             />
                           )}
-                          {/* Music / Parts Section */}
                           {canManage && project.project_positions.length > 0 && (
-                            <ProjectFilesSection
-                              projectId={project.id}
-                              projectName={project.name}
-                              organizationId={organizationId}
-                              organizationName={organizationName}
-                              positions={project.project_positions}
-                              canManage={canManage}
-                              timezone={timezone}
-                              musicSends={(project as any).music_sends as any[] | undefined}
-                            />
+                            <GigSection>
+                              {/* Music / Parts Section */}
+                              {(
+                                <ProjectFilesSection
+                                  projectId={project.id}
+                                  projectName={project.name}
+                                  organizationId={organizationId}
+                                  organizationName={organizationName}
+                                  positions={project.project_positions}
+                                  canManage={canManage}
+                                  timezone={timezone}
+                                  musicSends={(project as any).music_sends as any[] | undefined}
+                                />
+                              )}
+                            </GigSection>
                           )}
-                          {/* Payments shortcut */}
-                          {canManage && project.project_positions.some((p) => p.status === 'confirmed') && (
-                            <div className="flex items-center gap-3">
-                              <Link href={`/dashboard/payments?project=${project.id}`}>
-                                <Button variant="outline" size="sm">
-                                  <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                                  </svg>
-                                  Manage Payments
-                                </Button>
-                              </Link>
-                            </div>
-                          )}
-                          {/* Gig report from the lead musician(s), after the gig */}
-                          {canManage && project.project_positions.some((p) => p.status === 'confirmed') && (
-                            <GigReportPanel
-                              projectId={project.id}
-                              positions={project.project_positions}
-                              leaderIds={leaderIds}
-                              chosenLeadId={project.gig_lead_musician_id ?? null}
-                              reports={gigReports.filter((r) => r.project_id === project.id)}
-                              timezone={timezone}
-                            />
-                          )}
-                          {/* Send Gig Details + Group Text (gated behind all positions confirmed) */}
-                          {canManage && project.project_positions.length > 0 && project.project_positions.every((p) => p.status === 'confirmed') && (
-                            <div className="flex items-center gap-3 pt-2">
-                              {(() => {
+                          {canManage && project.project_positions.length > 0 && (project.project_positions.every((p) => p.status === 'confirmed') || ((project as { gig_detail_sends?: unknown[] }).gig_detail_sends?.length ?? 0) > 0) && (
+                            <GigSection title="Send to musicians">
+                              {/* Send Gig Details + Group Text (gated behind all positions confirmed) */}
+                              {canManage && project.project_positions.length > 0 && project.project_positions.every((p) => p.status === 'confirmed') && (
+                                <div className="flex flex-wrap items-center gap-3">
+                                  {(() => {
+                                    const sends = (project as any).gig_detail_sends as any[] | undefined
+                                    const latestSend = sends?.sort((a: any, b: any) =>
+                                      new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
+                                    )[0]
+                                    return (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={!canUseEmailFeatures(plan) && !latestSend}
+                                        title={!canUseEmailFeatures(plan) ? 'Pro feature' : undefined}
+                                        onClick={() => {
+                                          setGigDetailsProject(project)
+                                          setGigDetailsOpen(true)
+                                        }}
+                                      >
+                                        <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+                                        </svg>
+                                        {latestSend ? 'Gig Details Status' : 'Send Gig Details'}
+                                      </Button>
+                                    )
+                                  })()}
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={!canUseEmailFeatures(plan)}
+                                    title={!canUseEmailFeatures(plan) ? 'Pro feature' : undefined}
+                                    onClick={() => {
+                                      setGroupTextProject(project)
+                                      setGroupTextOpen(true)
+                                    }}
+                                  >
+                                    <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
+                                    </svg>
+                                    Group Text
+                                  </Button>
+                                </div>
+                              )}
+                              {/* Gig Details Confirmation Status (always visible if sends exist) */}
+                              {canManage && (() => {
                                 const sends = (project as any).gig_detail_sends as any[] | undefined
                                 const latestSend = sends?.sort((a: any, b: any) =>
                                   new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
                                 )[0]
+                                if (!latestSend) return null
+                                const confirmations = latestSend?.gig_detail_confirmations as any[] | undefined
+                                const confirmedCount = confirmations?.filter((c: any) => c.confirmed_at).length ?? 0
+                                const totalCount = confirmations?.length ?? 0
+                                if (totalCount === 0) return null
+                                const allConfirmed = confirmedCount === totalCount
                                 return (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={!canUseEmailFeatures(plan) && !latestSend}
-                                    title={!canUseEmailFeatures(plan) ? 'Pro feature' : undefined}
+                                  <div
+                                    className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium cursor-pointer hover:opacity-80 ${
+                                      allConfirmed
+                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                        : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                                    }`}
                                     onClick={() => {
                                       setGigDetailsProject(project)
                                       setGigDetailsOpen(true)
                                     }}
                                   >
-                                    <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
-                                    </svg>
-                                    {latestSend ? 'Gig Details Status' : 'Send Gig Details'}
-                                  </Button>
+                                    {allConfirmed ? (
+                                      <>
+                                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                        </svg>
+                                        All {totalCount} confirmed gig details
+                                      </>
+                                    ) : (
+                                      <>
+                                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                        </svg>
+                                        Gig details: {confirmedCount} of {totalCount} confirmed
+                                      </>
+                                    )}
+                                  </div>
                                 )
                               })()}
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={!canUseEmailFeatures(plan)}
-                                title={!canUseEmailFeatures(plan) ? 'Pro feature' : undefined}
-                                onClick={() => {
-                                  setGroupTextProject(project)
-                                  setGroupTextOpen(true)
-                                }}
-                              >
-                                <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
-                                </svg>
-                                Group Text
-                              </Button>
-                            </div>
+                            </GigSection>
                           )}
-                          {/* Gig Details Confirmation Status (always visible if sends exist) */}
-                          {canManage && (() => {
-                            const sends = (project as any).gig_detail_sends as any[] | undefined
-                            const latestSend = sends?.sort((a: any, b: any) =>
-                              new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
-                            )[0]
-                            if (!latestSend) return null
-                            const confirmations = latestSend?.gig_detail_confirmations as any[] | undefined
-                            const confirmedCount = confirmations?.filter((c: any) => c.confirmed_at).length ?? 0
-                            const totalCount = confirmations?.length ?? 0
-                            if (totalCount === 0) return null
-                            const allConfirmed = confirmedCount === totalCount
-                            return (
-                              <div
-                                className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium cursor-pointer hover:opacity-80 mt-2 ${
-                                  allConfirmed
-                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                    : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
-                                }`}
-                                onClick={() => {
-                                  setGigDetailsProject(project)
-                                  setGigDetailsOpen(true)
-                                }}
-                              >
-                                {allConfirmed ? (
-                                  <>
-                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                    </svg>
-                                    All {totalCount} confirmed gig details
-                                  </>
-                                ) : (
-                                  <>
-                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                                    </svg>
-                                    Gig details: {confirmedCount} of {totalCount} confirmed
-                                  </>
-                                )}
-                              </div>
-                            )
-                          })()}
+                          {canManage && project.project_positions.some((p) => p.status === 'confirmed') && (
+                            <GigSection title="After the gig" hint="Thirty minutes after it ends, owners and admins get the pay summary and the gig lead is asked for a report.">
+                              {/* Payments shortcut */}
+                              {canManage && project.project_positions.some((p) => p.status === 'confirmed') && (
+                                <div className="flex flex-wrap items-center gap-3">
+                                  <Link href={`/dashboard/payments?project=${project.id}`}>
+                                    <Button variant="outline" size="sm">
+                                      <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                      </svg>
+                                      Manage Payments
+                                    </Button>
+                                  </Link>
+                                </div>
+                              )}
+                              {/* Gig report from the lead musician(s), after the gig */}
+                              {canManage && project.project_positions.some((p) => p.status === 'confirmed') && (
+                                <GigReportPanel
+                                  projectId={project.id}
+                                  positions={project.project_positions}
+                                  leaderIds={leaderIds}
+                                  chosenLeadId={project.gig_lead_musician_id ?? null}
+                                  reports={gigReports.filter((r) => r.project_id === project.id)}
+                                  timezone={timezone}
+                                />
+                              )}
+                            </GigSection>
+                          )}
                         </td>
                       </tr>
                     )}

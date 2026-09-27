@@ -52,6 +52,12 @@ interface ProjectOffersProps {
   onOfferChange: () => void
   /** `musicianId` is null when the admin picked "Someone else" and wants to choose. */
   onSendWaterfall?: (positionId: string, musicianId: string | null, customPay: number | null, isFollowUp?: boolean) => void
+  /**
+   * Chairs that still need someone (vacant or declined, no live offer). "Next in
+   * line" suggestions and expired follow-ups only ever appear for these: offering
+   * a chair that is already filled is never the right next step.
+   */
+  openPositionIds?: string[]
 }
 
 const OFFER_STATUS_COLORS: Record<string, string> = {
@@ -81,8 +87,10 @@ export function ProjectOffers({
   canManage,
   onOfferChange,
   onSendWaterfall,
+  openPositionIds,
 }: ProjectOffersProps) {
   const router = useRouter()
+  const [showHistory, setShowHistory] = useState(false)
   const terms = useTerms()
   const [sendingReminder, setSendingReminder] = useState<string | null>(null)
   const [waterfallCandidates, setWaterfallCandidates] = useState<Record<string, WaterfallCandidate[]>>({})
@@ -177,7 +185,11 @@ export function ProjectOffers({
   const [confirmWaterfall, setConfirmWaterfall] = useState<{ positionId: string; candidate: WaterfallCandidate; offer: OfferJoined } | null>(null)
 
   // Find declined/expired offers and load waterfall candidates
-  const waterfallOffers = offers.filter(o => o.status === 'declined' || o.status === 'expired')
+  const openChairs = openPositionIds ? new Set(openPositionIds) : null
+  const waterfallOffers = offers.filter(o =>
+    (o.status === 'declined' || o.status === 'expired') &&
+    (!openChairs || openChairs.has(o.project_position_id))
+  )
 
   useEffect(() => {
     async function loadWaterfallCandidates() {
@@ -388,9 +400,45 @@ export function ProjectOffers({
     return new Date(expiresAt) < new Date()
   }
 
+  // What the admin needs now vs. what already happened. Main list: offers
+  // still waiting on an answer, accepted offers (they carry "mark paid"), and,
+  // for each chair that still needs someone, its most recent declined/expired
+  // offer, which anchors the "Next in line" suggestion (once per chair).
+  // Everything else is history, folded until asked for.
+  const isLive = (o: OfferJoined) => (o.status === 'pending' || o.status === 'viewed') && !isExpired(o.expires_at)
+  const anchorByChair = new Map<string, OfferJoined>()
+  for (const o of offers) {
+    if (isLive(o) || o.status === 'accepted') continue
+    if (o.status !== 'declined' && o.status !== 'expired' && !isExpired(o.expires_at)) continue
+    if (openChairs && !openChairs.has(o.project_position_id)) continue
+    const current = anchorByChair.get(o.project_position_id)
+    if (!current || (o.sent_at || '') > (current.sent_at || '')) anchorByChair.set(o.project_position_id, o)
+  }
+  const anchorIds = new Set([...anchorByChair.values()].map((o) => o.id))
+  const mainOffers = offers.filter((o) => isLive(o) || o.status === 'accepted' || anchorIds.has(o.id))
+  const historyOffers = offers.filter((o) => !mainOffers.includes(o))
+  const visibleOffers = showHistory ? [...mainOffers, ...historyOffers] : mainOffers
+
   return (
     <div className="space-y-3">
-      <h4 className="text-sm font-semibold">Contract Offers</h4>
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold">Offers</h4>
+        {historyOffers.length > 0 && (
+          <button
+            type="button"
+            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            onClick={() => setShowHistory((v) => !v)}
+            aria-expanded={showHistory}
+          >
+            {showHistory ? 'Hide offer history' : `Show offer history (${historyOffers.length})`}
+          </button>
+        )}
+      </div>
+      {visibleOffers.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No open offers. {historyOffers.length > 0 ? 'Earlier offers are in the history.' : ''}
+        </p>
+      ) : (
       <div className="overflow-x-auto rounded-md border bg-background">
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/30">
@@ -418,7 +466,7 @@ export function ProjectOffers({
                 return acc
               }, {} as Record<string, Set<number>>)
 
-              return offers.map((offer) => {
+              return visibleOffers.map((offer) => {
                 const expired = isExpired(offer.expires_at)
                 const displayStatus = expired && (offer.status === 'pending' || offer.status === 'viewed')
                   ? 'expired'
@@ -518,8 +566,8 @@ export function ProjectOffers({
                     </td>
                   )}
                 </tr>
-                {/* Waterfall suggestion for declined/expired offers */}
-                {canManage && (offer.status === 'declined' || offer.status === 'expired' || displayStatus === 'expired') && onSendWaterfall && (
+                {/* Next-in-line suggestion: once per chair, only while the chair still needs someone */}
+                {canManage && anchorIds.has(offer.id) && (offer.status === 'declined' || offer.status === 'expired' || displayStatus === 'expired') && onSendWaterfall && (
                   <tr className="bg-amber-50/50 dark:bg-amber-950/20">
                     <td colSpan={canManage ? 9 : 7} className="px-3 py-2">
                       <div className="flex items-center gap-3 text-sm">
@@ -576,10 +624,14 @@ export function ProjectOffers({
           </tbody>
         </table>
       </div>
+      )}
 
       {/* Expired Offers Summary */}
       {canManage && (() => {
-        const expiredOffers = offers.filter(o => o.status === 'expired' || (isExpired(o.expires_at) && (o.status === 'pending' || o.status === 'viewed')))
+        const expiredOffers = offers.filter(o =>
+          (o.status === 'expired' || (isExpired(o.expires_at) && (o.status === 'pending' || o.status === 'viewed'))) &&
+          (!openChairs || openChairs.has(o.project_position_id))
+        )
         if (expiredOffers.length === 0) return null
 
         // Group by musician (deduplicate — a musician may have expired on multiple positions)

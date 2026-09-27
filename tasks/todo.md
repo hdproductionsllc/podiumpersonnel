@@ -1,3 +1,17 @@
+# Readability pass: Projects list + gig page (2026-09-27)
+David: "a lot of info... it can be done better". Scope chosen: gig page + Projects list.
+Seen live (PSQ, Lori Stone Wedding, 4/4 filled): ~12 declined/expired offers each
+followed by a "Next in line / Send Offer" bar for chairs that are ALREADY FILLED;
+Prepare Gig Music below all of it; "Unassign" twice per staffing row; unlabeled "+";
+list has 12 columns incl. always-"Active" Status and always-"1" Services, red Delete per row.
+- [x] List: name + client/venue as two lines; date with weekday + "in N days"; staffing pill; money in one cell; Edit/Complete/Delete in a menu; drop Status (badge only if not active) and Services columns
+- [x] Gig page: summary strip at top; order = Staffing -> Prepare Gig Music -> Music/Parts -> Send to musicians -> After the gig (payments + gig report)
+- [x] Offers: show open offers; history folded ("Offer history (N)")
+- [x] Next-in-line suggestions only for chairs that still need someone (David: yes)
+- [x] Staffing row: one Unassign, labeled actions, consistent pay
+- [x] Spacing/type: section spacing, readable table text
+- [x] Verify: 919 tests, tsc clean, build OK, no new lint in the 3 files. David said "make your edits live": pushed without the screenshot-approval step; live screenshots taken after deploy.
+
 # One lead per gig (2026-09-27, follow-up)
 David's correction: roster "Leader" = CAN lead; every gig has exactly ONE lead. The
 089 rule (ask every confirmed flagged leader) emailed Kathleen AND Jiyoung for the
