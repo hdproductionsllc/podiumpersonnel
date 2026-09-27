@@ -1,4 +1,5 @@
 {
+  "ignoreCommand": "if [ \"$VERCEL_GIT_COMMIT_REF\" = \"master\" ]; then exit 1; else exit 0; fi",
   "crons": [
     {
       "path": "/api/cron/expire-offers",
@@ -10,7 +11,7 @@
     },
     {
       "path": "/api/cron/complete-projects",
-      "schedule": "37 0 * * *"
+      "schedule": "37 9 * * *"
     },
     {
       "path": "/api/cron/keepalive",
@@ -25,8 +26,8 @@
       "schedule": "43 14 * * *"
     },
     {
-      "path": "/api/cron/song-planner-reminders",
-      "schedule": "31 16 * * *"
+      "path": "/api/cron/after-gig",
+      "schedule": "4,19,34,49 * * * *"
     }
   ]
 }

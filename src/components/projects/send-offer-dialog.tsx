@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { useTerms } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
+import { findPossibleDuplicates, type PossibleDuplicate } from '@/lib/musicians/duplicates'
 
 export type MusicianScheduleEntry = {
   id: string
@@ -98,6 +99,7 @@ export function SendOfferDialog({
   const [newEmail, setNewEmail] = useState('')
   const [addingMusician, setAddingMusician] = useState(false)
   const [locallyAddedMusicians, setLocallyAddedMusicians] = useState<MusicianForOffer[]>([])
+  const [addDuplicates, setAddDuplicates] = useState<PossibleDuplicate<MusicianForOffer>[]>([])
   const [updatedEmails, setUpdatedEmails] = useState<Record<string, string>>({})
   const [editingEmail, setEditingEmail] = useState('')
   const [savingEmail, setSavingEmail] = useState(false)
@@ -132,6 +134,7 @@ export function SendOfferDialog({
       }
 
       setLocallyAddedMusicians([])
+      setAddDuplicates([])
       setUpdatedEmails({})
       setEditingEmail('')
       setSavingEmail(false)
@@ -362,6 +365,27 @@ export function SendOfferDialog({
 
   // Combine prop musicians with locally added ones
   const allMusicians = [...musicians, ...locallyAddedMusicians]
+
+  // Possible-duplicate check for the quick-add form, debounced so it doesn't
+  // flicker on every keystroke. Non-blocking — it never disables "Add & Select".
+  useEffect(() => {
+    if (!showAddMusician) {
+      setAddDuplicates([])
+      return
+    }
+    const handle = setTimeout(() => {
+      const firstName = newFirstName.trim()
+      const lastName = newLastName.trim()
+      const email = newEmail.trim()
+      if (!firstName && !lastName && !email) {
+        setAddDuplicates([])
+        return
+      }
+      setAddDuplicates(findPossibleDuplicates({ first_name: firstName, last_name: lastName, email }, allMusicians))
+    }, 400)
+    return () => clearTimeout(handle)
+    // allMusicians is a fresh array each render; depending on its inputs instead avoids re-running the debounce on every render.
+  }, [showAddMusician, newFirstName, newLastName, newEmail, musicians, locallyAddedMusicians]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Get selected musician's email status
   const selectedMusician = allMusicians.find((m) => m.id === selectedMusicianId)
@@ -957,6 +981,17 @@ export function SendOfferDialog({
                       onChange={(e) => setNewEmail(e.target.value)}
                       className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
                     />
+                    {addDuplicates.length > 0 && (
+                      <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200 space-y-1">
+                        <p className="font-medium">Possible duplicate:</p>
+                        {addDuplicates.slice(0, 3).map(({ musician: match, reasons }) => (
+                          <p key={match.id}>
+                            {match.first_name} {match.last_name}
+                            {match.email ? ` (${match.email})` : ''} — same {reasons.join(' & ')}
+                          </p>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex gap-2">
                       <Button
                         size="sm"

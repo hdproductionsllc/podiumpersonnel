@@ -44,6 +44,7 @@ import { useTerms } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
 import { canCreateProject, canUseEmailFeatures, PLAN_LIMITS } from '@/lib/plan'
 import { UpgradePrompt } from '@/components/billing/upgrade-prompt'
+import { GigReportPanel, type GigReportRow } from '@/components/projects/gig-report-panel'
 
 export type ProjectWithServices = Project & {
   services: ServiceWithVenue[]
@@ -60,6 +61,8 @@ interface ProjectsClientProps {
   userRole: string
   userId?: string
   dismissedTooltips?: string[]
+  gigReports?: GigReportRow[]
+  leaderIds?: string[]
 }
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
@@ -248,6 +251,8 @@ export function ProjectsClient({
   userRole,
   userId,
   dismissedTooltips = [],
+  gigReports = [],
+  leaderIds = [],
 }: ProjectsClientProps) {
   const router = useRouter()
   const plan = usePlan()
@@ -979,18 +984,23 @@ export function ProjectsClient({
                             timezone={timezone}
                             conflicts={detectConflicts(project.project_positions, musicians, project.services)}
                           />
-                          {/* Payments shortcut */}
-                          {canManage && project.project_positions.some((p) => p.status === 'confirmed') && (
-                            <div className="flex items-center gap-3">
-                              <Link href={`/dashboard/payments?project=${project.id}`}>
-                                <Button variant="outline" size="sm">
-                                  <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                                  </svg>
-                                  Manage Payments
-                                </Button>
-                              </Link>
-                            </div>
+                          {/* Prepare Gig Music (client selections -> matched songs -> books). First,
+                              because it is the main job on a booked gig. */}
+                          {canManage && intakeEnabled && (
+                            <IntakePanel
+                              projectId={project.id}
+                              ensembleType={project.ensemble_type}
+                              positionInstruments={project.project_positions
+                                .map((p) => p.instrument?.name)
+                                .filter((n): n is string => !!n)}
+                              instruments={Array.from(
+                                new Map(
+                                  project.project_positions
+                                    .filter((p) => p.instrument)
+                                    .map((p) => [p.instrument!.id, { id: p.instrument!.id, name: p.instrument!.name }])
+                                ).values()
+                              )}
+                            />
                           )}
                           {/* Music / Parts Section */}
                           {canManage && project.project_positions.length > 0 && (
@@ -1005,22 +1015,27 @@ export function ProjectsClient({
                               musicSends={(project as any).music_sends as any[] | undefined}
                             />
                           )}
-                          {/* Client Selections (intake import + review) */}
-                          {canManage && intakeEnabled && (
-                            <IntakePanel
+                          {/* Payments shortcut */}
+                          {canManage && project.project_positions.some((p) => p.status === 'confirmed') && (
+                            <div className="flex items-center gap-3">
+                              <Link href={`/dashboard/payments?project=${project.id}`}>
+                                <Button variant="outline" size="sm">
+                                  <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                  </svg>
+                                  Manage Payments
+                                </Button>
+                              </Link>
+                            </div>
+                          )}
+                          {/* Gig report from the lead musician(s), after the gig */}
+                          {canManage && project.project_positions.some((p) => p.status === 'confirmed') && (
+                            <GigReportPanel
                               projectId={project.id}
-                              ensembleType={project.ensemble_type}
-                              positionInstruments={project.project_positions
-                                .map((p) => p.instrument?.name)
-                                .filter((n): n is string => !!n)}
-                              clientEmail={(project as any).client_email as string | null | undefined}
-                              instruments={Array.from(
-                                new Map(
-                                  project.project_positions
-                                    .filter((p) => p.instrument)
-                                    .map((p) => [p.instrument!.id, { id: p.instrument!.id, name: p.instrument!.name }])
-                                ).values()
-                              )}
+                              positions={project.project_positions}
+                              leaderIds={leaderIds}
+                              reports={gigReports.filter((r) => r.project_id === project.id)}
+                              timezone={timezone}
                             />
                           )}
                           {/* Send Gig Details + Group Text (gated behind all positions confirmed) */}

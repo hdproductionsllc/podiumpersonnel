@@ -1,7 +1,7 @@
 /**
  * Load the repertoire match index for an org's library.
  *
- * Lifted out of /api/intake/parse so the client planner's save endpoint (082)
+ * Lifted out of /api/intake/parse so the (since retired) client planner (082)
  * matches through exactly the same index the review screen does — a song typed
  * by the client and the same song pasted from a questionnaire must land on the
  * same work, or the operator sees two different answers for one list.

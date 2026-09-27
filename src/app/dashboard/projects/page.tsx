@@ -3,6 +3,8 @@ import { ProjectsClient, type ProjectWithServices } from '@/components/projects/
 import type { BookForImport } from '@/components/projects/project-positions'
 import type { MusicianForOffer } from '@/components/projects/send-offer-dialog'
 import { DEFAULT_TIMEZONE } from '@/lib/utils'
+import { isReadyToComplete } from '@/lib/projects/archive'
+import type { GigReportRow } from '@/components/projects/gig-report-panel'
 import { attachVenueDetails } from '@/lib/venue-attach'
 
 export default async function ProjectsPage() {
@@ -69,11 +71,12 @@ export default async function ProjectsPage() {
     await attachVenueDetails(projects.flatMap((p) => p.services || []))
   }
 
-  // Auto-complete active projects whose end_date has passed
-  const today = new Date().toISOString().split('T')[0]
+  // Auto-complete active projects once the day after their end_date is over, in
+  // the org's own time zone (the same rule the complete-projects cron uses).
   if (projects?.length) {
+    const now = new Date()
     const pastActive = projects.filter(
-      (p) => p.status === 'active' && p.end_date && p.end_date < today
+      (p) => p.status === 'active' && isReadyToComplete(p.end_date, now, timezone)
     )
     if (pastActive.length) {
       const { error: completeError } = await supabase
@@ -81,7 +84,7 @@ export default async function ProjectsPage() {
         .update({ status: 'completed' })
         .eq('organization_id', organization!.id)
         .eq('status', 'active')
-        .lt('end_date', today)
+        .in('id', pastActive.map((p) => p.id))
 
       if (completeError) {
         // Leave the local rows as "active" so the page shows what the database
@@ -120,6 +123,27 @@ export default async function ProjectsPage() {
     .order('last_name', { ascending: true })
     .order('first_name', { ascending: true })
 
+  // Gig reports from lead musicians (089) and who counts as a lead (the roster
+  // leader flag). Read separately and tolerantly: gig_reports is admin-only
+  // under RLS, and a failed read must never take the Projects page down with it.
+  const [{ data: gigReports, error: gigReportsError }, { data: leaders }] = await Promise.all([
+    supabase
+      .from('gig_reports')
+      .select(`
+        id, project_id, musician_id, requested_at, opened_at, submitted_at,
+        overall, all_on_time, late_notes, hiccups, client_follow_up, arrangement_notes, other_notes,
+        musician:musicians(first_name, last_name)
+      `)
+      .eq('organization_id', organization!.id)
+      .order('requested_at', { ascending: true }),
+    supabase
+      .from('musicians')
+      .select('id')
+      .eq('organization_id', organization!.id)
+      .eq('is_leader', true),
+  ])
+  if (gigReportsError) console.error('Projects page: could not read gig reports:', gigReportsError.message)
+
   // Fetch tutorial state for tooltips
   const { data: tutorialState } = await supabase
     .from('user_tutorial_state')
@@ -139,6 +163,8 @@ export default async function ProjectsPage() {
       userRole={membership!.role}
       userId={user!.id}
       dismissedTooltips={tutorialState?.dismissed_tooltips ?? []}
+      gigReports={(gigReports as unknown as GigReportRow[]) ?? []}
+      leaderIds={(leaders ?? []).map((l) => l.id)}
     />
   )
 }

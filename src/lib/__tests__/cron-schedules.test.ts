@@ -22,20 +22,26 @@ describe('vercel.json cron schedules', () => {
     expect(config.crons.length).toBeGreaterThan(0)
   })
 
+  // A job may list several fixed minutes (the after-gig job runs every 15
+  // minutes as "4,19,34,49"). Each listed minute is held to the same rules.
+  const minutesOf = (schedule: string) => schedule.split(' ')[0].split(',')
+
   it('never schedules a job on minute 0', () => {
-    const offenders = config.crons.filter((c) => c.schedule.split(' ')[0] === '0')
+    const offenders = config.crons.filter((c) => minutesOf(c.schedule).includes('0'))
     expect(offenders.map((c) => `${c.path} (${c.schedule})`)).toEqual([])
   })
 
-  it('uses a fixed minute, not a wildcard or a step, so runs stay predictable', () => {
+  it('uses fixed minutes, not a wildcard or a step, so runs stay predictable', () => {
     for (const cron of config.crons) {
-      const minute = cron.schedule.split(' ')[0]
-      expect(minute, `${cron.path} minute field`).toMatch(/^[1-9]\d?$/)
+      for (const minute of minutesOf(cron.schedule)) {
+        expect(minute, `${cron.path} minute field`).toMatch(/^[1-5]?\d$/)
+        expect(Number(minute), `${cron.path} minute field`).toBeGreaterThan(0)
+      }
     }
   })
 
   it('spreads the jobs across different minutes so they never pile up together', () => {
-    const minutes = config.crons.map((c) => c.schedule.split(' ')[0])
+    const minutes = config.crons.flatMap((c) => minutesOf(c.schedule))
     expect(new Set(minutes).size).toBe(minutes.length)
   })
 })

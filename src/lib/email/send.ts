@@ -24,7 +24,10 @@ import { MusicUploadedEmail } from './templates/music-uploaded'
 import { MusicReminderEmail } from './templates/music-reminder'
 import { PreGigNotificationEmail } from './templates/pre-gig-notification'
 import { StaffingAlertEmail } from './templates/staffing-alert'
-import { SongPlannerEmail, type SongPlannerVariant } from './templates/song-planner'
+import { PaySummaryEmail } from './templates/pay-summary'
+import { GigReportRequestEmail } from './templates/gig-report-request'
+import { GigReportSubmittedEmail, type GigReportAnswers } from './templates/gig-report-submitted'
+import type { PaySummaryLine } from '@/lib/after-gig/rules'
 import { render } from '@react-email/render'
 import { type EmailBranding } from './templates/email-layout'
 import { term, type TermDictionary, DEFAULT_TERMS } from '@/lib/verticals'
@@ -1192,45 +1195,97 @@ export async function sendStaffingAlertEmail(params: SendStaffingAlertParams) {
   })
 }
 
-// Client Song Planner (082) — invitation and nudges, sent to the CLIENT.
+// After-gig pay summary (089) — what to pay each person on a gig.
 //
-// Replies must reach a human at the org, not the platform inbox: a couple who
-// hits reply is asking about their wedding. replyToOrgId does that.
-interface SendSongPlannerParams {
-  to: string
-  clientName: string
+// Owners and admins ONLY, never musicians (David, 2026-09-27). The recipient
+// list is a parameter named for exactly that, and the only caller builds it from
+// getOrgAdminEmails (organization_members owner/admin), never from musicians.
+interface SendPaySummaryParams {
+  adminEmails: string[]
   organizationName: string
-  organizationId: string
-  /** Tokenized planner page — the client has no account. */
-  plannerUrl: string
-  eventDate?: string | null
-  dueAt?: string | null
-  variant: SongPlannerVariant
+  projectName: string
+  gigDate: string
+  lines: PaySummaryLine[]
+  grandTotal: number
+  paymentsUrl: string
   branding?: EmailBranding
 }
 
-export async function sendSongPlannerEmail(params: SendSongPlannerParams) {
-  const subject =
-    params.variant === 'invite'
-      ? `Choose your music — ${params.organizationName}`
-      : params.variant === 'due'
-        ? `Your music selections are due today — ${params.organizationName}`
-        : `A nudge about your music selections — ${params.organizationName}`
+export async function sendPaySummaryEmail(params: SendPaySummaryParams) {
+  return sendTransactional({
+    to: params.adminEmails,
+    subject: withDate(`Pay for ${params.projectName}`, params.gigDate),
+    react: PaySummaryEmail({
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      gigDate: params.gigDate,
+      lines: params.lines,
+      grandTotal: params.grandTotal,
+      paymentsUrl: params.paymentsUrl,
+      branding: params.branding,
+    }),
+    errorContext: 'pay summary',
+  })
+}
 
+// Gig report request (089) — to a lead musician, no pay information.
+// Replies reach the org owner, since a lead who hits reply is talking about the gig.
+interface SendGigReportRequestParams {
+  to: string
+  leadFirstName: string
+  organizationName: string
+  organizationId: string
+  projectName: string
+  gigDate: string
+  reportUrl: string
+  branding?: EmailBranding
+}
+
+export async function sendGigReportRequestEmail(params: SendGigReportRequestParams) {
   return sendTransactional({
     to: params.to,
-    subject,
-    react: SongPlannerEmail({
-      clientName: params.clientName,
+    subject: withDate(`How did ${params.projectName} go?`, params.gigDate),
+    react: GigReportRequestEmail({
       organizationName: params.organizationName,
-      plannerUrl: params.plannerUrl,
-      eventDate: params.eventDate,
-      dueAt: params.dueAt,
-      variant: params.variant,
+      leadFirstName: params.leadFirstName,
+      projectName: params.projectName,
+      gigDate: params.gigDate,
+      reportUrl: params.reportUrl,
       branding: params.branding,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,
-    errorContext: 'song planner',
+    errorContext: 'gig report request',
+  })
+}
+
+// Gig report submitted (089) — the lead's answers, to owners and admins only.
+interface SendGigReportSubmittedParams {
+  adminEmails: string[]
+  organizationName: string
+  leadName: string
+  projectName: string
+  gigDate: string
+  answers: GigReportAnswers
+  projectUrl: string
+  branding?: EmailBranding
+}
+
+export async function sendGigReportSubmittedEmail(params: SendGigReportSubmittedParams) {
+  const attention =
+    params.answers.overall === 'issues' || params.answers.allOnTime === false || !!params.answers.clientFollowUp
+  return sendTransactional({
+    to: params.adminEmails,
+    subject: withDate(`${attention ? 'Needs attention: ' : ''}Gig report for ${params.projectName}`, params.gigDate),
+    react: GigReportSubmittedEmail({
+      organizationName: params.organizationName,
+      leadName: params.leadName,
+      projectName: params.projectName,
+      gigDate: params.gigDate,
+      answers: params.answers,
+      projectUrl: params.projectUrl,
+      branding: params.branding,
+    }),
+    errorContext: 'gig report submitted',
   })
 }

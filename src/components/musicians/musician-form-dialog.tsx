@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/form'
 import { useTerms } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
+import { findPossibleDuplicates, type PossibleDuplicate } from '@/lib/musicians/duplicates'
 import type { MusicianWithInstruments, InstrumentOption } from './musicians-client'
 
 function formatPhoneNumber(phone: string): string {
@@ -47,6 +48,10 @@ interface MusicianFormDialogProps {
   instruments: InstrumentOption[]
   organizationId: string
   onSuccess: () => void
+  /** The org's full roster, already in memory on the page — used only to warn about possible duplicates. */
+  roster?: MusicianWithInstruments[]
+  /** Opens an existing roster musician for editing (e.g. from "possible duplicate" → "Open existing"). */
+  onOpenExisting?: (musician: MusicianWithInstruments) => void
 }
 
 export function MusicianFormDialog({
@@ -56,6 +61,8 @@ export function MusicianFormDialog({
   instruments,
   organizationId,
   onSuccess,
+  roster = [],
+  onOpenExisting,
 }: MusicianFormDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -285,6 +292,8 @@ export function MusicianFormDialog({
   }
 
   const watchedInstrumentIds = form.watch('instrument_ids') || []
+  const watchedFirstName = form.watch('first_name')
+  const watchedLastName = form.watch('last_name')
   const watchedEmail = form.watch('email')
   const watchedPhone = form.watch('phone')
   const watchedZelleMethod = form.watch('zelle_method')
@@ -300,6 +309,37 @@ export function MusicianFormDialog({
       form.setValue('zelle_verified', false)
     }
   }, [canVerifyZelle, form])
+
+  // Possible-duplicate check — debounced so it doesn't flicker on every
+  // keystroke. Runs whether adding or editing: when editing, excludeId keeps
+  // the record from matching itself, but still catches an edit that collides
+  // with a DIFFERENT person already on the roster (e.g. reusing their email).
+  const [duplicateMatches, setDuplicateMatches] = useState<PossibleDuplicate<MusicianWithInstruments>[]>([])
+
+  useEffect(() => {
+    if (!open) {
+      setDuplicateMatches([])
+      return
+    }
+    const handle = setTimeout(() => {
+      const firstName = (watchedFirstName || '').trim()
+      const lastName = (watchedLastName || '').trim()
+      const email = (watchedEmail || '').trim()
+      const phone = (watchedPhone || '').trim()
+      if (!firstName && !lastName && !email && !phone) {
+        setDuplicateMatches([])
+        return
+      }
+      setDuplicateMatches(
+        findPossibleDuplicates(
+          { first_name: firstName, last_name: lastName, email, phone },
+          roster,
+          { excludeId: musician?.id }
+        )
+      )
+    }, 400)
+    return () => clearTimeout(handle)
+  }, [open, watchedFirstName, watchedLastName, watchedEmail, watchedPhone, roster, musician?.id])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -320,6 +360,36 @@ export function MusicianFormDialog({
             {error && (
               <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
                 {error}
+              </div>
+            )}
+
+            {!error && duplicateMatches.length > 0 && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200 space-y-2">
+                <p className="font-medium">
+                  Possible duplicate {duplicateMatches.length > 1 ? `${term(terms, 'person', { plural: true, case: 'lower' })}` : term(terms, 'person', { case: 'lower' })}:
+                </p>
+                <ul className="space-y-1">
+                  {duplicateMatches.slice(0, 3).map(({ musician: match, reasons }) => (
+                    <li key={match.id} className="flex items-center justify-between gap-2">
+                      <span>
+                        {match.first_name} {match.last_name}
+                        {match.email ? ` (${match.email})` : ''} — same {reasons.join(' & ')}
+                      </span>
+                      {onOpenExisting && (
+                        <button
+                          type="button"
+                          className="text-xs font-medium underline hover:no-underline flex-shrink-0"
+                          onClick={() => onOpenExisting(match)}
+                        >
+                          Open existing
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs opacity-80">
+                  This won&apos;t stop you from saving — {isEditing ? 'save changes' : `add ${term(terms, 'person', { case: 'lower' })}`} below if this is a different person.
+                </p>
               </div>
             )}
 

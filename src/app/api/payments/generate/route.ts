@@ -1,4 +1,5 @@
 import { requireOrgAdmin, apiSuccess, apiError } from '@/lib/api-helpers'
+import { acceptedOfferPay, computeServicePay } from '@/lib/payments/compute'
 
 export async function POST(request: Request) {
   const { supabase, membership, error } = await requireOrgAdmin()
@@ -88,19 +89,11 @@ export async function POST(request: Request) {
 
       if (!musician || !project.services) continue
 
-      // Get the accepted offer's custom_pay (the actual agreed amount)
-      const acceptedOffer = offers?.find((o) => o.status === 'accepted')
-      const offerPay = acceptedOffer?.custom_pay ?? null
+      // The accepted offer's custom_pay is the actual agreed amount.
+      const offerPay = acceptedOfferPay(offers)
 
       for (const service of project.services) {
-        // Priority: accepted offer pay > service base_pay > 0
-        const basePay = offerPay ?? service.base_pay ?? 0
-        const isLeader = musician.is_leader && !!service.leader_fee
-
-        // Only add leader fee on top if using service base_pay (not offer pay,
-        // since offer pay already includes leader fee in the offered amount)
-        const leaderFee = (isLeader && offerPay === null && service.leader_fee) ? service.leader_fee : 0
-        const totalPay = basePay + leaderFee
+        const { total: totalPay, isLeader } = computeServicePay(service, musician.is_leader, offerPay)
 
         if (totalPay <= 0) continue
 

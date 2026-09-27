@@ -1,3 +1,75 @@
+# After-the-gig workflow + gig-music layout + roster duplicate warning (2026-09-27)
+
+David's asks: (1) don't archive a gig the moment it ends, wait a day; (2) email the
+org admins "here's how much to pay each person"; (3) get a timely report from the
+lead musician (on time? hiccups? client follow-ups? arrangements to rework?);
+(4) the gig-music section should be the obvious thing to click, sit above Music /
+Parts, with payments below; retire "Let the client choose"; (5) warn when adding a
+musician who may already be on the roster.
+
+## What is true today (verified 2026-09-27 by three code sweeps + one read-only DB query)
+- "Archived" = status completed/cancelled, hidden by a UI toggle. Two places flip
+  active -> completed when end_date < today **in UTC**: cron
+  `api/cron/complete-projects` (00:37 UTC) and the Projects page load itself.
+  UTC means a Saturday evening gig in Chicago/LA can vanish before Sunday starts.
+  Orgs already carry `organizations.timezone`.
+- Pay math lives only in `api/payments/generate/route.ts` (accepted offer custom_pay
+  > service base_pay; leader_fee added only on the default path). No payout email
+  exists. No post-gig job exists.
+- "Leader" is `musicians.is_leader`, global to the musician, not per gig.
+- Project detail = expanded row in `projects-client.tsx`. Order today: ... Manage
+  Payments (button to /dashboard/payments) -> Music / Parts -> Client Selections
+  (`IntakePanel`, only for orgs with intake_enabled).
+- "Let the client choose" (migration 082): card inside IntakePanel + planner-link API
+  + public /plan/[token] + 3 public APIs + reminder cron + email template + lib + test.
+  **Zero links have ever been minted in prod** (query 2026-09-27), so retiring it
+  breaks no client. Client Selections itself does not depend on it.
+- Musicians are created in 5 places (main dialog, bulk import, inline add in Send
+  Offer and in Assign Musician, sub approval). No DB uniqueness, no pre-insert check
+  except sub approval (exact email). The merge script has no matching rules (pairs
+  were hand-picked), so matching rules are new. Admins already hold the full roster
+  in the browser (RLS: members can read), so the check needs no new query.
+
+## Decisions (David, 2026-09-27)
+- Gig lead = every musician CONFIRMED on the gig whose roster record is flagged leader (musicians.is_leader). No per-gig picker. None flagged -> no request, the row says so.
+- Pay email + report request go out 30 min after the gig's END TIME (services.end_time, timestamptz; all 29 past gigs have one). Multi-service gigs: after the LAST service. New cron every 15 min -> lands 30-45 min after. Only gigs that ended in the last 48h (first deploy cannot blast the back catalogue).
+- Pay email recipients: org owners + admins ONLY. NEVER musicians. Enforced by building recipients solely from organization_members, with a test.
+- Section title: "Prepare Gig Music". Archive still waits one day (org time zone).
+
+## Plan
+### Phase 0 - database first (paste-ready SQL, run BEFORE the deploy)
+- [x] Migration 089: `gig_reports` (project, lead musician, 256-bit token, sent/opened/submitted, answers) unique per (project, musician); `projects.pay_summary_sent_at`. Additive only; RLS: org members read, writes via service role (public form uses service client, like /gig/[token]).
+- [x] scripts/after-gig-2026-09-27.sql written (body diffed identical to 089)
+- [ ] David pastes it; verify columns over REST before pushing code
+### Phase 1 - archive a day later, in the org's time zone
+- [x] One shared rule (`src/lib/projects/archive.ts` isReadyToComplete): end_date < (org's today - 1 day)
+- [x] Use it in BOTH the cron and the page-load fallback (the two enforcement points)
+### Phase 2 - after-the-gig job (new cron every 15 min, off minute 0)
+- [x] Extract pay math into `src/lib/payments/compute.ts`; generate route uses it (no behavior change, test proves same numbers)
+- [x] Pay summary email to owner + admins: each person, instrument, base, leader fee, total, grand total, link to Payments. Once per project (`pay_summary_sent_at`)
+- [x] Gig report request email to the lead musician with a no-login link
+- [x] Both fire once the project's LAST service end_time + 30 min has passed, within 48h; idempotent (pay_summary_sent_at, gig_reports rows); EMAIL_SAFE_MODE respected
+### Phase 3 - lead musician gig report
+- [x] Project row: "Gig report" panel: who the lead(s) are, "Send report request now / resend", and the submitted report
+- [x] Public /report/[token] form (resolver returns one plain 404 on every failure, like /gig/[token])
+- [x] On submit: save, email the answers to owner + admins
+### Phase 4 - gig music layout
+- [x] Rename "Client Selections" -> new title; make it a prominent call-to-action
+- [x] Order: gig music -> Music / Parts -> Manage Payments
+- [x] Retire planner: card, planner-link API, /plan/[token] page + 3 APIs, reminder cron + vercel.json entry, email template + sender, planner lib, its test. DB columns stay (harmless). UI sweep for dangling links.
+### Phase 5 - possible-duplicate warning
+- [x] `src/lib/musicians/duplicates.ts`: same org only; email (trim, lowercase), phone (last 10 digits), name (lowercase, accents/punctuation stripped)
+- [x] Amber, non-blocking warning with "open existing" / "add anyway" in: main Add dialog, Send Offer inline add, Assign Musician inline add
+- [x] Bulk import: rows whose email is already on the roster are skipped and listed; name-only matches imported but listed
+### Verification (log results here)
+- 2026-09-27: vitest 58 files / 911 tests pass (new: project-archive 7, after-gig 21; schedule test now checks every listed minute); tsc clean; next build OK (/report/[token] present, /plan gone); eslint adds no new errors in touched files (CI lint is advisory, ~700 pre-existing).
+- Read-only prod checks: 0 planner links ever minted; all 29 past services have end_time; no active/completed project lacks end_date; 41 musicians flagged leader; 088 live, 089 not yet.
+- Duplicate warning (built by a Sonnet helper, reviewed): 20 tests; main Add dialog ("Open existing" flips the dialog to edit that person), Send Offer + Assign quick-add (email/name only: those forms have no phone), bulk import skips same-email rows and lists name/phone matches. Largest roster 180 (<1,000 PostgREST cap). Full run after merge: 911 tests, tsc clean, build OK.
+- Also: complete-projects cron moved 00:37 -> 09:37 UTC (Monday-morning archive for Chicago + LA); vercel.json gained ignoreCommand (only master builds).
+- [ ] Unit tests: archive date rule across time zones, pay math parity, duplicate rules, report token resolver, cron selection + idempotency
+- [ ] npm test, npm run build, local run with screenshots of the project row and forms
+- [ ] ONE push to master after all phases verified (Vercel build discipline)
+
 # Music / Parts downloads had no extension (2026-09-22)
 
 Clicking a book in Music / Parts saved "Madelyn Intagliata Violin " — no ".pdf".

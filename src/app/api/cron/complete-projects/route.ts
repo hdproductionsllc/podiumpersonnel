@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
+import { isReadyToComplete } from '@/lib/projects/archive'
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request)
@@ -11,16 +12,37 @@ export async function GET(request: NextRequest) {
 
   return runCronJob('complete-projects', async () => {
     const supabase = createServiceClient()
-    const today = new Date().toISOString().split('T')[0]
+    const now = new Date()
 
-    // Mark active projects with past end_date as completed
+    // Candidates: active projects that ended before today in UTC. The real
+    // rule (isReadyToComplete) is stricter and per-org — the day after the gig
+    // stays active in the org's own time zone — and its cutoff is never later
+    // than UTC today, so this pre-filter cannot drop a project that is due.
+    const utcToday = now.toISOString().slice(0, 10)
+    const { data: candidates, error: readError } = await withCronRetry(
+      'complete-projects: read active projects past end_date',
+      () => supabase
+        .from('projects')
+        .select('id, name, end_date, organization:organizations(timezone)')
+        .eq('status', 'active')
+        .lt('end_date', utcToday),
+    )
+    if (readError) throw readError
+
+    const due = (candidates || []).filter((p) => {
+      const org = p.organization as unknown as { timezone: string | null } | null
+      return isReadyToComplete(p.end_date, now, org?.timezone)
+    })
+    if (due.length === 0) return NextResponse.json({ completed: 0 })
+
     const { data, error } = await withCronRetry(
-      'complete-projects: mark active projects past end_date as completed',
+      'complete-projects: mark due projects completed',
       () => supabase
         .from('projects')
         .update({ status: 'completed' })
+        .in('id', due.map((p) => p.id))
+        // Still active: an admin may have changed it since the read.
         .eq('status', 'active')
-        .lt('end_date', today)
         .select('id, name'),
     )
 

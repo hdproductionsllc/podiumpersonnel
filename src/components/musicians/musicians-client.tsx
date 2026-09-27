@@ -176,7 +176,15 @@ export function MusiciansClient({
   const [importTag, setImportTag] = useState('')
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [showPostImportGuide, setShowPostImportGuide] = useState(false)
-  const [importStats, setImportStats] = useState<{ total: number; withEmail: number; withoutEmail: number; withPhone: number; withoutPhone: number } | null>(null)
+  const [importStats, setImportStats] = useState<{
+    total: number
+    withEmail: number
+    withoutEmail: number
+    withPhone: number
+    withoutPhone: number
+    skippedExisting: { name: string; email: string | null }[]
+    possibleDuplicates: { name: string; matchedWith: string; reasons: string[] }[]
+  } | null>(null)
 
   const canManage = userRole === 'owner' || userRole === 'admin'
 
@@ -900,8 +908,18 @@ export function MusiciansClient({
           withoutEmail: result.stats?.withoutEmail ?? 0,
           withPhone: result.stats?.withPhone ?? 0,
           withoutPhone: result.stats?.withoutPhone ?? 0,
+          skippedExisting: result.skippedExisting ?? [],
+          possibleDuplicates: result.possibleDuplicates ?? [],
         })
         setShowPostImportGuide(true)
+      }
+
+      if (result.skippedExisting?.length > 0) {
+        const names = result.skippedExisting.slice(0, 3).map((s: { name: string }) => s.name).join(', ')
+        const more = result.skippedExisting.length > 3 ? '…' : ''
+        toast.warning(
+          `${result.skippedExisting.length} already in your roster (matched by email, not re-added): ${names}${more}`
+        )
       }
 
       if (result.errors > 0) {
@@ -1647,6 +1665,8 @@ export function MusiciansClient({
         instruments={instruments}
         organizationId={organizationId}
         onSuccess={handleSuccess}
+        roster={musicians}
+        onOpenExisting={handleEdit}
       />
 
       <DeleteMusicianDialog
@@ -1732,6 +1752,37 @@ export function MusiciansClient({
                   <span className={`font-medium ${importStats.withoutPhone > 0 ? 'text-amber-600 dark:text-amber-400' : ''}`}>{importStats.withoutPhone}</span>
                 </div>
               </div>
+            </div>
+          )}
+
+          {importStats && (importStats.skippedExisting.length > 0 || importStats.possibleDuplicates.length > 0) && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200 space-y-2">
+              {importStats.skippedExisting.length > 0 && (
+                <div>
+                  <p className="font-medium">
+                    {importStats.skippedExisting.length} already in your roster — not re-added:
+                  </p>
+                  <p className="text-xs mt-0.5">
+                    {importStats.skippedExisting.slice(0, 5).map((s) => s.name).join(', ')}
+                    {importStats.skippedExisting.length > 5 ? `, +${importStats.skippedExisting.length - 5} more` : ''}
+                  </p>
+                </div>
+              )}
+              {importStats.possibleDuplicates.length > 0 && (
+                <div>
+                  <p className="font-medium">
+                    {importStats.possibleDuplicates.length} possible duplicate{importStats.possibleDuplicates.length !== 1 ? 's' : ''} imported — worth a look:
+                  </p>
+                  <ul className="text-xs mt-0.5 space-y-0.5">
+                    {importStats.possibleDuplicates.slice(0, 5).map((d, i) => (
+                      <li key={i}>{d.name} — matches {d.matchedWith} ({d.reasons.join(' & ')})</li>
+                    ))}
+                  </ul>
+                  {importStats.possibleDuplicates.length > 5 && (
+                    <p className="text-xs mt-0.5">+{importStats.possibleDuplicates.length - 5} more</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

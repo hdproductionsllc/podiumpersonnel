@@ -10,6 +10,57 @@ import {
 } from '@/lib/import/parse-musicians'
 import { requireOrgPlan, apiSuccess, apiError } from '@/lib/api-helpers'
 import { canBulkImport } from '@/lib/plan'
+import { findPossibleDuplicates, type MusicianRosterEntry } from '@/lib/musicians/duplicates'
+
+type ImportRow = {
+  organization_id: string
+  first_name: string
+  last_name: string
+  email: string | null
+  phone: string | null
+  notes: string | null
+  is_active: boolean
+  tags: string[]
+}
+
+/**
+ * Compares each parsed row against the org's existing roster. A row whose
+ * normalized email already exists is skipped outright — inserting it would
+ * create an exact duplicate. A row that only matches by phone or name is
+ * still imported, but reported so an admin can go review it.
+ */
+function partitionAgainstRoster(rows: ImportRow[], roster: MusicianRosterEntry[]) {
+  const rowsToInsert: ImportRow[] = []
+  const skippedExisting: { name: string; email: string | null }[] = []
+  const possibleDuplicates: { name: string; matchedWith: string; reasons: string[] }[] = []
+
+  for (const row of rows) {
+    const name = `${row.first_name} ${row.last_name}`.trim()
+    const matches = findPossibleDuplicates(
+      { first_name: row.first_name, last_name: row.last_name, email: row.email, phone: row.phone },
+      roster
+    )
+
+    const emailMatch = matches.find((m) => m.reasons.includes('email'))
+    if (emailMatch) {
+      skippedExisting.push({ name, email: row.email })
+      continue
+    }
+
+    if (matches.length > 0) {
+      const top = matches[0]
+      possibleDuplicates.push({
+        name,
+        matchedWith: `${top.musician.first_name} ${top.musician.last_name}`.trim(),
+        reasons: top.reasons,
+      })
+    }
+
+    rowsToInsert.push(row)
+  }
+
+  return { rowsToInsert, skippedExisting, possibleDuplicates }
+}
 
 export async function POST(request: Request) {
   const { supabase, membership, plan, error } = await requireOrgPlan()
@@ -33,6 +84,16 @@ export async function POST(request: Request) {
     return apiError('Invalid file type. Please upload an Excel (.xlsx, .xls), CSV, or vCard (.vcf) file.')
   }
 
+  // Existing roster for this org, used only to flag/skip duplicates below —
+  // one query, reused for whichever parse path below ends up running. PostgREST
+  // returns at most 1,000 rows; the largest roster is 180 (2026-09-27), so this
+  // needs paging only if an org ever passes 1,000 musicians.
+  const { data: existingRoster } = await supabase
+    .from('musicians')
+    .select('id, first_name, last_name, email, phone')
+    .eq('organization_id', membership!.organization_id)
+  const roster: MusicianRosterEntry[] = existingRoster ?? []
+
   try {
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
@@ -46,7 +107,7 @@ export async function POST(request: Request) {
         return apiError('No contacts found in the vCard file.')
       }
 
-      const musiciansToInsert = musicians.map(m => ({
+      const parsedRows: ImportRow[] = musicians.map(m => ({
         organization_id: membership!.organization_id,
         first_name: m.firstName || m.lastName,
         last_name: m.firstName ? m.lastName : '',
@@ -56,6 +117,9 @@ export async function POST(request: Request) {
         is_active: true,
         tags: tags,
       }))
+
+      const { rowsToInsert: musiciansToInsert, skippedExisting, possibleDuplicates } =
+        partitionAgainstRoster(parsedRows, roster)
 
       if (musiciansToInsert.length > 0) {
         const { error: insertError } = await supabase
@@ -79,6 +143,8 @@ export async function POST(request: Request) {
           withPhone: musiciansToInsert.filter(m => m.phone).length,
           withoutPhone: musiciansToInsert.filter(m => !m.phone).length,
         },
+        skippedExisting,
+        possibleDuplicates,
       })
     }
 
@@ -143,7 +209,7 @@ export async function POST(request: Request) {
     // Filter out invalid entries and prepare for insert
     const validMusicians = musicians.filter(m => m.firstName || m.lastName)
 
-    const musiciansToInsert = validMusicians.map(m => ({
+    const parsedRows: ImportRow[] = validMusicians.map(m => ({
       organization_id: membership!.organization_id,
       first_name: m.firstName || m.lastName,
       last_name: m.firstName ? m.lastName : '',
@@ -153,6 +219,9 @@ export async function POST(request: Request) {
       is_active: true,
       tags: tags,
     }))
+
+    const { rowsToInsert: musiciansToInsert, skippedExisting, possibleDuplicates } =
+      partitionAgainstRoster(parsedRows, roster)
 
     if (musiciansToInsert.length > 0) {
       const { error: insertError } = await supabase
@@ -176,6 +245,8 @@ export async function POST(request: Request) {
         withPhone: musiciansToInsert.filter(m => m.phone).length,
         withoutPhone: musiciansToInsert.filter(m => !m.phone).length,
       },
+      skippedExisting,
+      possibleDuplicates,
     })
   } catch (err) {
     console.error('Excel import error:', err)

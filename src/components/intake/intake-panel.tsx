@@ -1,8 +1,9 @@
 'use client'
 
 /**
- * Client Selections — the admin-facing intake import + review screen, attached
- * to a project on the Projects page.
+ * Prepare Gig Music — the admin-facing intake import + review screen, attached
+ * to a project on the Projects page (it was titled "Client Selections"). It is
+ * the first section of a booked gig, styled as its main call to action.
  *
  * Three states, one component:
  *   EMPTY     — paste the 17hats questionnaire, Parse (PROPOSE-only: POST
@@ -45,10 +46,9 @@ import {
   type RowMatchStatus,
 } from './intake-song-row'
 import { BookDownload } from './book-download'
-import { ClientPlannerCard } from './client-planner-card'
 import { SpotifyPlaylistBuilder } from './spotify-playlist-builder'
 import type { ProposedSong } from '@/app/api/intake/parse/route'
-import type { IntakeRecord, IntakeSong, IntakePlannerFields } from '@/lib/intake/types'
+import type { IntakeRecord, IntakeSong } from '@/lib/intake/types'
 import { canonicalEnsemble, ensembleFromInstruments, type MatchCandidate } from '@/lib/intake/matcher'
 
 // --- section vocabulary (matches migration 069's CHECK set) ------------------
@@ -214,9 +214,6 @@ function isResolved(r: SongRow): boolean {
 
 interface IntakePanelProps {
   projectId: string
-  /** The project's client email, if any — decides whether the planner link can
-   *  be emailed from here or only copied. Optional. */
-  clientEmail?: string | null
   /** The project's ensemble label ("String Quartet", …) if known — used to rank
    *  matches toward the right arrangement and to badge part gaps. Optional. */
   ensembleType?: string | null
@@ -233,7 +230,6 @@ export function IntakePanel({
   ensembleType,
   instruments,
   positionInstruments,
-  clientEmail,
 }: IntakePanelProps) {
   // Fold the project's free-text ensemble label to the repertoire canon once;
   // a project with no label is read off its positions instead.
@@ -265,12 +261,6 @@ export function IntakePanel({
   // Owner's sign-off that the assembled books are ready to send (071). Any
   // save clears it server-side; mirrored here.
   const [booksApprovedAt, setBooksApprovedAt] = useState<string | null>(null)
-  // The client song planner's columns (082), read straight off the loaded
-  // intake. Null until the intake loads, or when none exists yet.
-  const [planner, setPlanner] = useState<Partial<IntakePlannerFields> | null>(null)
-  // Whether SONG_PLANNER_EMAILS is on, read from the server — the card must not
-  // promise automatic reminders that are switched off.
-  const [plannerEmails, setPlannerEmails] = useState(false)
 
   async function handleOpen() {
     const next = !open
@@ -292,13 +282,11 @@ export function IntakePanel({
       }
       const data = await res.json()
       if (!res.ok) {
-        setLoadError(data.error || 'Could not load client selections.')
+        setLoadError(data.error || 'Could not load the gig music.')
         return
       }
       const intake = data.intake as IntakeRecord | null
       const savedSongs = (data.songs ?? []) as SavedSong[]
-      setPlanner((intake as Partial<IntakePlannerFields> | null) ?? null)
-      setPlannerEmails(data.plannerEmails === true)
       if (!intake) {
         setPhase('empty')
         setLoaded(true)
@@ -308,7 +296,7 @@ export function IntakePanel({
       setPhase(intake.status === 'confirmed' ? 'confirmed' : 'review')
       setLoaded(true)
     } catch {
-      setLoadError('Could not load client selections.')
+      setLoadError('Could not load the gig music.')
     } finally {
       setLoading(false)
     }
@@ -596,16 +584,26 @@ export function IntakePanel({
       <button
         type="button"
         onClick={handleOpen}
-        className="flex w-full items-center gap-2 text-sm font-semibold"
+        aria-expanded={open}
+        className="group flex w-full items-center gap-3 rounded-lg border-2 border-primary/30 bg-primary/5 px-4 py-3 text-left transition-colors hover:border-primary/60 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <svg className={`h-4 w-4 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+          </svg>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2 text-base font-semibold">
+            Prepare Gig Music
+            <StatusChip />
+          </span>
+          <span className="block text-xs text-muted-foreground">
+            Turn the client&apos;s song picks into matched songs and ready-to-send books.
+          </span>
+        </span>
+        <svg className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden>
           <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
         </svg>
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-        </svg>
-        Client Selections
-        <StatusChip />
       </button>
 
       {open && (
@@ -614,7 +612,7 @@ export function IntakePanel({
 
           {!loading && unavailable && (
             <p className="text-sm text-muted-foreground">
-              Client Selections import isn’t available yet — it turns on once the intake tables (migration 069) are applied.
+              Prepare Gig Music isn’t available yet — it turns on once the intake tables (migration 069) are applied.
             </p>
           )}
 
@@ -623,19 +621,6 @@ export function IntakePanel({
               <p className="text-sm text-destructive">{loadError}</p>
               <Button size="sm" variant="outline" onClick={() => load()}>Retry</Button>
             </div>
-          )}
-
-          {/* The client's own way in. Shown in every phase: before a
-              questionnaire exists (it replaces pasting one), while a draft is
-              being reviewed, and after confirm (so a link can be reopened). */}
-          {!loading && !unavailable && !loadError && (
-            <ClientPlannerCard
-              projectId={projectId}
-              planner={planner}
-              hasClientEmail={!!clientEmail}
-              emailsEnabled={plannerEmails}
-              onChanged={() => void load()}
-            />
           )}
 
           {/* EMPTY */}

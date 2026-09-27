@@ -179,6 +179,7 @@ describe('cron jobs honor CRON_ENABLED', () => {
     'src/app/api/cron/pre-gig-reminders/route.ts',
     'src/app/api/cron/staffing-alerts/route.ts',
     'src/app/api/cron/complete-projects/route.ts',
+    'src/app/api/cron/after-gig/route.ts',
   ]
   guardedCrons.forEach((route) => {
     it(`${route} short-circuits when cron is disabled`, () => {

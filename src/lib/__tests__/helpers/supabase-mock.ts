@@ -2,8 +2,8 @@
  * Minimal chainable Supabase client fake for behavioral route tests.
  *
  * Scope: only the query-builder surface the offer-lifecycle routes actually
- * use — from / select / update / insert / eq / neq / in / is / not / lt /
- * limit / single / maybeSingle, plus `select('*', { count: 'exact', head: true })`.
+ * use — from / select / update / insert / delete / eq / neq / in / is / not /
+ * lt / gte / lte / limit / single / maybeSingle, plus `select('*', { count: 'exact', head: true })`.
  * Unknown filter operators throw loudly rather than silently matching.
  *
  * Behavior is driven by a plain in-memory table map: filters are applied to
@@ -44,7 +44,7 @@ export interface AppliedFilter {
 
 export interface QueryLogEntry {
   table: string
-  operation: 'select' | 'update' | 'insert'
+  operation: 'select' | 'update' | 'insert' | 'delete'
   filters: AppliedFilter[]
   payload?: unknown
   count: boolean
@@ -94,6 +94,8 @@ class MockQueryBuilder implements PromiseLike<MockResult> {
   private wantCount = false
   private singleMode: 'single' | 'maybe' | null = null
   private limitCount: number | null = null
+  /** select() called after insert(): PostgREST returns the inserted rows. */
+  private returning = false
 
   constructor(
     private db: MockSupabaseDb,
@@ -102,6 +104,7 @@ class MockQueryBuilder implements PromiseLike<MockResult> {
 
   select(_columns?: string, options?: { count?: string; head?: boolean }): this {
     if (options?.count) this.wantCount = true
+    if (this.operation === 'insert') this.returning = true
     return this
   }
 
@@ -114,6 +117,11 @@ class MockQueryBuilder implements PromiseLike<MockResult> {
   insert(rows: Row | Row[]): this {
     this.operation = 'insert'
     this.payload = rows
+    return this
+  }
+
+  delete(): this {
+    this.operation = 'delete'
     return this
   }
 
@@ -144,6 +152,16 @@ class MockQueryBuilder implements PromiseLike<MockResult> {
 
   lt(column: string, value: unknown): this {
     this.filters.push({ method: 'lt', args: [column, value] })
+    return this
+  }
+
+  gte(column: string, value: unknown): this {
+    this.filters.push({ method: 'gte', args: [column, value] })
+    return this
+  }
+
+  lte(column: string, value: unknown): this {
+    this.filters.push({ method: 'lte', args: [column, value] })
     return this
   }
 
@@ -179,6 +197,11 @@ class MockQueryBuilder implements PromiseLike<MockResult> {
           throw new Error(`MockSupabaseDb: unsupported not() operator "${String(args[1])}"`)
         case 'lt':
           return !isNullish(row[col]) && (row[col] as any) < (args[1] as any)
+        // Compared as strings: callers use these for ISO dates, which sort as text.
+        case 'gte':
+          return !isNullish(row[col]) && String(row[col]) >= String(args[1])
+        case 'lte':
+          return !isNullish(row[col]) && String(row[col]) <= String(args[1])
         default:
           throw new Error(`MockSupabaseDb: unsupported filter "${method}"`)
       }
@@ -200,8 +223,18 @@ class MockQueryBuilder implements PromiseLike<MockResult> {
 
     if (this.operation === 'insert') {
       const toInsert = Array.isArray(this.payload) ? (this.payload as Row[]) : [this.payload as Row]
-      rows.push(...toInsert.map((r) => ({ ...r })))
-      return { data: null, error: null }
+      const inserted = toInsert.map((r, i) => ({ id: `${this.table}-${rows.length + i + 1}`, ...r }))
+      rows.push(...inserted)
+      if (!this.returning) return { data: null, error: null }
+      const copies = inserted.map((r) => ({ ...r }))
+      return { data: this.singleMode ? copies[0] ?? null : copies, error: null }
+    }
+
+    if (this.operation === 'delete') {
+      const keep = rows.filter((r) => !this.rowMatches(r))
+      const removed = rows.length - keep.length
+      rows.splice(0, rows.length, ...keep)
+      return { data: null, error: null, count: removed }
     }
 
     let matched = rows.filter((r) => this.rowMatches(r))

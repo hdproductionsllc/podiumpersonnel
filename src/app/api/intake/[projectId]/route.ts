@@ -23,7 +23,6 @@
 
 import { requireIntakeEnabled, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
 import { createServiceClient } from '@/lib/supabase/server'
-import { plannerEmailsEnabled } from '@/lib/intake/planner-email'
 
 type SupabaseError = { code?: string; message?: string } | null
 
@@ -118,7 +117,7 @@ export async function GET(
   }
 
   if (!intake) {
-    return apiSuccess({ intake: null, songs: [], plannerEmails: plannerEmailsEnabled() })
+    return apiSuccess({ intake: null, songs: [] })
   }
 
   const { data: songs, error: songsErr } = await service
@@ -180,9 +179,7 @@ export async function GET(
     matched_repertoire: s.matched_repertoire_id ? repById.get(s.matched_repertoire_id) ?? null : null,
   }))
 
-  // Server-side env, surfaced so the planner card can promise reminders only
-  // when reminders will actually be sent (082).
-  return apiSuccess({ intake, songs: songsWithMatch, plannerEmails: plannerEmailsEnabled() })
+  return apiSuccess({ intake, songs: songsWithMatch })
 }
 
 export async function PUT(

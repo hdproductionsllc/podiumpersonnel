@@ -55,13 +55,10 @@ describe('the archived work still owns its identity slot', () => {
 
 describe('matching correctly ignores archived works', () => {
   it('the match index filters is_active, which is what produced the upload prompt', () => {
-    // The filter moved out of the parse route into the shared index loader when
-    // the client song planner (082) started matching through the same code. Both
-    // callers inherit it, which is the point — a client's typed song and the same
-    // song pasted from a questionnaire must never disagree about an archived work.
+    // The filter lives in the shared index loader (it moved there for the client
+    // song planner, since retired), so every caller inherits it.
     expect(read(MATCH_INDEX)).toContain("if (table === 'repertoire') q = q.eq('is_active', true)")
     expect(read(PARSE_ROUTE)).toContain('loadMatchIndex(')
-    expect(read('src/app/api/plan/[token]/save/route.ts')).toContain('loadMatchIndex(')
   })
 
   it('the manual repertoire search filters is_active too', () => {

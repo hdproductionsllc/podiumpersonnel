@@ -5,11 +5,11 @@
  * instance. Two instances mean two buckets, and a cold start forgets everything.
  * It is not a defense against a distributed attacker and is not sold as one.
  *
- * What it IS good for is the realistic failure on the client planner: a retry
- * loop, a stuck autosave, or one person hammering one token — where a single
- * instance sees the whole burst and stops it costing us a matcher run per
- * keystroke. The real access control is the 256-bit token; this only bounds the
- * damage a holder of one can do by accident.
+ * What it IS good for is the realistic failure on a tokenized public form (it
+ * was written for the since-retired client planner; the gig report form uses it
+ * now): a retry loop, or one person hammering one token, where a single instance
+ * sees the whole burst and stops it. The real access control is the 256-bit
+ * token; this only bounds the damage a holder of one can do by accident.
  *
  * If this ever needs to be real, the shape below is the same one a Redis/Upstash
  * INCR+EXPIRE implementation takes — swap the Map, keep the call sites.
@@ -47,7 +47,7 @@ export interface RateLimitResult {
 /**
  * Consume one unit against `key`. Returns whether the caller is within budget.
  *
- * @param key      bucket identity, e.g. `plan-save:${token}`
+ * @param key      bucket identity, e.g. `gig-report:${token}`
  * @param limit    requests allowed per window
  * @param windowMs window length
  */
