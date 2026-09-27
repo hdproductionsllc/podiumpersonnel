@@ -115,10 +115,10 @@ interface ProjectPositionsProps {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  vacant: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-  offered: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300',
-  confirmed: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300',
-  declined: 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300',
+  vacant: 'bg-gray-200 text-gray-800 ring-1 ring-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700',
+  offered: 'bg-amber-100 text-amber-900 ring-1 ring-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:ring-amber-800',
+  confirmed: 'bg-green-100 text-green-800 ring-1 ring-green-300 dark:bg-green-950 dark:text-green-200 dark:ring-green-800',
+  declined: 'bg-red-100 text-red-800 ring-1 ring-red-300 dark:bg-red-950 dark:text-red-200 dark:ring-red-800',
 }
 
 const STATUS_LABELS: Record<string, string> = {

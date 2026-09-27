@@ -1,3 +1,10 @@
+# Gig page trim + Violin 1 lead + contrast (2026-09-27)
+- [x] Gig lead = admin pick > confirmed Violin 1 (lowest chair) > nobody. Roster "Leader" flag no longer used AT ALL for the lead (David, twice). Preview shown: Oct 4 Shelly Ren, Oct 12 + Oct 25 Rebecca Chung, Nov 7 Ruzanna Sargsyan (was Boryana under the flag rule).
+- [x] Music / Parts hidden until it holds a file or a past send (it is where Prepare Gig Music's books land and Send Music goes out: 15 files, 2 sends in 90 days, so NOT deleted). "Upload sheet music (PDF) yourself" link in Send to musicians; book publish now refreshes the page so the panel appears.
+- [x] Manage Payments shortcut removed (Payments is in the sidebar and the pay email).
+- [x] Contrast: darker --border/--muted-foreground (light theme), colored stripe per gig panel on a darker backdrop, stronger status chips.
+- [x] Verify: after-gig 29 tests; full suite 919 (2 known-flaky timing tests, payment-failed-email + resend-webhook, failed once under load then passed twice: fix their timeouts in v2); tsc clean; build OK; no new lint.
+
 # Readability pass: Projects list + gig page (2026-09-27)
 David: "a lot of info... it can be done better". Scope chosen: gig page + Projects list.
 Seen live (PSQ, Lori Stone Wedding, 4/4 filled): ~12 declined/expired offers each

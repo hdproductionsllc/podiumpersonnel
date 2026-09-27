@@ -1208,7 +1208,7 @@ interface SendPaySummaryParams {
   lines: PaySummaryLine[]
   grandTotal: number
   paymentsUrl: string
-  /** True when the gig has no lead to ask for a report (two or no flagged leaders, none picked). */
+  /** True when the gig has no lead to ask for a report (no Violin 1 confirmed, none picked). */
   needsGigLead?: boolean
   projectUrl?: string
   branding?: EmailBranding

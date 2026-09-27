@@ -78,7 +78,7 @@ export function PaySummaryEmail({
 
         {needsGigLead && (
           <Text style={emailStyles.paragraph}>
-            <strong>No gig report was requested:</strong> this gig has no gig lead set.{' '}
+            <strong>No gig report was requested:</strong> nobody is confirmed in Violin 1 and no gig lead was picked.{' '}
             {projectUrl ? <a href={projectUrl}>Pick the gig lead</a> : 'Pick the gig lead on the gig'} and
             send the request from its Gig report panel.
           </Text>

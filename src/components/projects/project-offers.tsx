@@ -61,13 +61,13 @@ interface ProjectOffersProps {
 }
 
 const OFFER_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300',
-  viewed: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
-  accepted: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300',
-  declined: 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300',
-  rescinded: 'bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300',
-  released: 'bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300',
-  expired: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+  pending: 'bg-amber-100 text-amber-900 ring-1 ring-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:ring-amber-800',
+  viewed: 'bg-blue-100 text-blue-800 ring-1 ring-blue-300 dark:bg-blue-950 dark:text-blue-200 dark:ring-blue-800',
+  accepted: 'bg-green-100 text-green-800 ring-1 ring-green-300 dark:bg-green-950 dark:text-green-200 dark:ring-green-800',
+  declined: 'bg-red-100 text-red-800 ring-1 ring-red-300 dark:bg-red-950 dark:text-red-200 dark:ring-red-800',
+  rescinded: 'bg-orange-100 text-orange-800 ring-1 ring-orange-300 dark:bg-orange-950 dark:text-orange-200 dark:ring-orange-800',
+  released: 'bg-purple-100 text-purple-800 ring-1 ring-purple-300 dark:bg-purple-950 dark:text-purple-200 dark:ring-purple-800',
+  expired: 'bg-gray-200 text-gray-800 ring-1 ring-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700',
 }
 
 const OFFER_STATUS_LABELS: Record<string, string> = {

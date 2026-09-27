@@ -4,14 +4,15 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { isViolinOne } from '@/lib/after-gig/rules'
 
 /**
  * The lead musician's after-gig report, on the gig's row.
  *
- * Every gig has ONE lead. "Leader" on the roster only means someone CAN lead,
- * so the lead is the admin's pick, or else the only confirmed musician marked
- * Leader. With two or none marked, nobody is asked until an admin picks (the
- * same rule as lib/after-gig/rules gigLead, which the cron uses). The request
+ * Every gig has ONE lead: the admin's pick, or else whoever is confirmed in
+ * Violin 1 (the chair that usually leads). With neither, nobody is asked until
+ * an admin picks. Same rule as lib/after-gig/rules gigLead, which the cron
+ * uses. "Leader" on the roster is NOT used: it only means someone CAN lead. The request
  * goes out automatically 30 minutes after the gig ends; this panel sets the
  * lead, shows where the report is, and can send it now or again.
  */
@@ -36,13 +37,14 @@ export interface GigReportRow {
 interface PositionLike {
   status: string
   musician_id: string | null
+  chair_number?: number | null
+  instrument?: { name: string | null } | null
   musician?: { id: string; first_name: string | null; last_name: string | null } | null
 }
 
 interface GigReportPanelProps {
   projectId: string
   positions: PositionLike[]
-  leaderIds: string[]
   /** projects.gig_lead_musician_id (090): the admin's pick, if any. */
   chosenLeadId: string | null
   reports: GigReportRow[]
@@ -109,7 +111,7 @@ function ReportItem({ label, report, when }: { label: string; report: GigReportR
   )
 }
 
-export function GigReportPanel({ projectId, positions, leaderIds, chosenLeadId, reports, timezone }: GigReportPanelProps) {
+export function GigReportPanel({ projectId, positions, chosenLeadId, reports, timezone }: GigReportPanelProps) {
   const router = useRouter()
   const [sending, setSending] = useState(false)
   const [savingLead, setSavingLead] = useState(false)
@@ -122,11 +124,12 @@ export function GigReportPanel({ projectId, positions, leaderIds, chosenLeadId, 
         .map((p) => [p.musician_id!, p.musician])
     ).entries()
   )
-  const leaderSet = new Set(leaderIds)
-  const flagged = confirmed.filter(([id]) => leaderSet.has(id))
+  const violinOne = positions
+    .filter((p) => p.status === 'confirmed' && p.musician_id && isViolinOne(p.instrument?.name))
+    .sort((a, b) => (a.chair_number ?? 99) - (b.chair_number ?? 99))[0]
   const chosenIsConfirmed = !!chosenLeadId && confirmed.some(([id]) => id === chosenLeadId)
-  const leadId = chosenIsConfirmed ? chosenLeadId : flagged.length === 1 ? flagged[0][0] : null
-  const source: 'chosen' | 'only-leader' | 'needs-pick' = chosenIsConfirmed ? 'chosen' : leadId ? 'only-leader' : 'needs-pick'
+  const leadId = chosenIsConfirmed ? chosenLeadId : violinOne?.musician_id ?? null
+  const source: 'chosen' | 'violin-1' | 'needs-pick' = chosenIsConfirmed ? 'chosen' : leadId ? 'violin-1' : 'needs-pick'
   const leads = confirmed.filter(([id]) => id === leadId)
 
   async function setLead(musicianId: string | null) {
@@ -205,25 +208,22 @@ export function GigReportPanel({ projectId, positions, leaderIds, chosenLeadId, 
           onChange={(e) => void setLead(e.target.value || null)}
         >
           <option value="">
-            {source === 'only-leader' ? `Automatic: ${name(leads[0]?.[1])}` : 'Pick the gig lead…'}
+            {source === 'violin-1' ? `Violin 1: ${name(leads[0]?.[1])}` : 'Pick the gig lead…'}
           </option>
           {confirmed.map(([id, m]) => (
             <option key={id} value={id}>
-              {name(m)}{leaderSet.has(id) ? ' (can lead)' : ''}
+              {name(m)}
             </option>
           ))}
         </select>
-        {source === 'only-leader' && (
-          <span className="text-xs text-muted-foreground">the only confirmed musician marked Leader</span>
+        {source === 'violin-1' && (
+          <span className="text-xs text-muted-foreground">Violin 1 leads by default. Pick someone else to override.</span>
         )}
       </div>
 
       {source === 'needs-pick' && (
         <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-          {flagged.length > 1
-            ? `${flagged.length} confirmed musicians are marked Leader. Pick the one leading this gig.`
-            : 'Nobody confirmed on this gig is marked Leader. Pick who is leading it.'}{' '}
-          Nobody is asked for a report until you do.
+          Nobody is confirmed in Violin 1, so pick who is leading this gig. Nobody is asked for a report until you do.
         </p>
       )}
 

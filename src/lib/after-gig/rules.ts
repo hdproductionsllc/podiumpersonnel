@@ -32,6 +32,7 @@ export interface PositionForAfterGig {
   id: string
   status: string
   musician_id: string | null
+  chair_number?: number | null
   instrument?: { name: string | null } | null
   musician?: {
     id: string
@@ -78,23 +79,29 @@ export interface GigLead {
   email: string | null
 }
 
+/** True for the "Violin 1" instrument (the chair that usually leads the gig). */
+export function isViolinOne(instrumentName: string | null | undefined): boolean {
+  return /^\s*violin\s*(1|i)\s*$/i.test(instrumentName || '')
+}
+
 /**
- * Who leads THIS gig. There is exactly one (David, 2026-09-27):
- * musicians.is_leader only says someone CAN lead.
+ * Who leads THIS gig. There is exactly one (David, 2026-09-27).
  *
- *   'chosen'       an admin named the lead (projects.gig_lead_musician_id) and
- *                  that musician is confirmed on the gig
- *   'only-leader'  nobody was named, and exactly one confirmed musician is
- *                  flagged leader on the roster: that is the lead
- *   'needs-pick'   nobody was named and two or none are flagged: an admin must
- *                  pick, and nobody is asked for a report until they do
+ *   'chosen'    an admin named the lead (projects.gig_lead_musician_id) and
+ *               that musician is confirmed on the gig
+ *   'violin-1'  nobody was named: the musician confirmed in Violin 1, lowest
+ *               chair ("the leader of the gig is usually violin 1")
+ *   'needs-pick' nobody named and no confirmed Violin 1: an admin must pick,
+ *               and nobody is asked for a report until they do
+ *
+ * musicians.is_leader is deliberately NOT used: it means someone CAN lead,
+ * never that they lead this gig.
  */
 export function gigLead(
   positions: PositionForAfterGig[] | null | undefined,
   chosenMusicianId: string | null | undefined,
-): { lead: GigLead | null; source: 'chosen' | 'only-leader' | 'needs-pick' } {
-  const people = new Map<string, NonNullable<PositionForAfterGig['musician']>>()
-  for (const p of confirmed(positions)) people.set(p.musician!.id, p.musician!)
+): { lead: GigLead | null; source: 'chosen' | 'violin-1' | 'needs-pick' } {
+  const seated = confirmed(positions)
   const toLead = (m: NonNullable<PositionForAfterGig['musician']>): GigLead => ({
     musicianId: m.id,
     name: fullName(m),
@@ -102,11 +109,14 @@ export function gigLead(
     email: m.email,
   })
 
-  if (chosenMusicianId && people.has(chosenMusicianId)) {
-    return { lead: toLead(people.get(chosenMusicianId)!), source: 'chosen' }
-  }
-  const flagged = [...people.values()].filter((m) => m.is_leader)
-  if (flagged.length === 1) return { lead: toLead(flagged[0]), source: 'only-leader' }
+  const chosen = chosenMusicianId ? seated.find((p) => p.musician!.id === chosenMusicianId) : undefined
+  if (chosen) return { lead: toLead(chosen.musician!), source: 'chosen' }
+
+  const violinOne = seated
+    .filter((p) => isViolinOne(p.instrument?.name))
+    .sort((a, b) => (a.chair_number ?? 99) - (b.chair_number ?? 99))[0]
+  if (violinOne) return { lead: toLead(violinOne.musician!), source: 'violin-1' }
+
   return { lead: null, source: 'needs-pick' }
 }
 

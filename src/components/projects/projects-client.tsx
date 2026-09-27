@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Fragment } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -68,7 +67,6 @@ interface ProjectsClientProps {
   userId?: string
   dismissedTooltips?: string[]
   gigReports?: GigReportRow[]
-  leaderIds?: string[]
 }
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
@@ -135,10 +133,29 @@ function relativeDays(date: string | null, timeZone: string): string | null {
   return null
 }
 
-/** One block of the opened gig: a white card, optionally titled. */
-function GigSection({ title, hint, children }: { title?: string; hint?: string; children: React.ReactNode }) {
+/** Music / Parts has something in it: a file (e.g. a book from Prepare Gig Music) or a past send. */
+function hasMusic(project: ProjectWithServices): boolean {
+  const p = project as ProjectWithServices & { project_files?: unknown[]; music_sends?: unknown[] }
+  return (p.project_files?.length ?? 0) > 0 || (p.music_sends?.length ?? 0) > 0
+}
+
+const SECTION_ACCENTS = {
+  schedule: 'border-l-slate-400',
+  staffing: 'border-l-blue-500',
+  music: 'border-l-violet-500',
+  send: 'border-l-teal-500',
+  after: 'border-l-amber-500',
+} as const
+
+/** One block of the opened gig: a white card with a colored stripe, optionally titled. */
+function GigSection({ title, hint, accent, children }: {
+  title?: string
+  hint?: string
+  accent: keyof typeof SECTION_ACCENTS
+  children: React.ReactNode
+}) {
   return (
-    <section className="rounded-lg border bg-background p-4 shadow-sm space-y-4">
+    <section className={`rounded-lg border border-l-4 ${SECTION_ACCENTS[accent]} bg-card p-4 shadow-sm space-y-4`}>
       {title && (
         <div>
           <h4 className="text-sm font-semibold">{title}</h4>
@@ -295,7 +312,6 @@ export function ProjectsClient({
   userId,
   dismissedTooltips = [],
   gigReports = [],
-  leaderIds = [],
 }: ProjectsClientProps) {
   const router = useRouter()
   const plan = usePlan()
@@ -321,6 +337,8 @@ export function ProjectsClient({
   // Expandable row state
   const searchParams = useSearchParams()
   const expandProjectId = searchParams.get('expand')
+  // Gigs whose (empty) Music / Parts panel the admin opened to upload a file.
+  const [filesOpen, setFilesOpen] = useState<Set<string>>(new Set())
   const [expandedRows, setExpandedRows] = useState<Set<string>>(() => {
     // URL query param takes priority
     if (expandProjectId) {
@@ -828,7 +846,7 @@ export function ProjectsClient({
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
-            <thead className="border-b bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+            <thead className="border-b bg-muted text-xs font-semibold uppercase tracking-wide text-foreground/70">
               <tr>
                 <th className="w-10 px-2 py-2.5"></th>
                 <th className="px-3 py-2.5 text-left font-medium">{term(terms, 'work')}</th>
@@ -853,7 +871,7 @@ export function ProjectsClient({
                   <Fragment key={project.id}>
                     <tr
                       id={`project-${project.id}`}
-                      className={`cursor-pointer transition-colors hover:bg-muted/50 ${isExpanded ? 'bg-muted/40' : ''}`}
+                      className={`cursor-pointer transition-colors hover:bg-muted/60 ${isExpanded ? 'bg-muted' : 'bg-card'}`}
                       onClick={() => toggleRow(project.id)}
                     >
                       <td className="px-2 py-3.5 text-center align-top">
@@ -934,9 +952,9 @@ export function ProjectsClient({
 
                     {isExpanded && (
                       <tr>
-                        <td colSpan={colCount} className="bg-muted/30 px-3 py-4 sm:px-5 space-y-4">
+                        <td colSpan={colCount} className="bg-muted px-3 py-4 sm:px-5 space-y-4 dark:bg-muted/40">
                           {/* The gig, top to bottom in the order the work happens. */}
-                          <GigSection>
+                          <GigSection accent="schedule">
                             <ServicesList
                               services={project.services}
                               projectId={project.id}
@@ -947,7 +965,7 @@ export function ProjectsClient({
                               onDeleteService={handleDeleteService}
                             />
                           </GigSection>
-                          <GigSection>
+                          <GigSection accent="staffing">
                             <ProjectPositions
                               positions={project.project_positions}
                               projectId={project.id}
@@ -1017,9 +1035,10 @@ export function ProjectsClient({
                               )}
                             />
                           )}
-                          {canManage && project.project_positions.length > 0 && (
-                            <GigSection>
-                              {/* Music / Parts Section */}
+                          {canManage && project.project_positions.length > 0 && (hasMusic(project) || filesOpen.has(project.id)) && (
+                            <GigSection accent="music">
+                              {/* Music / Parts: where Prepare Gig Music's books land and Send Music
+                                  goes out. Hidden while empty; it appears once a book is sent here. */}
                               {(
                                 <ProjectFilesSection
                                   projectId={project.id}
@@ -1035,7 +1054,7 @@ export function ProjectsClient({
                             </GigSection>
                           )}
                           {canManage && project.project_positions.length > 0 && (project.project_positions.every((p) => p.status === 'confirmed') || ((project as { gig_detail_sends?: unknown[] }).gig_detail_sends?.length ?? 0) > 0) && (
-                            <GigSection title="Send to musicians">
+                            <GigSection accent="send" title="Send to musicians">
                               {/* Send Gig Details + Group Text (gated behind all positions confirmed) */}
                               {canManage && project.project_positions.length > 0 && project.project_positions.every((p) => p.status === 'confirmed') && (
                                 <div className="flex flex-wrap items-center gap-3">
@@ -1121,30 +1140,25 @@ export function ProjectsClient({
                                   </div>
                                 )
                               })()}
+                              {!hasMusic(project) && !filesOpen.has(project.id) && (
+                                <button
+                                  type="button"
+                                  className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                                  onClick={() => setFilesOpen((prev) => new Set(prev).add(project.id))}
+                                >
+                                  Upload sheet music (PDF) yourself
+                                </button>
+                              )}
                             </GigSection>
                           )}
                           {canManage && project.project_positions.some((p) => p.status === 'confirmed') && (
-                            <GigSection title="After the gig" hint="Thirty minutes after it ends, owners and admins get the pay summary and the gig lead is asked for a report.">
-                              {/* Payments shortcut */}
-                              {canManage && project.project_positions.some((p) => p.status === 'confirmed') && (
-                                <div className="flex flex-wrap items-center gap-3">
-                                  <Link href={`/dashboard/payments?project=${project.id}`}>
-                                    <Button variant="outline" size="sm">
-                                      <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                                      </svg>
-                                      Manage Payments
-                                    </Button>
-                                  </Link>
-                                </div>
-                              )}
+                            <GigSection accent="after" title="After the gig" hint="Thirty minutes after it ends, owners and admins get the pay summary and the gig lead is asked for a report.">
                               {/* Gig report from the lead musician(s), after the gig */}
                               {canManage && project.project_positions.some((p) => p.status === 'confirmed') && (
                                 <GigReportPanel
                                   projectId={project.id}
                                   positions={project.project_positions}
-                                  leaderIds={leaderIds}
-                                  chosenLeadId={project.gig_lead_musician_id ?? null}
+                                      chosenLeadId={project.gig_lead_musician_id ?? null}
                                   reports={gigReports.filter((r) => r.project_id === project.id)}
                                   timezone={timezone}
                                 />

@@ -6,7 +6,7 @@
  *                        two overlapping runs can never both send; releases the
  *                        claim if the send throws, so the next run retries.
  *   requestGigReports    asks the gig's ONE lead (gigLead: the admin's pick,
- *                        else the only confirmed musician flagged leader). One
+ *                        else the confirmed Violin 1). One
  *                        gig_reports row per (project, lead); a lead who already
  *                        has a row is not asked again unless `force` (the admin's
  *                        "Send again" button). No lead = nobody is asked.
@@ -40,6 +40,7 @@ export const AFTER_GIG_PROJECT_SELECT = `
     id,
     status,
     musician_id,
+    chair_number,
     instrument:instruments(name),
     musician:musicians(id, first_name, last_name, email, is_leader),
     contract_offers(custom_pay, status)

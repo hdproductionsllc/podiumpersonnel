@@ -123,25 +123,18 @@ export default async function ProjectsPage() {
     .order('last_name', { ascending: true })
     .order('first_name', { ascending: true })
 
-  // Gig reports from lead musicians (089) and who counts as a lead (the roster
-  // leader flag). Read separately and tolerantly: gig_reports is admin-only
-  // under RLS, and a failed read must never take the Projects page down with it.
-  const [{ data: gigReports, error: gigReportsError }, { data: leaders }] = await Promise.all([
-    supabase
-      .from('gig_reports')
-      .select(`
+  // Gig reports from gig leads (089). Read separately and tolerantly:
+  // gig_reports is admin-only under RLS, and a failed read must never take the
+  // Projects page down with it.
+  const { data: gigReports, error: gigReportsError } = await supabase
+    .from('gig_reports')
+    .select(`
         id, project_id, musician_id, requested_at, opened_at, submitted_at,
         overall, all_on_time, late_notes, hiccups, client_follow_up, arrangement_notes, other_notes,
         musician:musicians(first_name, last_name)
       `)
-      .eq('organization_id', organization!.id)
-      .order('requested_at', { ascending: true }),
-    supabase
-      .from('musicians')
-      .select('id')
-      .eq('organization_id', organization!.id)
-      .eq('is_leader', true),
-  ])
+    .eq('organization_id', organization!.id)
+    .order('requested_at', { ascending: true })
   if (gigReportsError) console.error('Projects page: could not read gig reports:', gigReportsError.message)
 
   // Fetch tutorial state for tooltips
@@ -164,7 +157,6 @@ export default async function ProjectsPage() {
       userId={user!.id}
       dismissedTooltips={tutorialState?.dismissed_tooltips ?? []}
       gigReports={(gigReports as unknown as GigReportRow[]) ?? []}
-      leaderIds={(leaders ?? []).map((l) => l.id)}
     />
   )
 }

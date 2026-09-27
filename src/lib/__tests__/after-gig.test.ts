@@ -6,8 +6,8 @@ import { MockSupabaseDb } from './helpers/supabase-mock'
 /**
  * After the gig (089): 30 minutes after the last service ends, the owners and
  * admins get "what to pay each person" (NEVER the musicians), and the gig's
- * ONE lead is asked for a gig report. "Leader" on the roster only means someone
- * CAN lead (David, 2026-09-27).
+ * ONE lead is asked for a gig report: the admin's pick, else Violin 1. "Leader"
+ * on the roster only means someone CAN lead and is never used (David, 2026-09-27).
  */
 
 const state = vi.hoisted(() => ({ db: undefined as unknown as MockSupabaseDb, adminEmails: ['owner@org.test', 'admin@org.test'] }))
@@ -24,7 +24,7 @@ vi.mock('@/lib/email/send', () => ({
 
 vi.mock('@/lib/email/log', () => ({ logEmail: vi.fn(async () => {}) }))
 
-import { buildPaySummary, gigEndedAt, gigLead, isAfterGigDue, type PositionForAfterGig, type ServiceForAfterGig } from '@/lib/after-gig/rules'
+import { buildPaySummary, gigEndedAt, gigLead, isAfterGigDue, isViolinOne, type PositionForAfterGig, type ServiceForAfterGig } from '@/lib/after-gig/rules'
 import { requestGigReports, sendPaySummaryOnce } from '@/lib/after-gig/run'
 import { acceptedOfferPay, computeServicePay } from '@/lib/payments/compute'
 import { sendGigReportRequestEmail, sendPaySummaryEmail } from '@/lib/email/send'
@@ -45,9 +45,9 @@ const PLAYER = { id: 'm-play', first_name: 'Pat', last_name: 'Player', email: 'p
 const CUSTOM = { id: 'm-custom', first_name: 'Cam', last_name: 'Custom', email: 'cam@musician.test', is_leader: true }
 
 const POSITIONS: PositionForAfterGig[] = [
-  position('p1', { musician: LEAD }),
-  position('p2', { musician: PLAYER, instrument: { name: 'Cello' } }),
-  position('p3', { musician: CUSTOM, contract_offers: [{ custom_pay: 500, status: 'accepted' }, { custom_pay: 999, status: 'declined' }] }),
+  position('p1', { musician: LEAD, instrument: { name: 'Violin 1' }, chair_number: 1 }),
+  position('p2', { musician: PLAYER, instrument: { name: 'Cello' }, chair_number: 1 }),
+  position('p3', { musician: CUSTOM, instrument: { name: 'Violin 2' }, chair_number: 1, contract_offers: [{ custom_pay: 500, status: 'accepted' }, { custom_pay: 999, status: 'declined' }] }),
   position('p4', { status: 'offered', musician: { ...PLAYER, id: 'm-offered', email: 'offered@musician.test' } }),
 ]
 
@@ -93,39 +93,49 @@ describe('when the after-gig sends are due', () => {
 // --- who leads ------------------------------------------------------------------
 
 describe('the ONE gig lead', () => {
-  // POSITIONS has two confirmed musicians who CAN lead: Lena and Cam.
-  it('two people who can lead and nobody picked: nobody is the lead (the 2026-09-26 wedding)', () => {
-    expect(gigLead(POSITIONS, null)).toEqual({ lead: null, source: 'needs-pick' })
+  it('defaults to whoever is confirmed in Violin 1', () => {
+    expect(gigLead(POSITIONS, null)).toMatchObject({ source: 'violin-1', lead: { musicianId: 'm-lead', firstName: 'Lena' } })
   })
 
-  it("the admin's pick wins", () => {
-    const { lead, source } = gigLead(POSITIONS, 'm-custom')
-    expect(source).toBe('chosen')
-    expect(lead?.musicianId).toBe('m-custom')
+  it('never uses the roster "Leader" flag: someone who CAN lead is not the leader', () => {
+    // Cam is marked Leader but plays Violin 2; Pat is not marked Leader but sits in Violin 1.
+    const seats = [
+      position('a', { musician: CUSTOM, instrument: { name: 'Violin 2' }, chair_number: 1 }),
+      position('b', { musician: { ...PLAYER, is_leader: false }, instrument: { name: 'Violin 1' }, chair_number: 1 }),
+    ]
+    expect(gigLead(seats, null).lead?.musicianId).toBe('m-play')
+    // Two musicians marked Leader and no Violin 1: nobody, NOT one of them.
+    const noViolinOne = [
+      position('c', { musician: LEAD, instrument: { name: 'Viola' } }),
+      position('d', { musician: CUSTOM, instrument: { name: 'Cello' } }),
+    ]
+    expect(gigLead(noViolinOne, null)).toEqual({ lead: null, source: 'needs-pick' })
+    expect(gigLead([position('e', { musician: LEAD, instrument: { name: 'Cello' } })], null).source).toBe('needs-pick')
   })
 
-  it('exactly one confirmed musician who can lead is the lead automatically', () => {
-    const one = [position('p1', { musician: LEAD }), position('p2', { musician: PLAYER })]
-    expect(gigLead(one, null)).toMatchObject({ source: 'only-leader', lead: { musicianId: 'm-lead', firstName: 'Lena' } })
-  })
-
-  it('nobody who can lead and nobody picked: an admin must pick', () => {
-    expect(gigLead([position('p2', { musician: PLAYER })], null).source).toBe('needs-pick')
-  })
-
-  it('an admin can pick someone not marked Leader', () => {
+  it("the admin's pick overrides Violin 1", () => {
+    expect(gigLead(POSITIONS, 'm-custom')).toMatchObject({ source: 'chosen', lead: { musicianId: 'm-custom' } })
     expect(gigLead(POSITIONS, 'm-play').lead?.musicianId).toBe('m-play')
   })
 
-  it('a pick who is no longer confirmed on the gig is ignored', () => {
-    const one = [position('p1', { musician: LEAD })]
-    expect(gigLead(one, 'm-gone')).toMatchObject({ source: 'only-leader', lead: { musicianId: 'm-lead' } })
-    expect(gigLead(POSITIONS, 'm-offered').source).toBe('needs-pick')
+  it('a pick who is no longer confirmed falls back to Violin 1', () => {
+    expect(gigLead(POSITIONS, 'm-gone').source).toBe('violin-1')
+    expect(gigLead(POSITIONS, 'm-offered').lead?.musicianId).toBe('m-lead')
   })
 
-  it('a musician confirmed in two chairs is still one person', () => {
-    const doubled = [position('p1', { musician: LEAD }), position('p5', { musician: LEAD })]
-    expect(gigLead(doubled, null).source).toBe('only-leader')
+  it('with two Violin 1 chairs, chair 1 leads; an unconfirmed Violin 1 does not count', () => {
+    const two = [
+      position('v2', { musician: CUSTOM, instrument: { name: 'Violin 1' }, chair_number: 2 }),
+      position('v1', { musician: LEAD, instrument: { name: 'Violin 1' }, chair_number: 1 }),
+    ]
+    expect(gigLead(two, null).lead?.musicianId).toBe('m-lead')
+    const offered = [position('v1', { status: 'offered', musician: LEAD, instrument: { name: 'Violin 1' }, chair_number: 1 })]
+    expect(gigLead(offered, null).source).toBe('needs-pick')
+  })
+
+  it('recognises how Violin 1 is written', () => {
+    for (const n of ['Violin 1', 'violin 1', ' Violin 1 ', 'Violin I']) expect(isViolinOne(n), n).toBe(true)
+    for (const n of ['Violin 2', 'Viola', 'Violin', 'Violin 10', null]) expect(isViolinOne(n), String(n)).toBe(false)
   })
 })
 
@@ -222,8 +232,17 @@ describe('asking the lead for a gig report', () => {
     expect(state.db.tables.gig_reports).toHaveLength(1)
   })
 
-  it('asks NOBODY when two people who can lead played and none was picked', async () => {
-    expect(await requestGigReports(state.db, withLead(null))).toEqual([])
+  it('with nobody picked, asks the Violin 1 (and only them)', async () => {
+    const outcomes = await requestGigReports(state.db, withLead(null))
+    expect(outcomes.map((o) => [o.musicianId, o.outcome])).toEqual([['m-lead', 'sent']])
+  })
+
+  it('asks NOBODY when there is no Violin 1 and none was picked, even if people are marked Leader', async () => {
+    const noViolinOne = project({ project_positions: [
+      position('c', { musician: LEAD, instrument: { name: 'Viola' } }),
+      position('d', { musician: CUSTOM, instrument: { name: 'Cello' } }),
+    ] })
+    expect(await requestGigReports(state.db, noViolinOne)).toEqual([])
     expect(sendGigReportRequestEmail).not.toHaveBeenCalled()
     expect(state.db.tables.gig_reports).toHaveLength(0)
   })
@@ -253,14 +272,14 @@ describe('asking the lead for a gig report', () => {
   })
 
   it('reports a lead with no email instead of silently skipping them', async () => {
-    const noEmail = project({ project_positions: [position('p1', { musician: { ...LEAD, email: null } })] })
+    const noEmail = project({ project_positions: [position('p1', { musician: { ...LEAD, email: null }, instrument: { name: 'Violin 1' }, chair_number: 1 })] })
     const outcomes = await requestGigReports(state.db, noEmail)
     expect(outcomes).toEqual([{ musicianId: 'm-lead', name: 'Lena Lead', outcome: 'no-email' }])
   })
 
   it('the pay summary says when no report was requested because no lead is set', async () => {
     state.db = new MockSupabaseDb({ projects: [{ id: 'proj-1', pay_summary_sent_at: null }] })
-    await sendPaySummaryOnce(state.db, withLead(null))
+    await sendPaySummaryOnce(state.db, project({ project_positions: [position('c', { musician: LEAD, instrument: { name: 'Viola' } })] }))
     expect(vi.mocked(sendPaySummaryEmail).mock.calls[0][0]).toMatchObject({ needsGigLead: true })
     state.db = new MockSupabaseDb({ projects: [{ id: 'proj-1', pay_summary_sent_at: null }] })
     vi.clearAllMocks()

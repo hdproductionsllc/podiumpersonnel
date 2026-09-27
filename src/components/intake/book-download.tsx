@@ -21,6 +21,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { zipSync, type Zippable } from 'fflate'
 import { Button } from '@/components/ui/button'
 import {
@@ -115,6 +116,7 @@ export function BookDownload({
   onApprovalChange,
   playlistUrl,
 }: BookDownloadProps) {
+  const router = useRouter()
   const [manifest, setManifest] = useState<Manifest | null>(null)
   const [loading, setLoading] = useState(false)
   const [building, setBuilding] = useState<string | null>(null) // part or 'all'
@@ -560,6 +562,8 @@ export function BookDownload({
           ' — use Send Music there to email the musicians.'
       )
       setPublishPlan(null)
+      // Music / Parts is hidden on the gig while empty; refresh so it appears now.
+      router.refresh()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Publishing failed.')
     } finally {
