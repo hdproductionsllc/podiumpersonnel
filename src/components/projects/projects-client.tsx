@@ -1034,6 +1034,7 @@ export function ProjectsClient({
                               projectId={project.id}
                               positions={project.project_positions}
                               leaderIds={leaderIds}
+                              chosenLeadId={project.gig_lead_musician_id ?? null}
                               reports={gigReports.filter((r) => r.project_id === project.id)}
                               timezone={timezone}
                             />

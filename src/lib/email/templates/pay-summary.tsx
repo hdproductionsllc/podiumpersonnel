@@ -11,6 +11,8 @@ interface PaySummaryEmailProps {
   lines: PaySummaryLine[]
   grandTotal: number
   paymentsUrl: string
+  needsGigLead?: boolean
+  projectUrl?: string
   branding?: EmailBranding
 }
 
@@ -29,6 +31,8 @@ export function PaySummaryEmail({
   lines,
   grandTotal,
   paymentsUrl,
+  needsGigLead,
+  projectUrl,
   branding,
 }: PaySummaryEmailProps) {
   const brandColor = branding?.brandColor || '#1E293B'
@@ -69,6 +73,14 @@ export function PaySummaryEmail({
           <Text style={emailStyles.paragraph}>
             {unpriced.length === 1 ? 'One person has' : `${unpriced.length} people have`} no pay amount on this gig.
             Set it on the gig&apos;s pay, then generate payments.
+          </Text>
+        )}
+
+        {needsGigLead && (
+          <Text style={emailStyles.paragraph}>
+            <strong>No gig report was requested:</strong> this gig has no gig lead set.{' '}
+            {projectUrl ? <a href={projectUrl}>Pick the gig lead</a> : 'Pick the gig lead on the gig'} and
+            send the request from its Gig report panel.
           </Text>
         )}
 

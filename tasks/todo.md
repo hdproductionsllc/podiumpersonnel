@@ -1,3 +1,16 @@
+# One lead per gig (2026-09-27, follow-up)
+David's correction: roster "Leader" = CAN lead; every gig has exactly ONE lead. The
+089 rule (ask every confirmed flagged leader) emailed Kathleen AND Jiyoung for the
+Sean McDonald wedding on its first run (11:34 UTC). Leader fee: do not touch.
+- [x] Migration 090 `projects.gig_lead_musician_id` + scripts/gig-lead-2026-09-27.sql (body diffed identical)
+- [x] gigLead(): admin's pick > the only confirmed flagged leader > needs-pick (nobody asked)
+- [x] Cron + "Send now" ask only the gig lead; pay summary says when no lead is set
+- [x] Gig report panel: "Gig lead" picker, amber prompt when 2+ or 0 flagged, earlier reports still shown
+- [x] Tests: after-gig 29 (incl. the two-flagged wedding case -> nobody asked); full suite 919 pass; tsc clean; build OK
+- [x] Preview shown to David BEFORE deploy (next 60 days): Oct 4 Shelly Ren; Oct 12 Lori Stone Wedding = YOU PICK (Sooah Jung / Rebecca Chung); Oct 25 Rebecca Chung; Nov 7 Boryana Popova
+- [ ] David pastes scripts/gig-lead-2026-09-27.sql; verify column over REST
+- [ ] One push to master; verify deploy
+
 # After-the-gig workflow + gig-music layout + roster duplicate warning (2026-09-27)
 
 David's asks: (1) don't archive a gig the moment it ends, wait a day; (2) email the

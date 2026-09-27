@@ -3,8 +3,8 @@
  * tested directly.
  *
  * Thirty minutes after a project's LAST service ends, the org's owners and
- * admins get "here is what to pay each person", and every confirmed musician
- * flagged leader on the roster is asked for a short gig report.
+ * admins get "here is what to pay each person", and the gig's ONE lead is
+ * asked for a short gig report.
  */
 
 import { acceptedOfferPay, computeServicePay, type OfferForPay } from '@/lib/payments/compute'
@@ -71,21 +71,43 @@ function confirmed(positions: PositionForAfterGig[] | null | undefined) {
   return (positions || []).filter((p) => p.status === 'confirmed' && p.musician_id && p.musician)
 }
 
+export interface GigLead {
+  musicianId: string
+  name: string
+  firstName: string
+  email: string | null
+}
+
 /**
- * The gig's leads: every CONFIRMED musician whose roster record is flagged
- * leader (David, 2026-09-27: the roster flag, no per-gig choice). A musician
- * confirmed in two chairs is asked once.
+ * Who leads THIS gig. There is exactly one (David, 2026-09-27):
+ * musicians.is_leader only says someone CAN lead.
+ *
+ *   'chosen'       an admin named the lead (projects.gig_lead_musician_id) and
+ *                  that musician is confirmed on the gig
+ *   'only-leader'  nobody was named, and exactly one confirmed musician is
+ *                  flagged leader on the roster: that is the lead
+ *   'needs-pick'   nobody was named and two or none are flagged: an admin must
+ *                  pick, and nobody is asked for a report until they do
  */
-export function gigLeads(positions: PositionForAfterGig[] | null | undefined) {
-  const seen = new Set<string>()
-  const leads: { musicianId: string; name: string; firstName: string; email: string | null }[] = []
-  for (const p of confirmed(positions)) {
-    const m = p.musician!
-    if (!m.is_leader || seen.has(m.id)) continue
-    seen.add(m.id)
-    leads.push({ musicianId: m.id, name: fullName(m), firstName: m.first_name || '', email: m.email })
+export function gigLead(
+  positions: PositionForAfterGig[] | null | undefined,
+  chosenMusicianId: string | null | undefined,
+): { lead: GigLead | null; source: 'chosen' | 'only-leader' | 'needs-pick' } {
+  const people = new Map<string, NonNullable<PositionForAfterGig['musician']>>()
+  for (const p of confirmed(positions)) people.set(p.musician!.id, p.musician!)
+  const toLead = (m: NonNullable<PositionForAfterGig['musician']>): GigLead => ({
+    musicianId: m.id,
+    name: fullName(m),
+    firstName: m.first_name || '',
+    email: m.email,
+  })
+
+  if (chosenMusicianId && people.has(chosenMusicianId)) {
+    return { lead: toLead(people.get(chosenMusicianId)!), source: 'chosen' }
   }
-  return leads
+  const flagged = [...people.values()].filter((m) => m.is_leader)
+  if (flagged.length === 1) return { lead: toLead(flagged[0]), source: 'only-leader' }
+  return { lead: null, source: 'needs-pick' }
 }
 
 export interface PaySummaryLine {

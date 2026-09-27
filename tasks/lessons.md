@@ -1,5 +1,16 @@
 # Lessons Learned
 
+## "Leader" on the roster means CAN lead; every gig has exactly ONE lead (2026-09-27)
+`musicians.is_leader` marks people who are able to lead. It is not "the lead of
+this gig". I built the after-gig report request as "every confirmed musician
+flagged leader", which asked two people on one wedding (Kathleen AND Jiyoung).
+The data would have shown it: in the last 120 days 6 gigs had two flagged
+leaders and 17 had none. Rule: anything that needs "the lead of this gig" needs
+a per-gig lead (exactly one), never the roster flag. Before shipping any rule
+that picks people, count how it would have picked on real recent gigs and show
+the owner. Also: a feature whose first run emails real people should be
+previewed with the owner BEFORE deploy (list who would be emailed), not after.
+
 ## Resend Rate Limit: the throttle lives in the email client, never in loops
 **Date:** 2026-02-10, rewritten 2026-09-01
 **Bug:** "1 failed" when sending music reminders to 3 musicians. Third email hit Resend's 2 requests/second rate limit.

@@ -5,9 +5,11 @@
  *   sendPaySummaryOnce   claims projects.pay_summary_sent_at BEFORE sending, so
  *                        two overlapping runs can never both send; releases the
  *                        claim if the send throws, so the next run retries.
- *   requestGigReports    one gig_reports row per (project, lead); a lead who
- *                        already has a row is not asked again unless `force`
- *                        (the admin's "Send again" button).
+ *   requestGigReports    asks the gig's ONE lead (gigLead: the admin's pick,
+ *                        else the only confirmed musician flagged leader). One
+ *                        gig_reports row per (project, lead); a lead who already
+ *                        has a row is not asked again unless `force` (the admin's
+ *                        "Send again" button). No lead = nobody is asked.
  *
  * Recipients: the pay summary and the submitted-report email go ONLY to
  * getOrgAdminEmails (organization_members owner/admin). Musicians' addresses
@@ -20,7 +22,7 @@ import { getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendGigReportRequestEmail, sendPaySummaryEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
-import { buildPaySummary, gigEndedAt, gigLeads } from './rules'
+import { buildPaySummary, gigEndedAt, gigLead } from './rules'
 
 type Supabase = any
 
@@ -31,6 +33,7 @@ export const AFTER_GIG_PROJECT_SELECT = `
   status,
   organization_id,
   pay_summary_sent_at,
+  gig_lead_musician_id,
   organization:organizations(id, name, timezone, email_logo_url, email_brand_color, email_footer_text),
   services(id, name, start_time, end_time, base_pay, leader_fee),
   project_positions(
@@ -99,6 +102,9 @@ export async function sendPaySummaryOnce(supabase: Supabase, project: any): Prom
       lines,
       grandTotal,
       paymentsUrl: `${getAppUrl()}/dashboard/payments?project=${project.id}`,
+      // No lead worked out: say so, so a missing gig report is never a silent gap.
+      needsGigLead: gigLead(project.project_positions, project.gig_lead_musician_id).lead === null,
+      projectUrl: `${getAppUrl()}/dashboard/projects?expand=${project.id}`,
       branding: branding(org),
     })
     await logEmail({
@@ -136,7 +142,8 @@ export async function requestGigReports(
   project: any,
   { force = false }: { force?: boolean } = {},
 ): Promise<ReportRequestOutcome[]> {
-  const leads = gigLeads(project.project_positions)
+  const { lead } = gigLead(project.project_positions, project.gig_lead_musician_id)
+  const leads = lead ? [lead] : []
   const outcomes: ReportRequestOutcome[] = []
   const org = project.organization
 

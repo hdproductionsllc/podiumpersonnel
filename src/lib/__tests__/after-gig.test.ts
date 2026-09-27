@@ -5,8 +5,9 @@ import { MockSupabaseDb } from './helpers/supabase-mock'
 
 /**
  * After the gig (089): 30 minutes after the last service ends, the owners and
- * admins get "what to pay each person" (NEVER the musicians), and each
- * confirmed musician flagged leader on the roster is asked for a gig report.
+ * admins get "what to pay each person" (NEVER the musicians), and the gig's
+ * ONE lead is asked for a gig report. "Leader" on the roster only means someone
+ * CAN lead (David, 2026-09-27).
  */
 
 const state = vi.hoisted(() => ({ db: undefined as unknown as MockSupabaseDb, adminEmails: ['owner@org.test', 'admin@org.test'] }))
@@ -23,7 +24,7 @@ vi.mock('@/lib/email/send', () => ({
 
 vi.mock('@/lib/email/log', () => ({ logEmail: vi.fn(async () => {}) }))
 
-import { buildPaySummary, gigEndedAt, gigLeads, isAfterGigDue, type PositionForAfterGig, type ServiceForAfterGig } from '@/lib/after-gig/rules'
+import { buildPaySummary, gigEndedAt, gigLead, isAfterGigDue, type PositionForAfterGig, type ServiceForAfterGig } from '@/lib/after-gig/rules'
 import { requestGigReports, sendPaySummaryOnce } from '@/lib/after-gig/run'
 import { acceptedOfferPay, computeServicePay } from '@/lib/payments/compute'
 import { sendGigReportRequestEmail, sendPaySummaryEmail } from '@/lib/email/send'
@@ -57,6 +58,7 @@ function project(over: Record<string, unknown> = {}) {
     status: 'active',
     organization_id: 'org-1',
     pay_summary_sent_at: null,
+    gig_lead_musician_id: null as string | null,
     organization: { id: 'org-1', name: 'Test Strings', timezone: 'America/Chicago' },
     services: SERVICES,
     project_positions: POSITIONS,
@@ -90,15 +92,40 @@ describe('when the after-gig sends are due', () => {
 
 // --- who leads ------------------------------------------------------------------
 
-describe('gig leads (roster leader flag)', () => {
-  it('are confirmed musicians flagged leader, once each', () => {
-    const doubled = [...POSITIONS, position('p5', { musician: LEAD })]
-    expect(gigLeads(doubled).map((l) => l.musicianId)).toEqual(['m-lead', 'm-custom'])
+describe('the ONE gig lead', () => {
+  // POSITIONS has two confirmed musicians who CAN lead: Lena and Cam.
+  it('two people who can lead and nobody picked: nobody is the lead (the 2026-09-26 wedding)', () => {
+    expect(gigLead(POSITIONS, null)).toEqual({ lead: null, source: 'needs-pick' })
   })
 
-  it('never includes someone who is not confirmed', () => {
-    const offeredLeader = [position('p9', { status: 'offered', musician: { ...LEAD, id: 'm-x' } })]
-    expect(gigLeads(offeredLeader)).toEqual([])
+  it("the admin's pick wins", () => {
+    const { lead, source } = gigLead(POSITIONS, 'm-custom')
+    expect(source).toBe('chosen')
+    expect(lead?.musicianId).toBe('m-custom')
+  })
+
+  it('exactly one confirmed musician who can lead is the lead automatically', () => {
+    const one = [position('p1', { musician: LEAD }), position('p2', { musician: PLAYER })]
+    expect(gigLead(one, null)).toMatchObject({ source: 'only-leader', lead: { musicianId: 'm-lead', firstName: 'Lena' } })
+  })
+
+  it('nobody who can lead and nobody picked: an admin must pick', () => {
+    expect(gigLead([position('p2', { musician: PLAYER })], null).source).toBe('needs-pick')
+  })
+
+  it('an admin can pick someone not marked Leader', () => {
+    expect(gigLead(POSITIONS, 'm-play').lead?.musicianId).toBe('m-play')
+  })
+
+  it('a pick who is no longer confirmed on the gig is ignored', () => {
+    const one = [position('p1', { musician: LEAD })]
+    expect(gigLead(one, 'm-gone')).toMatchObject({ source: 'only-leader', lead: { musicianId: 'm-lead' } })
+    expect(gigLead(POSITIONS, 'm-offered').source).toBe('needs-pick')
+  })
+
+  it('a musician confirmed in two chairs is still one person', () => {
+    const doubled = [position('p1', { musician: LEAD }), position('p5', { musician: LEAD })]
+    expect(gigLead(doubled, null).source).toBe('only-leader')
   })
 })
 
@@ -183,46 +210,62 @@ describe('asking the lead for a gig report', () => {
     state.db = new MockSupabaseDb({ projects: [{ id: 'proj-1' }], gig_reports: [] })
   })
 
-  it('asks every lead once, with a 64-hex token link and no pay information', async () => {
-    const outcomes = await requestGigReports(state.db, project())
-    expect(outcomes.map((o) => [o.musicianId, o.outcome])).toEqual([['m-lead', 'sent'], ['m-custom', 'sent']])
+  const withLead = (id: string | null) => project({ gig_lead_musician_id: id })
+
+  it('asks ONLY the one gig lead, with a 64-hex token link and no pay information', async () => {
+    const outcomes = await requestGigReports(state.db, withLead('m-lead'))
+    expect(outcomes.map((o) => [o.musicianId, o.outcome])).toEqual([['m-lead', 'sent']])
     const calls = vi.mocked(sendGigReportRequestEmail).mock.calls.map((c) => c[0])
-    expect(calls.map((c) => c.to)).toEqual(['lena@musician.test', 'cam@musician.test'])
-    for (const c of calls) {
-      expect(c.reportUrl).toMatch(/\/report\/[a-f0-9]{64}$/)
-      expect(JSON.stringify(c)).not.toMatch(/pay|\$\d/i)
-    }
-    expect(state.db.tables.gig_reports).toHaveLength(2)
+    expect(calls.map((c) => c.to)).toEqual(['lena@musician.test'])
+    expect(calls[0].reportUrl).toMatch(/\/report\/[a-f0-9]{64}$/)
+    expect(JSON.stringify(calls[0])).not.toMatch(/pay|\$\d/i)
+    expect(state.db.tables.gig_reports).toHaveLength(1)
+  })
+
+  it('asks NOBODY when two people who can lead played and none was picked', async () => {
+    expect(await requestGigReports(state.db, withLead(null))).toEqual([])
+    expect(sendGigReportRequestEmail).not.toHaveBeenCalled()
+    expect(state.db.tables.gig_reports).toHaveLength(0)
   })
 
   it('does not ask again on the next run', async () => {
-    await requestGigReports(state.db, project())
-    const again = await requestGigReports(state.db, project())
+    await requestGigReports(state.db, withLead('m-lead'))
+    const again = await requestGigReports(state.db, withLead('m-lead'))
     expect(again.every((o) => o.outcome === 'already-asked')).toBe(true)
-    expect(sendGigReportRequestEmail).toHaveBeenCalledTimes(2)
+    expect(sendGigReportRequestEmail).toHaveBeenCalledTimes(1)
   })
 
-  it('"Send again" re-sends the same link, but never to a lead who already reported', async () => {
-    await requestGigReports(state.db, project())
-    const lenaRow = state.db.tables.gig_reports.find((r) => r.musician_id === 'm-lead')!
-    lenaRow.submitted_at = '2026-09-27T01:00:00Z'
+  it('"Send again" re-sends the same link, but never after the lead has reported', async () => {
+    await requestGigReports(state.db, withLead('m-lead'))
+    const token = state.db.tables.gig_reports[0].token
     vi.clearAllMocks()
-    const outcomes = await requestGigReports(state.db, project(), { force: true })
-    expect(outcomes.map((o) => [o.musicianId, o.outcome])).toEqual([['m-lead', 'already-asked'], ['m-custom', 'sent']])
-    expect(state.db.tables.gig_reports).toHaveLength(2)
+    expect((await requestGigReports(state.db, withLead('m-lead'), { force: true }))[0].outcome).toBe('sent')
+    expect(vi.mocked(sendGigReportRequestEmail).mock.calls[0][0].reportUrl).toContain(token)
+    state.db.tables.gig_reports[0].submitted_at = '2026-09-27T01:00:00Z'
+    expect((await requestGigReports(state.db, withLead('m-lead'), { force: true }))[0].outcome).toBe('already-asked')
+    expect(state.db.tables.gig_reports).toHaveLength(1)
   })
 
   it('removes a new row whose email never left, so the next run asks again', async () => {
     vi.mocked(sendGigReportRequestEmail).mockRejectedValueOnce(new Error('resend down'))
-    const outcomes = await requestGigReports(state.db, project())
-    expect(outcomes[0].outcome).toBe('failed')
-    expect(state.db.tables.gig_reports.map((r) => r.musician_id)).toEqual(['m-custom'])
+    expect((await requestGigReports(state.db, withLead('m-lead')))[0].outcome).toBe('failed')
+    expect(state.db.tables.gig_reports).toHaveLength(0)
   })
 
   it('reports a lead with no email instead of silently skipping them', async () => {
     const noEmail = project({ project_positions: [position('p1', { musician: { ...LEAD, email: null } })] })
     const outcomes = await requestGigReports(state.db, noEmail)
     expect(outcomes).toEqual([{ musicianId: 'm-lead', name: 'Lena Lead', outcome: 'no-email' }])
+  })
+
+  it('the pay summary says when no report was requested because no lead is set', async () => {
+    state.db = new MockSupabaseDb({ projects: [{ id: 'proj-1', pay_summary_sent_at: null }] })
+    await sendPaySummaryOnce(state.db, withLead(null))
+    expect(vi.mocked(sendPaySummaryEmail).mock.calls[0][0]).toMatchObject({ needsGigLead: true })
+    state.db = new MockSupabaseDb({ projects: [{ id: 'proj-1', pay_summary_sent_at: null }] })
+    vi.clearAllMocks()
+    await sendPaySummaryOnce(state.db, withLead('m-lead'))
+    expect(vi.mocked(sendPaySummaryEmail).mock.calls[0][0]).toMatchObject({ needsGigLead: false })
   })
 })
 
@@ -238,6 +281,13 @@ describe('the public report link', () => {
     expect(src).toContain(".is('submitted_at', null)")
     expect(src).toContain('rateLimit(`gig-report:${token}`')
     expect(src).toContain('getOrgAdminEmails(report.organizationId)')
+  })
+
+  it('setting the gig lead is admin-only and only accepts someone confirmed on the gig', () => {
+    const src = readFileSync(join(process.cwd(), 'src/app/api/projects/[projectId]/gig-lead/route.ts'), 'utf8')
+    expect(src).toContain('requireOrgAdmin()')
+    expect(src).toContain("p.status === 'confirmed' && p.musician_id === musicianId")
+    expect(src).toContain('project.organization_id !== membership!.organization_id')
   })
 
   it('gig reports are readable by admins only (089 RLS)', () => {

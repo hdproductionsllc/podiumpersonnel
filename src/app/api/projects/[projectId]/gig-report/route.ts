@@ -1,10 +1,10 @@
 import { requireOrgAdmin, apiSuccess, apiError } from '@/lib/api-helpers'
 import { createServiceClient } from '@/lib/supabase/server'
 import { AFTER_GIG_PROJECT_SELECT, requestGigReports } from '@/lib/after-gig/run'
-import { gigLeads, type PositionForAfterGig } from '@/lib/after-gig/rules'
+import { gigLead, type PositionForAfterGig } from '@/lib/after-gig/rules'
 
 /**
- * POST: ask this gig's lead musician(s) for a gig report now, or ask again.
+ * POST: ask this gig's ONE lead for a gig report now, or ask again.
  * The after-gig cron does this automatically 30 minutes after the gig ends;
  * this is the admin's manual "Send now / Send again". A lead who already sent
  * their report is never asked again.
@@ -26,8 +26,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ pr
     return apiError('Not found', 404)
   }
 
-  if (gigLeads((project as unknown as { project_positions: PositionForAfterGig[] }).project_positions).length === 0) {
-    return apiError('Nobody confirmed on this gig is marked as a leader on the roster.', 400)
+  const shaped = project as unknown as { project_positions: PositionForAfterGig[]; gig_lead_musician_id: string | null }
+  if (!gigLead(shaped.project_positions, shaped.gig_lead_musician_id).lead) {
+    return apiError('Pick the gig lead first.', 400)
   }
 
   const outcomes = await requestGigReports(service, project, { force: true })

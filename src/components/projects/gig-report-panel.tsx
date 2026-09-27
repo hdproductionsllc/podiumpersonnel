@@ -8,9 +8,12 @@ import { Button } from '@/components/ui/button'
 /**
  * The lead musician's after-gig report, on the gig's row.
  *
- * Leads are the confirmed musicians flagged leader on the roster. The request
- * goes out automatically 30 minutes after the gig ends (after-gig cron); this
- * panel shows where each lead is and lets an admin send it now or again.
+ * Every gig has ONE lead. "Leader" on the roster only means someone CAN lead,
+ * so the lead is the admin's pick, or else the only confirmed musician marked
+ * Leader. With two or none marked, nobody is asked until an admin picks (the
+ * same rule as lib/after-gig/rules gigLead, which the cron uses). The request
+ * goes out automatically 30 minutes after the gig ends; this panel sets the
+ * lead, shows where the report is, and can send it now or again.
  */
 
 export interface GigReportRow {
@@ -40,6 +43,8 @@ interface GigReportPanelProps {
   projectId: string
   positions: PositionLike[]
   leaderIds: string[]
+  /** projects.gig_lead_musician_id (090): the admin's pick, if any. */
+  chosenLeadId: string | null
   reports: GigReportRow[]
   timezone: string
 }
@@ -54,24 +59,103 @@ function name(m: { first_name: string | null; last_name: string | null } | null 
   return [m?.first_name, m?.last_name].filter(Boolean).join(' ') || 'Lead'
 }
 
-export function GigReportPanel({ projectId, positions, leaderIds, reports, timezone }: GigReportPanelProps) {
+function ReportItem({ label, report, when }: { label: string; report: GigReportRow | undefined; when: (iso: string) => string }) {
+  return (
+    <li className="rounded-md border p-3 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="font-medium">{label}</span>
+        <span className="text-xs text-muted-foreground">
+          {report?.submitted_at
+            ? `Report received ${when(report.submitted_at)}`
+            : report?.opened_at
+              ? `Opened ${when(report.opened_at)}, not sent yet`
+              : report
+                ? `Asked ${when(report.requested_at)}`
+                : 'Asked automatically 30 minutes after the gig ends'}
+        </span>
+      </div>
+
+      {report?.submitted_at && (
+        <div className="mt-3 space-y-2">
+          <div className="flex flex-wrap gap-2">
+            {report.overall && (
+              <span className={`rounded px-2 py-0.5 text-xs font-medium ${OVERALL[report.overall].className}`}>
+                {OVERALL[report.overall].label}
+              </span>
+            )}
+            {report.all_on_time !== null && (
+              <span className={`rounded px-2 py-0.5 text-xs font-medium ${report.all_on_time ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300' : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300'}`}>
+                {report.all_on_time ? 'Everyone on time' : 'Someone was late'}
+              </span>
+            )}
+          </div>
+          {[
+            ['Who was late', report.all_on_time ? null : report.late_notes],
+            ['Hiccups', report.hiccups],
+            ['Follow up with the client', report.client_follow_up],
+            ['Arrangements that need work', report.arrangement_notes],
+            ['Anything else', report.other_notes],
+          ].map(([heading, value]) =>
+            value ? (
+              <div key={heading as string}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{heading}</p>
+                <p className="whitespace-pre-wrap">{value}</p>
+              </div>
+            ) : null
+          )}
+        </div>
+      )}
+    </li>
+  )
+}
+
+export function GigReportPanel({ projectId, positions, leaderIds, chosenLeadId, reports, timezone }: GigReportPanelProps) {
   const router = useRouter()
   const [sending, setSending] = useState(false)
+  const [savingLead, setSavingLead] = useState(false)
 
-  const leaderSet = new Set(leaderIds)
-  const leads = Array.from(
+  // Everyone confirmed on the gig, once each.
+  const confirmed = Array.from(
     new Map(
       positions
-        .filter((p) => p.status === 'confirmed' && p.musician_id && leaderSet.has(p.musician_id))
+        .filter((p) => p.status === 'confirmed' && p.musician_id)
         .map((p) => [p.musician_id!, p.musician])
     ).entries()
   )
+  const leaderSet = new Set(leaderIds)
+  const flagged = confirmed.filter(([id]) => leaderSet.has(id))
+  const chosenIsConfirmed = !!chosenLeadId && confirmed.some(([id]) => id === chosenLeadId)
+  const leadId = chosenIsConfirmed ? chosenLeadId : flagged.length === 1 ? flagged[0][0] : null
+  const source: 'chosen' | 'only-leader' | 'needs-pick' = chosenIsConfirmed ? 'chosen' : leadId ? 'only-leader' : 'needs-pick'
+  const leads = confirmed.filter(([id]) => id === leadId)
+
+  async function setLead(musicianId: string | null) {
+    setSavingLead(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/gig-lead`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ musicianId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not save the gig lead')
+      toast.success('Gig lead saved')
+      router.refresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save the gig lead')
+    } finally {
+      setSavingLead(false)
+    }
+  }
 
   const when = (iso: string) =>
     new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: timezone })
 
   const allSubmitted = leads.length > 0 && leads.every(([id]) => reports.some((r) => r.musician_id === id && r.submitted_at))
-  const anyAsked = reports.length > 0
+  const anyAsked = leads.some(([id]) => reports.some((r) => r.musician_id === id))
+  // Reports from anyone who is not the current lead (asked before a lead was
+  // picked): still shown, never lost.
+  const otherReports = reports.filter((r) => r.musician_id !== leadId)
 
   async function sendNow() {
     setSending(true)
@@ -111,63 +195,51 @@ export function GigReportPanel({ projectId, positions, leaderIds, reports, timez
         )}
       </div>
 
-      {leads.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Nobody confirmed on this gig is marked as a leader on the roster, so no one will be asked for a report.
-          Turn on &quot;Leader&quot; for a musician in Musicians to get one after the gig.
-        </p>
-      ) : (
-        <ul className="space-y-3">
-          {leads.map(([musicianId, musician]) => {
-            const report = reports.find((r) => r.musician_id === musicianId)
-            return (
-              <li key={musicianId} className="rounded-md border p-3 text-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium">{name(musician || report?.musician)}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {report?.submitted_at
-                      ? `Report received ${when(report.submitted_at)}`
-                      : report?.opened_at
-                        ? `Opened ${when(report.opened_at)}, not sent yet`
-                        : report
-                          ? `Asked ${when(report.requested_at)}`
-                          : 'Asked automatically 30 minutes after the gig ends'}
-                  </span>
-                </div>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <label htmlFor={`gig-lead-${projectId}`} className="text-muted-foreground">Gig lead</label>
+        <select
+          id={`gig-lead-${projectId}`}
+          className="rounded-md border bg-background px-2 py-1 text-sm"
+          value={chosenIsConfirmed ? chosenLeadId! : ''}
+          disabled={savingLead}
+          onChange={(e) => void setLead(e.target.value || null)}
+        >
+          <option value="">
+            {source === 'only-leader' ? `Automatic: ${name(leads[0]?.[1])}` : 'Pick the gig lead…'}
+          </option>
+          {confirmed.map(([id, m]) => (
+            <option key={id} value={id}>
+              {name(m)}{leaderSet.has(id) ? ' (can lead)' : ''}
+            </option>
+          ))}
+        </select>
+        {source === 'only-leader' && (
+          <span className="text-xs text-muted-foreground">the only confirmed musician marked Leader</span>
+        )}
+      </div>
 
-                {report?.submitted_at && (
-                  <div className="mt-3 space-y-2">
-                    <div className="flex flex-wrap gap-2">
-                      {report.overall && (
-                        <span className={`rounded px-2 py-0.5 text-xs font-medium ${OVERALL[report.overall].className}`}>
-                          {OVERALL[report.overall].label}
-                        </span>
-                      )}
-                      {report.all_on_time !== null && (
-                        <span className={`rounded px-2 py-0.5 text-xs font-medium ${report.all_on_time ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300' : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300'}`}>
-                          {report.all_on_time ? 'Everyone on time' : 'Someone was late'}
-                        </span>
-                      )}
-                    </div>
-                    {[
-                      ['Who was late', report.all_on_time ? null : report.late_notes],
-                      ['Hiccups', report.hiccups],
-                      ['Follow up with the client', report.client_follow_up],
-                      ['Arrangements that need work', report.arrangement_notes],
-                      ['Anything else', report.other_notes],
-                    ].map(([label, value]) =>
-                      value ? (
-                        <div key={label as string}>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-                          <p className="whitespace-pre-wrap">{value}</p>
-                        </div>
-                      ) : null
-                    )}
-                  </div>
-                )}
-              </li>
-            )
-          })}
+      {source === 'needs-pick' && (
+        <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+          {flagged.length > 1
+            ? `${flagged.length} confirmed musicians are marked Leader. Pick the one leading this gig.`
+            : 'Nobody confirmed on this gig is marked Leader. Pick who is leading it.'}{' '}
+          Nobody is asked for a report until you do.
+        </p>
+      )}
+
+      {leads.length > 0 && (
+        <ul className="space-y-3">
+          {leads.map(([musicianId, musician]) => (
+            <ReportItem key={musicianId} label={name(musician)} report={reports.find((r) => r.musician_id === musicianId)} when={when} />
+          ))}
+        </ul>
+      )}
+
+      {otherReports.length > 0 && (
+        <ul className="space-y-3">
+          {otherReports.map((r) => (
+            <ReportItem key={r.id} label={`${name(r.musician)} (asked earlier)`} report={r} when={when} />
+          ))}
         </ul>
       )}
     </div>

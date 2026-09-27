@@ -1208,6 +1208,9 @@ interface SendPaySummaryParams {
   lines: PaySummaryLine[]
   grandTotal: number
   paymentsUrl: string
+  /** True when the gig has no lead to ask for a report (two or no flagged leaders, none picked). */
+  needsGigLead?: boolean
+  projectUrl?: string
   branding?: EmailBranding
 }
 
@@ -1222,6 +1225,8 @@ export async function sendPaySummaryEmail(params: SendPaySummaryParams) {
       lines: params.lines,
       grandTotal: params.grandTotal,
       paymentsUrl: params.paymentsUrl,
+      needsGigLead: params.needsGigLead,
+      projectUrl: params.projectUrl,
       branding: params.branding,
     }),
     errorContext: 'pay summary',
