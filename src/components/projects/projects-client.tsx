@@ -695,16 +695,17 @@ export function ProjectsClient({
           ]))
         }
       } else if (newProject.template === 'custom') {
-        // Auto-create a performance with default times
+        // Auto-create a performance: default times, or the contract's own when
+        // the gig came from a pasted contract whose ensemble has no template
         const dateStr = newProject.start_date || newProject.end_date
         if (dateStr) {
           trackTemplateWrite('services', await supabase.from('services').insert({
             project_id: newProject.id,
             name: `${newProject.name} Performance`,
             service_type: 'performance',
-            start_time: toISO(dateStr, '19:00'),
-            end_time: toISO(dateStr, '22:00'),
-            call_time: toISO(dateStr, '18:30'),
+            start_time: toISO(dateStr, newProject.startTime || '19:00'),
+            end_time: toISO(dateStr, newProject.endTime || '22:00'),
+            call_time: toISO(dateStr, newProject.callTime || '18:30'),
             ...venueFields,
           }))
         }
@@ -1181,6 +1182,7 @@ export function ProjectsClient({
         onOpenChange={setProjectFormOpen}
         project={editingProject}
         organizationId={organizationId}
+        organizationName={organizationName}
         timezone={timezone}
         isFirstProject={projects.length === 0 && !editingProject}
         onSuccess={handleProjectSuccess}

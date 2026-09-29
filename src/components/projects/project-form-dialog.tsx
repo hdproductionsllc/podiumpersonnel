@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { TimePicker } from '@/components/ui/time-picker'
 import { VenueSearch } from '@/components/ui/venue-search'
 import {
@@ -36,6 +37,12 @@ import {
 } from '@/components/ui/form'
 import { useVertical } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
+import {
+  parseContract,
+  contractDescription,
+  contractPaymentNotes,
+  isSameCompany,
+} from '@/lib/projects/contract-parser'
 import type { ProjectWithServices } from './projects-client'
 
 type TemplateType = 'string-quartet' | 'string-trio' | 'duo' | 'solo' | 'orchestra' | 'custom'
@@ -90,6 +97,8 @@ interface ProjectFormDialogProps {
   onOpenChange: (open: boolean) => void
   project: ProjectWithServices | null
   organizationId: string
+  /** Lets a pasted contract be checked against the org it is being added to. */
+  organizationName?: string
   timezone: string
   isFirstProject?: boolean
   onSuccess: (newProject?: { id: string; name: string; start_date: string | null; end_date: string | null; template?: TemplateType; callTime?: string; startTime?: string; endTime?: string; venueName?: string; venueId?: string | null }) => void
@@ -100,6 +109,7 @@ export function ProjectFormDialog({
   onOpenChange,
   project,
   organizationId,
+  organizationName,
   timezone,
   isFirstProject,
   onSuccess,
@@ -122,7 +132,20 @@ export function ProjectFormDialog({
   const [venueName, setVenueName] = useState('')
   const [venueId, setVenueId] = useState<string | null>(null)
   const [bookingOpen, setBookingOpen] = useState(false)
+  // Paste-a-contract: the step itself, the pasted text, and what the reader
+  // wants double-checked (null = this gig was not filled in from a contract).
+  const [showContractPaste, setShowContractPaste] = useState(false)
+  const [contractText, setContractText] = useState('')
+  const [contractError, setContractError] = useState<string | null>(null)
+  const [contractWarnings, setContractWarnings] = useState<string[] | null>(null)
+  const [contractEnsemble, setContractEnsemble] = useState<string | null>(null)
   const isEditing = !!project
+  const fromContract = contractWarnings !== null
+  // A template creates the performance (times + venue) along with the gig. A
+  // contract always carries its own times and venue, even when its ensemble has
+  // no template and the gig falls back to "custom".
+  const createsPerformance = !isEditing && selectedTemplate !== null && (selectedTemplate !== 'custom' || fromContract)
+  const hasTimePicker = createsPerformance && selectedTemplate !== 'orchestra'
   const today = new Date().toISOString().split('T')[0]
 
   /** Extract "HH:mm" from a UTC ISO string, converted to the org's timezone */
@@ -223,6 +246,11 @@ export function ProjectFormDialog({
         setVenueName('')
         setVenueId(null)
       }
+      setShowContractPaste(false)
+      setContractText('')
+      setContractError(null)
+      setContractWarnings(null)
+      setContractEnsemble(null)
       setError(null)
     }
   }, [open, project, form, isFirstProject])
@@ -259,6 +287,67 @@ export function ProjectFormDialog({
     setIsSingleDay(!!TEMPLATES[template].singleDay)
   }
 
+  /**
+   * Fill the form from a pasted contract. Nothing is saved here: every value
+   * lands in a box the admin can see and change, and whatever the reader was
+   * unsure of is listed above the form.
+   */
+  async function handleReadContract() {
+    const contract = parseContract(contractText)
+    if (contract.fieldsFound === 0) {
+      setContractError(contract.warnings[0])
+      return
+    }
+
+    const warnings = [...contract.warnings]
+    if (contract.company && organizationName && !isSameCompany(contract.company, organizationName)) {
+      warnings.unshift(`This contract is from ${contract.company}, but you are adding it to ${organizationName}.`)
+    }
+
+    const template: TemplateType = contract.template ?? 'custom'
+    const kind = contract.template ? TEMPLATES[template].defaultName : contract.ensemble || 'Gig'
+    form.setValue('name', [contract.clientName, kind].filter(Boolean).join(' '))
+    form.setValue('description', contractDescription(contract))
+    form.setValue('start_date', contract.date ?? '')
+    form.setValue('end_date', contract.date ?? '')
+    form.setValue('client_name', contract.clientName ?? '')
+    form.setValue('event_type', contract.eventType)
+    form.setValue('contract_amount', contract.totalFee)
+    form.setValue('deposit_amount', contract.depositAmount)
+    form.setValue('payment_notes', contractPaymentNotes(contract))
+
+    if (contract.startTime) {
+      setStartTime(contract.startTime)
+      setCallTime(contract.callTime ?? contract.startTime)
+      setEndTime(contract.endTime ?? addMinutes(contract.startTime, 180))
+    }
+
+    // A venue the org has already saved brings its address with it. Anything
+    // else stays as the contract's text until the admin picks it from the search.
+    let savedVenueId: string | null = null
+    if (contract.venueName) {
+      const supabase = createClient()
+      const { data: saved } = await supabase
+        .from('venues')
+        .select('id')
+        .eq('organization_id', organizationId)
+        .ilike('name', contract.venueName.replace(/[\\%_]/g, '\\$&'))
+        .limit(2)
+      if (saved?.length === 1) savedVenueId = saved[0].id
+      else warnings.push(`"${contract.venueName}" is not one of your saved venues. Pick it from the venue search to add its address.`)
+    }
+    setVenueName(contract.venueName ?? '')
+    setVenueId(savedVenueId)
+
+    setSelectedTemplate(template)
+    setContractEnsemble(contract.ensemble)
+    setIsSingleDay(true)
+    setBookingOpen(true)
+    setContractWarnings(warnings)
+    setContractError(null)
+    setShowContractPaste(false)
+  }
+
   async function onSubmit(data: ProjectInput) {
     setIsLoading(true)
     setError(null)
@@ -271,14 +360,14 @@ export function ProjectFormDialog({
     }
 
     // Validate venue for template-based projects (services will be auto-created)
-    if (!isEditing && selectedTemplate && selectedTemplate !== 'custom' && !venueName.trim()) {
+    if (createsPerformance && !venueName.trim()) {
       setError('Please select a performance venue.')
       setIsLoading(false)
       return
     }
 
     // Validate time ordering for single-day events with time pickers
-    const showTimePicker = isSingleDay && (isEditing || (selectedTemplate !== null && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra'))
+    const showTimePicker = isSingleDay && (isEditing || hasTimePicker)
     if (showTimePicker) {
       if (endTime <= startTime) {
         setError('End time must be after start time.')
@@ -378,7 +467,7 @@ export function ProjectFormDialog({
           start_date: data.start_date || null,
           end_date: data.end_date || null,
           status: data.status,
-          ensemble_type: selectedTemplate ? ENSEMBLE_LABELS[selectedTemplate] || null : null,
+          ensemble_type: selectedTemplate ? ENSEMBLE_LABELS[selectedTemplate] || contractEnsemble : null,
           client_name: data.client_name || null,
           client_email: data.client_email || null,
           client_phone: data.client_phone || null,
@@ -408,9 +497,9 @@ export function ProjectFormDialog({
         start_date: data.start_date || null,
         end_date: data.end_date || null,
         template: selectedTemplate || undefined,
-        callTime: isSingleDay && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' ? callTime : undefined,
-        startTime: isSingleDay && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' ? startTime : undefined,
-        endTime: isSingleDay && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra' ? endTime : undefined,
+        callTime: isSingleDay && hasTimePicker ? callTime : undefined,
+        startTime: isSingleDay && hasTimePicker ? startTime : undefined,
+        endTime: isSingleDay && hasTimePicker ? endTime : undefined,
         venueName: venueName || undefined,
         venueId: venueId,
       })
@@ -419,6 +508,56 @@ export function ProjectFormDialog({
 
     setIsLoading(false)
     onSuccess()
+  }
+
+  // Paste-a-contract step
+  if (showContractPaste) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Paste a Contract</DialogTitle>
+            <DialogDescription>
+              Open the contract, select the whole page, copy it and paste it here. The client, date, venue, times and fee are filled in for you to check.
+            </DialogDescription>
+          </DialogHeader>
+
+          {contractError && (
+            <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+              {contractError}
+            </div>
+          )}
+
+          <Textarea
+            autoFocus
+            aria-label="Contract text"
+            className="h-64 resize-none font-mono text-xs"
+            placeholder={'Ensemble: String Quartet\nService: Wedding Ceremony\nClient: Jane Smith\nDate: 4/3/27\nVenue: ...'}
+            value={contractText}
+            onChange={(e) => {
+              setContractText(e.target.value)
+              setContractError(null)
+            }}
+          />
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowContractPaste(false)
+                setShowTemplatePicker(true)
+              }}
+            >
+              Back
+            </Button>
+            <Button type="button" disabled={!contractText.trim()} onClick={handleReadContract}>
+              Read Contract
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
   }
 
   // Template picker step
@@ -434,6 +573,17 @@ export function ProjectFormDialog({
           </DialogHeader>
 
           <div className="space-y-3 py-2">
+            <button
+              type="button"
+              className="w-full rounded-lg border border-primary/40 bg-primary/5 p-4 text-left transition-colors hover:bg-primary/10"
+              onClick={() => {
+                setShowTemplatePicker(false)
+                setShowContractPaste(true)
+              }}
+            >
+              <p className="font-medium">Paste a Contract</p>
+              <p className="text-sm text-muted-foreground">Fills in the client, date, venue, times and fee from the contract</p>
+            </button>
             {(Object.keys(TEMPLATES) as TemplateType[]).map((key) => {
               const t = TEMPLATES[key]
               return (
@@ -473,6 +623,19 @@ export function ProjectFormDialog({
             {error && (
               <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
                 {error}
+              </div>
+            )}
+
+            {contractWarnings && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                <p className="font-medium">Filled in from the contract. Check every box before you create it.</p>
+                {contractWarnings.length > 0 && (
+                  <ul className="mt-2 list-disc space-y-1 pl-5">
+                    {contractWarnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
 
@@ -588,7 +751,7 @@ export function ProjectFormDialog({
                     )}
                   />
 
-                  {(isEditing || (selectedTemplate !== null && selectedTemplate !== 'custom' && selectedTemplate !== 'orchestra')) && (
+                  {(isEditing || hasTimePicker) && (
                     <>
                     <p className="text-xs text-muted-foreground">All times in {formatTimezoneLabel(timezone)}</p>
                     <div className="grid grid-cols-3 gap-3">
@@ -667,7 +830,7 @@ export function ProjectFormDialog({
               )}
             </div>
 
-            {!isEditing && selectedTemplate && selectedTemplate !== 'custom' && (
+            {createsPerformance && (
               <div className="space-y-2">
                 <label className="text-sm font-medium leading-none">
                   Performance Venue <span className="text-destructive">*</span>

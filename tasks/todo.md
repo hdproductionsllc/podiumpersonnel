@@ -1,3 +1,67 @@
+# Create a project from a pasted contract (2026-09-29)
+
+David: paste a 17hats contract (whole page, menus and all) and get the project:
+client, date, venue, times, fee. First real one: Monica Traupmann, Subito Strings.
+
+## What is true today (verified 2026-09-29)
+- A project is created in two halves: `project-form-dialog.tsx` inserts the
+  `projects` row, then `projects-client.tsx handleProjectSuccess` adds one
+  performance (call/start/end + venue) and the empty chairs for the template.
+- The contract's facts all have a home already: projects.client_name,
+  event_type, contract_amount, deposit_amount, payment_notes, ensemble_type,
+  description; services.call_time/start_time/end_time/venue/venue_id.
+  => NO migration, NO new API route, NO new write path.
+- Subito Strings (acd446d8): America/Los_Angeles, naming habit is
+  "<Client> String Quartet Gig". No Traupmann project and no "Invisible House"
+  venue exist yet (read-only query).
+- Creating a project with empty chairs emails nobody (offers/reminders/after-gig
+  all key off assigned musicians).
+
+## Design
+The contract is just another way to fill in the Add Project form. The reader
+only PROPOSES (same rule as the questionnaire parser): every value lands in a
+visible, editable box and anything odd is listed as a warning before Create.
+
+## Plan
+- [x] `src/lib/projects/contract-parser.ts`: pure text -> fields + warnings
+      (labels, date, times out of the "Performance Time" sentence, money,
+      balance-due date, company, signed-or-not)
+- [x] Tests `src/lib/__tests__/contract-parser.test.ts` (41, fictional client)
+- [x] Dialog: "Paste a Contract" in the template picker -> paste -> prefilled form
+      with a "check this" banner; saved-venue match by name; wrong-org warning
+- [x] Unknown ensemble (e.g. quintet): custom project that still keeps the
+      contract's times + venue
+- [x] Verify: 41 new tests; full suite 960/960 (first run, alongside the build, the
+      2 known-flaky timing tests failed, then passed alone and in a clean full
+      run); tsc clean; build OK; lint count unchanged on the two edited files
+      (pre-existing errors only), new files clean
+- [x] Real gig added to Subito Strings with the SAME reader and read back:
+      project a86a40fc-973e-457c-aa65-e78175a795cc, Sat Apr 3 2027, call 8:00 /
+      start 8:30 / end 11:00 AM PDT, venue "The Invisible House" 8198 Uphill Rd,
+      Joshua Tree CA 92252 (new venue ad4ffcb1), 4 vacant chairs, 0 offers,
+      $5,890 / $2,990, payment pending (deposit corrected to $2,945 same day, see below)
+- [x] Docs: docs/contract-import.md
+- [ ] NOT DONE: nobody has looked at the new dialog on screen. Local login needs
+      David's password, so it is verified by types + build only. First look
+      happens on the live site after the push.
+- [ ] David says go, then ONE commit + ONE push to master (expected pushes: 1)
+
+## For David to decide
+- RESOLVED 2026-09-29: contract said "50% Deposit: $2,990" but half of $5,890 is
+  $2,945. David fixed the contract; Podium gig updated to deposit $2,945, balance
+  $2,945 due Mar 20, 2027 (read back from the database).
+- Event Type saved as "Ceremony" (there is no "Coffee Hour" type).
+- Venue is Google's one match for "Invisible House" in California. Confirm it is
+  the Joshua Tree one.
+
+## Version 2 ideas
+- Look the venue's address up automatically when the contract's venue is new
+- Read client email / phone from the 17hats contact page
+- "Coffee Hour" (or free-text) event type
+- Keep the contract text or PDF attached to the project
+- Warn when a gig for the same client and date already exists
+- Mark deposit paid / contract signed from 17hats instead of by hand
+
 # Gig page trim + Violin 1 lead + contrast (2026-09-27)
 - [x] Gig lead = admin pick > confirmed Violin 1 (lowest chair) > nobody. Roster "Leader" flag no longer used AT ALL for the lead (David, twice). Preview shown: Oct 4 Shelly Ren, Oct 12 + Oct 25 Rebecca Chung, Nov 7 Ruzanna Sargsyan (was Boryana under the flag rule).
 - [x] Music / Parts hidden until it holds a file or a past send (it is where Prepare Gig Music's books land and Send Music goes out: 15 files, 2 sends in 90 days, so NOT deleted). "Upload sheet music (PDF) yourself" link in Send to musicians; book publish now refreshes the page so the panel appears.
