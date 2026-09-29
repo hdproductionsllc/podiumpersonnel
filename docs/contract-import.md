@@ -51,13 +51,21 @@ Added 2026-09-29.
    punctuation do not matter), that venue is used.
 2. Otherwise Google is asked, looking first in the state most of the org's saved
    venues are in, then everywhere.
-3. The address is taken only when exactly ONE place carries the name. It is shown
-   under the venue box as "Found on Google" with a Maps link.
+3. A place is chosen only when one stands out: it is the ONLY place with the
+   name, or the only one with the name in the org's state. It is shown under the
+   venue box as "Found on Google" with a Maps link.
+   Anything less clear (a club with two locations in town, a common church name)
+   is listed under the venue box with each address; one click chooses.
 4. The venue is saved to the org's venues when Create is clicked, not before.
    Changing the venue box drops the found place.
 
-Several places with the name (a club with two locations, a common church name) or
-none: nothing is attached and the amber box says so. Pick it from the venue search.
+Nothing found at all: nothing is attached and the amber box says so. Pick it from
+the venue search.
+
+Google tailors results to where the request comes from, and the live server is
+not where the office is. The same name can return one place from a laptop and
+several from the server. That is why ambiguity is handled as a choice, not an
+error, and why two listings at one street address count as one place.
 
 Measured on 28 venues already saved with a known Google place (2026-09-29): 23
 right, 2 refused as "several", 2 not found (saved under a street address, not a
@@ -76,7 +84,7 @@ name), 1 duplicate saved venue. No wrong address.
   was given (needed when a contract's ensemble has no template).
 
 - `src/lib/venue-lookup.ts` + `src/lib/__tests__/venue-lookup.test.ts`: the
-  pick-exactly-one rule. 17 tests.
+  choosing rule. 30 tests.
 - `src/app/api/venues/lookup/route.ts`: admin-only GET that asks Google and applies
   the rule. Saves nothing. Costs one Google text search per contract read (two
   when the first finds nothing).

@@ -25,9 +25,10 @@ async function searchPlaces(query: string): Promise<PlaceCandidate[]> {
 /**
  * GET /api/venues/lookup?organization_id=...&name=...
  *
- * From a venue name (all a contract gives) to the one place it means. Saves
- * nothing: the venue is created later through POST /api/venues, which fills in
- * the address from the place id. See src/lib/venue-lookup.ts for the rule.
+ * From a venue name (all a contract gives) to the place it means, or to the few
+ * places it could mean when nothing singles one out. Saves nothing: the venue is
+ * created later through POST /api/venues, which fills in the address from the
+ * place id. See src/lib/venue-lookup.ts for the rule.
  */
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (!GOOGLE_API_KEY) {
-    return NextResponse.json({ match: null, reason: 'unavailable' })
+    return NextResponse.json({ match: null, reason: 'unavailable', others: [] })
   }
 
   // Use service role client to bypass RLS (we've already verified authorization above)
@@ -70,13 +71,13 @@ export async function GET(request: NextRequest) {
   try {
     // Look where the org works first. A gig further afield is found by the
     // second, unbiased search, which only runs when the first found no match.
-    let result = pickVenueMatch(name, await searchPlaces(state ? `${name}, ${state}` : name))
+    let result = pickVenueMatch(name, await searchPlaces(state ? `${name}, ${state}` : name), state)
     if (result.reason === 'none' && state) {
-      result = pickVenueMatch(name, await searchPlaces(name))
+      result = pickVenueMatch(name, await searchPlaces(name), state)
     }
     return NextResponse.json(result)
   } catch (error) {
     console.error('Venue lookup failed:', error)
-    return NextResponse.json({ match: null, reason: 'unavailable' })
+    return NextResponse.json({ match: null, reason: 'unavailable', others: [] })
   }
 }

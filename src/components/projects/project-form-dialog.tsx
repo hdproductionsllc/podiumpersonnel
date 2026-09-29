@@ -43,7 +43,13 @@ import {
   contractPaymentNotes,
   isSameCompany,
 } from '@/lib/projects/contract-parser'
-import { isSameVenueName, formatPlaceAddress, type PlaceCandidate, type VenueLookupResult } from '@/lib/venue-lookup'
+import {
+  isSameVenueName,
+  formatPlaceAddress,
+  stateOfAddress,
+  type PlaceCandidate,
+  type VenueLookupResult,
+} from '@/lib/venue-lookup'
 import type { ProjectWithServices } from './projects-client'
 
 type TemplateType = 'string-quartet' | 'string-trio' | 'duo' | 'solo' | 'orchestra' | 'custom'
@@ -144,6 +150,8 @@ export function ProjectFormDialog({
   // The place Google found for a contract's venue. Shown under the venue box and
   // saved as a venue on Create; dropped the moment the admin changes the venue.
   const [foundPlace, setFoundPlace] = useState<PlaceCandidate | null>(null)
+  // Every place the venue's name could mean, when there is more than one.
+  const [placeChoices, setPlaceChoices] = useState<PlaceCandidate[]>([])
   const isEditing = !!project
   const fromContract = contractWarnings !== null
   // A template creates the performance (times + venue) along with the gig. A
@@ -258,6 +266,7 @@ export function ProjectFormDialog({
       setContractEnsemble(null)
       setIsReadingContract(false)
       setFoundPlace(null)
+      setPlaceChoices([])
       setError(null)
     }
   }, [open, project, form, isFirstProject])
@@ -300,7 +309,9 @@ export function ProjectFormDialog({
    * unsure of is listed above the form.
    */
   /** Ask Google which place a venue name means. Never throws: no answer is an answer. */
-  async function lookUpVenue(name: string): Promise<VenueLookupResult | { match: null; reason: 'unavailable' }> {
+  async function lookUpVenue(
+    name: string
+  ): Promise<VenueLookupResult | { match: null; reason: 'unavailable'; others: PlaceCandidate[] }> {
     try {
       const query = new URLSearchParams({ organization_id: organizationId, name })
       const res = await fetch(`/api/venues/lookup?${query}`)
@@ -309,7 +320,7 @@ export function ProjectFormDialog({
     } catch (err) {
       console.error('Venue lookup failed:', err)
     }
-    return { match: null, reason: 'unavailable' }
+    return { match: null, reason: 'unavailable', others: [] }
   }
 
   async function handleReadContract() {
@@ -344,10 +355,12 @@ export function ProjectFormDialog({
     }
 
     // A venue the org has already saved brings its address with it. A new one is
-    // looked up on Google, and its address is taken only when exactly one place
-    // carries that name. Either way the admin sees it under the venue box first.
+    // looked up on Google, and chosen only when one place stands out: the only
+    // one with that name, or the only one with it in the org's state. Anything
+    // less clear is offered as a choice under the venue box.
     let savedVenue: { id: string; name: string } | null = null
     let place: PlaceCandidate | null = null
+    let choices: PlaceCandidate[] = []
     if (contract.venueName) {
       const wanted = contract.venueName
       const supabase = createClient()
@@ -361,8 +374,12 @@ export function ProjectFormDialog({
       } else {
         const lookup = await lookUpVenue(wanted)
         place = lookup.match
+        if (lookup.others.length > 0) choices = place ? [place, ...lookup.others] : lookup.others
         if (lookup.reason === 'several') {
-          warnings.push(`More than one place is called "${wanted}". Pick the right one from the venue search to add its address.`)
+          warnings.push(`More than one place is called "${wanted}". Choose the right one under the venue box.`)
+        } else if (place && lookup.others.length > 0) {
+          const where = stateOfAddress(place.address)
+          warnings.push(`More than one place is called "${wanted}". The one in ${where ?? 'your state'} was chosen. Check it under the venue box.`)
         } else if (lookup.reason === 'none') {
           warnings.push(`"${wanted}" was not found on Google. Pick it from the venue search to add its address.`)
         } else if (lookup.reason === 'unavailable') {
@@ -373,6 +390,7 @@ export function ProjectFormDialog({
     setVenueName(savedVenue?.name ?? place?.name ?? contract.venueName ?? '')
     setVenueId(savedVenue?.id ?? null)
     setFoundPlace(place)
+    setPlaceChoices(choices)
 
     setSelectedTemplate(template)
     setContractEnsemble(contract.ensemble)
@@ -902,6 +920,7 @@ export function ProjectFormDialog({
                     setVenueName(name)
                     setVenueId(id)
                     setFoundPlace(null)
+                    setPlaceChoices([])
 
                     // Auto-create venue when a Google Place is selected (no saved id yet)
                     if (!id && (googlePlaceData || placeId)) {
@@ -931,6 +950,26 @@ export function ProjectFormDialog({
                   }}
                   placeholder="Search saved venues or enter address..."
                 />
+                {placeChoices.length > 1 && !venueId && (
+                  <div className="rounded-md border p-3 text-sm space-y-2">
+                    <p className="font-medium">More than one place has this name. Which one is it?</p>
+                    {placeChoices.map((choice) => (
+                      <button
+                        key={choice.placeId}
+                        type="button"
+                        aria-pressed={foundPlace?.placeId === choice.placeId}
+                        className={`w-full rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted ${foundPlace?.placeId === choice.placeId ? 'border-primary bg-primary/5' : ''}`}
+                        onClick={() => {
+                          setFoundPlace(choice)
+                          setVenueName(choice.name)
+                        }}
+                      >
+                        <span className="block font-medium">{choice.name}</span>
+                        <span className="block text-xs text-muted-foreground">{formatPlaceAddress(choice.address)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {foundPlace && !venueId && (
                   <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
                     <div className="flex items-center gap-2">

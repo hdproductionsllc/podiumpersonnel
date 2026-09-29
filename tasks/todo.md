@@ -22,14 +22,21 @@ the admin re-picks it from the venue search.
 - Changing the venue box drops the found place.
 
 ## Plan
-- [ ] `src/lib/venue-lookup.ts`: name folding ("The X" = "X") + pick-one-match rule
-- [ ] Tests `src/lib/__tests__/venue-lookup.test.ts`
-- [ ] `GET /api/venues/lookup`: admin-only, Google text search biased to the state
+- [x] `src/lib/venue-lookup.ts`: name folding ("The X" = "X") + choosing rule
+- [x] Tests `src/lib/__tests__/venue-lookup.test.ts` (30)
+- [x] `GET /api/venues/lookup`: admin-only, Google text search biased to the state
       the org's saved venues are in, retry without the bias if nothing matches
-- [ ] Dialog: saved-venue match by folded name; else lookup; "Found on Google" box
+- [x] Dialog: saved-venue match by folded name; else lookup; "Found on Google" box
       under the venue; venue saved on Create through the existing POST /api/venues
-- [ ] Verify: tests, tsc, lint, build; then on the live site with the real contract
-- [ ] ONE push to master (expected pushes: 1)
+- [x] Rule measured on 28 saved venues with a known place: 23 right, 2 several,
+      2 none (saved under a street address), 1 duplicate saved venue, 0 wrong
+- [x] Push 1 (93310591) deployed. LIVE TEST FOUND A GAP: from the server Google
+      returned several places for "Invisible House" (one from my laptop), so it
+      refused and sent the admin to the search. Safe, but not what was asked.
+- [x] Fix: several -> the only one in the org's state is chosen, else the
+      candidates are listed under the venue box for a one-click choice; two
+      listings at one street address are one place. 990/990 tests, tsc, build.
+- [ ] Push 2, then verify on the live site (pushes for this change: 2)
 
 # Create a project from a pasted contract (2026-09-29)
 
