@@ -1,3 +1,36 @@
+# Contract import: attach the venue's address automatically (2026-09-29)
+
+David: "make the venue address attach automatically". Today a venue the org has
+not saved comes out of a contract as a bare name; the gig has no address unless
+the admin re-picks it from the venue search.
+
+## What is true today (verified)
+- POST /api/venues already does the hard part: given a name + google_place_id it
+  fills in street/city/state/zip from Google, builds the Maps link, and reuses an
+  existing venue with the same place id. So the only missing piece is going from
+  a venue NAME to a place id.
+- Organizations have no address. The only hint of where an org works is its own
+  saved venues (Subito: CA, PSQ: MO).
+- The saved-venue match is an exact name match, so the contract's "Invisible
+  House" misses Subito's saved "The Invisible House".
+
+## Rules (so it never attaches a wrong address silently)
+- Attach only when Google has ONE place with that name. Several -> no guess, the
+  admin picks. None -> same.
+- The address found is SHOWN in the form before Create. The venue is saved at
+  Create, not at paste (paste saves nothing, as before).
+- Changing the venue box drops the found place.
+
+## Plan
+- [ ] `src/lib/venue-lookup.ts`: name folding ("The X" = "X") + pick-one-match rule
+- [ ] Tests `src/lib/__tests__/venue-lookup.test.ts`
+- [ ] `GET /api/venues/lookup`: admin-only, Google text search biased to the state
+      the org's saved venues are in, retry without the bias if nothing matches
+- [ ] Dialog: saved-venue match by folded name; else lookup; "Found on Google" box
+      under the venue; venue saved on Create through the existing POST /api/venues
+- [ ] Verify: tests, tsc, lint, build; then on the live site with the real contract
+- [ ] ONE push to master (expected pushes: 1)
+
 # Create a project from a pasted contract (2026-09-29)
 
 David: paste a 17hats contract (whole page, menus and all) and get the project:
@@ -41,10 +74,14 @@ visible, editable box and anything odd is listed as a warning before Create.
       Joshua Tree CA 92252 (new venue ad4ffcb1), 4 vacant chairs, 0 offers,
       $5,890 / $2,990, payment pending (deposit corrected to $2,945 same day, see below)
 - [x] Docs: docs/contract-import.md
-- [ ] NOT DONE: nobody has looked at the new dialog on screen. Local login needs
-      David's password, so it is verified by types + build only. First look
-      happens on the live site after the push.
-- [ ] David says go, then ONE commit + ONE push to master (expected pushes: 1)
+- [x] David: "ship it make it live". ONE push: f0073f22 to master, Vercel production
+      deploy success, CI (typecheck, lint, test) success.
+- [x] Seen on the live site (app.podiumpersonnel.com, PSQ login): picker shows
+      "Paste a Contract"; pasted the contract; form filled correctly; wrong-company,
+      unsigned and unsaved-venue warnings all shown. Cancelled, nothing created.
+- [ ] Cost note: the push also built podium-marketing, which did not change.
+      Every app push pays for two builds. Fix = ignoreCommand on that project
+      that skips when podium-marketing/ is untouched.
 
 ## For David to decide
 - RESOLVED 2026-09-29: contract said "50% Deposit: $2,990" but half of $5,890 is

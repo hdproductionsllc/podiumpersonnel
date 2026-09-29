@@ -43,6 +43,7 @@ import {
   contractPaymentNotes,
   isSameCompany,
 } from '@/lib/projects/contract-parser'
+import { isSameVenueName, formatPlaceAddress, type PlaceCandidate, type VenueLookupResult } from '@/lib/venue-lookup'
 import type { ProjectWithServices } from './projects-client'
 
 type TemplateType = 'string-quartet' | 'string-trio' | 'duo' | 'solo' | 'orchestra' | 'custom'
@@ -139,6 +140,10 @@ export function ProjectFormDialog({
   const [contractError, setContractError] = useState<string | null>(null)
   const [contractWarnings, setContractWarnings] = useState<string[] | null>(null)
   const [contractEnsemble, setContractEnsemble] = useState<string | null>(null)
+  const [isReadingContract, setIsReadingContract] = useState(false)
+  // The place Google found for a contract's venue. Shown under the venue box and
+  // saved as a venue on Create; dropped the moment the admin changes the venue.
+  const [foundPlace, setFoundPlace] = useState<PlaceCandidate | null>(null)
   const isEditing = !!project
   const fromContract = contractWarnings !== null
   // A template creates the performance (times + venue) along with the gig. A
@@ -251,6 +256,8 @@ export function ProjectFormDialog({
       setContractError(null)
       setContractWarnings(null)
       setContractEnsemble(null)
+      setIsReadingContract(false)
+      setFoundPlace(null)
       setError(null)
     }
   }, [open, project, form, isFirstProject])
@@ -292,12 +299,26 @@ export function ProjectFormDialog({
    * lands in a box the admin can see and change, and whatever the reader was
    * unsure of is listed above the form.
    */
+  /** Ask Google which place a venue name means. Never throws: no answer is an answer. */
+  async function lookUpVenue(name: string): Promise<VenueLookupResult | { match: null; reason: 'unavailable' }> {
+    try {
+      const query = new URLSearchParams({ organization_id: organizationId, name })
+      const res = await fetch(`/api/venues/lookup?${query}`)
+      if (res.ok) return await res.json()
+      console.error('Venue lookup failed:', res.status)
+    } catch (err) {
+      console.error('Venue lookup failed:', err)
+    }
+    return { match: null, reason: 'unavailable' }
+  }
+
   async function handleReadContract() {
     const contract = parseContract(contractText)
     if (contract.fieldsFound === 0) {
       setContractError(contract.warnings[0])
       return
     }
+    setIsReadingContract(true)
 
     const warnings = [...contract.warnings]
     if (contract.company && organizationName && !isSameCompany(contract.company, organizationName)) {
@@ -322,22 +343,36 @@ export function ProjectFormDialog({
       setEndTime(contract.endTime ?? addMinutes(contract.startTime, 180))
     }
 
-    // A venue the org has already saved brings its address with it. Anything
-    // else stays as the contract's text until the admin picks it from the search.
-    let savedVenueId: string | null = null
+    // A venue the org has already saved brings its address with it. A new one is
+    // looked up on Google, and its address is taken only when exactly one place
+    // carries that name. Either way the admin sees it under the venue box first.
+    let savedVenue: { id: string; name: string } | null = null
+    let place: PlaceCandidate | null = null
     if (contract.venueName) {
+      const wanted = contract.venueName
       const supabase = createClient()
-      const { data: saved } = await supabase
+      const { data: venues } = await supabase
         .from('venues')
-        .select('id')
+        .select('id, name')
         .eq('organization_id', organizationId)
-        .ilike('name', contract.venueName.replace(/[\\%_]/g, '\\$&'))
-        .limit(2)
-      if (saved?.length === 1) savedVenueId = saved[0].id
-      else warnings.push(`"${contract.venueName}" is not one of your saved venues. Pick it from the venue search to add its address.`)
+      const saved = (venues || []).filter((v) => isSameVenueName(v.name, wanted))
+      if (saved.length === 1) {
+        savedVenue = saved[0]
+      } else {
+        const lookup = await lookUpVenue(wanted)
+        place = lookup.match
+        if (lookup.reason === 'several') {
+          warnings.push(`More than one place is called "${wanted}". Pick the right one from the venue search to add its address.`)
+        } else if (lookup.reason === 'none') {
+          warnings.push(`"${wanted}" was not found on Google. Pick it from the venue search to add its address.`)
+        } else if (lookup.reason === 'unavailable') {
+          warnings.push(`"${wanted}" could not be looked up just now. Pick it from the venue search to add its address.`)
+        }
+      }
     }
-    setVenueName(contract.venueName ?? '')
-    setVenueId(savedVenueId)
+    setVenueName(savedVenue?.name ?? place?.name ?? contract.venueName ?? '')
+    setVenueId(savedVenue?.id ?? null)
+    setFoundPlace(place)
 
     setSelectedTemplate(template)
     setContractEnsemble(contract.ensemble)
@@ -345,6 +380,7 @@ export function ProjectFormDialog({
     setBookingOpen(true)
     setContractWarnings(warnings)
     setContractError(null)
+    setIsReadingContract(false)
     setShowContractPaste(false)
   }
 
@@ -457,6 +493,29 @@ export function ProjectFormDialog({
         }
       }
     } else {
+      // A venue found on Google for a pasted contract is saved first, so a
+      // failure here stops before anything is half-made. The venues route fills
+      // in the address from the place id and reuses a venue the org already has.
+      let projectVenueId = venueId
+      if (foundPlace && !venueId) {
+        const res = await fetch('/api/venues', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            organization_id: organizationId,
+            name: foundPlace.name,
+            google_place_id: foundPlace.placeId,
+          }),
+        })
+        const savedVenue = await res.json().catch(() => null)
+        if (!res.ok || !savedVenue?.id) {
+          setError('The venue could not be saved. Pick it from the venue search, or try again.')
+          setIsLoading(false)
+          return
+        }
+        projectVenueId = savedVenue.id
+      }
+
       const { data: newProject, error: insertError } = await supabase
         .from('projects')
         .insert({
@@ -501,7 +560,7 @@ export function ProjectFormDialog({
         startTime: isSingleDay && hasTimePicker ? startTime : undefined,
         endTime: isSingleDay && hasTimePicker ? endTime : undefined,
         venueName: venueName || undefined,
-        venueId: venueId,
+        venueId: projectVenueId,
       })
       return
     }
@@ -551,8 +610,8 @@ export function ProjectFormDialog({
             >
               Back
             </Button>
-            <Button type="button" disabled={!contractText.trim()} onClick={handleReadContract}>
-              Read Contract
+            <Button type="button" disabled={!contractText.trim() || isReadingContract} onClick={handleReadContract}>
+              {isReadingContract ? 'Reading...' : 'Read Contract'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -842,6 +901,7 @@ export function ProjectFormDialog({
                   onChange={async (name, id, _venueData, placeId, googlePlaceData) => {
                     setVenueName(name)
                     setVenueId(id)
+                    setFoundPlace(null)
 
                     // Auto-create venue when a Google Place is selected (no saved id yet)
                     if (!id && (googlePlaceData || placeId)) {
@@ -871,6 +931,27 @@ export function ProjectFormDialog({
                   }}
                   placeholder="Search saved venues or enter address..."
                 />
+                {foundPlace && !venueId && (
+                  <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center rounded-full bg-blue-100 dark:bg-blue-900 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-300">
+                        Found on Google
+                      </span>
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${foundPlace.name}, ${formatPlaceAddress(foundPlace.address)}`)}&query_place_id=${foundPlace.placeId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        View on Google Maps
+                      </a>
+                    </div>
+                    <p className="text-muted-foreground">{formatPlaceAddress(foundPlace.address)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Saved to your venues when you create the {term(terms, 'work', { case: 'lower' })}. Not the right place? Type in the box above to pick another.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
