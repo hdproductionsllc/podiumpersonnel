@@ -36,7 +36,20 @@ the admin re-picks it from the venue search.
 - [x] Fix: several -> the only one in the org's state is chosen, else the
       candidates are listed under the venue box for a one-click choice; two
       listings at one street address are one place. 990/990 tests, tsc, build.
-- [ ] Push 2, then verify on the live site (pushes for this change: 2)
+- [x] Push 2 (40658fae) deployed and checked live: the choice list and the "Found
+      on Google" box both work. It also showed WHY there were several: Google
+      lists the house twice, once as "8198 Uphill Rd, Joshua Tree, CA 92252" and
+      once as "Joshua Tree, CA 92252".
+- [x] Fix: a town-only listing with the same name as a fuller one is the same
+      place; the fuller one is kept. The live server's exact result is now a test.
+      994/994 tests, tsc, build.
+- [ ] Push 3 for this change (4th of the day: past the limit of three, so this is
+      the batch and the last), then verify on the live site
+
+## Lesson for next time
+Anything that calls Google from the server cannot be fully tested from a laptop:
+results depend on where the request comes from. Build the "several" path and
+the duplicate-listing handling BEFORE the first push, not after seeing it live.
 
 # Create a project from a pasted contract (2026-09-29)
 

@@ -65,7 +65,12 @@ the venue search.
 Google tailors results to where the request comes from, and the live server is
 not where the office is. The same name can return one place from a laptop and
 several from the server. That is why ambiguity is handled as a choice, not an
-error, and why two listings at one street address count as one place.
+error.
+
+Google also lists one place several times under different ids. These count as
+one place: the same street address twice, and a listing with only the town
+("Joshua Tree, CA 92252") next to one of the same name with the street. The one
+with the street is kept.
 
 Measured on 28 venues already saved with a known Google place (2026-09-29): 23
 right, 2 refused as "several", 2 not found (saved under a street address, not a
@@ -84,7 +89,7 @@ name), 1 duplicate saved venue. No wrong address.
   was given (needed when a contract's ensemble has no template).
 
 - `src/lib/venue-lookup.ts` + `src/lib/__tests__/venue-lookup.test.ts`: the
-  choosing rule. 30 tests.
+  choosing rule. 34 tests.
 - `src/app/api/venues/lookup/route.ts`: admin-only GET that asks Google and applies
   the rule. Saves nothing. Costs one Google text search per contract read (two
   when the first finds nothing).

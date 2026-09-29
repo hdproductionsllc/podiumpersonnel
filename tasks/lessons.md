@@ -1,5 +1,17 @@
 # Lessons Learned
 
+## Google answers differently from the server than from a laptop (2026-09-29)
+The venue lookup returned ONE place for "Invisible House" from my machine and TWO
+from the live server: Google tailors text search to where the request comes from,
+and it lists one place several times (once with its street, once with only the
+town). I tested the rule on 28 real venues locally, saw no problem, pushed, and
+needed two more pushes to handle what the server actually got.
+**Rule:** for anything that calls an outside service from the server, a local run
+is not proof. Before the first push, build for the messy answers (several
+results, duplicate listings, partial addresses) and show the choices to the
+person instead of treating ambiguity as an error. Expect the live answer to
+differ and make the first deploy able to show what it received.
+
 ## "Leader" on the roster means CAN lead; every gig has exactly ONE lead (2026-09-27)
 `musicians.is_leader` marks people who are able to lead. It is not "the lead of
 this gig". I built the after-gig report request as "every confirmed musician

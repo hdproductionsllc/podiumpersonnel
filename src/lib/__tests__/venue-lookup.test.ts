@@ -85,6 +85,33 @@ describe('pickVenueMatch: one place fits', () => {
     const gate = place('p2', 'Sony Pictures Studios', '10202 Washington Blvd, Culver City, CA 90232')
     expect(pickVenueMatch('Sony Pictures Studios', [studio, gate])).toEqual({ match: studio, reason: 'found', others: [] })
   })
+
+  it('counts a listing with no street as the same place as the fuller one, and keeps the fuller', () => {
+    // Exactly what the live server got from Google on 2026-09-29.
+    const full = place('p1', 'The Invisible House', '8198 Uphill Rd, Joshua Tree, CA 92252, USA')
+    const townOnly = place('p2', 'The Invisible House', 'Joshua Tree, CA 92252, USA')
+    const found = { match: full, reason: 'found', others: [] }
+    expect(pickVenueMatch('Invisible House', [full, townOnly], 'CA')).toEqual(found)
+    expect(pickVenueMatch('Invisible House', [townOnly, full], 'MO')).toEqual(found)
+    expect(pickVenueMatch('Invisible House', [townOnly, full])).toEqual(found)
+  })
+
+  it('keeps a town-only listing when it is the only one', () => {
+    const townOnly = place('p2', 'The Invisible House', 'Joshua Tree, CA 92252, USA')
+    expect(pickVenueMatch('Invisible House', [townOnly]).match).toBe(townOnly)
+  })
+
+  it('does not merge a town-only listing into a place with a different name', () => {
+    const chapel = place('p1', 'Desert Chapel', '8198 Uphill Rd, Joshua Tree, CA 92252, USA')
+    const house = place('p2', 'The Invisible House', 'Joshua Tree, CA 92252, USA')
+    expect(pickVenueMatch('Invisible House', [chapel, house]).match).toBe(house)
+  })
+
+  it('does not merge two places in the same town that both have a street', () => {
+    const oak = place('p1', "St. Mary's Church", '12 Oak St, St. Louis, MO 63101, USA')
+    const elm = place('p2', "St. Mary's Church", '40 Elm St, St. Louis, MO 63101, USA')
+    expect(pickVenueMatch("St. Mary's Church", [oak, elm], 'MO').reason).toBe('several')
+  })
 })
 
 describe('pickVenueMatch: several places fit', () => {

@@ -72,23 +72,38 @@ export function stateOfAddress(address: string): string | null {
 // A name this short ("Inn", "Bar") is contained in half of everything.
 const MIN_CONTAINED_LENGTH = 6
 
+const foldAddress = (address: string) => formatPlaceAddress(address).toLowerCase().replace(/[^a-z0-9]/g, '')
+
 /**
- * One entry per place. Google can list a place twice, and can list one building
- * under two ids (a studio and its front gate): the same id, or the same street
- * address, is the same place to drive to.
+ * One entry per place. Google lists the same place more than once, under
+ * different ids, in three ways seen in real results:
+ *  - the same id twice;
+ *  - the same street address twice (a studio and its front gate);
+ *  - once with its street and once with only the town ("The Invisible House,
+ *    8198 Uphill Rd, Joshua Tree, CA 92252" and "The Invisible House, Joshua
+ *    Tree, CA 92252"). The fuller one is kept: nobody can drive to a zip code.
  */
 function distinctPlaces(candidates: PlaceCandidate[]): PlaceCandidate[] {
   const seenIds = new Set<string>()
   const seenAddresses = new Set<string>()
   const places: PlaceCandidate[] = []
   for (const candidate of candidates) {
-    const address = formatPlaceAddress(candidate.address).toLowerCase().replace(/[^a-z0-9]/g, '')
+    const address = foldAddress(candidate.address)
     if (seenIds.has(candidate.placeId) || (address && seenAddresses.has(address))) continue
     seenIds.add(candidate.placeId)
     if (address) seenAddresses.add(address)
     places.push(candidate)
   }
-  return places
+
+  return places.filter((place) => {
+    const name = foldVenueName(place.name)
+    const address = foldAddress(place.address)
+    return !places.some((other) => {
+      if (other === place || foldVenueName(other.name) !== name) return false
+      const fuller = foldAddress(other.address)
+      return fuller.length > address.length && fuller.endsWith(address)
+    })
+  })
 }
 
 /**
