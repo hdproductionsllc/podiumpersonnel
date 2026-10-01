@@ -257,6 +257,8 @@ Event *Acme Leadership Meeting*, calls Load-in 07:00–11:00, Rehearsal 15:00–
 
 ## 8. Implementation sequence (PR-sized steps)
 
+> **Sequencing is superseded by [the-plan.md](the-plan.md).** The PR contents and numbers below remain the catalog of work and are referenced from there, but the order in which they ship, and the customer-facing items the-plan.md adds (auto-cascade in Release 1, the staffing board, SMS and availability in Release 2, the worker schedule page, fast expiry, worker drop, backups and 10DLC in Release 0), follow that document.
+
 Each PR is independently testable and shippable. Migrations are listed where they apply; every migration PR carries a RESULTS query per the house convention and the PR template checkbox. "Flag" means the behaviour is dark for existing orgs until the org column is flipped.
 
 ### Phase 0: audit (this PR)
