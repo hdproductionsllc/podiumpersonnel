@@ -185,20 +185,20 @@ Create `src/lib/staffing/` and move the cascade's business rules into it. Routes
 ```
 src/lib/staffing/
   types.ts        Requirement, Offer, Assignment, Candidate (TS views over existing rows)
-  live.ts         isLiveOffer(offer, now) — the one predicate (replaces 9 ad hoc checks)
-  scope.ts        servicesFor(position, services) — "no rows = all"
+  live.ts         isLiveOffer(offer, now): the one predicate (replaces 9 ad hoc checks)
+  scope.ts        servicesFor(position, services): "no rows = all"
   rank.ts         pure ranking policy extracted from next-candidate.ts (sort, exclusions)
   candidates.ts   getNextCandidates (existing, moved; excludes expired/rescinded/released by default)
   conflicts.ts    schedule-conflict.ts (existing, moved; also sees offer-less seats)
-  pay.ts          payments/compute.ts (existing) + computeOfferPay — single rule for email, gig page, calendar, payments
+  pay.ts          payments/compute.ts (existing) + computeOfferPay: single rule for email, gig page, calendar, payments
   offers.ts       createOffer (RPC create_offer), respond (RPC claim_chair / decline), rescind, expire, supersede
-  seats.ts        assignDirect, releaseSeat(reason) — the one "free the chair" function
+  seats.ts        assignDirect, releaseSeat(reason): the one "free the chair" function
   requirements.ts cancelPosition, createRequirement (materialize)
   projects.ts     cancelProject (retire offers, notify)
   substitutions.ts request / approve / decline / expire as one state machine
-  cascade.ts      advance(position, trigger) — manual: suggest; auto: suggest + createOffer; idempotent on (position, trigger offer)
+  cascade.ts      advance(position, trigger): manual: suggest; auto: suggest + createOffer; idempotent on (position, trigger offer)
   events.ts       logEvent()
-  notify.ts       notify(event, ctx) — fan-out to email now, SMS later; always logs
+  notify.ts       notify(event, ctx): fan-out to email now, SMS later; always logs
 ```
 
 Two RPCs carry the atomicity:
