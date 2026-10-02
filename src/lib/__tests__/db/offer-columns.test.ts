@@ -28,7 +28,7 @@ afterAll(async () => {
   await db?.end()
 })
 
-/** A fresh chair on the tenant's gig (094 allows one open offer per chair). */
+/** A fresh chair on the tenant's gig (095 allows one open offer per chair). */
 async function newChair(): Promise<string> {
   const id = randomUUID()
   await db.query(

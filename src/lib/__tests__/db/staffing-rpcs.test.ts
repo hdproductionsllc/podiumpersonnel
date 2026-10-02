@@ -6,19 +6,23 @@ import type { Client } from 'pg'
 import { adminClient, asAnon, asUser, createTenant, type Tenant } from './helpers'
 
 /**
- * Migration 094 against real Postgres: the cascade constraints and the two
- * functions that decide who sits in a chair, claim_chair and create_offer.
+ * Migrations 094 and 095 against real Postgres: the cascade constraints (094's
+ * CHECK, 095's two indexes) and the two functions that decide who sits in a
+ * chair, claim_chair and create_offer (094).
  *
  *   - the indexes and the CHECK refuse the states they exist to prevent;
  *   - claim_chair: claims, refuses on a cancelled gig or an inactive musician,
  *     moves a chair from the original musician to a substitute releasing the
  *     original FIRST, retires the loser of a race instead of reopening it;
- *   - create_offer: checks in the server's order, retires then inserts, logs;
+ *   - create_offer: checks in the server's order, retires then inserts, logs,
+ *     and closes a retired substitute's approved request;
  *   - concurrency with two connections: two accepts on one chair, two
  *     create_offer calls for one chair or one musician; exactly one wins;
  *   - only the service role may call either function;
- *   - the repair script fixes bad rows and logs each fix, 094 refuses to run
- *     over bad rows, and both paste scripts report all PASS twice.
+ *   - in David's order (094 repair, 094, 095 repair, 095): each repair script
+ *     fixes its bad rows and logs each fix, 094 refuses to run without 092 or
+ *     over bad chairs, 095 refuses over duplicate offers, 094 passes with
+ *     duplicate offers still present, and every script reports all PASS twice.
  *
  * Synthetic data only. Every case uses its own chairs, so cases do not see
  * each other's offers.
@@ -309,6 +313,37 @@ describe('create_offer', () => {
     ])
   })
 
+  it("retires a substitute's open offer on the empty chair and closes its approved request", async () => {
+    const pos = await chair()
+    const regular = await offer(pos, await musician())
+    const subOffer = await offer(pos, await musician(), 'pending', { sub: true })
+    const requestId = randomUUID()
+    await db.query(
+      `insert into substitution_requests (id, project_position_id, requesting_musician_id, status, offer_id)
+       values ($1, $2, $3, 'approved', $4)`,
+      [requestId, pos, await musician(), subOffer]
+    )
+
+    const r = await createOffer(pos, await musician())
+
+    expect(r.result).toBe('created')
+    expect(r.superseded).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: regular, is_substitution: false }),
+        expect.objectContaining({ id: subOffer, is_substitution: true }),
+      ])
+    )
+    expect(await offerStatus(subOffer)).toBe('superseded')
+    expect((await db.query('select status from substitution_requests where id = $1', [requestId])).rows[0].status).toBe('cancelled')
+    expect(await events(requestId)).toEqual([
+      expect.objectContaining({
+        action: 'substitution.ended',
+        actor_type: 'admin',
+        after: expect.objectContaining({ status: 'cancelled', reason: 'offer_superseded', offer_id: subOffer, replaced_by: r.offer.id }),
+      }),
+    ])
+  })
+
   it.each([
     ['forbidden', async () => ({ pos: await chair(), m: await musician(), by: randomUUID() })],
     ['chair_filled', async () => ({ pos: await chair(t.projectId, await musician()), m: await musician() })],
@@ -446,16 +481,25 @@ describe('who may call the functions', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Last: drops and re-creates 094's rules around bad rows, then leaves the
-// database exactly as the migrations left it.
+// Last: drops 094's CHECK and 095's indexes, makes bad rows, then runs the
+// scripts in the order David does (094 repair, 094, deploy, 095 repair, 095),
+// leaving the database exactly as the migrations left it.
 
-describe('the repair script and the 094 paste script', () => {
-  const repair = readFileSync(join(process.cwd(), 'scripts', 'sql', '094-repair-before-constraints.paste.sql'), 'utf8')
-  const paste = readFileSync(join(process.cwd(), 'scripts', 'sql', '094-cascade-constraints.paste.sql'), 'utf8')
+describe('the repair scripts and the 094 / 095 paste scripts', () => {
+  const sql = (...p: string[]) => readFileSync(join(process.cwd(), ...p), 'utf8')
+  const repair094 = sql('scripts', 'sql', '094-repair-before-constraints.paste.sql')
+  const paste094 = sql('scripts', 'sql', '094-cascade-constraints.paste.sql')
+  const migration094 = sql('supabase', 'migrations', '094_cascade_constraints.sql')
+  const repair095 = sql('scripts', 'sql', '095-repair-before-unique-indexes.paste.sql')
+  const paste095 = sql('scripts', 'sql', '095-one-offer-per-chair.paste.sql')
   const results = async (script: string) => {
     const out = (await db.query(script)) as unknown as { rows: { check_name: string; result: string }[] }[]
     return out[out.length - 1].rows
   }
+  const repaired = async (reason: string) =>
+    (await db.query("select count(*)::int as n from staffing_events where after->>'reason' = $1", [reason])).rows[0].n as number
+  const indexExists = async (name: string) =>
+    ((await db.query('select 1 from pg_indexes where indexname = $1', [name])).rowCount ?? 0) > 0
 
   let twoLive: { pos: string; older: string; newer: string }
   let emptyConfirmed: string
@@ -482,36 +526,79 @@ describe('the repair script and the 094 paste script', () => {
     seatedOffered = { pos: p2, m }
   })
 
-  it('094 refuses to run over bad rows, and changes nothing', async () => {
-    await expect(db.query(paste)).rejects.toThrow(/Migration 094 stopped, nothing was changed/)
-    await db.query('rollback')
-    const idx = await db.query("select 1 from pg_indexes where indexname = 'contract_offers_one_live_per_position'")
-    expect(idx.rowCount).toBe(0)
+  it('094 refuses to run without 092, and says so', async () => {
+    await db.query('begin')
+    try {
+      await db.query(
+        'alter function log_staffing_event(uuid, text, uuid, text, uuid, text, jsonb, jsonb) rename to log_staffing_event_gone'
+      )
+      await expect(db.query(migration094)).rejects.toThrow(/Migration 094 stopped, nothing was changed: migration 092/)
+    } finally {
+      await db.query('rollback')
+    }
   })
 
-  it('the repair fixes every bad row, logs each fix, and reports all PASS', async () => {
-    for (const row of await results(repair)) expect(row.result, row.check_name).toMatch(/^(PASS|INFO)/)
+  it('094 refuses to run over bad chairs, and changes nothing', async () => {
+    await expect(db.query(paste094)).rejects.toThrow(/Migration 094 stopped, nothing was changed: \d+ chair/)
+    await db.query('rollback')
+    const check = await db.query("select 1 from pg_constraint where conname = 'project_positions_confirmed_has_musician'")
+    expect(check.rowCount).toBe(0)
+  })
+
+  it('095 refuses to run over two open offers on a chair, and changes nothing', async () => {
+    await expect(db.query(paste095)).rejects.toThrow(/Migration 095 stopped, nothing was changed: \d+ chair/)
+    await db.query('rollback')
+    expect(await indexExists('contract_offers_one_live_per_position')).toBe(false)
+  })
+
+  it('the 094 repair fixes every bad chair, logs each fix, leaves offers alone, and reports all PASS', async () => {
+    for (const row of await results(repair094)) expect(row.result, row.check_name).toMatch(/^(PASS|INFO)/)
+
+    expect(await seat(emptyConfirmed)).toEqual({ status: 'vacant', musician_id: null })
+    expect(await seat(seatedOffered.pos)).toEqual({ status: 'confirmed', musician_id: seatedOffered.m })
+    expect((await events(emptyConfirmed)).map((e) => e.after.reason)).toEqual(['repair_094'])
+    expect(await offerStatus(twoLive.older)).toBe('pending')
+    expect(await offerStatus(twoLive.newer)).toBe('pending')
+  })
+
+  it.each([1, 2])('094 repair run again (%i) changes nothing', async () => {
+    const before = await repaired('repair_094')
+    for (const row of await results(repair094)) expect(row.result, row.check_name).toMatch(/^(PASS|INFO)/)
+    expect(await repaired('repair_094')).toBe(before)
+  })
+
+  it.each([1, 2])('094 paste run %i (two open offers on a chair still there): every RESULTS row is PASS', async () => {
+    const table = await results(paste094)
+    expect(table.length).toBeGreaterThan(5)
+    for (const row of table) expect(row.result, row.check_name).toBe('PASS')
+    expect(await indexExists('contract_offers_one_live_per_position')).toBe(false)
+  })
+
+  it('the 095 repair keeps the newest of two open offers, logs the fix, and reports all PASS', async () => {
+    for (const row of await results(repair095)) expect(row.result, row.check_name).toMatch(/^(PASS|INFO)/)
 
     expect(await offerStatus(twoLive.older)).toBe('superseded')
     expect(await offerStatus(twoLive.newer)).toBe('pending')
-    expect(await seat(emptyConfirmed)).toEqual({ status: 'vacant', musician_id: null })
-    expect(await seat(seatedOffered.pos)).toEqual({ status: 'confirmed', musician_id: seatedOffered.m })
     expect(await events(twoLive.older)).toEqual([
-      expect.objectContaining({ action: 'offer.superseded', actor_type: 'system', after: expect.objectContaining({ reason: 'repair_094', replaced_by: twoLive.newer }) }),
+      expect.objectContaining({
+        action: 'offer.superseded',
+        actor_type: 'system',
+        after: expect.objectContaining({ reason: 'repair_095', replaced_by: twoLive.newer }),
+      }),
     ])
-    expect((await events(emptyConfirmed)).map((e) => e.after.reason)).toEqual(['repair_094'])
   })
 
-  it.each([1, 2])('repair run again (%i) changes nothing', async () => {
-    const before = (await db.query("select count(*)::int as n from staffing_events where after->>'reason' = 'repair_094'")).rows[0].n
-    for (const row of await results(repair)) expect(row.result, row.check_name).toMatch(/^(PASS|INFO)/)
-    const after = (await db.query("select count(*)::int as n from staffing_events where after->>'reason' = 'repair_094'")).rows[0].n
-    expect(after).toBe(before)
+  it.each([1, 2])('095 repair run again (%i) changes nothing', async () => {
+    const before = await repaired('repair_095')
+    for (const row of await results(repair095)) expect(row.result, row.check_name).toMatch(/^(PASS|INFO)/)
+    expect(await repaired('repair_095')).toBe(before)
   })
 
-  it.each([1, 2])('094 paste run %i: every RESULTS row is PASS', async () => {
-    const table = await results(paste)
-    expect(table.length).toBeGreaterThan(6)
+  it.each([1, 2])('095 paste run %i: every RESULTS row is PASS', async () => {
+    const table = await results(paste095)
+    expect(table.length).toBeGreaterThan(3)
     for (const row of table) expect(row.result, row.check_name).toBe('PASS')
+    expect(await indexExists('contract_offers_one_live_per_position')).toBe(true)
+    expect(await indexExists('contract_offers_one_accepted_per_position')).toBe(true)
   })
 })

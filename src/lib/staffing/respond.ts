@@ -114,7 +114,7 @@ export async function claimChairForAccept(
   const { data, error } = await supabase.rpc('claim_chair', { p_offer_id: offer.id })
 
   if (error) {
-    if (isMissingFunction(error)) {
+    if (isMissingFunction(error, 'claim_chair')) {
       console.error(`Accept of offer ${offer.id} refused, nothing changed: ${MIGRATION_094_MISSING}`)
     }
     return { outcome: 'error', error }

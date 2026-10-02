@@ -4,9 +4,9 @@ import type { Client } from 'pg'
 import { adminClient, createTenant, type Tenant } from './helpers'
 
 /**
- * Replacing a chair's offer under 094's index, in real Postgres.
+ * Replacing a chair's offer under 095's index, in real Postgres.
  *
- * contract_offers_one_live_per_position (migration 094): at most one
+ * contract_offers_one_live_per_position (migration 095): at most one
  * pending/viewed non-substitute offer per chair. create_offer replaces a
  * chair's offer as: retire the open offers ('superseded'), then insert the new
  * one; createOffer (src/lib/staffing/offers.ts) undoes that after a failed

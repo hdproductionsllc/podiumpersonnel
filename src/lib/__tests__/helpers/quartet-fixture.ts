@@ -251,7 +251,7 @@ export class QuartetFixture {
 }
 
 /**
- * 094's index contract_offers_one_live_per_position: at most one
+ * 095's index contract_offers_one_live_per_position: at most one
  * pending/viewed non-substitute offer per chair. Install with
  * `q.db.constraint = oneLiveOfferPerChair` to run a flow under it.
  */
@@ -265,7 +265,7 @@ export function oneLiveOfferPerChair(table: string, candidate: Row, others: Row[
     : null
 }
 
-/** 094's index contract_offers_one_accepted_per_position: at most one accepted offer per chair. */
+/** 095's index contract_offers_one_accepted_per_position: at most one accepted offer per chair. */
 export function oneAcceptedOfferPerChair(table: string, candidate: Row, others: Row[]) {
   if (table !== 'contract_offers' || candidate.status !== 'accepted') return null
   const clash = others.some((o) => o.project_position_id === candidate.project_position_id && o.status === 'accepted')
@@ -282,7 +282,7 @@ export function confirmedHasMusician(table: string, candidate: Row) {
     : null
 }
 
-/** All three of 094's cascade rules at once. */
+/** All three cascade rules at once (095's two indexes and 094's CHECK). */
 export function cascadeConstraints(table: string, candidate: Row, others: Row[]) {
   return (
     oneLiveOfferPerChair(table, candidate, others) ??

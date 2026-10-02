@@ -11,7 +11,7 @@
 --      say what was originally agreed.
 --   4. An offer whose email failed looked exactly like one that was delivered.
 --   5. A substitute's offer (made when an admin approves a sub request) looked
---      like any other offer on the chair. Later constraints (094: one live
+--      like any other offer on the chair. Later constraints (095: one live
 --      offer per chair) must leave those out, so the row has to say so itself.
 --
 -- WHAT CHANGES

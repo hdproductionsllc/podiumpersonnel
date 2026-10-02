@@ -230,7 +230,13 @@ export function createOffer(db: MockSupabaseDb, args: CreateOfferArgs): Row {
       .filter((o) => o.project_position_id === pos.id && LIVE.includes(o.status))
       .sort((a, b) => String(a.sent_at ?? '').localeCompare(String(b.sent_at ?? '')))
     for (const o of live) {
-      retired.push({ id: o.id, musician_id: o.musician_id, previous_status: o.status, expires_at: o.expires_at ?? null })
+      retired.push({
+        id: o.id,
+        musician_id: o.musician_id,
+        previous_status: o.status,
+        expires_at: o.expires_at ?? null,
+        is_substitution: o.is_substitution === true,
+      })
       write(db, 'contract_offers', o, { status: 'superseded', responded_at: nowIso })
     }
   } else if (offers.some((o) => o.project_position_id === pos.id && LIVE.includes(o.status) && o.is_substitution !== true)) {
@@ -265,6 +271,15 @@ export function createOffer(db: MockSupabaseDb, args: CreateOfferArgs): Row {
       org, actorType: 'admin', actorId: args.p_created_by, entityType: 'offer', entityId: o.id, action: 'offer.superseded',
       after: { status: 'superseded', position_id: pos.id, musician_id: o.musician_id, replaced_by: id },
     })
+    for (const request of table(db, 'substitution_requests').filter((r) => r.offer_id === o.id && r.status === 'approved')) {
+      write(db, 'substitution_requests', request, { status: 'cancelled' })
+      logStaffingEvent(db, {
+        org, actorType: 'admin', actorId: args.p_created_by, entityType: 'substitution_request', entityId: request.id,
+        action: 'substitution.ended',
+        before: { status: 'approved' },
+        after: { status: 'cancelled', reason: 'offer_superseded', offer_id: o.id, replaced_by: id },
+      })
+    }
   }
   logStaffingEvent(db, {
     org, actorType: 'admin', actorId: args.p_created_by, entityType: 'offer', entityId: id, action: 'offer.created',

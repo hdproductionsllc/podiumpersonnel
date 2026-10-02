@@ -387,7 +387,7 @@ async function offerChair(positionId: string, musicianId: string, extra: Record<
 }
 
 describe('a new offer whose email fails (S12, audit R-14), through createOffer', () => {
-  it('a successful send leaves exactly one live offer on the chair, even under the 094 index', async () => {
+  it('a successful send leaves exactly one live offer on the chair, even under the 095 index', async () => {
     q().db.constraint = oneLiveOfferPerChair // a second live offer, even for a moment, is refused
     const anna = q().sendOffer('v1', R.v1[0])
 
@@ -528,7 +528,7 @@ describe('two live offers on one chair (S14, audit R-1, R-13)', () => {
     return { anna, bea }
   }
 
-  it('R-1: under the 094 index a second live offer cannot be written (rows from before it may remain)', async () => {
+  it('R-1: under the 095 index a second live offer cannot be written (rows from before it may remain)', async () => {
     q().db.constraint = oneLiveOfferPerChair
     const anna = q().sendOffer('v1', R.v1[0])
 
@@ -538,7 +538,7 @@ describe('two live offers on one chair (S14, audit R-1, R-13)', () => {
     expect(q().liveOffers('v1').map((o) => o.id)).toEqual([anna.id])
   })
 
-  it('rescind cannot find "the" offer when there are two (rows from before 094): 400, and neither is withdrawn', async () => {
+  it('rescind cannot find "the" offer when there are two (rows from before 095): 400, and neither is withdrawn', async () => {
     const { anna, bea } = twoLive()
 
     const res = await rescind('pos-v1')
@@ -549,11 +549,11 @@ describe('two live offers on one chair (S14, audit R-1, R-13)', () => {
     expect(mailCount(email.sendOfferRescindedEmail)).toBe(0)
   })
 
-  // R-13 is closed by making the state impossible: the 094 repair script
-  // retires the older of any two live offers and the 094 index refuses a new
+  // R-13 is closed by making the state impossible: the 095 repair script
+  // retires the older of any two live offers and the 095 index refuses a new
   // second one, so rescind always finds exactly one. (Postgres proof:
   // db/staffing-rpcs.test.ts.)
-  it('R-13: once the older of two live offers is retired (094 repair), rescind works', async () => {
+  it('R-13: once the older of two live offers is retired (095 repair), rescind works', async () => {
     const { anna, bea } = twoLive()
     q().db.row('contract_offers', anna.id as string)!.status = 'superseded'
 

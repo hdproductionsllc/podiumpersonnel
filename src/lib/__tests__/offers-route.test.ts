@@ -21,14 +21,26 @@ const state = vi.hoisted(() => ({
   user: null as unknown,
   sendOfferFails: false,
   suppress: false,
+  /** When set, the admin session's read of the musician returns this instead. */
+  musicianRead: null as null | { data: unknown; error: unknown },
 }))
 
 const ADMIN = { id: 'user-admin', email: 'admin@example.com' }
 
+/** A select().eq().maybeSingle() chain that resolves to `result`. */
+function stubbedRead(result: { data: unknown; error: unknown }) {
+  const chain: Record<string, unknown> = {}
+  chain.select = () => chain
+  chain.eq = () => chain
+  chain.maybeSingle = async () => result
+  return chain
+}
+
 vi.mock('@/lib/supabase/server', () => ({
   createServiceClient: () => state.q.db,
   createClient: async () => ({
-    from: (table: string) => state.q.db.from(table),
+    from: (table: string) =>
+      table === 'musicians' && state.musicianRead ? stubbedRead(state.musicianRead) : state.q.db.from(table),
     auth: { getUser: async () => ({ data: { user: state.user } }) },
   }),
   getOrgAdminEmails: vi.fn(async () => ['admin@example.com']),
@@ -68,6 +80,7 @@ beforeEach(() => {
   state.user = ADMIN
   state.sendOfferFails = false
   state.suppress = false
+  state.musicianRead = null
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -357,11 +370,71 @@ describe('replacing the previous offer', () => {
     expect(row(anna.id as string).status).toBe('superseded')
     expect(row(res.body.offerId)).toMatchObject({ status: 'pending', delivery_status: 'failed' })
   })
+
+  it("retires a substitute's open offer on the empty chair and closes its request; a failed send does not bring it back", async () => {
+    const anna = q().sendOffer('v1', R.v1[0])
+    const sub = q().sendOffer('v1', R.v1[2], { supersede: false })
+    sub.is_substitution = true
+    q().db.tables.substitution_requests.push({
+      id: 'sub-req-1',
+      project_position_id: 'pos-v1',
+      requesting_musician_id: R.v2[0],
+      status: 'approved',
+      offer_id: sub.id,
+    })
+    state.sendOfferFails = true
+
+    const res = await offer('pos-v1', { musicianId: R.v1[1] })
+
+    expect(res).toMatchObject({ status: 502, body: { code: 'send_failed' } })
+    expect(row(anna.id as string).status).toBe('pending')
+    expect(row(sub.id as string).status).toBe('superseded')
+    expect(q().db.row('substitution_requests', 'sub-req-1')!.status).toBe('cancelled')
+    expect(events().filter((e: Row) => e.entity_id === 'sub-req-1')).toEqual([
+      expect.objectContaining({
+        action: 'substitution.ended',
+        after: expect.objectContaining({ status: 'cancelled', reason: 'offer_superseded', offer_id: sub.id }),
+      }),
+    ])
+    expect(events().filter((e: Row) => e.action === 'offer.restored').map((e: Row) => e.entity_id)).toEqual([anna.id])
+  })
 })
 
 // ---------------------------------------------------------------------------
 
-describe("under 094's one-live-offer-per-chair index", () => {
+describe('the musician cannot be read', () => {
+  it('a failed read refuses before anything is written: create_offer is not called, the chair is untouched', async () => {
+    const anna = q().sendOffer('v1', R.v1[0])
+    state.musicianRead = { data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } }
+
+    const res = await offer('pos-v1', { musicianId: R.v1[1] })
+
+    expect(res).toMatchObject({ status: 500, body: { code: 'failed' } })
+    expect(q().db.log.filter((e) => e.operation === 'rpc')).toEqual([])
+    expect(row(anna.id as string)).toMatchObject({ status: 'pending', responded_at: null })
+    expect(q().offers('v1')).toHaveLength(1)
+    expect(events()).toEqual([])
+    expect(mailCalls(email.sendContractOfferEmail)).toHaveLength(0)
+  })
+
+  it('create_offer made the offer but the musician row came back empty: the offer is undone and the old one put back', async () => {
+    const anna = q().sendOffer('v1', R.v1[0])
+    state.musicianRead = { data: null, error: null }
+
+    const res = await offer('pos-v1', { musicianId: R.v1[1] })
+
+    expect(res).toMatchObject({ status: 500, body: { code: 'failed' } })
+    expect(row(anna.id as string)).toMatchObject({ status: 'pending', responded_at: null })
+    expect(q().offers('v1').map((o) => o.id)).toEqual([anna.id])
+    expect(mailCalls(email.sendContractOfferEmail)).toHaveLength(0)
+    expect(events().map((e: Row) => e.action)).toEqual(['offer.superseded', 'offer.created', 'offer.withdrawn', 'offer.restored'])
+    expect(events()[2].after).toMatchObject({ reason: 'musician_unreadable' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+
+describe("under 095's one-live-offer-per-chair index", () => {
   beforeEach(() => {
     q().db.constraint = oneLiveOfferPerChair
   })

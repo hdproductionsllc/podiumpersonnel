@@ -288,7 +288,7 @@ describe('accept route — substitution transfer', () => {
 
   it('transfers the chair from the requesting musician to the substitute', async () => {
     seedSubScenario()
-    // 094's indexes and CHECK: the original is released before the substitute
+    // 095's indexes and 094's CHECK: the original is released before the substitute
     // is accepted, so the chair never holds two accepted offers.
     state.db.constraint = cascadeConstraints
 

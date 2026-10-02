@@ -99,7 +99,7 @@ beforeEach(() => {
   process.env.CRON_SECRET = 'test-secret'
   delete process.env.CRON_ENABLED
   state.q = buildQuartet()
-  // Run the whole business under 094's indexes and CHECK: no write in the
+  // Run the whole business under 095's indexes and 094's CHECK: no write in the
   // flow may ever produce two live or two accepted offers on a chair.
   state.q.db.constraint = cascadeConstraints
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

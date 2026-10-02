@@ -38,10 +38,11 @@ import {
  * Retire-then-insert inside one transaction means a chair never holds two
  * live offers, not even for the seconds the email takes, and two admins
  * sending at once queue on the chair's lock instead of interleaving; the
- * one-live-offer-per-chair index (094) is the backstop. Step 4 is the R-14
- * fix: an old offer is not killed for a call that never went out.
+ * one-live-offer-per-chair index (095, pasted after this code is live) is the
+ * backstop. Step 4 is the R-14 fix: an old offer is not killed for a call
+ * that never went out.
  *
- * Before 094 is pasted the function does not exist and no offer is made
+ * If 094 is not applied the function does not exist and no offer is made
  * (503, logged): see rpc.ts for why there is no fallback.
  */
 
@@ -100,6 +101,11 @@ interface RetiredOffer {
   musician_id: string
   previous_status: string
   expires_at: string | null
+  /**
+   * A substitute's offer. create_offer closes its substitution request, and it
+   * could never have been accepted on an empty chair, so it is not put back.
+   */
+  is_substitution?: boolean
 }
 
 type RpcRefusal = Exclude<CreateOfferRefusal, 'send_failed' | 'not_ready' | 'failed'>
@@ -153,11 +159,18 @@ export async function createOffer(
   const project = pos.project
   const organizationId: string | undefined = project?.organization_id
 
-  const { data: musician } = await supabase
+  const { data: musician, error: musicianError } = await supabase
     .from('musicians')
     .select('id, first_name, last_name, email, organization_id, is_active')
     .eq('id', musicianId)
     .maybeSingle()
+
+  // The email needs this row. Refuse now, before anything is written, rather
+  // than make an offer that cannot be sent (and retire the chair's current one).
+  if (musicianError) {
+    console.error(`createOffer: could not read musician ${musicianId}; nothing changed:`, musicianError)
+    return refuse(500, 'failed', 'Failed to create offer')
+  }
 
   // -- 2. the offer, in one transaction ---------------------------------------------
 
@@ -181,25 +194,35 @@ export async function createOffer(
   })
 
   if (rpcError) {
-    if (isMissingFunction(rpcError)) {
+    if (isMissingFunction(rpcError, 'create_offer')) {
       console.error(`createOffer: offer for musician ${musicianId} on position ${positionId} refused: ${MIGRATION_094_MISSING}`)
       return refuse(503, 'not_ready', 'Offers cannot be sent until a database update is applied. Nothing was changed.')
     }
     console.error(`createOffer: create_offer failed for musician ${musicianId} on position ${positionId}:`, rpcError)
     if ((rpcError as { code?: string }).code === '23505') {
-      // Another writer's offer for this chair landed first (094's index).
+      // Another writer's offer for this chair landed first (095's index).
       return refuse(409, 'chair_has_live_offer', 'Another offer for this chair was sent a moment ago. Refresh to see it.')
     }
     return refuse(500, 'failed', (rpcError as any)?.message || 'Failed to create offer')
   }
 
   const created = rpcData as CreateOfferRpcResult | null
-  if (!created || created.result !== 'created' || !musician) {
+  if (!created || created.result !== 'created') {
     return refusal(created, musician)
   }
 
   const offer = created.offer
   const retired = created.superseded || []
+  const actor = adminActor(userId)
+
+  if (!musician) {
+    // create_offer found the musician, but the admin's own read did not (the
+    // row is not visible to them): there is nobody to email. Undo it, as for a
+    // failed send, so the chair is exactly as it was.
+    console.error(`createOffer: create_offer made offer ${offer.id} but musician ${musicianId} could not be read; undoing it`)
+    await undoOffer(service, { organizationId, actor, positionId, musicianId, offerId: offer.id, retired, reason: 'musician_unreadable' })
+    return refuse(500, 'failed', 'Failed to create offer')
+  }
 
   // -- 3. the email ---------------------------------------------------------------
 
@@ -229,25 +252,31 @@ export async function createOffer(
     }
   }
 
-  const actor = adminActor(userId)
-
   // -- 4. a failed send while someone else was waiting: undo ------------------------
 
   // "Waiting" means still answerable: an offer past its deadline that the cron
   // has not collected yet loses nothing by being replaced.
   const now = new Date()
-  const someoneWaiting = retired.some((o) => isLiveOffer({ status: o.previous_status, expires_at: o.expires_at }, now))
+  const someoneWaiting = restorable(retired).some((o) =>
+    isLiveOffer({ status: o.previous_status, expires_at: o.expires_at }, now)
+  )
 
   if (delivery === 'failed' && someoneWaiting) {
     // R-14: this call never reached anyone. Take the new offer back (nobody has
     // its link) and give the previous musician their offer back.
-    const { error: withdrawError } = await service.from('contract_offers').delete().eq('id', offer.id)
-    if (!withdrawError) {
-      const restored = await restoreSuperseded(service, positionId, retired)
+    const restored = await undoOffer(service, {
+      organizationId,
+      actor,
+      positionId,
+      musicianId,
+      offerId: offer.id,
+      retired,
+      reason: 'send_failed',
+    })
+    if (restored) {
       console.warn(
         `createOffer: email to musician ${musicianId} failed; withdrew offer ${offer.id} and restored ${restored.length} earlier offer(s) on position ${positionId}`
       )
-      await logEvent(withdrawnEvents({ organizationId, actor, positionId, musicianId, offerId: offer.id, restored }))
       return refuse(
         502,
         'send_failed',
@@ -256,7 +285,6 @@ export async function createOffer(
     }
     // Putting the old offer back now would leave two live offers; keep the new
     // one (the admin is told its email failed, and can Send Reminder).
-    console.error(`createOffer: could not withdraw unsent offer ${offer.id}; leaving it pending:`, withdrawError)
   }
 
   if (willEmail && delivery !== 'no_email') {
@@ -312,22 +340,46 @@ function refusal(
     case 'chair_has_live_offer':
       return refuse(409, 'chair_has_live_offer', 'Another offer for this chair was sent a moment ago. Refresh to see it.')
     default:
-      // 'created' without a musician row cannot happen (create_offer read it);
-      // anything else is a shape this code does not know.
+      // A shape this code does not know.
       console.error('createOffer: create_offer returned an unexpected result:', rpc)
       return refuse(500, 'failed', 'Failed to create offer')
   }
 }
 
-/** The history of a withdrawn offer: it was taken back, and what it replaced came back. */
-function withdrawnEvents(ctx: {
+/** The retired offers that may be put back: not substitutes' (see RetiredOffer). */
+function restorable(retired: RetiredOffer[]): RetiredOffer[] {
+  return retired.filter((o) => o.is_substitution !== true)
+}
+
+interface UndoContext {
   organizationId: string | undefined
   actor: Actor
   positionId: string
   musicianId: string
   offerId: string
-  restored: RetiredOffer[]
-}): StaffingEvent[] {
+  retired: RetiredOffer[]
+  reason: 'send_failed' | 'musician_unreadable'
+}
+
+/**
+ * Undo create_offer: delete the new offer (nobody has its link) and put back
+ * the offers it retired, recording both. Returns the offers put back, or null
+ * when the new offer could not be deleted; then nothing is put back, since
+ * that would leave two live offers on the chair.
+ */
+async function undoOffer(service: SupabaseClient, ctx: UndoContext): Promise<RetiredOffer[] | null> {
+  const { error: withdrawError } = await service.from('contract_offers').delete().eq('id', ctx.offerId)
+  if (withdrawError) {
+    console.error(`createOffer: could not withdraw offer ${ctx.offerId}; leaving it pending:`, withdrawError)
+    return null
+  }
+  const restored = await restoreSuperseded(service, ctx.positionId, restorable(ctx.retired))
+  await logEvent(withdrawnEvents({ ...ctx, restored }))
+  return restored
+}
+
+/** The history of a withdrawn offer: it was taken back, and what it replaced came back. */
+function withdrawnEvents(ctx: Omit<UndoContext, 'retired'> & { restored: RetiredOffer[] }): StaffingEvent[] {
   return [
     {
       organizationId: ctx.organizationId,
@@ -336,7 +388,7 @@ function withdrawnEvents(ctx: {
       entityId: ctx.offerId,
       action: 'offer.withdrawn',
       before: { status: 'pending' },
-      after: { reason: 'send_failed', position_id: ctx.positionId, musician_id: ctx.musicianId },
+      after: { reason: ctx.reason, position_id: ctx.positionId, musician_id: ctx.musicianId },
     },
     ...ctx.restored.map(
       (o): StaffingEvent => ({
@@ -355,7 +407,7 @@ function withdrawnEvents(ctx: {
 /**
  * Undo create_offer's retire step: put each offer it retired back to the
  * status it had (pending or viewed), only while it still says 'superseded'.
- * Returns the ones that came back. Under 094's index a restore that would make
+ * Returns the ones that came back. Under 095's index a restore that would make
  * a second live offer is refused; that is logged and left.
  */
 async function restoreSuperseded(

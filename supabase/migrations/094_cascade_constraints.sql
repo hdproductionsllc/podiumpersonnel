@@ -1,4 +1,4 @@
--- 094: cascade constraints, and the two database functions that make an offer
+-- 094: the cascade CHECK, and the two database functions that make an offer
 -- and claim a chair in one transaction (claim_chair, create_offer)
 --
 -- WHY (architecture audit C, R-1 / R-9 / R-11 / R-13; target architecture
@@ -14,8 +14,11 @@
 --       back to 'pending', so their page offered "Accept" again (R-11);
 --     - making an offer was five separate writes (retire the old offer, insert,
 --       mark the chair offered, ...), so two admins could interleave.
---   This migration adds the constraints, and moves the two operations that
---   decide who holds a chair into single database transactions.
+--   This migration moves the two operations that decide who holds a chair
+--   into single database transactions, and adds the one rule today's code
+--   already keeps. The two one-offer-per-chair unique indexes are migration
+--   095, pasted AFTER the code that uses these functions is deployed, because
+--   today's code breaks them in passing (see 095).
 --
 -- WHAT CHANGES
 --   1. substitution_requests.status defaults to 'pending_approval'. The old
@@ -26,65 +29,61 @@
 --      project_positions(project_id), contract_offers(project_position_id),
 --      projects(organization_id), instruments(organization_id). The tables are
 --      small (a few hundred rows), so plain CREATE INDEX is instant.
---   3. contract_offers_one_live_per_position: at most one pending/viewed offer
---      per chair, not counting substitutes' offers (is_substitution, 093),
---      which are made on a chair someone already holds.
---   4. contract_offers_one_accepted_per_position: at most one accepted offer
---      per chair.
---   5. project_positions_confirmed_has_musician: a chair is 'confirmed'
+--   3. project_positions_confirmed_has_musician: a chair is 'confirmed'
 --      exactly when it has a musician.
---   6. claim_chair(offer_id) and create_offer(...): see their own comments.
+--   4. claim_chair(offer_id) and create_offer(...): see their own comments.
 --      Both are SECURITY DEFINER with a pinned search_path and are callable
 --      only by the service role (the server); both write staffing_events (092)
 --      in the same transaction as the change.
 --
 -- BEFORE PASTING
+--   092 and 093 must be applied (the functions write staffing_events through
+--   log_staffing_event, and read contract_offers.is_substitution); if either
+--   is missing this migration stops with a plain-English error.
 --   Run scripts/sql/094-repair-before-constraints.paste.sql first. It fixes
---   any rows that would break 3-5 (production had none on 2026-10-01) and logs
---   each fix to staffing_events. If a violating row is still there, this
+--   any chair that would break 3 (production had none on 2026-10-01) and logs
+--   each fix to staffing_events. If such a chair is still there, this
 --   migration stops with a plain-English error and changes nothing.
 --
 -- AGAINST TODAY'S CODE (the app as deployed before this step)
---   Nothing double-books and nothing is lost. Two things the old code does are
---   now refused until the new code is deployed, so deploy promptly:
---     - a substitute accepting: the old code writes their 'accepted' before
---       the original's 'released', which index 4 refuses. The accept fails
---       cleanly (the offer stays open, the chair stays with the original
---       musician) and works once the new code, which uses claim_chair, is out;
---     - sending a new offer from the browser dialog while the chair's previous
---       offer is still open: the old dialog inserts before retiring, which
---       index 3 refuses, and the dialog shows an error.
---   Deleting a musician who is seated in a confirmed chair is refused by 5
---   (the chair would be left confirmed with nobody in it); the delete dialog
---   already says to deactivate instead.
+--   Safe to paste before the deploy: today's code never calls the two
+--   functions, every substitution_requests insert names its status, and every
+--   path that seats or unseats a musician sets the chair's status in the same
+--   write (checked 2026-10-02: assign, unassign, accept, rescind, the expiry
+--   cron, auto-populate, import from book, add position). It refuses only
+--   writes that would themselves corrupt a chair:
+--     - deleting a musician who is seated in a confirmed chair (the chair
+--       would be left confirmed with nobody in it); the delete dialog already
+--       says to deactivate instead;
+--     - the offers list's "next in line" button marking a chair 'offered'
+--       after someone else was seated in it; the button already says the
+--       chair could not be marked and to refresh.
 --
 -- Idempotent and safe to re-run.
 
 -- ---------------------------------------------------------------------------
--- 0. Refuse to run over rows the constraints would reject (repair first).
+-- 0. Refuse to run without 092/093, or over chairs the CHECK would reject.
 -- ---------------------------------------------------------------------------
 DO $$
 DECLARE
-  v_live int;
-  v_accepted int;
   v_chairs int;
 BEGIN
-  SELECT count(*) INTO v_live FROM (
-    SELECT project_position_id FROM contract_offers
-    WHERE status IN ('pending', 'viewed') AND is_substitution = false
-    GROUP BY project_position_id HAVING count(*) > 1
-  ) s;
-  SELECT count(*) INTO v_accepted FROM (
-    SELECT project_position_id FROM contract_offers
-    WHERE status = 'accepted'
-    GROUP BY project_position_id HAVING count(*) > 1
-  ) s;
+  IF to_regprocedure('public.log_staffing_event(uuid, text, uuid, text, uuid, text, jsonb, jsonb)') IS NULL THEN
+    RAISE EXCEPTION 'Migration 094 stopped, nothing was changed: migration 092 (the staffing history, log_staffing_event) is not applied. Run scripts/sql/092-staffing-events.paste.sql first.';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'contract_offers' AND column_name = 'is_substitution'
+  ) THEN
+    RAISE EXCEPTION 'Migration 094 stopped, nothing was changed: migration 093 (the offer columns, contract_offers.is_substitution) is not applied. Run scripts/sql/093-offer-columns.paste.sql first.';
+  END IF;
+
   SELECT count(*) INTO v_chairs FROM project_positions
   WHERE (status = 'confirmed') <> (musician_id IS NOT NULL);
 
-  IF v_live + v_accepted + v_chairs > 0 THEN
-    RAISE EXCEPTION 'Migration 094 stopped, nothing was changed: % chair(s) with two open offers, % with two accepted offers, % confirmed without a musician (or the reverse). Run scripts/sql/094-repair-before-constraints.paste.sql first.',
-      v_live, v_accepted, v_chairs;
+  IF v_chairs > 0 THEN
+    RAISE EXCEPTION 'Migration 094 stopped, nothing was changed: % chair(s) confirmed without a musician (or the reverse). Run scripts/sql/094-repair-before-constraints.paste.sql first.',
+      v_chairs;
   END IF;
 END $$;
 
@@ -103,23 +102,15 @@ CREATE INDEX IF NOT EXISTS idx_projects_organization ON projects (organization_i
 CREATE INDEX IF NOT EXISTS idx_instruments_organization ON instruments (organization_id);
 
 -- ---------------------------------------------------------------------------
--- 3-5. The cascade invariants
+-- 3. A chair is confirmed exactly when someone sits in it
 -- ---------------------------------------------------------------------------
-CREATE UNIQUE INDEX IF NOT EXISTS contract_offers_one_live_per_position
-  ON contract_offers (project_position_id)
-  WHERE status IN ('pending', 'viewed') AND is_substitution = false;
-
-CREATE UNIQUE INDEX IF NOT EXISTS contract_offers_one_accepted_per_position
-  ON contract_offers (project_position_id)
-  WHERE status = 'accepted';
-
 ALTER TABLE project_positions DROP CONSTRAINT IF EXISTS project_positions_confirmed_has_musician;
 ALTER TABLE project_positions
   ADD CONSTRAINT project_positions_confirmed_has_musician
   CHECK ((status = 'confirmed') = (musician_id IS NOT NULL));
 
 -- ---------------------------------------------------------------------------
--- 6a. claim_chair: a musician accepts an offer
+-- 4a. claim_chair: a musician accepts an offer
 -- ---------------------------------------------------------------------------
 --   One transaction. Locks the chair, then the offer (create_offer takes the
 --   same order, so the two never deadlock), and returns one of:
@@ -137,7 +128,7 @@ ALTER TABLE project_positions
 --   A substitute's offer (an 'approved' substitution request points at it)
 --   takes the chair from the musician who asked for cover, and only from them.
 --   The original's accepted offer is released BEFORE the substitute's is
---   accepted, so the one-accepted-offer index never sees two. Any other open
+--   accepted, so the one-accepted-offer index (095) never sees two. Any other open
 --   offer on the chair is retired, since the chair is now filled.
 --
 --   Every change is recorded in staffing_events, the musician as the actor.
@@ -272,7 +263,7 @@ REVOKE ALL ON FUNCTION claim_chair(UUID) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION claim_chair(UUID) TO service_role;
 
 -- ---------------------------------------------------------------------------
--- 6b. create_offer: an admin offers a chair to a musician
+-- 4b. create_offer: an admin offers a chair to a musician
 -- ---------------------------------------------------------------------------
 --   One transaction. Locks the chair, checks, retires the chair's open offers
 --   (when p_supersede, the default), inserts the new offer, marks the chair
@@ -282,7 +273,8 @@ GRANT EXECUTE ON FUNCTION claim_chair(UUID) TO service_role;
 --   Returns jsonb. On success:
 --     { "result": "created",
 --       "offer": { id, token, expires_at, custom_pay, personal_message },
---       "superseded": [ { id, musician_id, previous_status, expires_at }, ... ] }
+--       "superseded": [ { id, musician_id, previous_status, expires_at,
+--                         is_substitution }, ... ] }
 --   Otherwise { "result": <reason> } and nothing changed, reason one of:
 --     not_found (with "what": position | musician), forbidden (p_created_by is
 --     not an owner/admin of the gig's organization), wrong_organization,
@@ -294,7 +286,13 @@ GRANT EXECUTE ON FUNCTION claim_chair(UUID) TO service_role;
 --   an admin is given does not change. Two calls for one chair queue on the
 --   chair's lock; two for one musician on the same gig queue on an advisory
 --   lock, so the "already has an offer on this gig" check cannot be raced.
---   The one-live-offer index is the backstop for any other writer.
+--   The one-live-offer index (095) is the backstop for any other writer.
+--
+--   A substitute's open offer on the chair is retired with the rest: the chair
+--   is empty, so the musician they were covering has left it and that offer
+--   could never be accepted (claim_chair would refuse it). Its approved
+--   substitution request is closed as 'cancelled', as claim_chair does when a
+--   chair fills, so no request is left pointing at a retired offer.
 --
 --   Pay is stored exactly as given (custom_pay is the fee for the whole gig);
 --   nothing here computes or changes an amount.
@@ -324,6 +322,7 @@ DECLARE
   v_retired   JSONB := '[]'::jsonb;
   v_now       TIMESTAMPTZ := now();
   r           RECORD;
+  s           RECORD;
 BEGIN
   SELECT * INTO v_pos FROM project_positions WHERE id = p_position_id FOR UPDATE;
   IF NOT FOUND THEN
@@ -368,14 +367,15 @@ BEGIN
 
   IF p_supersede THEN
     FOR r IN
-      SELECT id, musician_id, status, expires_at FROM contract_offers
+      SELECT id, musician_id, status, expires_at, is_substitution FROM contract_offers
       WHERE project_position_id = p_position_id AND status IN ('pending', 'viewed')
       ORDER BY sent_at NULLS FIRST, id
       FOR UPDATE
     LOOP
       UPDATE contract_offers SET status = 'superseded', responded_at = v_now WHERE id = r.id;
       v_retired := v_retired || jsonb_build_array(jsonb_build_object(
-        'id', r.id, 'musician_id', r.musician_id, 'previous_status', r.status, 'expires_at', r.expires_at));
+        'id', r.id, 'musician_id', r.musician_id, 'previous_status', r.status, 'expires_at', r.expires_at,
+        'is_substitution', r.is_substitution));
     END LOOP;
   ELSIF EXISTS (
     SELECT 1 FROM contract_offers
@@ -401,6 +401,17 @@ BEGIN
       NULL,
       jsonb_build_object('status', 'superseded', 'position_id', p_position_id,
                          'musician_id', r.musician_id, 'replaced_by', v_offer.id));
+    FOR s IN
+      UPDATE substitution_requests SET status = 'cancelled'
+      WHERE offer_id = r.id AND status = 'approved'
+      RETURNING id
+    LOOP
+      PERFORM log_staffing_event(v_org, 'admin', p_created_by, 'substitution_request', s.id,
+        'substitution.ended',
+        jsonb_build_object('status', 'approved'),
+        jsonb_build_object('status', 'cancelled', 'reason', 'offer_superseded', 'offer_id', r.id,
+                           'replaced_by', v_offer.id));
+    END LOOP;
   END LOOP;
   PERFORM log_staffing_event(v_org, 'admin', p_created_by, 'offer', v_offer.id, 'offer.created',
     NULL,
@@ -422,8 +433,6 @@ GRANT EXECUTE ON FUNCTION create_offer(UUID, UUID, UUID, TIMESTAMPTZ, NUMERIC, T
 
 -- ===========================================================================
 -- verify:
--- SELECT indexname FROM pg_indexes WHERE indexname IN
---   ('contract_offers_one_live_per_position', 'contract_offers_one_accepted_per_position');   -- 2 rows
 -- SELECT conname FROM pg_constraint WHERE conname = 'project_positions_confirmed_has_musician'; -- 1 row
 -- SELECT column_default FROM information_schema.columns
 --   WHERE table_name = 'substitution_requests' AND column_name = 'status';                     -- 'pending_approval'::text

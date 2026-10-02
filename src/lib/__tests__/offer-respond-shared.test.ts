@@ -148,6 +148,20 @@ describe('claimChairForAccept (the claim_chair database function, migration 094)
     expect(String(error.mock.calls[0][0])).toMatch(/migration 094/)
     error.mockRestore()
   })
+
+  it('does not blame 094 when claim_chair exists but something it calls is missing', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const result = await respond.claimChairForAccept(
+      rpcClient({
+        data: null,
+        error: { code: '42883', message: 'function log_staffing_event(uuid, unknown, uuid, unknown, uuid, unknown, jsonb, jsonb) does not exist' },
+      }),
+      OFFER
+    )
+    expect(result.outcome).toBe('error')
+    expect(error.mock.calls.some((c) => /migration 094/.test(String(c[0])))).toBe(false)
+    error.mockRestore()
+  })
 })
 
 describe('markOfferDeclined', () => {
