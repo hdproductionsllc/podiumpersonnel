@@ -71,6 +71,7 @@ type Refused = { ok: false; status: number; code: RequirementRefusal; error: str
 const refuse = (status: number, code: RequirementRefusal, error: string): Refused => ({ ok: false, status, code, error })
 
 const NOT_READY = 'This needs a database update first. Nothing was changed.'
+const REQUEST_KEY_REUSED = 'This request was already used for another gig. Close the dialog and try again.'
 
 /** A refusal either function can return, as the admin is told it. */
 function commonRefusal(result: string | undefined, what?: string): Refused | null {
@@ -119,6 +120,13 @@ export async function createRequirement(
       console.error(`createRequirement: refused for project ${projectId}: ${MIGRATION_099_MISSING}`)
       return refuse(503, 'not_ready', NOT_READY)
     }
+    // The same request key on two gigs at the same moment: the function's
+    // per-gig lock cannot see the other gig, so the unique index answers. (On
+    // one gig the lock makes the second call return the first one's chairs.)
+    const e = error as { code?: string; message?: string }
+    if (e.code === '23505' && /requirements_request_key_key/.test(e.message ?? '')) {
+      return refuse(409, 'request_key_reused', REQUEST_KEY_REUSED)
+    }
     console.error(`createRequirement: create_requirement failed for project ${projectId}:`, error)
     return refuse(500, 'failed', 'Could not add these chairs')
   }
@@ -137,7 +145,7 @@ export async function createRequirement(
     case 'invalid_pay':
       return refuse(400, 'invalid', 'Invalid pay amount')
     case 'request_key_reused':
-      return refuse(409, 'request_key_reused', 'This request was already used for another gig. Close the dialog and try again.')
+      return refuse(409, 'request_key_reused', REQUEST_KEY_REUSED)
     default:
       console.error('createRequirement: create_requirement returned an unexpected result:', r)
       return refuse(500, 'failed', 'Could not add these chairs')
@@ -191,15 +199,59 @@ export async function setChairScope(
 
 let reportedMissing099 = false
 
+/** PostgREST returns at most this many rows per request (Supabase's max-rows). */
+const PAGE = 1000
+/** Gig ids per request, so the URL stays short however many gigs there are. */
+const PROJECT_CHUNK = 100
+
 /**
- * What the projects page needs to show call pickers and requirements, or null
- * when it must show none of it: the organization's switch is off (every
- * organization today), or cannot be read (098 not applied), or the chairs and
- * requirements cannot be read (099 not applied). Read separately from the
- * page's main query so that query, and so the page of every organization with
- * the switch off, is exactly what it was.
+ * Every row of `table` for these gigs: `in` chunks of PROJECT_CHUNK gigs, each
+ * read page by page (as intake/match-index.ts does), in a stable order so no
+ * page skips or repeats a row. The first error stops the read.
  */
-export async function getCallScopeView(supabase: SupabaseClient, organizationId: string): Promise<CallScopeView | null> {
+async function selectForProjects(
+  supabase: SupabaseClient,
+  table: string,
+  columns: string,
+  projectIds: readonly string[]
+): Promise<{ rows: any[]; error: unknown }> {
+  const rows: any[] = []
+  for (let i = 0; i < projectIds.length; i += PROJECT_CHUNK) {
+    const chunk = projectIds.slice(i, i + PROJECT_CHUNK)
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from(table)
+        .select(columns)
+        .in('project_id', chunk)
+        .order('id', { ascending: true })
+        .range(from, from + PAGE - 1)
+      if (error) return { rows, error }
+      const page = (data ?? []) as any[]
+      rows.push(...page)
+      if (page.length < PAGE) break
+    }
+  }
+  return { rows, error: null }
+}
+
+/**
+ * What the projects page needs to show call pickers and requirements for the
+ * gigs it shows (`projectIds`), or null when it must show none of it: the
+ * organization's switch is off (every organization today), or cannot be read
+ * (098 not applied), or the chairs and requirements cannot be read (099 not
+ * applied). Read separately from the page's main query so that query, and so
+ * the page of every organization with the switch off, is exactly what it was.
+ *
+ * Complete or nothing: every chair of these gigs is in `chairs` (paged, never
+ * cut off at PostgREST's row limit), or the whole view is null. A chair the
+ * page still cannot find (callScopeChairServices returns null for it) is shown
+ * as unknown, never as "every call".
+ */
+export async function getCallScopeView(
+  supabase: SupabaseClient,
+  organizationId: string,
+  projectIds: readonly string[]
+): Promise<CallScopeView | null> {
   const { data: org, error: orgError } = await supabase
     .from('organizations')
     .select('call_scoped_requirements')
@@ -212,15 +264,13 @@ export async function getCallScopeView(supabase: SupabaseClient, organizationId:
   if ((org as any)?.call_scoped_requirements !== true) return null
 
   const [chairsRes, requirementsRes] = await Promise.all([
-    supabase
-      .from('project_positions')
-      .select('id, scope_mode, requirement_id, position_services(service_id), project:projects!inner(organization_id)')
-      .eq('project.organization_id', organizationId),
-    supabase
-      .from('requirements')
-      .select('id, project_id, instrument_id, quantity, default_pay, notes, status, created_at, project:projects!inner(organization_id)')
-      .eq('project.organization_id', organizationId)
-      .order('created_at', { ascending: true }),
+    selectForProjects(supabase, 'project_positions', 'id, scope_mode, requirement_id, position_services(service_id)', projectIds),
+    selectForProjects(
+      supabase,
+      'requirements',
+      'id, project_id, instrument_id, quantity, default_pay, notes, status, created_at',
+      projectIds
+    ),
   ])
   const failed = chairsRes.error || requirementsRes.error
   if (failed) {
@@ -232,7 +282,7 @@ export async function getCallScopeView(supabase: SupabaseClient, organizationId:
   }
 
   const chairs: Record<string, ChairCallScope> = {}
-  for (const row of (chairsRes.data || []) as any[]) {
+  for (const row of chairsRes.rows) {
     const selected = row.scope_mode === 'selected'
     chairs[row.id] = {
       scopeMode: selected ? 'selected' : 'all',
@@ -240,7 +290,11 @@ export async function getCallScopeView(supabase: SupabaseClient, organizationId:
       requirementId: row.requirement_id ?? null,
     }
   }
-  const requirements = ((requirementsRes.data || []) as any[]).map(
+  // In the order they were written (the summary lists them so), id breaking ties.
+  const ordered = [...requirementsRes.rows].sort(
+    (a, b) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')) || String(a.id).localeCompare(String(b.id))
+  )
+  const requirements = ordered.map(
     (r): RequirementRow => ({
       id: r.id,
       project_id: r.project_id,

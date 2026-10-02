@@ -40,9 +40,11 @@ interface AddRequirementDialogProps {
  * many chairs at once (POST /api/projects/[projectId]/requirements, migration
  * 099). Only offered to an organization with call_scoped_requirements on.
  *
- * The request carries an id made when the dialog opens, so a double click or a
+ * The request carries an id for exactly what it asks, so a double click or a
  * retry after a dropped connection returns the chairs the first one made
- * instead of making a second set.
+ * instead of making a second set. Changing any field after a failed attempt
+ * makes a new id: the edited request is a new request, never answered with
+ * the chairs of the one before it.
  */
 export function AddRequirementDialog({
   open,
@@ -60,7 +62,8 @@ export function AddRequirementDialog({
   const [calls, setCalls] = useState<string[] | null>(null)
   const [pay, setPay] = useState('')
   const [notes, setNotes] = useState('')
-  const [requestId, setRequestId] = useState('')
+  /** The last request sent: its id, and exactly what it asked (to reuse the id only for the same ask). */
+  const [sent, setSent] = useState<{ id: string; ask: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -76,7 +79,7 @@ export function AddRequirementDialog({
     setPay('')
     setNotes('')
     setError(null)
-    setRequestId(crypto.randomUUID())
+    setSent(null)
     createClient()
       .from('instruments')
       .select('id, name, section')
@@ -96,18 +99,21 @@ export function AddRequirementDialog({
     if (!ready) return
     setSaving(true)
     setError(null)
+    const fields = {
+      instrumentId: roleId,
+      quantity: count,
+      serviceIds: calls,
+      defaultPay: pay.trim() === '' ? null : Number(pay),
+      notes: notes.trim() || null,
+    }
+    const ask = JSON.stringify(fields)
+    const requestId = sent && sent.ask === ask ? sent.id : crypto.randomUUID()
+    setSent({ id: requestId, ask })
     try {
       const response = await fetch(`/api/projects/${projectId}/requirements`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          instrumentId: roleId,
-          quantity: count,
-          serviceIds: calls,
-          defaultPay: pay.trim() === '' ? null : Number(pay),
-          notes: notes.trim() || null,
-          requestId,
-        }),
+        body: JSON.stringify({ ...fields, requestId }),
       })
       const result = await response.json().catch(() => ({}))
       if (!response.ok) {
@@ -115,8 +121,14 @@ export function AddRequirementDialog({
         return
       }
       const made = (result.positionIds as string[] | undefined)?.length ?? count
-      const role = roles.find((r) => r.id === roleId)?.name ?? skill
-      toast.success(`Added ${made} × ${role}`)
+      const madeRoleId = (result.requirement as { instrument_id?: string } | undefined)?.instrument_id ?? roleId
+      const role = roles.find((r) => r.id === madeRoleId)?.name ?? skill
+      if (result.created === false) {
+        // A retry of a request that had already gone through: say what it made.
+        toast.success(`Already added: ${made} × ${role}. Nothing new was made.`)
+      } else {
+        toast.success(`Added ${made} × ${role}`)
+      }
       onSuccess()
       onOpenChange(false)
     } catch {

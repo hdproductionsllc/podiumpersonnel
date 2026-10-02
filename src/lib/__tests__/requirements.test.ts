@@ -31,6 +31,8 @@ vi.mock('@/lib/api-helpers', () => ({
 import {
   MAX_REQUIREMENT_QUANTITY,
   alertGroupFor,
+  callScopeChairServices,
+  chairFirstCalls,
   chairScopeForServicesFor,
   createRequirement,
   getCallScopeView,
@@ -38,6 +40,7 @@ import {
   parseRequirementInput,
   requirementFulfilment,
   setChairScope,
+  startsAtForChair,
 } from '@/lib/staffing/requirements'
 import { POST as requirementsPOST } from '@/app/api/projects/[projectId]/requirements/route'
 import { PUT as scopePUT } from '@/app/api/positions/[positionId]/scope/route'
@@ -189,6 +192,16 @@ describe('createRequirement: how the database answer reaches the admin', () => {
     expect(await createRequirement('user-admin', 'proj-1', input)).toMatchObject({ ok: false, status, code: codeName })
   })
 
+  it('the same key on two gigs at the same moment (the unique index answers): request_key_reused, not a 500', async () => {
+    state.rpc.mockResolvedValue({
+      data: null,
+      error: { code: '23505', message: 'duplicate key value violates unique constraint "requirements_request_key_key"' },
+    })
+    expect(await createRequirement('user-admin', 'proj-1', input)).toMatchObject({ ok: false, status: 409, code: 'request_key_reused' })
+    state.rpc.mockResolvedValue({ data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint "something_else"' } })
+    expect(await createRequirement('user-admin', 'proj-1', input)).toMatchObject({ ok: false, status: 500, code: 'failed' })
+  })
+
   it('before 099 is pasted: refused, nothing changed, and the log says which script', async () => {
     state.rpc.mockResolvedValue({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.create_requirement' } })
     expect(await createRequirement('user-admin', 'proj-1', input)).toMatchObject({ ok: false, status: 503, code: 'not_ready' })
@@ -223,33 +236,47 @@ describe('setChairScope', () => {
   })
 })
 
-/** A client whose reads answer per table, recording what was read. */
-function fakeSupabase(answers: Record<string, { data: unknown; error: unknown }>) {
+type Read = { table: string; in?: string[]; range?: [number, number] }
+type Answer = { data: unknown; error: unknown }
+
+/**
+ * A client whose reads answer per table (an answer, or a function of the read
+ * for paging), recording each read with its `in` list and `range`.
+ */
+function fakeSupabase(answers: Record<string, Answer | ((read: Read) => Answer)>) {
   const reads: string[] = []
+  const log: Read[] = []
   const client = {
     from(table: string) {
       reads.push(table)
-      const answer = answers[table] ?? { data: [], error: null }
+      const read: Read = { table }
+      log.push(read)
+      const answer = () => {
+        const a = answers[table] ?? { data: [], error: null }
+        return typeof a === 'function' ? a(read) : a
+      }
       const chain: Record<string, unknown> = {}
       for (const m of ['select', 'eq', 'order']) chain[m] = () => chain
-      chain.maybeSingle = () => Promise.resolve(answer)
-      chain.then = (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) => Promise.resolve(answer).then(res, rej)
+      chain.in = (_col: string, ids: string[]) => ((read.in = ids), chain)
+      chain.range = (from: number, to: number) => ((read.range = [from, to]), chain)
+      chain.maybeSingle = () => Promise.resolve(answer())
+      chain.then = (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) => Promise.resolve(answer()).then(res, rej)
       return chain
     },
   }
-  return { client: client as unknown as SupabaseClient, reads }
+  return { client: client as unknown as SupabaseClient, reads, log }
 }
 
 describe('getCallScopeView: the projects page shows calls and requirements only where the switch is on', () => {
   it('switch off (every organization today): null, and nothing else is read', async () => {
     const { client, reads } = fakeSupabase({ organizations: { data: { call_scoped_requirements: false }, error: null } })
-    expect(await getCallScopeView(client, 'org-1')).toBeNull()
+    expect(await getCallScopeView(client, 'org-1', ['proj-1'])).toBeNull()
     expect(reads).toEqual(['organizations'])
   })
 
   it('before 098 (no switch column): null, quietly', async () => {
     const { client, reads } = fakeSupabase({ organizations: { data: null, error: { code: '42703', message: 'column organizations.call_scoped_requirements does not exist' } } })
-    expect(await getCallScopeView(client, 'org-1')).toBeNull()
+    expect(await getCallScopeView(client, 'org-1', ['proj-1'])).toBeNull()
     expect(reads).toEqual(['organizations'])
     expect(console.error).not.toHaveBeenCalled()
   })
@@ -259,7 +286,7 @@ describe('getCallScopeView: the projects page shows calls and requirements only 
       organizations: { data: { call_scoped_requirements: true }, error: null },
       project_positions: { data: null, error: { code: '42703', message: 'column project_positions.requirement_id does not exist' } },
     })
-    expect(await getCallScopeView(client, 'org-1')).toBeNull()
+    expect(await getCallScopeView(client, 'org-1', ['proj-1'])).toBeNull()
   })
 
   it('switch on: every chair\'s calls and requirement, and the requirements', async () => {
@@ -278,7 +305,7 @@ describe('getCallScopeView: the projects page shows calls and requirements only 
         error: null,
       },
     })
-    expect(await getCallScopeView(client, 'org-1')).toEqual({
+    expect(await getCallScopeView(client, 'org-1', ['proj-1'])).toEqual({
       chairs: {
         a1: { scopeMode: 'all', serviceIds: [], requirementId: null },
         'hand-1': { scopeMode: 'selected', serviceIds: [LOAD_IN], requirementId: 'req-1' },
@@ -288,12 +315,93 @@ describe('getCallScopeView: the projects page shows calls and requirements only 
     })
   })
 
+  it("reads only the gigs on the page, every page of rows: a chair past PostgREST's 1000-row cut is still there", async () => {
+    const chairRow = (n: number) => ({ id: `c${n}`, scope_mode: 'selected', requirement_id: 'req-1', position_services: [{ service_id: LOAD_IN }] })
+    const all = Array.from({ length: 1005 }, (_, n) => chairRow(n))
+    const { client, log } = fakeSupabase({
+      organizations: { data: { call_scoped_requirements: true }, error: null },
+      project_positions: (r) => ({ data: all.slice(r.range![0], r.range![1] + 1), error: null }),
+      requirements: { data: [], error: null },
+    })
+    const view = await getCallScopeView(client, 'org-1', ['proj-1', 'proj-2'])
+    expect(Object.keys(view!.chairs)).toHaveLength(1005)
+    expect(view!.chairs.c1004).toEqual({ scopeMode: 'selected', serviceIds: [LOAD_IN], requirementId: 'req-1' })
+    const chairReads = log.filter((r) => r.table === 'project_positions')
+    expect(chairReads.map((r) => r.range)).toEqual([[0, 999], [1000, 1999]])
+    expect(chairReads.every((r) => r.in?.join() === 'proj-1,proj-2')).toBe(true)
+  })
+
+  it('many gigs: asked about in groups of 100, and requirements come back in the order they were made', async () => {
+    const ids = Array.from({ length: 250 }, (_, n) => `proj-${n}`)
+    const req = (id: string, project: string, at: string) => ({
+      id, project_id: project, instrument_id: ROLE, quantity: 1, default_pay: null, notes: null, status: 'open', created_at: at,
+    })
+    const { client, log } = fakeSupabase({
+      organizations: { data: { call_scoped_requirements: true }, error: null },
+      project_positions: { data: [], error: null },
+      requirements: (r) => ({
+        data: r.in![0] === 'proj-0'
+          ? [req('req-b', 'proj-0', '2026-10-02T10:00:00+00:00')]
+          : r.in![0] === 'proj-100'
+            ? [req('req-a', 'proj-100', '2026-10-01T10:00:00+00:00')]
+            : [],
+        error: null,
+      }),
+    })
+    const view = await getCallScopeView(client, 'org-1', ids)
+    expect(log.filter((r) => r.table === 'requirements').map((r) => r.in!.length)).toEqual([100, 100, 50])
+    expect(view!.requirements.map((r) => r.id)).toEqual(['req-a', 'req-b'])
+  })
+
+  it('switch on, no gigs: an empty view, and no chair or requirement read', async () => {
+    const { client, reads } = fakeSupabase({ organizations: { data: { call_scoped_requirements: true }, error: null } })
+    expect(await getCallScopeView(client, 'org-1', [])).toEqual({ chairs: {}, requirements: [] })
+    expect(reads).toEqual(['organizations'])
+  })
+
   it('reads back into servicesFor exactly', () => {
     expect(chairScopeForServicesFor({ scopeMode: 'selected', serviceIds: [LOAD_IN], requirementId: null })).toEqual({
       scope_mode: 'selected',
       position_services: [{ service_id: LOAD_IN }],
     })
     expect(chairScopeForServicesFor(undefined)).toBeNull()
+  })
+})
+
+describe('a chair the view does not have: its calls are unknown, never every call', () => {
+  const services = [
+    { id: LOAD_IN, start_time: '2026-11-01T14:00:00Z', base_pay: 100 },
+    { id: STRIKE, start_time: '2026-11-01T23:00:00Z', base_pay: 50 },
+  ]
+  const view = {
+    chairs: {
+      every: { scopeMode: 'all' as const, serviceIds: [], requirementId: null },
+      strike: { scopeMode: 'selected' as const, serviceIds: [STRIKE], requirementId: 'req-1' },
+      none: { scopeMode: 'selected' as const, serviceIds: [], requirementId: null },
+    },
+    requirements: [],
+  }
+
+  it('without a view (switch off): the same services array, so nothing changes', () => {
+    expect(callScopeChairServices(null, 'anything', services)).toBe(services)
+  })
+
+  it("with a view: the chair's calls, or null for a chair it does not have", () => {
+    expect(callScopeChairServices(view, 'every', services)).toBe(services)
+    expect(callScopeChairServices(view, 'strike', services)!.map((s) => s.id)).toEqual([STRIKE])
+    expect(callScopeChairServices(view, 'missing', services)).toBeNull()
+  })
+
+  it("Text from my phone: a chair's own first call, no date for no calls or unknown ones, else the gig's", () => {
+    const byChair = chairFirstCalls([{ id: 'every' }, { id: 'strike' }, { id: 'none' }, { id: 'missing' }], services, view)
+    expect(byChair).toEqual({ strike: '2026-11-01T23:00:00Z', none: null, missing: null })
+    const gig = '2026-11-01T14:00:00Z'
+    expect(startsAtForChair(byChair, 'strike', gig)).toBe('2026-11-01T23:00:00Z')
+    expect(startsAtForChair(byChair, 'none', gig)).toBeNull()
+    expect(startsAtForChair(byChair, 'missing', gig)).toBeNull()
+    expect(startsAtForChair(byChair, 'every', gig)).toBe(gig)
+    expect(startsAtForChair(undefined, 'every', gig)).toBe(gig)
+    expect(startsAtForChair(undefined, 'every', undefined)).toBeNull()
   })
 })
 

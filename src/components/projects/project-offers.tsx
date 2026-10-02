@@ -10,6 +10,7 @@ import { useTerms } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
 import { hasLapsed, hasLiveStatus, isLapsedOffer, isLiveOffer } from '@/lib/staffing/live'
 import { NEXT_IN_LINE_OFFER_EXPIRY } from '@/lib/staffing/expiry'
+import { startsAtForChair } from '@/lib/staffing/requirement-rules'
 import { OfferTextButton } from './offer-text-button'
 
 type PositionPayment = {
@@ -66,8 +67,9 @@ interface ProjectOffersProps {
   startsAt?: string | null
   /**
    * The first call each chair works, by chair id, for a chair limited to some
-   * calls (098/099). Only given where call_scoped_requirements is on; any
-   * chair not in it uses startsAt.
+   * calls (098/099), null for one with no calls or unknown ones (no date).
+   * Only given where call_scoped_requirements is on; any chair not in it uses
+   * startsAt (requirement-rules.ts chairFirstCalls / startsAtForChair).
    */
   startsAtByChair?: Record<string, string | null>
 }
@@ -498,7 +500,7 @@ export function ProjectOffers({
                             phone={offer.musician.phone}
                             organizationName={organizationName}
                             projectName={projectName}
-                            startsAt={startsAtByChair?.[offer.project_position_id] ?? startsAt ?? null}
+                            startsAt={startsAtForChair(startsAtByChair, offer.project_position_id, startsAt)}
                             timezone={timezone}
                             role={`${offer.position_instrument}${hasMultipleChairs ? `, ${term(terms, 'rank')} ${offer.position_chair}` : ''}`}
                           />

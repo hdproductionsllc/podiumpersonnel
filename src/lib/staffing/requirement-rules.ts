@@ -133,6 +133,61 @@ export function chairScopeForServicesFor(scope: ChairCallScope | null | undefine
   return { scope_mode: scope.scopeMode, position_services: scope.serviceIds.map((service_id) => ({ service_id })) }
 }
 
+/**
+ * The services one chair works, as the projects page knows it. Without a view
+ * (the switch is off: every organization today) that is `services` itself,
+ * the same array, so nothing about the page changes. With one, the chair's
+ * calls; or null when the chair is not in the view: its calls are UNKNOWN, and
+ * the caller must not treat that as every call (no pay total over every call,
+ * no "Every call" label, no Calls dialog pre-set to every call).
+ */
+export function callScopeChairServices<S extends { id: string }>(
+  callScope: CallScopeView | null | undefined,
+  positionId: string,
+  services: S[]
+): S[] | null {
+  if (!callScope) return services
+  const scope = callScope.chairs[positionId]
+  if (!scope) return null
+  return servicesFor(chairScopeForServicesFor(scope), services)
+}
+
+/**
+ * For "Text from my phone": the first call (ISO) of each chair whose calls
+ * are not the whole gig, by chair id. A chair limited to some calls gets its
+ * first one, or null when it has none left; a chair missing from the view
+ * gets null (its calls are unknown, so no date is better than a wrong one). A
+ * chair on every call is left out and uses the gig's first call.
+ */
+export function chairFirstCalls(
+  positions: readonly { id: string }[],
+  services: readonly { id: string; start_time: string }[],
+  callScope: CallScopeView
+): Record<string, string | null> {
+  const out: Record<string, string | null> = {}
+  for (const p of positions) {
+    const scope = callScope.chairs[p.id]
+    if (scope && scope.scopeMode === 'all') continue
+    const starts = (callScopeChairServices(callScope, p.id, [...services]) ?? []).map((s) => s.start_time).filter(Boolean)
+    out[p.id] = starts.length === 0 ? null : starts.reduce((a, b) => (new Date(a).getTime() <= new Date(b).getTime() ? a : b))
+  }
+  return out
+}
+
+/**
+ * The date a chair's text message carries: its own first call when
+ * chairFirstCalls lists it (null included: a chair with no calls left, or
+ * unknown ones, gets no date), else the gig's first call.
+ */
+export function startsAtForChair(
+  byChair: Record<string, string | null> | undefined,
+  positionId: string,
+  gigStartsAt: string | null | undefined
+): string | null {
+  if (byChair && Object.prototype.hasOwnProperty.call(byChair, positionId)) return byChair[positionId]
+  return gigStartsAt ?? null
+}
+
 // ---------------------------------------------------------------------------
 // The staffing alert: chairs of one requirement are one line
 // ---------------------------------------------------------------------------

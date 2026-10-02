@@ -36,9 +36,8 @@ import { Input } from '@/components/ui/input'
 import { MusicianFormDialog } from '@/components/musicians/musician-form-dialog'
 import { AddRequirementDialog } from './add-requirement-dialog'
 import { ChairCallsDialog } from './chair-calls-dialog'
-import { servicesFor } from '@/lib/staffing/scope'
 import {
-  chairScopeForServicesFor,
+  callScopeChairServices,
   requirementFulfilment,
   type CallScopeView,
   type RequirementRow,
@@ -161,20 +160,29 @@ export type ConflictInfo = {
   service: Service
 }
 
+/**
+ * Outside commitments that overlap the calls each seated person works. With
+ * `callScope` (call_scoped_requirements on) only the calls their chair works
+ * count, as in the chair's own row; a chair whose calls are unknown is checked
+ * against every call (over-warning costs a glance, under-warning a double
+ * booking). Without it every service counts, exactly as before.
+ */
 export function detectConflicts(
   positions: PositionJoined[],
   musicians: MusicianForOffer[],
-  services: Service[]
+  services: Service[],
+  callScope: CallScopeView | null = null
 ): ConflictInfo[] {
   const conflicts: ConflictInfo[] = []
   for (const position of positions) {
     if (!position.musician_id) continue
     const musician = musicians.find((m) => m.id === position.musician_id)
     if (!musician || !musician.competing_schedules) continue
+    const worked = callScopeChairServices(callScope, position.id, services) ?? services
     for (const schedule of musician.competing_schedules) {
       const schedStart = new Date(schedule.start_time).getTime()
       const schedEnd = new Date(schedule.end_time).getTime()
-      for (const service of services) {
+      for (const service of worked) {
         const svcStart = new Date(service.start_time).getTime()
         const svcEnd = service.end_time
           ? new Date(service.end_time).getTime()
@@ -223,6 +231,11 @@ export function ProjectPositions({
   const [offerChairNumber, setOfferChairNumber] = useState<number>(1)
   const [offerExistingIds, setOfferExistingIds] = useState<string[]>([])
   const [suggestedCustomPay, setSuggestedCustomPay] = useState<string>('')
+  /**
+   * The requirement of the chair suggestedCustomPay was chosen on (null: none).
+   * With callScope it is carried over only to chairs of that same requirement.
+   */
+  const [suggestedPayRequirementId, setSuggestedPayRequirementId] = useState<string | null>(null)
   const [assignPositionId, setAssignPositionId] = useState<string | null>(null)
   const [assignInstrumentId, setAssignInstrumentId] = useState<string | null>(null)
   const [assignChairNumber, setAssignChairNumber] = useState<number>(1)
@@ -277,6 +290,7 @@ export function ProjectPositions({
         setIsFollowUp(!!waterfallTrigger.isFollowUp)
         if (waterfallTrigger.customPay != null) {
           setSuggestedCustomPay(waterfallTrigger.customPay.toString())
+          setSuggestedPayRequirementId(requirementOf(position.id)?.id ?? null)
         }
       }
       onWaterfallHandled?.()
@@ -312,10 +326,13 @@ export function ProjectPositions({
 
   // -- Which calls each chair works, and requirements (only with callScope) --
   // Without callScope every chair works every service: chairServices returns
-  // `services` itself and none of the call UI below is rendered.
-  function chairServices(position: { id: string }): Service[] {
-    if (!callScope) return services
-    return servicesFor(chairScopeForServicesFor(callScope.chairs[position.id]), services)
+  // `services` itself and none of the call UI below is rendered. With it, a
+  // chair missing from callScope has UNKNOWN calls (null), never every call.
+  function chairServices(position: { id: string }): Service[] | null {
+    return callScopeChairServices(callScope, position.id, services)
+  }
+  function scopeUnknown(position: { id: string }): boolean {
+    return !!callScope && !callScope.chairs[position.id]
   }
   const sessionsWord = term(terms, 'session', { plural: true, case: 'lower' })
   const projectRequirements: RequirementRow[] = callScope
@@ -335,12 +352,20 @@ export function ProjectPositions({
     return !!position.musician_id || position.contract_offers.some((o) => hasLiveStatus(o.status) || o.status === 'accepted')
   }
   function callsLabel(position: PositionJoined): string {
+    if (scopeUnknown(position)) return `${term(terms, 'session', { plural: true })} unknown: refresh the page`
     const scope = callScope?.chairs[position.id]
     if (!scope || scope.scopeMode === 'all') return `Every ${term(terms, 'session', { case: 'lower' })}`
-    const names = chairServices(position).map((s) => s.name)
+    const names = (chairServices(position) ?? []).map((s) => s.name)
     return names.length > 0 ? names.join(', ') : `No ${sessionsWord}`
   }
+  /** Why the Calls button is disabled for this chair, or null when it is not. */
+  function callsDisabledReason(position: PositionJoined): string | null {
+    if (scopeUnknown(position)) return `The ${sessionsWord} of this slot could not be read. Refresh the page.`
+    if (chairInUse(position)) return `Someone holds or is considering this slot. Withdraw the offer or unassign them to change its ${sessionsWord}.`
+    return null
+  }
   function openCalls(position: PositionJoined) {
+    if (scopeUnknown(position)) return
     const scope = callScope?.chairs[position.id]
     setCallsChair({
       id: position.id,
@@ -349,18 +374,31 @@ export function ProjectPositions({
     })
   }
   // What the Send Offer dialog suggests for the chair it is open on: an amount
-  // the admin chose for the remaining chairs wins, then the chair's
+  // the admin chose for the remaining chairs wins (with callScope, only on
+  // chairs of the requirement it was chosen on), then the chair's
   // requirement's whole-engagement amount. Its rate total is over the calls
-  // the chair works (every service, without callScope: as before).
+  // the chair works (every service, without callScope: as before; none when
+  // the chair's calls are unknown).
   const offerRequirement = requirementOf(offerPositionId)
-  const offerSuggestedPay = suggestedCustomPay
+  const offerRequirementId = offerRequirement?.id ?? null
+  const carriedPay = !callScope || suggestedPayRequirementId === offerRequirementId ? suggestedCustomPay : ''
+  const offerSuggestedPay = carriedPay
     || (offerRequirement?.default_pay != null ? String(offerRequirement.default_pay) : '')
   const offerChairServices = callScope && offerPositionId ? chairServices({ id: offerPositionId }) : services
   const offerBasePay = offerChairServices === services
     ? basePay
-    : offerChairServices.some((s) => s.base_pay != null)
+    : offerChairServices?.some((s) => s.base_pay != null)
       ? offerChairServices.reduce((sum, s) => sum + (s.base_pay ?? 0), 0)
       : null
+  /**
+   * The chairs "Send next" and "Apply to remaining" move on to: vacant chairs
+   * of the same role and, with callScope, of the same requirement (or none),
+   * so a load-in amount never carries to a strike chair.
+   */
+  function isNextForOffer(p: PositionJoined): boolean {
+    if (p.instrument_id !== offerInstrumentId || p.status !== 'vacant' || p.id === offerPositionId) return false
+    return !callScope || (callScope.chairs[p.id]?.requirementId ?? null) === offerRequirementId
+  }
 
   function handleSendOffer(position: PositionJoined) {
     if (services.length === 0) {
@@ -752,7 +790,7 @@ export function ProjectPositions({
                                 const hasConflict = m?.competing_schedules?.some((sched) => {
                                   const schedStart = new Date(sched.start_time).getTime()
                                   const schedEnd = new Date(sched.end_time).getTime()
-                                  return chairServices(position).some((svc) => {
+                                  return (chairServices(position) ?? services).some((svc) => {
                                     const svcStart = new Date(svc.start_time).getTime()
                                     const svcEnd = svc.end_time ? new Date(svc.end_time).getTime() : svcStart + 3600000
                                     return schedStart < svcEnd && schedEnd > svcStart
@@ -835,7 +873,7 @@ export function ProjectPositions({
                             if (position.status === 'confirmed') {
                               const acceptedOffer = position.contract_offers.find(o => o.status === 'accepted')
                               if (acceptedOffer?.custom_pay != null) return `$${acceptedOffer.custom_pay}`
-                              const basePay = services.reduce((sum, s) => sum + (s.base_pay ?? 0), 0)
+                              const basePay = (chairServices(position) ?? []).reduce((sum, s) => sum + (s.base_pay ?? 0), 0)
                               return basePay > 0
                                 ? <span title="The gig's base pay (no custom amount on the offer)">${basePay.toLocaleString()} <span className="text-xs">base</span></span>
                                 : '—'
@@ -882,11 +920,9 @@ export function ProjectPositions({
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  disabled={chairInUse(position)}
+                                  disabled={callsDisabledReason(position) !== null}
                                   onClick={() => openCalls(position)}
-                                  title={chairInUse(position)
-                                    ? `Someone holds or is considering this slot. Withdraw the offer or unassign them to change its ${sessionsWord}.`
-                                    : `Choose which ${sessionsWord} this slot works`}
+                                  title={callsDisabledReason(position) ?? `Choose which ${sessionsWord} this slot works`}
                                 >
                                   {term(terms, 'session', { plural: true })}
                                 </Button>
@@ -950,7 +986,7 @@ export function ProjectPositions({
                                     </DropdownMenuItem>
                                   )}
                                   {callScope && (
-                                    <DropdownMenuItem disabled={chairInUse(position)} onClick={() => openCalls(position)}>
+                                    <DropdownMenuItem disabled={callsDisabledReason(position) !== null} onClick={() => openCalls(position)}>
                                       {term(terms, 'session', { plural: true })}
                                     </DropdownMenuItem>
                                   )}
@@ -1054,7 +1090,7 @@ export function ProjectPositions({
         suggestedCustomPay={offerSuggestedPay}
         projectEndDate={projectEndDate}
         timezone={timezone}
-        nextVacantCount={offerInstrumentId ? positions.filter(p => p.instrument_id === offerInstrumentId && p.status === 'vacant' && p.id !== offerPositionId).length : 0}
+        nextVacantCount={offerInstrumentId ? positions.filter(isNextForOffer).length : 0}
         nextInstrumentName={offerInstrumentId ? positions.find(p => p.instrument_id === offerInstrumentId)?.instrument?.name : undefined}
         preSelectedMusicianId={preSelectedMusicianId}
         autoSelect={offerAutoSelect}
@@ -1062,6 +1098,7 @@ export function ProjectPositions({
         onSuccess={(applyPayToRemaining) => {
           if (applyPayToRemaining?.customPay) {
             setSuggestedCustomPay(applyPayToRemaining.customPay)
+            setSuggestedPayRequirementId(offerRequirementId)
           }
           // Check staffing progress after this offer
           if (positions.length > 0) {
@@ -1077,10 +1114,8 @@ export function ProjectPositions({
           onPositionChange()
         }}
         onSendNext={() => {
-          // Find next vacant position for the same instrument
-          const nextVacant = positions.find(
-            p => p.instrument_id === offerInstrumentId && p.status === 'vacant' && p.id !== offerPositionId
-          )
+          // Find next vacant position for the same instrument (and requirement)
+          const nextVacant = positions.find(isNextForOffer)
           if (nextVacant) {
             handleSendOffer(nextVacant)
           }

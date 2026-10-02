@@ -22,8 +22,7 @@ import { ProjectFilesSection } from './project-files-section'
 import { IntakePanel } from '@/components/intake/intake-panel'
 import { detectConflicts } from './project-positions'
 import type { PositionJoined, BookForImport, AutoCascadeSwitches } from './project-positions'
-import { chairScopeForServicesFor, type CallScopeView } from '@/lib/staffing/requirement-rules'
-import { servicesFor } from '@/lib/staffing/scope'
+import { chairFirstCalls, type CallScopeView } from '@/lib/staffing/requirement-rules'
 import type { MusicianForOffer } from './send-offer-dialog'
 import type { Project, Service } from '@/types'
 import { toast } from 'sonner'
@@ -195,16 +194,6 @@ function firstServiceStart(services: { start_time: string }[] | null | undefined
   const starts = (services || []).map((s) => s.start_time).filter(Boolean)
   if (starts.length === 0) return null
   return starts.reduce((a, b) => (new Date(a).getTime() <= new Date(b).getTime() ? a : b))
-}
-
-/** The first call each chair limited to some calls works (098/099), by chair id. */
-function chairStarts(project: ProjectWithServices, callScope: CallScopeView): Record<string, string | null> {
-  const out: Record<string, string | null> = {}
-  for (const p of project.project_positions) {
-    const scope = callScope.chairs[p.id]
-    if (scope?.scopeMode === 'selected') out[p.id] = firstServiceStart(servicesFor(chairScopeForServicesFor(scope), project.services))
-  }
-  return out
 }
 
 function ServicesList({
@@ -1028,7 +1017,7 @@ export function ProjectsClient({
                             />
                             <ConflictsSummary
                               timezone={timezone}
-                              conflicts={detectConflicts(project.project_positions, musicians, project.services)}
+                              conflicts={detectConflicts(project.project_positions, musicians, project.services, callScope)}
                             />
                             <ProjectOffers
                               offers={project.project_positions.flatMap((p) =>
@@ -1046,7 +1035,7 @@ export function ProjectsClient({
                               openPositionIds={openChairIds(project.project_positions)}
                               projectName={project.name}
                               startsAt={firstServiceStart(project.services)}
-                              startsAtByChair={callScope ? chairStarts(project, callScope) : undefined}
+                              startsAtByChair={callScope ? chairFirstCalls(project.project_positions, project.services, callScope) : undefined}
                               onSendWaterfall={(positionId, musicianId, customPay, isFollowUp) => {
                                 setWaterfallTrigger({ positionId, musicianId, customPay, isFollowUp })
                               }}
