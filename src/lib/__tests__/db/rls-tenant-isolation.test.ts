@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { randomUUID } from 'crypto'
 import type { Client } from 'pg'
 import { adminClient, asAnon, asUser, createTenant, type Tenant } from './helpers'
 
@@ -118,14 +119,38 @@ describe('RLS inserts across organizations', () => {
     ).rejects.toMatchObject({ code: '42501' })
   })
 
-  it('rejects joining another organization as a member', async () => {
+  // The self-insert hole from the 2026-09-18 audit. The user must belong to no
+  // organization: an existing member would be stopped by the one-org-per-account
+  // unique constraint (23505) whether or not the policy held, so only 42501 proves RLS.
+  it('rejects a signed-in user with no organization joining one as admin', async () => {
+    const outsiderId = randomUUID()
+    await db.query('insert into auth.users (id, email) values ($1, $2)', [
+      outsiderId,
+      `outsider-${outsiderId}@example.test`,
+    ])
+    await expect(
+      asUser(db, outsiderId, (q) =>
+        q("insert into organization_members (organization_id, user_id, role) values ($1, $2, 'admin')", [
+          a.orgId,
+          outsiderId,
+        ])
+      )
+    ).rejects.toMatchObject({ code: '42501' })
+  })
+
+  it("rejects an admin adding another user to a different organization", async () => {
+    const outsiderId = randomUUID()
+    await db.query('insert into auth.users (id, email) values ($1, $2)', [
+      outsiderId,
+      `outsider-${outsiderId}@example.test`,
+    ])
     await expect(
       asUser(db, a.adminUserId, (q) =>
         q("insert into organization_members (organization_id, user_id, role) values ($1, $2, 'admin')", [
           b.orgId,
-          a.adminUserId,
+          outsiderId,
         ])
       )
-    ).rejects.toThrow()
+    ).rejects.toMatchObject({ code: '42501' })
   })
 })
