@@ -3,7 +3,7 @@
  *
  * Scope: only the query-builder surface the offer-lifecycle routes actually
  * use — from / select / update / insert / delete / eq / neq / in / is / not /
- * lt / gte / lte / limit / single / maybeSingle, plus `select('*', { count: 'exact', head: true })`.
+ * lt / gte / lte / ilike / order / limit / single / maybeSingle, plus `select('*', { count: 'exact', head: true })`.
  * Unknown filter operators throw loudly rather than silently matching.
  *
  * Behavior is driven by a plain in-memory table map: filters are applied to
@@ -94,6 +94,7 @@ class MockQueryBuilder implements PromiseLike<MockResult> {
   private wantCount = false
   private singleMode: 'single' | 'maybe' | null = null
   private limitCount: number | null = null
+  private orderBy: { column: string; ascending: boolean }[] = []
   /** select() called after insert(): PostgREST returns the inserted rows. */
   private returning = false
 
@@ -165,6 +166,20 @@ class MockQueryBuilder implements PromiseLike<MockResult> {
     return this
   }
 
+  /** Case-insensitive match. Only wildcard-free patterns are supported (an email lookup, not a search). */
+  ilike(column: string, value: string): this {
+    if (value.includes('%') || value.includes('_')) {
+      throw new Error(`MockSupabaseDb: ilike() wildcards are not supported ("${value}")`)
+    }
+    this.filters.push({ method: 'ilike', args: [column, value] })
+    return this
+  }
+
+  order(column: string, options?: { ascending?: boolean }): this {
+    this.orderBy.push({ column, ascending: options?.ascending ?? true })
+    return this
+  }
+
   limit(count: number): this {
     this.limitCount = count
     return this
@@ -195,6 +210,8 @@ class MockQueryBuilder implements PromiseLike<MockResult> {
         case 'not':
           if (args[1] === 'is' && args[2] === null) return !isNullish(row[col])
           throw new Error(`MockSupabaseDb: unsupported not() operator "${String(args[1])}"`)
+        case 'ilike':
+          return typeof row[col] === 'string' && row[col].toLowerCase() === String(args[1]).toLowerCase()
         case 'lt':
           return !isNullish(row[col]) && (row[col] as any) < (args[1] as any)
         // Compared as strings: callers use these for ISO dates, which sort as text.
@@ -240,6 +257,21 @@ class MockQueryBuilder implements PromiseLike<MockResult> {
     let matched = rows.filter((r) => this.rowMatches(r))
     if (this.operation === 'update') {
       for (const row of matched) Object.assign(row, this.payload as Row)
+    }
+    if (this.orderBy.length > 0) {
+      // Nulls sort last, as PostgREST does for ascending order.
+      const compare = (a: Row, b: Row) => {
+        for (const { column, ascending } of this.orderBy) {
+          const x = a[column]
+          const y = b[column]
+          if (x === y) continue
+          if (isNullish(x)) return 1
+          if (isNullish(y)) return -1
+          return (x < y ? -1 : 1) * (ascending ? 1 : -1)
+        }
+        return 0
+      }
+      matched = [...matched].sort(compare)
     }
     if (this.limitCount !== null) matched = matched.slice(0, this.limitCount)
 
