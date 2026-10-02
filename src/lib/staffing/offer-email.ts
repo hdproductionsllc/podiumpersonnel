@@ -43,12 +43,7 @@ export const OFFER_EMAIL_SELECT = `
         )
       `
 
-/** The organization fields the email reads (branding, timezone). */
-export const OFFER_EMAIL_ORG_FIELDS = 'id, name, timezone, email_logo_url, email_brand_color, email_footer_text'
-
-/** The service fields the email reads (times, venues, base pay and leader fee). */
-export const OFFER_EMAIL_SERVICE_FIELDS =
-  'id, name, service_type, call_time, start_time, end_time, venue, venue_id, base_pay, leader_fee, venue_2, venue_id_2'
+export { OFFER_EMAIL_ORG_FIELDS, OFFER_EMAIL_SERVICE_FIELDS } from './offer-email-fields'
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- PostgREST embeds, typed as the route always did */
 export interface OfferEmailInput {

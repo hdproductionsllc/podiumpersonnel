@@ -70,6 +70,43 @@ describe('migration 096 and its paste script', () => {
     )
   })
 
+  it('the cascade functions are SECURITY DEFINER where they write, pinned to public, and the server\'s only', () => {
+    const body = (fn: string) => {
+      const sql = code(migration)
+      const start = sql.indexOf(`CREATE OR REPLACE FUNCTION ${fn}(`)
+      expect(start, fn).toBeGreaterThan(0)
+      return sql.slice(start, sql.indexOf('$$;', start))
+    }
+    for (const fn of ['cascade_offer', 'mark_cascade_exhausted']) {
+      expect(body(fn).slice(0, body(fn).indexOf('AS $$'))).toMatch(/SECURITY DEFINER\s+SET search_path = public, pg_temp/)
+    }
+    expect(body('cascade_refusal')).toMatch(/SET search_path = public, pg_temp/)
+    for (const sig of [
+      'cascade_refusal(UUID)',
+      'cascade_offer(UUID, UUID, TIMESTAMPTZ, NUMERIC, JSONB, TEXT)',
+      'mark_cascade_exhausted(UUID)',
+    ]) {
+      expect(code(migration)).toMatch(new RegExp(`REVOKE ALL ON FUNCTION ${sig.replace(/[()]/g, '\\$&')}\\s+FROM PUBLIC, anon, authenticated;`))
+      expect(code(migration)).toMatch(new RegExp(`GRANT EXECUTE ON FUNCTION ${sig.replace(/[()]/g, '\\$&')}\\s+TO service_role;`))
+    }
+  })
+
+  it('both cascade writes lock the chair first and check every reason to stop', () => {
+    for (const fn of ['cascade_offer', 'mark_cascade_exhausted']) {
+      const sql = code(migration)
+      const start = sql.indexOf(`CREATE OR REPLACE FUNCTION ${fn}(`)
+      const body = sql.slice(start, sql.indexOf('$$;', start))
+      expect(body.indexOf('FOR UPDATE'), fn).toBeGreaterThan(0)
+      expect(body.indexOf('FOR UPDATE')).toBeLessThan(body.indexOf('cascade_refusal(p_trigger_offer_id)'))
+    }
+    // The reasons, and the app's list of them, agree.
+    const refusal = code(migration).slice(code(migration).indexOf('CREATE OR REPLACE FUNCTION cascade_refusal('))
+    for (const reason of ['not_found', 'auto_off', 'chair_opted_out', 'gig_closed', 'gig_not_active', 'trigger_not_ended', 'already_cascaded', 'already_exhausted', 'chair_filled', 'chair_has_live_offer']) {
+      expect(refusal).toContain(`'${reason}'`)
+    }
+    expect(code(migration)).toMatch(/ADD COLUMN IF NOT EXISTS cascade_exhausted_at timestamptz;/)
+  })
+
   it('deletes nothing and touches no billing or library column', () => {
     expect(code(migration)).not.toMatch(/\bDELETE FROM\b|\bTRUNCATE\b|\bDROP COLUMN\b|\bDROP TABLE\b/i)
     expect(code(migration)).not.toMatch(/is_comped|plan_tier|library_org_id|intake_enabled/)

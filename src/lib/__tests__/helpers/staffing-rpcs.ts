@@ -1,11 +1,12 @@
 import type { MockRpc, MockSupabaseDb, Row } from './supabase-mock'
 
 /**
- * In-memory stand-ins for the two staffing database functions of migration
- * 094, claim_chair and create_offer, so route tests on MockSupabaseDb can run
- * the real server code end to end.
+ * In-memory stand-ins for the staffing database functions: claim_chair and
+ * create_offer (migration 094), cascade_offer and mark_cascade_exhausted
+ * (096), so route tests on MockSupabaseDb can run the real server code end to
+ * end.
  *
- * They follow supabase/migrations/094_cascade_constraints.sql step for step
+ * They follow the migrations step for step
  * (same checks in the same order, same rows written, same staffing_events).
  * The SQL itself, its locking and its behaviour under real concurrency, is
  * tested against Postgres in src/lib/__tests__/db/staffing-rpcs.test.ts; if
@@ -299,8 +300,137 @@ export function createOffer(db: MockSupabaseDb, args: CreateOfferArgs): Row {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Migration 096: the auto-cascade's writes (cascade_refusal, cascade_offer,
+// mark_cascade_exhausted). Tested against Postgres in db/cascade-rpcs.test.ts.
+// ---------------------------------------------------------------------------
+
+/** cascade_refusal: why the cascade may not act on this ended offer, or null. */
+export function cascadeRefusal(db: MockSupabaseDb, triggerOfferId: string): string | null {
+  const trigger = db.row('contract_offers', triggerOfferId)
+  if (!trigger) return 'not_found'
+  const pos = db.row('project_positions', trigger.project_position_id)
+  if (!pos) return 'not_found'
+  const project = projectOf(db, pos)
+  const org = db.row('organizations', project?.organization_id)
+
+  if (org?.auto_cascade !== true) return 'auto_off'
+  if (pos.auto_cascade_disabled === true) return 'chair_opted_out'
+  if (project?.status === 'cancelled' || project?.status === 'completed') return 'gig_closed'
+  if (project?.status !== 'active') return 'gig_not_active'
+  if (!['declined', 'expired', 'released'].includes(trigger.status)) return 'trigger_not_ended'
+  if (table(db, 'contract_offers').some((o) => o.cascaded_from_offer_id === triggerOfferId)) return 'already_cascaded'
+  if (trigger.cascade_exhausted_at) return 'already_exhausted'
+  if (pos.musician_id != null) return 'chair_filled'
+  if (table(db, 'contract_offers').some((o) => o.project_position_id === pos.id && LIVE.includes(o.status))) {
+    return 'chair_has_live_offer'
+  }
+  return null
+}
+
+export interface CascadeOfferArgs {
+  p_trigger_offer_id: string
+  p_musician_id: string
+  p_expires_at: string | null
+  p_custom_pay?: number | null
+  p_terms_snapshot?: Row | null
+  p_delivery_status?: string | null
+}
+
+/** The unique index contract_offers_one_cascade_per_trigger. */
+function oneCascadePerTrigger(db: MockSupabaseDb, candidate: Row) {
+  if (candidate.cascaded_from_offer_id == null) return
+  if (table(db, 'contract_offers').some((o) => o.cascaded_from_offer_id === candidate.cascaded_from_offer_id)) {
+    throw new MockPgError('duplicate key value violates unique constraint "contract_offers_one_cascade_per_trigger"', '23505')
+  }
+}
+
+export function cascadeOffer(db: MockSupabaseDb, args: CascadeOfferArgs): Row {
+  const nowIso = new Date().toISOString()
+  const trigger = db.row('contract_offers', args.p_trigger_offer_id)
+  if (!trigger) return { result: 'not_found' }
+  const pos = db.row('project_positions', trigger.project_position_id)
+  if (!pos) return { result: 'not_found' }
+
+  const refusal = cascadeRefusal(db, args.p_trigger_offer_id)
+  if (refusal) return { result: refusal }
+  if (!args.p_expires_at || new Date(args.p_expires_at).getTime() <= Date.now()) return { result: 'no_time_left' }
+
+  const org = projectOf(db, pos)?.organization_id ?? null
+  const musician = db.row('musicians', args.p_musician_id)
+  if (!musician) return { result: 'musician_not_found' }
+  if (musician.organization_id !== org) return { result: 'wrong_organization' }
+  if (musician.is_active === false) return { result: 'musician_inactive' }
+
+  const gigChairs = new Set(table(db, 'project_positions').filter((p) => p.project_id === pos.project_id).map((p) => p.id))
+  if (
+    table(db, 'contract_offers').some(
+      (o) => gigChairs.has(o.project_position_id) && o.musician_id === args.p_musician_id && ['pending', 'viewed', 'accepted'].includes(o.status)
+    )
+  ) {
+    return { result: 'musician_has_active_offer' }
+  }
+
+  const id = nextId(db, 'contract_offers')
+  const offer: Row = {
+    id,
+    token: `tok-${id}`,
+    project_position_id: pos.id,
+    musician_id: args.p_musician_id,
+    status: 'pending',
+    sent_at: nowIso,
+    expires_at: args.p_expires_at,
+    responded_at: null,
+    viewed_at: null,
+    response_notes: null,
+    custom_pay: args.p_custom_pay ?? null,
+    personal_message: null,
+    created_by: null,
+    terms_snapshot: args.p_terms_snapshot ?? null,
+    delivery_status: args.p_delivery_status ?? null,
+    is_substitution: false,
+    cascaded_from_offer_id: args.p_trigger_offer_id,
+    cascade_exhausted_at: null,
+  }
+  oneCascadePerTrigger(db, offer)
+  insert(db, 'contract_offers', offer)
+  if (pos.status !== 'offered') write(db, 'project_positions', pos, { status: 'offered' })
+
+  logStaffingEvent(db, {
+    org, actorType: 'system', actorId: null, entityType: 'offer', entityId: id, action: 'offer.created',
+    after: { status: 'pending', position_id: pos.id, musician_id: args.p_musician_id, expires_at: offer.expires_at, cascaded_from_offer_id: args.p_trigger_offer_id },
+  })
+  logStaffingEvent(db, {
+    org, actorType: 'system', actorId: null, entityType: 'offer', entityId: id, action: 'cascade.offered',
+    after: { position_id: pos.id, musician_id: args.p_musician_id, trigger_offer_id: args.p_trigger_offer_id, expires_at: offer.expires_at, custom_pay: offer.custom_pay },
+  })
+
+  return {
+    result: 'created',
+    offer: { id, token: offer.token, expires_at: offer.expires_at, custom_pay: offer.custom_pay, personal_message: null },
+  }
+}
+
+export function markCascadeExhausted(db: MockSupabaseDb, args: { p_trigger_offer_id: string }): string {
+  const trigger = db.row('contract_offers', args.p_trigger_offer_id)
+  if (!trigger) return 'not_found'
+  const pos = db.row('project_positions', trigger.project_position_id)
+  if (!pos) return 'not_found'
+  const refusal = cascadeRefusal(db, args.p_trigger_offer_id)
+  if (refusal) return refusal
+
+  write(db, 'contract_offers', trigger, { cascade_exhausted_at: new Date().toISOString() })
+  logStaffingEvent(db, {
+    org: projectOf(db, pos)?.organization_id ?? null, actorType: 'system', actorId: null, entityType: 'offer',
+    entityId: trigger.id, action: 'cascade.exhausted', after: { position_id: pos.id },
+  })
+  return 'marked'
+}
+
 /** The functions MockSupabaseDb.rpc() knows by default. */
 export const STAFFING_RPCS: Record<string, MockRpc> = {
   claim_chair: claimChair,
   create_offer: createOffer,
+  cascade_offer: cascadeOffer,
+  mark_cascade_exhausted: markCascadeExhausted,
 }

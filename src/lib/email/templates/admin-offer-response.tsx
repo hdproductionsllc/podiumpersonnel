@@ -10,6 +10,7 @@ import {
   Preview,
 } from '@react-email/components'
 import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
+import { AutoOfferNoteSection, type AutoOfferNote } from './auto-offer-note'
 
 interface AdminOfferResponseEmailProps {
   adminName?: string
@@ -24,6 +25,8 @@ interface AdminOfferResponseEmailProps {
   responseNotes?: string | null
   dashboardUrl: string
   terms?: TermDictionary
+  /** Auto-offer was on and Podium acted on this decline: say what it did instead of "now vacant". */
+  autoOffer?: AutoOfferNote | null
 }
 
 export function AdminOfferResponseEmail({
@@ -39,6 +42,7 @@ export function AdminOfferResponseEmail({
   responseNotes,
   dashboardUrl,
   terms,
+  autoOffer,
 }: AdminOfferResponseEmailProps) {
   const t = terms ?? DEFAULT_TERMS
   const isAccepted = status === 'accepted'
@@ -106,7 +110,9 @@ export function AdminOfferResponseEmail({
               </>
             )}
 
-            {!isAccepted && (
+            {!isAccepted && autoOffer && <AutoOfferNoteSection note={autoOffer} terms={t} />}
+
+            {!isAccepted && !autoOffer && (
               <Text style={actionText}>
                 The position is now vacant. You may want to send an offer to another {term(t, 'person', { case: 'lower' })}.
               </Text>

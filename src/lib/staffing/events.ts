@@ -39,6 +39,10 @@ export type StaffingAction =
   | 'offer.superseded' // retired because another offer or an assignment replaced it
   | 'offer.rescinded' // the admin withdrew it
   | 'offer.released' // an accepted musician let go (substitute took over, or unassigned)
+  // the auto-cascade (096; cascade.ts), actor 'system'
+  | 'cascade.offered' // an ended offer's chair was offered to the next person (written by cascade_offer)
+  | 'cascade.exhausted' // nobody left to offer it to; the admins are emailed once (mark_cascade_exhausted)
+  | 'cascade.skipped' // auto-offer is on but did nothing, with the reason
   // chairs
   | 'position.assigned' // seated without an offer being accepted (direct assign, book)
   | 'position.unassigned'

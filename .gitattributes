@@ -1,2 +1,5 @@
 # Mac double-click launcher must keep Unix line endings or macOS rejects the shebang.
 *.command text eol=lf
+
+# Golden test files are compared byte for byte; Windows line endings would fail them.
+src/lib/__tests__/__golden__/** text eol=lf

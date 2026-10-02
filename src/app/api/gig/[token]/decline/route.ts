@@ -7,6 +7,7 @@ import { markOfferDeclined, notifySubDeclined, countChairs, isOfferClosed } from
 import { isLiveOffer } from '@/lib/staffing/live'
 import { releaseSeat } from '@/lib/staffing/seats'
 import { logEvent, musicianActor, type StaffingEvent } from '@/lib/staffing/events'
+import { advance, autoOfferNote } from '@/lib/staffing/cascade'
 
 export async function POST(
   _request: Request,
@@ -177,6 +178,15 @@ async function handleDecline(_request: Request, token: string) {
 
   await logEvent(events)
 
+  // Auto-offer: with the organization's switch on, offer the chair to the next
+  // person now (cascade.ts). Never for a substitute's offer: the chair is still
+  // the original musician's. advance() never throws, and the decline above is
+  // already committed whatever it does.
+  const cascade = subRequest
+    ? null
+    : await advance(supabase, { positionId: offer.project_position_id, triggerOfferId: offer.id, trigger: 'declined' })
+  const autoOffer = autoOfferNote(cascade, timezone)
+
   // Send confirmation emails (don't block on failure)
   try {
     const totalChairs = await countChairs(supabase, project?.id, instrument?.id)
@@ -231,6 +241,7 @@ async function handleDecline(_request: Request, token: string) {
           responseNotes: offer.response_notes,
           dashboardUrl: `${baseUrl}/dashboard/projects`,
           performanceDate,
+          ...(autoOffer ? { autoOffer } : {}),
         }).catch((err) => console.warn('Failed to send admin notification:', err))
       }
     }

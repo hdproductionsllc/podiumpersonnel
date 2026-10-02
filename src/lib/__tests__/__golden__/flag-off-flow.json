@@ -1,0 +1,171 @@
+{
+  "emails": [
+    {
+      "kind": "sendOfferDeclinedEmail",
+      "args": {
+        "to": "mus-v2-a@example.com",
+        "musicianName": "V2A Player",
+        "organizationName": "Test Quartet Co",
+        "organizationId": "org-quartet",
+        "projectName": "Smith Wedding",
+        "instrument": "Violin",
+        "chairNumber": 2,
+        "totalChairs": 2,
+        "declineReason": null,
+        "performanceDate": "Nov 7"
+      }
+    },
+    {
+      "kind": "sendAdminOfferResponseEmail",
+      "args": {
+        "to": [
+          "admin@example.com"
+        ],
+        "organizationName": "Test Quartet Co",
+        "projectName": "Smith Wedding",
+        "musicianName": "V2A Player",
+        "musicianEmail": "mus-v2-a@example.com",
+        "instrument": "Violin",
+        "chairNumber": 2,
+        "totalChairs": 2,
+        "status": "declined",
+        "responseNotes": null,
+        "dashboardUrl": "http://localhost:3000/dashboard/projects",
+        "performanceDate": "Nov 7"
+      }
+    },
+    {
+      "kind": "sendOfferExpiredEmail",
+      "args": {
+        "to": [
+          "admin@example.com"
+        ],
+        "organizationName": "Test Quartet Co",
+        "projectName": "Smith Wedding",
+        "musicianName": "VIOLAA Player",
+        "instrument": "Viola",
+        "chairNumber": 1,
+        "totalChairs": 1,
+        "nextCandidate": {
+          "name": "VIOLAB Player",
+          "email": "mus-viola-b@example.com",
+          "callOrder": 2
+        },
+        "dashboardUrl": "http://localhost:3000/dashboard/projects?expand=proj-wedding",
+        "performanceDate": "Nov 7"
+      }
+    },
+    {
+      "kind": "sendOfferExpiredEmail",
+      "args": {
+        "to": [
+          "admin@example.com"
+        ],
+        "organizationName": "Test Quartet Co",
+        "projectName": "Smith Wedding",
+        "musicianName": "CELLOC Player",
+        "instrument": "Cello",
+        "chairNumber": 1,
+        "totalChairs": 1,
+        "nextCandidate": null,
+        "dashboardUrl": "http://localhost:3000/dashboard/projects?expand=proj-wedding",
+        "performanceDate": "Nov 7"
+      }
+    }
+  ],
+  "emailLogs": [
+    {
+      "organizationId": "org-quartet",
+      "recipientEmail": "mus-v2-a@example.com",
+      "recipientName": "V2A Player",
+      "subject": "offer-declined",
+      "emailType": "offer_declined",
+      "musicianId": "mus-v2-a",
+      "projectId": "proj-wedding",
+      "offerId": "offer-1",
+      "resendEmailId": "offer-declined",
+      "body": "<p>offer-declined</p>"
+    },
+    {
+      "organizationId": "org-quartet",
+      "recipientEmail": "admin@example.com",
+      "subject": "offer-expired",
+      "emailType": "offer_expired",
+      "musicianId": "mus-viola-a",
+      "projectId": "proj-wedding",
+      "offerId": "offer-2",
+      "resendEmailId": "offer-expired",
+      "metadata": {
+        "allRecipients": [
+          "admin@example.com"
+        ]
+      },
+      "body": "<p>offer-expired</p>"
+    },
+    {
+      "organizationId": "org-quartet",
+      "recipientEmail": "admin@example.com",
+      "subject": "offer-expired",
+      "emailType": "offer_expired",
+      "musicianId": "mus-cello-c",
+      "projectId": "proj-wedding",
+      "offerId": "offer-5",
+      "resendEmailId": "offer-expired",
+      "metadata": {
+        "allRecipients": [
+          "admin@example.com"
+        ]
+      },
+      "body": "<p>offer-expired</p>"
+    }
+  ],
+  "offers": [
+    {
+      "id": "offer-1",
+      "musician_id": "mus-v2-a",
+      "status": "declined"
+    },
+    {
+      "id": "offer-2",
+      "musician_id": "mus-viola-a",
+      "status": "expired"
+    },
+    {
+      "id": "offer-3",
+      "musician_id": "mus-cello-a",
+      "status": "declined"
+    },
+    {
+      "id": "offer-4",
+      "musician_id": "mus-cello-b",
+      "status": "expired"
+    },
+    {
+      "id": "offer-5",
+      "musician_id": "mus-cello-c",
+      "status": "expired"
+    }
+  ],
+  "chairs": [
+    {
+      "id": "pos-v1",
+      "status": "vacant",
+      "musician_id": null
+    },
+    {
+      "id": "pos-v2",
+      "status": "vacant",
+      "musician_id": null
+    },
+    {
+      "id": "pos-viola",
+      "status": "vacant",
+      "musician_id": null
+    },
+    {
+      "id": "pos-cello",
+      "status": "vacant",
+      "musician_id": null
+    }
+  ]
+}

@@ -9,6 +9,7 @@ import { notifySubDeclined } from '@/lib/staffing/respond'
 import { LIVE_OFFER_STATUSES } from '@/lib/staffing/live'
 import { releaseSeat } from '@/lib/staffing/seats'
 import { logEvent, SYSTEM, type StaffingEvent } from '@/lib/staffing/events'
+import { advance, autoOfferNote, isAutoCascadeOn } from '@/lib/staffing/cascade'
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request)
@@ -70,6 +71,9 @@ export async function GET(request: NextRequest) {
   // History for the whole run, written in one insert after the loop so a slow
   // database adds at most one LOG_TIMEOUT_MS to the run, not one per offer.
   const runEvents: StaffingEvent[] = []
+  // Which organizations have auto-offer on, read once per organization per run.
+  const autoCascadeByOrg = new Map<string, boolean>()
+  let autoOffered = 0
 
   try {
     for (let i = 0; i < expiredOffers.length; i++) {
@@ -205,17 +209,34 @@ export async function GET(request: NextRequest) {
           ...(subRequest ? { substitution_request_id: subRequest.id } : {}),
         },
       })
-      runEvents.push(...events)
+      // 1c. Auto-offer (cascade.ts), for organizations that switched it on. Not
+      // for a substitute's offer: the chair is still the original musician's.
+      // This expiry's history is written first, so it reads in order; advance()
+      // never throws, so one chair's trouble cannot stop the run.
+      let autoOffer: ReturnType<typeof autoOfferNote>
+      const orgId: string = project.organization_id
+      if (!autoCascadeByOrg.has(orgId)) autoCascadeByOrg.set(orgId, await isAutoCascadeOn(supabase, orgId))
+      if (!subRequest && autoCascadeByOrg.get(orgId)) {
+        await logEvent(events)
+        const cascade = await advance(supabase, { positionId: position.id, triggerOfferId: offer.id, trigger: 'expired' })
+        if (cascade.outcome === 'offered') autoOffered++
+        autoOffer = autoOfferNote(cascade, organization?.timezone)
+      } else {
+        runEvents.push(...events)
+      }
 
-      // 2. Find next candidate
-      const { candidates } = await getNextCandidates(supabase, position.id, 1)
-      const nextCandidate = candidates.length > 0 && !candidates[0].has_conflict
-        ? {
-            name: `${candidates[0].first_name} ${candidates[0].last_name}`,
-            email: candidates[0].email,
-            callOrder: candidates[0].call_order,
-          }
-        : null
+      // 2. Find next candidate (not needed when Podium already acted on it)
+      let nextCandidate: { name: string; email: string; callOrder: number | null } | null = null
+      if (!autoOffer) {
+        const { candidates } = await getNextCandidates(supabase, position.id, 1)
+        nextCandidate = candidates.length > 0 && !candidates[0].has_conflict
+          ? {
+              name: `${candidates[0].first_name} ${candidates[0].last_name}`,
+              email: candidates[0].email,
+              callOrder: candidates[0].call_order,
+            }
+          : null
+      }
 
       // 3. Count total chairs for this instrument (for email display)
       let totalChairs = 1
@@ -244,6 +265,7 @@ export async function GET(request: NextRequest) {
             nextCandidate,
             dashboardUrl: `${baseUrl}/dashboard/projects?expand=${project.id}`,
             performanceDate,
+            ...(autoOffer ? { autoOffer } : {}),
           })
           emailsSent++
 
@@ -272,12 +294,13 @@ export async function GET(request: NextRequest) {
     await logEvent(runEvents)
   }
 
-  console.log(`Cron: expired ${processed} offers, sent ${emailsSent} notification emails, ${emailFailures} failed`)
+  console.log(`Cron: expired ${processed} offers, sent ${emailsSent} notification emails, ${emailFailures} failed${autoOffered ? `, ${autoOffered} offered on automatically` : ''}`)
 
   return NextResponse.json({
     expired: processed,
     emailsSent,
     emailFailures,
+    ...(autoOffered ? { autoOffered } : {}),
   })
   })
 }

@@ -10,6 +10,7 @@ import {
   Preview,
 } from '@react-email/components'
 import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
+import { AutoOfferNoteSection, type AutoOfferNote } from './auto-offer-note'
 
 interface NextCandidateInfo {
   name: string
@@ -27,6 +28,8 @@ interface OfferExpiredEmailProps {
   nextCandidate: NextCandidateInfo | null
   dashboardUrl: string
   terms?: TermDictionary
+  /** Auto-offer was on and Podium acted on this expiry: say what it did instead of naming who is next. */
+  autoOffer?: AutoOfferNote | null
 }
 
 export function OfferExpiredEmail({
@@ -39,6 +42,7 @@ export function OfferExpiredEmail({
   nextCandidate,
   dashboardUrl,
   terms,
+  autoOffer,
 }: OfferExpiredEmailProps) {
   const t = terms ?? DEFAULT_TERMS
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
@@ -79,7 +83,9 @@ export function OfferExpiredEmail({
               </Text>
             </Section>
 
-            {nextCandidate ? (
+            {autoOffer ? (
+              <AutoOfferNoteSection note={autoOffer} terms={t} />
+            ) : nextCandidate ? (
               <Section style={nextCandidateBox}>
                 <Text style={sectionTitle}>Next on the call list:</Text>
                 <Text style={candidateName}>
@@ -98,9 +104,11 @@ export function OfferExpiredEmail({
               </Section>
             )}
 
-            <Text style={actionText}>
-              Visit the dashboard to send an offer to the next {term(t, 'person', { case: 'lower' })}.
-            </Text>
+            {!autoOffer && (
+              <Text style={actionText}>
+                Visit the dashboard to send an offer to the next {term(t, 'person', { case: 'lower' })}.
+              </Text>
+            )}
 
             <Section style={buttonContainer}>
               <Button style={button} href={dashboardUrl}>

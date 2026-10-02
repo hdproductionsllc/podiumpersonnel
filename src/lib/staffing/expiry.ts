@@ -72,6 +72,38 @@ export function capNoExpiryAtGigStart(
 }
 
 /**
+ * The deadline of an offer the auto-cascade makes (owner decision, Release 1
+ * batch 2): the same response window the ended offer gave (its expires_at
+ * minus its sent_at), starting now; DEFAULT_OFFER_EXPIRY when that window is
+ * unknown (no deadline, no send time, or nonsense); and never later than the
+ * gig's first service start.
+ *
+ * Returns null when there is no time left to answer: the gig's first service
+ * has already started. The cascade then does not offer at all.
+ */
+export function cascadeExpiresAt(
+  ended: { sent_at?: string | null; expires_at?: string | null },
+  serviceStarts: readonly (string | null | undefined)[],
+  now: number = Date.now()
+): string | null {
+  const sent = ended.sent_at ? new Date(ended.sent_at).getTime() : NaN
+  const expires = ended.expires_at ? new Date(ended.expires_at).getTime() : NaN
+  const window =
+    Number.isFinite(sent) && Number.isFinite(expires) && expires > sent
+      ? expires - sent
+      : new Date(resolveExpiresAt(DEFAULT_OFFER_EXPIRY, 0)!).getTime()
+
+  const starts = serviceStarts
+    .map((s) => (s ? new Date(s).getTime() : NaN))
+    .filter((t) => Number.isFinite(t))
+  const firstStart = starts.length > 0 ? Math.min(...starts) : null
+  if (firstStart !== null && firstStart <= now) return null
+
+  const end = firstStart === null ? now + window : Math.min(now + window, firstStart)
+  return new Date(end).toISOString()
+}
+
+/**
  * The dialog's "Response deadline" select, as an expiry. `value` is the
  * select's value ('0.17' ASAP, '1' / '2' / '7' days, 'custom', '' none) and
  * `customDate` the date input (YYYY-MM-DD). A custom date means the end of that

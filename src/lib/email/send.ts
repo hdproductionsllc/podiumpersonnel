@@ -17,6 +17,8 @@ import { MusicianReleasedEmail } from './templates/musician-released'
 import { SubDeclinedFindAnotherEmail } from './templates/sub-declined-find-another'
 import { AdminWelcomeEmail } from './templates/admin-welcome'
 import { OfferExpiredEmail } from './templates/offer-expired'
+import { CascadeExhaustedEmail } from './templates/cascade-exhausted'
+import type { AutoOfferNote } from './templates/auto-offer-note'
 import { OfferExpiringSoonEmail } from './templates/offer-expiring-soon'
 import { GigDetailsEmail } from './templates/gig-details'
 import { GigDetailsReminderEmail } from './templates/gig-details-reminder'
@@ -420,6 +422,8 @@ interface SendAdminOfferResponseParams {
   dashboardUrl: string
   performanceDate?: string
   terms?: TermDictionary
+  /** Only when auto-offer acted on this decline (see AutoOfferNote); omitted, the email is unchanged. */
+  autoOffer?: AutoOfferNote
 }
 
 export async function sendAdminOfferResponseEmail(params: SendAdminOfferResponseParams) {
@@ -445,6 +449,7 @@ export async function sendAdminOfferResponseEmail(params: SendAdminOfferResponse
       responseNotes: params.responseNotes,
       dashboardUrl: params.dashboardUrl,
       terms,
+      ...(params.autoOffer ? { autoOffer: params.autoOffer } : {}),
     }),
     errorContext: 'admin offer response',
   })
@@ -817,6 +822,8 @@ interface SendOfferExpiredParams {
   dashboardUrl: string
   performanceDate?: string
   terms?: TermDictionary
+  /** Only when auto-offer acted on this expiry (see AutoOfferNote); omitted, the email is unchanged. */
+  autoOffer?: AutoOfferNote
 }
 
 export async function sendOfferExpiredEmail(params: SendOfferExpiredParams) {
@@ -834,8 +841,47 @@ export async function sendOfferExpiredEmail(params: SendOfferExpiredParams) {
       nextCandidate: params.nextCandidate,
       dashboardUrl: params.dashboardUrl,
       terms,
+      ...(params.autoOffer ? { autoOffer: params.autoOffer } : {}),
     }),
     errorContext: 'offer expired',
+  })
+}
+
+// Auto-offer ran out of people for a position (to admins, once per exhaustion)
+interface SendCascadeExhaustedParams {
+  to: string | string[]
+  organizationName: string
+  projectName: string
+  instrument: string
+  chairNumber: number
+  totalChairs?: number
+  lastMusicianName: string
+  lastOutcome: 'declined' | 'expired' | 'dropped'
+  dashboardUrl: string
+  performanceDate?: string
+  terms?: TermDictionary
+}
+
+export async function sendCascadeExhaustedEmail(params: SendCascadeExhaustedParams) {
+  const terms = await resolveEmailTerms(params.terms, undefined)
+  const showChair = params.totalChairs !== undefined ? params.totalChairs > 1 : true
+  const position = `${params.instrument}${showChair && terms.rank ? ` ${term(terms, 'rank')} ${params.chairNumber}` : ''}`
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`Nobody left for ${position} - ${params.projectName}`, params.performanceDate || ''),
+    react: CascadeExhaustedEmail({
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      instrument: params.instrument,
+      chairNumber: params.chairNumber,
+      totalChairs: params.totalChairs,
+      lastMusicianName: params.lastMusicianName,
+      lastOutcome: params.lastOutcome,
+      performanceDate: params.performanceDate,
+      dashboardUrl: params.dashboardUrl,
+      terms,
+    }),
+    errorContext: 'cascade exhausted',
   })
 }
 
