@@ -18,6 +18,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  *   unassigned
  *     The admin is deliberately taking the chair away from the musician who
  *     holds it. No guard: clearing a held chair is the whole point.
+ *
+ * A worker dropping out ("I can't make it", drop.ts) frees their chair inside
+ * the database function worker_drop (096), in the same transaction that
+ * releases their offer, so it never goes through here: a separate write could
+ * fail and leave a released worker in the chair.
  */
 export type SeatReleaseReason = 'declined' | 'expired' | 'rescinded' | 'unassigned'
 

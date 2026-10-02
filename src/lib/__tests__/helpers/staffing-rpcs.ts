@@ -2,8 +2,8 @@ import type { MockRpc, MockSupabaseDb, Row } from './supabase-mock'
 
 /**
  * In-memory stand-ins for the staffing database functions: claim_chair and
- * create_offer (migration 094), cascade_offer and mark_cascade_exhausted
- * (096), so route tests on MockSupabaseDb can run the real server code end to
+ * create_offer (migration 094), cascade_offer, mark_cascade_exhausted and
+ * worker_drop (096), so route tests on MockSupabaseDb can run the real server code end to
  * end.
  *
  * They follow the migrations step for step
@@ -466,10 +466,54 @@ export function markCascadeExhausted(db: MockSupabaseDb, args: { p_trigger_offer
   return 'marked'
 }
 
+/** worker_drop (096): an accepted worker gives the gig back. Tested against Postgres in db/cascade-rpcs.test.ts. */
+export function workerDrop(db: MockSupabaseDb, args: { p_offer_id: string; p_reason?: string | null }): string {
+  const offer = db.row('contract_offers', args.p_offer_id)
+  if (!offer) return 'not_found'
+  const pos = db.row('project_positions', offer.project_position_id)
+  if (!pos) return 'not_found'
+  if (offer.status === 'released') return 'already_released'
+  if (offer.status !== 'accepted') return 'not_accepted'
+
+  const project = projectOf(db, pos)
+  const org = db.row('organizations', project?.organization_id)
+  if (!project) return 'not_found'
+  if (org?.allow_worker_drop !== true) return 'not_allowed'
+  if (project.status === 'cancelled' || project.status === 'completed') return 'project_inactive'
+  if (table(db, 'services').some((s) => s.project_id === pos.project_id && new Date(s.start_time).getTime() <= Date.now())) {
+    return 'gig_started'
+  }
+  if (pos.musician_id !== offer.musician_id) return 'not_seated'
+  if (
+    table(db, 'substitution_requests').some(
+      (r) =>
+        r.project_position_id === pos.id &&
+        r.requesting_musician_id === offer.musician_id &&
+        ['pending_approval', 'approved'].includes(r.status)
+    )
+  ) {
+    return 'substitution_in_progress'
+  }
+
+  const note = (args.p_reason ?? '').trim().slice(0, 1000) || null
+  write(db, 'contract_offers', offer, { status: 'released' })
+  write(db, 'project_positions', pos, { musician_id: null, status: 'vacant' })
+  logStaffingEvent(db, {
+    org: project.organization_id ?? null, actorType: 'musician', actorId: offer.musician_id, entityType: 'offer',
+    entityId: offer.id, action: 'offer.released', before: { status: 'accepted' },
+    after: {
+      status: 'released', reason: 'dropped', position_id: pos.id, musician_id: offer.musician_id, seat_released: true,
+      ...(note ? { note } : {}),
+    },
+  })
+  return 'released'
+}
+
 /** The functions MockSupabaseDb.rpc() knows by default. */
 export const STAFFING_RPCS: Record<string, MockRpc> = {
   claim_chair: claimChair,
   create_offer: createOffer,
   cascade_offer: cascadeOffer,
   mark_cascade_exhausted: markCascadeExhausted,
+  worker_drop: workerDrop,
 }

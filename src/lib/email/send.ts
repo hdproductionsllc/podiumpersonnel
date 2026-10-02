@@ -18,6 +18,7 @@ import { SubDeclinedFindAnotherEmail } from './templates/sub-declined-find-anoth
 import { AdminWelcomeEmail } from './templates/admin-welcome'
 import { OfferExpiredEmail } from './templates/offer-expired'
 import { CascadeExhaustedEmail } from './templates/cascade-exhausted'
+import { AdminWorkerDroppedEmail } from './templates/admin-worker-dropped'
 import type { AutoOfferNote } from './templates/auto-offer-note'
 import { OfferExpiringSoonEmail } from './templates/offer-expiring-soon'
 import { GigDetailsEmail } from './templates/gig-details'
@@ -861,11 +862,13 @@ interface SendCascadeExhaustedParams {
   performanceDate?: string
   /** Free on the call list, but no email address on file. */
   noEmailNames?: string[]
+  /** Resolves the vertical's words (chair, musicians) when terms is not given. */
+  organizationId?: string
   terms?: TermDictionary
 }
 
 export async function sendCascadeExhaustedEmail(params: SendCascadeExhaustedParams) {
-  const terms = await resolveEmailTerms(params.terms, undefined)
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
   const showChair = params.totalChairs !== undefined ? params.totalChairs > 1 : true
   const position = `${params.instrument}${showChair && terms.rank ? ` ${term(terms, 'rank')} ${params.chairNumber}` : ''}`
   return sendTransactional({
@@ -885,6 +888,50 @@ export async function sendCascadeExhaustedEmail(params: SendCascadeExhaustedPara
       terms,
     }),
     errorContext: 'cascade exhausted',
+  })
+}
+
+// A worker who had accepted pressed "I can't make it" (to admins)
+interface SendAdminWorkerDroppedParams {
+  to: string | string[]
+  organizationName: string
+  organizationId?: string
+  projectName: string
+  musicianName: string
+  musicianEmail?: string | null
+  instrument: string
+  chairNumber: number
+  totalChairs?: number
+  reason?: string | null
+  dashboardUrl: string
+  performanceDate?: string
+  /** What auto-offer did next; absent when it is off. */
+  autoOffer?: AutoOfferNote
+  terms?: TermDictionary
+}
+
+export async function sendAdminWorkerDroppedEmail(params: SendAdminWorkerDroppedParams) {
+  const terms = await resolveEmailTerms(params.terms, params.organizationId)
+  const showChair = params.totalChairs !== undefined ? params.totalChairs > 1 : true
+  const position = `${params.instrument}${showChair && terms.rank ? ` ${term(terms, 'rank')} ${params.chairNumber}` : ''}`
+  return sendTransactional({
+    to: params.to,
+    subject: withDate(`${params.musicianName} can't make it: ${position} - ${params.projectName}`, params.performanceDate || ''),
+    react: AdminWorkerDroppedEmail({
+      organizationName: params.organizationName,
+      projectName: params.projectName,
+      musicianName: params.musicianName,
+      musicianEmail: params.musicianEmail,
+      instrument: params.instrument,
+      chairNumber: params.chairNumber,
+      totalChairs: params.totalChairs,
+      reason: params.reason,
+      performanceDate: params.performanceDate,
+      dashboardUrl: params.dashboardUrl,
+      terms,
+      ...(params.autoOffer ? { autoOffer: params.autoOffer } : {}),
+    }),
+    errorContext: 'worker dropped',
   })
 }
 

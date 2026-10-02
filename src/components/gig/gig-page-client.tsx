@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { SubRequestForm } from './sub-request-form'
 import { describeGigOffer, type GigOfferTone } from '@/lib/staffing/gig-offer-state'
 
@@ -77,6 +79,13 @@ interface GigPageClientProps {
   workTerm?: string
   /** Its word for the chair, lowercase, or '' when the vertical has none. */
   rankTerm?: string
+  /**
+   * Offer "I can't make it": accepted, the gig not started, and the
+   * organization allows workers to drop (organizations.allow_worker_drop).
+   */
+  canDrop?: boolean
+  /** How a released offer was released ('dropped' = they said they can't make it). */
+  releasedReason?: string | null
 }
 
 const TONE_CLASSES: Record<GigOfferTone, string> = {
@@ -112,13 +121,16 @@ export function GigPageClient({
   chairHeldByOther = false,
   workTerm,
   rankTerm,
+  canDrop = false,
+  releasedReason = null,
 }: GigPageClientProps) {
   const [showSubRequestForm, setShowSubRequestForm] = useState(false)
   const [subRequestSubmitted, setSubRequestSubmitted] = useState(false)
   const [currentSubRequest, setCurrentSubRequest] = useState(existingSubRequest)
   // Tracks which native form is submitting so we can disable both buttons and
   // avoid double-taps on slow mobile connections (the POST does a full redirect).
-  const [submitting, setSubmitting] = useState<false | 'accept' | 'decline'>(false)
+  const [submitting, setSubmitting] = useState<false | 'accept' | 'decline' | 'drop'>(false)
+  const [showDropConfirm, setShowDropConfirm] = useState(false)
 
   const offerState = describeGigOffer({
     offerStatus,
@@ -129,12 +141,19 @@ export function GigPageClient({
     workTerm,
     rankTerm,
     organizationName,
+    releasedReason,
   })
   const canRespond = offerState.key === 'open'
   // Sub requests never needed an account: /api/gig/[token]/request-sub authorizes
   // on the token alone and enforces the plan gate server-side. Requiring one here
   // only hid the button from the musicians most likely to need it.
   const canRequestSub = offerState.key === 'accepted' && !currentSubRequest && subsEnabled
+  // A substitute who is still being arranged has to be settled first (the
+  // server refuses the drop too), so the button waits until then.
+  const subInProgress =
+    subRequestSubmitted || currentSubRequest?.status === 'pending_approval' || currentSubRequest?.status === 'approved'
+  const showDrop = canDrop && offerState.key === 'accepted' && !subInProgress
+  const work = workTerm || 'project'
 
   function handleSubRequestSuccess() {
     setShowSubRequestForm(false)
@@ -460,6 +479,57 @@ export function GigPageClient({
                         Submit New Sub Request
                       </Button>
                     )}
+
+                  {showDrop && !showDropConfirm && (
+                    <Button
+                      variant="ghost"
+                      className="w-full text-muted-foreground"
+                      onClick={() => setShowDropConfirm(true)}
+                    >
+                      I can&apos;t make it
+                    </Button>
+                  )}
+
+                  {showDrop && showDropConfirm && (
+                    <form
+                      action={`/api/gig/${token}/drop`}
+                      method="POST"
+                      className="space-y-3 rounded-md border border-destructive/40 p-4"
+                      onSubmit={() => setSubmitting('drop')}
+                      data-drop-confirm
+                    >
+                      <p className="text-sm font-medium">Are you sure you can&apos;t make it?</p>
+                      <p className="text-sm text-muted-foreground">
+                        You will no longer be booked for this {work}, and {organizationName} will be told right away so
+                        they can find someone else. You can&apos;t undo this from here.
+                      </p>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="drop-reason" className="text-sm">
+                          Anything {organizationName} should know? (optional)
+                        </Label>
+                        <Textarea id="drop-reason" name="reason" rows={3} maxLength={1000} />
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <Button
+                          type="submit"
+                          variant="destructive"
+                          disabled={submitting !== false}
+                          className="flex-1"
+                        >
+                          {submitting === 'drop' ? 'Letting them know…' : 'Yes, I can’t make it'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={submitting !== false}
+                          className="flex-1"
+                          onClick={() => setShowDropConfirm(false)}
+                        >
+                          Keep me booked
+                        </Button>
+                      </div>
+                    </form>
+                  )}
                 </div>
               )}
 

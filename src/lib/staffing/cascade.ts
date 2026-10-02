@@ -343,6 +343,7 @@ async function exhaustedEmail(
   return {
     to: adminEmails,
     organizationName: organization?.name || 'Your Organization',
+    organizationId: project?.organization_id,
     projectName: project?.name || 'Project',
     instrument: instrument?.name || 'Instrument',
     chairNumber: position?.chair_number || 1,

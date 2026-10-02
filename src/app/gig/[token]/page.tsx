@@ -8,6 +8,8 @@ import { DEFAULT_TIMEZONE } from '@/lib/utils'
 import { isOfferClosed } from '@/lib/staffing/respond'
 import { hasLiveStatus } from '@/lib/staffing/live'
 import { logEvent, musicianActor } from '@/lib/staffing/events'
+import { getOrgStaffingSettings } from '@/lib/staffing/settings'
+import { gigHasStarted } from '@/lib/staffing/drop'
 
 interface GigPageProps {
   params: Promise<{ token: string }>
@@ -202,6 +204,36 @@ export default async function GigPage({ params }: GigPageProps) {
     }
   }
 
+  // "I can't make it" (src/lib/staffing/drop.ts): offered to someone who
+  // accepted, before the gig starts, where the organization allows it
+  // (organizations.allow_worker_drop; off for music organizations, which keep
+  // the substitute request). Unreadable settings (096 not applied) mean off.
+  let canDrop = false
+  if (offerData.status === 'accepted' && position?.project?.organization_id && !isOfferClosed(position.project, musician)) {
+    const settings = await getOrgStaffingSettings(supabase, position.project.organization_id)
+    canDrop = settings?.allowWorkerDrop === true && !gigHasStarted(services.map((s: { start_time: string }) => s.start_time))
+  }
+
+  // A released offer: whether they dropped out themselves (their sentence
+  // says so) or were released another way. Read from the offer's history.
+  let releasedReason: string | null = null
+  if (offerData.status === 'released') {
+    const { data: releasedEvent, error: releasedError } = await supabase
+      .from('staffing_events')
+      .select('after')
+      .eq('entity_id', offerData.id)
+      .eq('action', 'offer.released')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (releasedError) {
+      // The page still renders with the general "released" sentence.
+      console.warn(`gig page: could not read how offer ${offerData.id} was released:`, releasedError)
+    }
+    const reason = (releasedEvent?.after as { reason?: unknown } | null)?.reason
+    releasedReason = typeof reason === 'string' ? reason : null
+  }
+
   // An offer on a cancelled/completed gig, or to a deactivated musician, still
   // says pending but can no longer be answered (the accept/decline routes refuse
   // it). It is not marked viewed, and the page shows it closed with the reason
@@ -287,6 +319,8 @@ export default async function GigPage({ params }: GigPageProps) {
       chairHeldByOther={chairHeldByOther}
       workTerm={workTerm}
       rankTerm={rankTerm}
+      canDrop={canDrop}
+      releasedReason={releasedReason}
     />
   )
 }

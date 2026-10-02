@@ -58,6 +58,8 @@ export interface GigOfferStateInput {
   /** Its word for the chair, lowercase, or '' for a vertical without chairs. */
   rankTerm?: string
   organizationName?: string
+  /** Why a 'released' offer was released, when the page knows: 'dropped' = the worker said they can't make it. */
+  releasedReason?: string | null
   now?: Date
 }
 
@@ -129,6 +131,13 @@ export function describeGigOffer(input: GigOfferStateInput): GigOfferState {
         message: `This offer has been replaced and is no longer open. ${NO_RESPONSE} If you received a newer offer, please answer that one.`,
       }
     case 'released':
+      if (input.releasedReason === 'dropped') {
+        return {
+          key: 'released',
+          tone: 'neutral',
+          message: `You let ${org} know you can't make it, so you are no longer booked for this ${work}. No action is needed.`,
+        }
+      }
       return { key: 'released', tone: 'neutral', message: 'You have been released from this engagement. No action is needed.' }
     default:
       return { key: 'closed', tone: 'neutral', message: `This offer is no longer open. ${NO_RESPONSE}` }

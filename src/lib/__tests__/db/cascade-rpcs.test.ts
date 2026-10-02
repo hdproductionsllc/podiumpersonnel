@@ -9,6 +9,7 @@ import { adminClient, asUser } from './helpers'
  *   cascade_offer           offers an ended offer's chair to the next musician
  *   mark_cascade_exhausted  claims the one "nobody left" email for an ended offer
  *   cascade_refusal         every reason both of them stop
+ *   worker_drop             an accepted worker gives the gig back ("I can't make it")
  *
  * The in-memory copies in helpers/staffing-rpcs.ts follow these; this file is
  * what says the SQL itself is right, including under real concurrency (two
@@ -377,8 +378,160 @@ describe('mark_cascade_exhausted', () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+
+/** An accepted offer on the gig's chair, with the musician seated, as claim_chair leaves it. */
+async function acceptedOffer(g: Gig, musician = g.musicians[0], chair = g.chairId): Promise<string> {
+  const id = randomUUID()
+  await db.query("insert into contract_offers (id, project_position_id, musician_id, status) values ($1, $2, $3, 'accepted')", [
+    id,
+    chair,
+    musician,
+  ])
+  await db.query("update project_positions set musician_id = $1, status = 'confirmed' where id = $2", [musician, chair])
+  return id
+}
+
+async function allowDrop(g: Gig, allow = true) {
+  await db.query('update organizations set allow_worker_drop = $1 where id = $2', [allow, g.orgId])
+}
+
+async function workerDrop(client: Client, offerId: string, reason: string | null = null): Promise<string> {
+  const { rows } = await client.query('select worker_drop($1, $2) as r', [offerId, reason])
+  return rows[0].r
+}
+
+const offerStatus = async (offerId: string) =>
+  (await db.query('select status from contract_offers where id = $1', [offerId])).rows[0].status
+
+describe('worker_drop', () => {
+  it('releases the offer and empties the chair in one go, recorded with the worker as the actor', async () => {
+    const g = await gig()
+    await allowDrop(g)
+    const offer = await acceptedOffer(g)
+    expect(await workerDrop(db, offer, '  Sick, sorry  ')).toBe('released')
+
+    expect(await offerStatus(offer)).toBe('released')
+    const chair = await db.query('select musician_id, status from project_positions where id = $1', [g.chairId])
+    expect(chair.rows[0]).toEqual({ musician_id: null, status: 'vacant' })
+
+    const history = await db.query(
+      "select actor_type, actor_id, before, after from staffing_events where entity_id = $1 and action = 'offer.released'",
+      [offer]
+    )
+    expect(history.rows).toEqual([
+      {
+        actor_type: 'musician',
+        actor_id: g.musicians[0],
+        before: { status: 'accepted' },
+        after: {
+          status: 'released',
+          reason: 'dropped',
+          position_id: g.chairId,
+          musician_id: g.musicians[0],
+          seat_released: true,
+          note: 'Sick, sorry',
+        },
+      },
+    ])
+  })
+
+  it('the dropped offer can start the auto-offer, and its worker is not asked again', async () => {
+    const g = await gig()
+    await allowDrop(g)
+    const offer = await acceptedOffer(g)
+    await workerDrop(db, offer)
+    expect((await cascade(db, offer, g.musicians[0])).result).toBe('musician_had_turn')
+    expect((await cascade(db, offer, g.musicians[1])).result).toBe('created')
+  })
+
+  it('a second call changes nothing', async () => {
+    const g = await gig()
+    await allowDrop(g)
+    const offer = await acceptedOffer(g)
+    expect(await workerDrop(db, offer)).toBe('released')
+    expect(await workerDrop(db, offer)).toBe('already_released')
+    const events = await db.query(
+      "select count(*)::int as n from staffing_events where entity_id = $1 and action = 'offer.released'",
+      [offer]
+    )
+    expect(events.rows[0].n).toBe(1)
+  })
+
+  it('two connections at once: one drop', async () => {
+    const g = await gig()
+    await allowDrop(g)
+    const offer = await acceptedOffer(g)
+    const results = await Promise.all([workerDrop(db, offer), workerDrop(other, offer)])
+    expect(results.sort()).toEqual(['already_released', 'released'])
+  })
+
+  describe('does nothing when', () => {
+    const unchanged = async (g: Gig, offer: string) => {
+      expect(await offerStatus(offer)).toBe('accepted')
+      const chair = await db.query('select musician_id, status from project_positions where id = $1', [g.chairId])
+      expect(chair.rows[0]).toEqual({ musician_id: g.musicians[0], status: 'confirmed' })
+    }
+
+    it('the organization does not allow it (the music default)', async () => {
+      const g = await gig()
+      await allowDrop(g, false)
+      const offer = await acceptedOffer(g)
+      expect(await workerDrop(db, offer)).toBe('not_allowed')
+      await unchanged(g, offer)
+    })
+
+    it('the gig has started', async () => {
+      const g = await gig()
+      await allowDrop(g)
+      await db.query("update services set start_time = now() - interval '1 minute' where project_id = $1", [g.projectId])
+      const offer = await acceptedOffer(g)
+      expect(await workerDrop(db, offer)).toBe('gig_started')
+      await unchanged(g, offer)
+    })
+
+    it('the gig is cancelled', async () => {
+      const g = await gig()
+      await allowDrop(g)
+      const offer = await acceptedOffer(g)
+      await db.query("update projects set status = 'cancelled' where id = $1", [g.projectId])
+      expect(await workerDrop(db, offer)).toBe('project_inactive')
+      await unchanged(g, offer)
+    })
+
+    it('a substitute is being arranged', async () => {
+      const g = await gig()
+      await allowDrop(g)
+      const offer = await acceptedOffer(g)
+      await db.query(
+        "insert into substitution_requests (project_position_id, requesting_musician_id, status) values ($1, $2, 'pending_approval')",
+        [g.chairId, g.musicians[0]]
+      )
+      expect(await workerDrop(db, offer)).toBe('substitution_in_progress')
+      await unchanged(g, offer)
+    })
+
+    it('the offer was never accepted, or does not exist', async () => {
+      const g = await gig()
+      await allowDrop(g)
+      expect(await workerDrop(db, await endedOffer(g, 'pending'))).toBe('not_accepted')
+      expect(await workerDrop(db, randomUUID())).toBe('not_found')
+    })
+
+    it('someone else holds the chair', async () => {
+      const g = await gig()
+      await allowDrop(g)
+      const offer = await acceptedOffer(g)
+      await db.query('update project_positions set musician_id = $1 where id = $2', [g.musicians[1], g.chairId])
+      expect(await workerDrop(db, offer)).toBe('not_seated')
+      expect(await offerStatus(offer)).toBe('accepted')
+    })
+  })
+})
+
 describe('only the server can call them', () => {
   it.each([
+    ['worker_drop', `select worker_drop('${randomUUID()}')`],
     ['cascade_offer', `select cascade_offer('${randomUUID()}', '${randomUUID()}', now() + interval '1 day')`],
     ['mark_cascade_exhausted', `select mark_cascade_exhausted('${randomUUID()}')`],
     ['cascade_refusal', `select cascade_refusal('${randomUUID()}')`],

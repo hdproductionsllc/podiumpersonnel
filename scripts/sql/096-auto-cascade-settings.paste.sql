@@ -13,7 +13,8 @@
 -- if any statement errors NOTHING is applied — paste the error back to Claude.
 --
 -- WHAT IT DOES, in plain English
---   Adds four switches. None of them changes anything today:
+--   Adds three switches and the database steps that read them. None of it
+--   changes anything today:
 --
 --   * "Auto-offer to the next person" for each organization. OFF for every
 --     organization. While it is off, Podium behaves exactly as it does now.
@@ -33,6 +34,11 @@
 --     They also refuse to offer a chair to someone who already turned that
 --     chair down (or let it lapse), or who is booked on another gig at the
 --     same time.
+--   * The database step behind the "I can't make it" button: someone who
+--     accepted gives the gig back, in one go (their offer is closed, the
+--     chair is empty again, and it is written in the history). It refuses
+--     unless the organization's drop-out switch is on and the gig has not
+--     started, so for your music organizations it does nothing.
 --
 --   Nothing here changes pay, who is emailed, or what emails say.
 --
@@ -85,6 +91,11 @@ BEGIN;
 --      as claim_chair and create_offer), re-checks every reason to stop
 --      (cascade_refusal), and records itself in staffing_events as the
 --      system. Service role only. See their own comments.
+--   8. worker_drop(...): a worker who accepted gives the gig back ("I can't
+--      make it" on the gig page), when the organization has allow_worker_drop
+--      on and the gig has not started. One transaction: the offer becomes
+--      'released', the chair vacant, and offer.released is recorded with
+--      reason 'dropped'. Service role only. See its own comment.
 --
 -- Nothing in today's code reads these, and every default reproduces today's
 -- behaviour, so this is safe to paste BEFORE the code that uses it (house
@@ -474,6 +485,88 @@ $$;
 REVOKE ALL ON FUNCTION mark_cascade_exhausted(UUID, JSONB) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION mark_cascade_exhausted(UUID, JSONB) TO service_role;
 
+-- ---------------------------------------------------------------------------
+-- 8. worker_drop: "I can't make it" from the gig page
+-- ---------------------------------------------------------------------------
+--   One transaction. A worker who accepted gives the gig back. Locks the chair,
+--   then the offer (claim_chair's order, so the two never deadlock), and
+--   returns one of:
+--
+--     released                  the offer is 'released' and the chair is vacant
+--     already_released          a second press of the button; nothing changed
+--     not_found                 no such offer, or its chair is gone
+--     not_accepted              the offer was never accepted (or ended another way)
+--     not_allowed               the organization has allow_worker_drop off
+--     project_inactive          the gig is cancelled or completed
+--     gig_started               the gig's first service has started
+--     not_seated                the chair is not theirs (someone else holds it)
+--     substitution_in_progress  they asked for a substitute who is not settled
+--                               yet; the admin sorts that out first
+--
+--   p_reason is the worker's optional note, kept on the offer.released event
+--   (never written over response_notes, which hold their earlier answer).
+--   Recorded as offer.released with reason 'dropped', the worker as the actor.
+--   The admin email and the auto-offer (cascade_offer, trigger 'dropped') are
+--   the server's, afterwards (src/lib/staffing/drop.ts).
+CREATE OR REPLACE FUNCTION worker_drop(p_offer_id UUID, p_reason TEXT DEFAULT NULL)
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_pos_id  UUID;
+  v_pos     project_positions%ROWTYPE;
+  v_offer   contract_offers%ROWTYPE;
+  v_project RECORD;
+  v_reason  TEXT := NULLIF(left(btrim(COALESCE(p_reason, '')), 1000), '');
+BEGIN
+  SELECT project_position_id INTO v_pos_id FROM contract_offers WHERE id = p_offer_id;
+  IF NOT FOUND THEN RETURN 'not_found'; END IF;
+
+  SELECT * INTO v_pos FROM project_positions WHERE id = v_pos_id FOR UPDATE;
+  IF NOT FOUND THEN RETURN 'not_found'; END IF;
+  SELECT * INTO v_offer FROM contract_offers WHERE id = p_offer_id FOR UPDATE;
+
+  IF v_offer.status = 'released' THEN RETURN 'already_released'; END IF;
+  IF v_offer.status IS DISTINCT FROM 'accepted' THEN RETURN 'not_accepted'; END IF;
+
+  SELECT p.status, p.organization_id, o.allow_worker_drop INTO v_project
+    FROM projects p JOIN organizations o ON o.id = p.organization_id
+   WHERE p.id = v_pos.project_id;
+  IF NOT FOUND THEN RETURN 'not_found'; END IF;
+
+  IF v_project.allow_worker_drop IS NOT TRUE THEN RETURN 'not_allowed'; END IF;
+  IF v_project.status IN ('cancelled', 'completed') THEN RETURN 'project_inactive'; END IF;
+  IF EXISTS (SELECT 1 FROM services WHERE project_id = v_pos.project_id AND start_time <= now()) THEN
+    RETURN 'gig_started';
+  END IF;
+  IF v_pos.musician_id IS DISTINCT FROM v_offer.musician_id THEN RETURN 'not_seated'; END IF;
+  IF EXISTS (
+    SELECT 1 FROM substitution_requests
+     WHERE project_position_id = v_pos.id
+       AND requesting_musician_id = v_offer.musician_id
+       AND status IN ('pending_approval', 'approved')
+  ) THEN
+    RETURN 'substitution_in_progress';
+  END IF;
+
+  UPDATE contract_offers SET status = 'released' WHERE id = p_offer_id;
+  UPDATE project_positions SET musician_id = NULL, status = 'vacant' WHERE id = v_pos.id;
+
+  PERFORM log_staffing_event(v_project.organization_id, 'musician', v_offer.musician_id, 'offer', p_offer_id,
+    'offer.released',
+    jsonb_build_object('status', 'accepted'),
+    jsonb_strip_nulls(jsonb_build_object('status', 'released', 'reason', 'dropped', 'position_id', v_pos.id,
+                                         'musician_id', v_offer.musician_id, 'seat_released', true,
+                                         'note', v_reason)));
+  RETURN 'released';
+END;
+$$;
+
+REVOKE ALL ON FUNCTION worker_drop(UUID, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION worker_drop(UUID, TEXT) TO service_role;
+
 -- ===========================================================================
 -- verify:
 -- SELECT vertical, allow_worker_drop, auto_cascade, count(*) FROM organizations GROUP BY 1, 2, 3;
@@ -571,6 +664,17 @@ SELECT
       AND NOT has_function_privilege('authenticated', p.oid, 'EXECUTE')
       AND NOT has_function_privilege('anon', p.oid, 'EXECUTE')
   ) = 3 THEN 'PASS' ELSE 'FAIL - tell Claude' END
+UNION ALL
+SELECT
+  'the "I can''t make it" step exists and only the server can run it',
+  CASE WHEN EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.pronamespace = 'public'::regnamespace
+      AND p.proname = 'worker_drop'
+      AND has_function_privilege('service_role', p.oid, 'EXECUTE')
+      AND NOT has_function_privilege('authenticated', p.oid, 'EXECUTE')
+      AND NOT has_function_privilege('anon', p.oid, 'EXECUTE')
+  ) THEN 'PASS' ELSE 'FAIL - tell Claude' END
 UNION ALL
 SELECT
   'music organizations keep the substitute flow (drop-out off)',

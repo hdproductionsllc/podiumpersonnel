@@ -69,6 +69,12 @@ const cases: { name: string; input: Partial<GigOfferStateInput>; key: string; se
     sentence: 'You have been released from this engagement. No action is needed.',
   },
   {
+    name: 'released because they said they could not make it',
+    input: { offerStatus: 'released', releasedReason: 'dropped', organizationName: 'Test Quartet Co' },
+    key: 'released',
+    sentence: "You let Test Quartet Co know you can't make it, so you are no longer booked for this project. No action is needed.",
+  },
+  {
     name: 'chair filled by someone else (superseded)',
     input: { offerStatus: 'superseded', chairHeldByOther: true },
     key: 'filled_by_other',
@@ -140,6 +146,7 @@ function gigPage(input: Partial<GigOfferStateInput>) {
       chairHeldByOther: i.chairHeldByOther,
       workTerm: i.workTerm,
       rankTerm: i.rankTerm,
+      releasedReason: i.releasedReason,
     })
   )
 }
@@ -194,5 +201,57 @@ describe('the gig page renders it', () => {
       const html = gigPage({ offerStatus: status })
       expect(html.includes('data-offer-state') || /Accept Offer/.test(html), status).toBe(true)
     }
+  })
+})
+
+describe('the "I can’t make it" button (worker drop)', () => {
+  const page = (extra: Record<string, unknown>) =>
+    renderToStaticMarkup(
+      createElement(GigPageClient, {
+        token: 'tok',
+        offerId: 'offer-1',
+        offerStatus: 'accepted',
+        expiresAt: null,
+        musicianFirstName: 'Anna',
+        organizationName: 'Test Quartet Co',
+        organizationId: 'org-1',
+        projectName: 'Smith Wedding',
+        projectDescription: null,
+        ensembleType: 'quartet',
+        projectStartDate: '2026-11-07',
+        projectEndDate: '2026-11-07',
+        instrumentId: 'inst-violin',
+        instrumentName: 'Violin',
+        services: [],
+        payAmount: 200,
+        timezone: 'America/Chicago',
+        instruments: [],
+        existingSubRequest: null,
+        ...extra,
+      })
+    )
+  const button = /I can&#x27;t make it/
+
+  it('is shown to someone who accepted, when the server says dropping is allowed', () => {
+    const html = page({ canDrop: true })
+    expect(html).toMatch(button)
+    // The confirm step comes first: no form is posted from the first click.
+    expect(html).not.toContain('data-drop-confirm')
+  })
+
+  it('is not shown when dropping is not allowed (the music default), so the page is as before', () => {
+    const html = page({ canDrop: false })
+    expect(html).not.toMatch(button)
+    expect(html).toContain('Request a Substitute')
+    expect(page({})).toBe(html)
+  })
+
+  it('waits while a substitute is being arranged', () => {
+    const html = page({ canDrop: true, existingSubRequest: { id: 's1', status: 'pending_approval', suggested_sub_name: null } })
+    expect(html).not.toMatch(button)
+  })
+
+  it('is never shown on an offer that is not accepted', () => {
+    expect(page({ canDrop: true, offerStatus: 'pending', expiresAt: FUTURE })).not.toMatch(button)
   })
 })
