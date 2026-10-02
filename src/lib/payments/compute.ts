@@ -1,14 +1,20 @@
 /**
- * What one confirmed musician is owed for one service.
+ * What one confirmed musician is owed for a gig.
  *
  * The single source of the pay rule, shared by "Generate Payments" (which
  * writes payment rows) and the after-gig pay summary email (which only reports
  * the amounts), so the two can never disagree.
  *
- *   base       = the accepted offer's custom_pay, else the service's base_pay, else 0
- *   leader fee = the service's leader_fee, only for a musician flagged leader,
- *                and only when the base came from the service default. A custom
- *                offer amount was negotiated as the whole fee, leader part included.
+ *   An accepted offer with an amount (custom_pay): that amount is the agreed
+ *     fee for the WHOLE gig, however many services it has, leader part
+ *     included. It is owed once, recorded against the gig's first service.
+ *   No amount on the offer: each service's own base_pay, plus its leader_fee
+ *     for a musician flagged leader. These are set per service, so they are
+ *     owed per service.
+ *
+ * The offer amount used to be applied to every service, so a $300 offer on a
+ * gig with a rehearsal and a performance generated $600 while the musician had
+ * been shown $300.
  */
 
 export interface OfferForPay {
@@ -17,16 +23,22 @@ export interface OfferForPay {
 }
 
 export interface ServiceForPay {
+  id: string
+  start_time?: string | null
   base_pay: number | null
   leader_fee: number | null
 }
 
-export interface ServicePay {
+/** One payment row's worth: what is owed against one service. */
+export interface PayLine {
+  serviceId: string
   basePay: number
   leaderFee: number
   total: number
   /** Leader AND the service has a leader fee (what payments.is_leader_fee records). */
   isLeader: boolean
+  /** True when this line is the offer's whole-gig amount rather than a service rate. */
+  wholeGig: boolean
 }
 
 /** The agreed amount on the musician's accepted offer, or null when none. */
@@ -35,13 +47,40 @@ export function acceptedOfferPay(offers: OfferForPay[] | null | undefined): numb
   return accepted?.custom_pay ?? null
 }
 
-export function computeServicePay(
-  service: ServiceForPay,
+/** The gig's first service by start time (input order breaks ties and missing times). */
+function firstService<S extends ServiceForPay>(services: S[]): S {
+  return services.reduce((first, s) =>
+    s.start_time && (!first.start_time || s.start_time < first.start_time) ? s : first
+  )
+}
+
+/**
+ * The lines one musician is owed for a gig. Empty when the gig has no services.
+ * Lines can total zero (no rate set anywhere); callers decide whether to skip them.
+ */
+export function computeGigPay(
+  services: ServiceForPay[] | null | undefined,
   musicianIsLeader: boolean,
   offerPay: number | null,
-): ServicePay {
-  const basePay = offerPay ?? service.base_pay ?? 0
-  const isLeader = musicianIsLeader && !!service.leader_fee
-  const leaderFee = (isLeader && offerPay === null && service.leader_fee) ? service.leader_fee : 0
-  return { basePay, leaderFee, total: basePay + leaderFee, isLeader }
+): PayLine[] {
+  if (!services || services.length === 0) return []
+
+  if (offerPay !== null) {
+    const first = firstService(services)
+    return [{
+      serviceId: first.id,
+      basePay: offerPay,
+      leaderFee: 0,
+      total: offerPay,
+      isLeader: musicianIsLeader && !!first.leader_fee,
+      wholeGig: true,
+    }]
+  }
+
+  return services.map((service) => {
+    const basePay = service.base_pay ?? 0
+    const isLeader = musicianIsLeader && !!service.leader_fee
+    const leaderFee = isLeader ? service.leader_fee! : 0
+    return { serviceId: service.id, basePay, leaderFee, total: basePay + leaderFee, isLeader, wholeGig: false }
+  })
 }

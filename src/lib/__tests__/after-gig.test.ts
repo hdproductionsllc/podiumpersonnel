@@ -26,7 +26,7 @@ vi.mock('@/lib/email/log', () => ({ logEmail: vi.fn(async () => {}) }))
 
 import { buildPaySummary, gigEndedAt, gigLead, isAfterGigDue, isViolinOne, type PositionForAfterGig, type ServiceForAfterGig } from '@/lib/after-gig/rules'
 import { requestGigReports, sendPaySummaryOnce } from '@/lib/after-gig/run'
-import { acceptedOfferPay, computeServicePay } from '@/lib/payments/compute'
+import { acceptedOfferPay, computeGigPay } from '@/lib/payments/compute'
 import { sendGigReportRequestEmail, sendPaySummaryEmail } from '@/lib/email/send'
 
 // --- fixtures -----------------------------------------------------------------
@@ -142,7 +142,7 @@ describe('the ONE gig lead', () => {
 // --- pay ------------------------------------------------------------------------
 
 describe('pay summary amounts', () => {
-  it('match the Generate Payments rule service by service', () => {
+  it('match the Generate Payments rule', () => {
     const { lines, grandTotal } = buildPaySummary(SERVICES, POSITIONS)
     const byId = Object.fromEntries(lines.map((l) => [l.musicianId, l]))
 
@@ -150,23 +150,23 @@ describe('pay summary amounts', () => {
     expect(byId['m-lead']).toMatchObject({ basePay: 350, leaderFee: 50, total: 400 })
     // Plain player: base pay on both services.
     expect(byId['m-play']).toMatchObject({ basePay: 350, leaderFee: 0, total: 350, instrument: 'Cello' })
-    // Accepted custom offer applies per service and already includes any leader fee.
-    expect(byId['m-custom']).toMatchObject({ basePay: 1000, leaderFee: 0, total: 1000 })
+    // An accepted offer amount is the whole-gig fee: owed once, leader part included.
+    expect(byId['m-custom']).toMatchObject({ basePay: 500, leaderFee: 0, total: 500 })
     // An offered (unconfirmed) chair is not paid.
     expect(byId['m-offered']).toBeUndefined()
-    expect(grandTotal).toBe(1750)
+    expect(grandTotal).toBe(1250)
 
     // Same numbers as the shared rule Generate Payments now calls.
     for (const p of POSITIONS.filter((x) => x.status === 'confirmed')) {
-      const expected = SERVICES.reduce(
-        (sum, s) => sum + computeServicePay(s, !!p.musician!.is_leader, acceptedOfferPay(p.contract_offers)).total, 0)
+      const expected = computeGigPay(SERVICES, !!p.musician!.is_leader, acceptedOfferPay(p.contract_offers))
+        .reduce((sum, line) => sum + line.total, 0)
       expect(byId[p.musician!.id].total).toBe(expected)
     }
   })
 
   it('Generate Payments uses the shared rule, not its own copy', () => {
     const src = readFileSync(join(process.cwd(), 'src/app/api/payments/generate/route.ts'), 'utf8')
-    expect(src).toContain('computeServicePay(')
+    expect(src).toContain('computeGigPay(')
     expect(src).not.toContain('offerPay ?? service.base_pay')
   })
 })

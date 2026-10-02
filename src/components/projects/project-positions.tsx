@@ -252,9 +252,14 @@ export function ProjectPositions({
     }
   }, [waterfallTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Get pay info from the first service (services should have consistent pay)
+  // The offer's pay is for the whole gig, so suggest the sum of every service's
+  // rate (null when no service has one). The leader fee default still comes
+  // from the first service.
   const firstService = services[0]
-  const basePay = (firstService as any)?.base_pay ?? null
+  const servicesWithPay = services.filter((s) => s.base_pay != null)
+  const basePay = servicesWithPay.length > 0
+    ? servicesWithPay.reduce((sum, s) => sum + (s.base_pay ?? 0), 0)
+    : null
   const leaderFee = (firstService as any)?.leader_fee ?? 50
 
   // Get the project's end date for deadline context

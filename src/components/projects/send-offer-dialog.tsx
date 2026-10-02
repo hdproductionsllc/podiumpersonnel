@@ -1126,7 +1126,7 @@ export function SendOfferDialog({
           </div>
 
           <div className="space-y-3">
-            <label className="text-sm font-medium">Pay <span className="text-destructive">*</span></label>
+            <label className="text-sm font-medium">Pay for the whole gig <span className="text-destructive">*</span></label>
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">$</span>
@@ -1135,7 +1135,7 @@ export function SendOfferDialog({
                   min="0"
                   step="0.01"
                   required
-                  placeholder="Base pay amount"
+                  placeholder="Total pay for the gig"
                   value={customPay}
                   onChange={(e) => setCustomPay(e.target.value)}
                   className="flex-1 rounded-md border bg-background px-3 py-2 text-sm"

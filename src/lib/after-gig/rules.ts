@@ -7,7 +7,7 @@
  * asked for a short gig report.
  */
 
-import { acceptedOfferPay, computeServicePay, type OfferForPay } from '@/lib/payments/compute'
+import { acceptedOfferPay, computeGigPay, type OfferForPay } from '@/lib/payments/compute'
 
 /** Wait this long after the last service ends: the gig may run a little over. */
 export const AFTER_GIG_DELAY_MS = 30 * 60 * 1000
@@ -130,8 +130,8 @@ export interface PaySummaryLine {
 }
 
 /**
- * What each confirmed musician is owed for the whole gig, summed over its
- * services with the same rule Generate Payments uses. One line per chair, so a
+ * What each confirmed musician is owed for the whole gig, with the same rule
+ * Generate Payments uses (an offer amount once, else each service's rate). One line per chair, so a
  * musician confirmed in two chairs shows both. Largest first, then by name.
  */
 export function buildPaySummary(
@@ -144,8 +144,7 @@ export function buildPaySummary(
     const offerPay = acceptedOfferPay(p.contract_offers)
     let basePay = 0
     let leaderFee = 0
-    for (const s of services || []) {
-      const pay = computeServicePay(s, !!m.is_leader, offerPay)
+    for (const pay of computeGigPay(services, !!m.is_leader, offerPay)) {
       basePay += pay.basePay
       leaderFee += pay.leaderFee
     }

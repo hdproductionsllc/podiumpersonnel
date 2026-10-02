@@ -1,5 +1,5 @@
 import { requireOrgAdmin, apiSuccess, apiError } from '@/lib/api-helpers'
-import { acceptedOfferPay, computeServicePay } from '@/lib/payments/compute'
+import { acceptedOfferPay, computeGigPay } from '@/lib/payments/compute'
 
 export async function POST(request: Request) {
   const { supabase, membership, error } = await requireOrgAdmin()
@@ -23,6 +23,7 @@ export async function POST(request: Request) {
           services(
             id,
             name,
+            start_time,
             base_pay,
             leader_fee
           )
@@ -60,7 +61,8 @@ export async function POST(request: Request) {
       })
     }
 
-    // Generate one payment per musician per service
+    // One payment per musician per service on service rates; one per musician
+    // for the gig when the offer carries a whole-gig amount.
     const paymentsToInsert: {
       organization_id: string
       service_id: string
@@ -70,6 +72,8 @@ export async function POST(request: Request) {
       is_leader_fee: boolean
       status: 'unpaid'
     }[] = []
+    // Rows that carry an offer's whole-gig amount: these dedupe per chair, not per service.
+    const wholeGigRows = new Set<(typeof paymentsToInsert)[number]>()
 
     for (const position of positions) {
       const project = position.projects as unknown as {
@@ -79,6 +83,7 @@ export async function POST(request: Request) {
         services: Array<{
           id: string
           name: string
+          start_time: string | null
           base_pay: number | null
           leader_fee: number | null
         }>
@@ -92,20 +97,20 @@ export async function POST(request: Request) {
       // The accepted offer's custom_pay is the actual agreed amount.
       const offerPay = acceptedOfferPay(offers)
 
-      for (const service of project.services) {
-        const { total: totalPay, isLeader } = computeServicePay(service, musician.is_leader, offerPay)
+      for (const line of computeGigPay(project.services, musician.is_leader, offerPay)) {
+        if (line.total <= 0) continue
 
-        if (totalPay <= 0) continue
-
-        paymentsToInsert.push({
+        const row = {
           organization_id: project.organization_id,
-          service_id: service.id,
+          service_id: line.serviceId,
           musician_id: musician.id,
           project_position_id: position.id,
-          amount: totalPay,
-          is_leader_fee: isLeader,
-          status: 'unpaid',
-        })
+          amount: line.total,
+          is_leader_fee: line.isLeader,
+          status: 'unpaid' as const,
+        }
+        paymentsToInsert.push(row)
+        if (line.wholeGig) wholeGigRows.add(row)
       }
     }
 
@@ -117,21 +122,33 @@ export async function POST(request: Request) {
       })
     }
 
-    // Fetch existing payments to avoid duplicates (one per musician per service)
+    // Fetch existing payments to avoid duplicates. Service-rate pay is one row
+    // per musician per service. A whole-gig amount is one row per chair, so it
+    // is skipped if that chair already has ANY payment for this musician: adding
+    // or re-timing a service later must not move "first service" and pay twice.
     const orgId = paymentsToInsert[0].organization_id
-    const { data: existingPayments } = await supabase
+    const { data: existingPayments, error: existingError } = await supabase
       .from('payments')
-      .select('service_id, musician_id')
+      .select('service_id, musician_id, project_position_id')
       .eq('organization_id', orgId)
 
-    const existingKeys = new Set(
-      (existingPayments || []).map(
-        (p) => `${p.service_id}|${p.musician_id}`
-      )
+    if (existingError) {
+      // Without this list every row would look new and be paid twice.
+      console.error('Error fetching existing payments:', existingError)
+      return apiError(existingError.message, 500)
+    }
+
+    const existingServiceKeys = new Set(
+      (existingPayments || []).map((p) => `${p.service_id}|${p.musician_id}`)
+    )
+    const existingChairKeys = new Set(
+      (existingPayments || []).map((p) => `${p.project_position_id}|${p.musician_id}`)
     )
 
-    const newPayments = paymentsToInsert.filter(
-      (p) => !existingKeys.has(`${p.service_id}|${p.musician_id}`)
+    const newPayments = paymentsToInsert.filter((p) =>
+      wholeGigRows.has(p)
+        ? !existingChairKeys.has(`${p.project_position_id}|${p.musician_id}`)
+        : !existingServiceKeys.has(`${p.service_id}|${p.musician_id}`)
     )
 
     if (newPayments.length === 0) {
