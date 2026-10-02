@@ -4,7 +4,8 @@
  */
 import { describe, it, expect } from 'vitest'
 import { VERTICALS, VERTICAL_KEYS, plainTitleRules, term, termCount } from '@/lib/verticals'
-import { INSTRUMENT_SECTIONS } from '@/lib/validations/instruments'
+import { ALL_INSTRUMENT_SECTIONS } from '@/lib/validations/instruments'
+import { ALL_SERVICE_TYPES } from '@/lib/validations/projects'
 
 const templates = Object.values(VERTICALS)
 
@@ -71,7 +72,9 @@ describe('verticals registry invariants', () => {
         expect(seed.name.length).toBeGreaterThan(0)
         expect(seed.name.length).toBeLessThanOrEqual(255)
         expect(seed.abbreviation.length).toBeLessThanOrEqual(10)
-        expect(INSTRUMENT_SECTIONS).toContain(seed.section)
+        expect(ALL_INSTRUMENT_SECTIONS).toContain(seed.section)
+        // and it is one of the vertical's own groups, or the skill would be listed nowhere
+        expect(t.sections, `${t.key}: ${seed.name}`).toContain(seed.section)
         expect(Number.isInteger(seed.sort_order)).toBe(true)
         expect(seed.sort_order).toBeGreaterThanOrEqual(0)
       }
@@ -81,6 +84,34 @@ describe('verticals registry invariants', () => {
   it('rank-less templates have chairs off, and vice versa', () => {
     for (const t of templates) {
       expect(t.features.useChairs).toBe(t.terms.rank !== null)
+    }
+  })
+  it('session types: known, unique, labelled, and the main session is one of them', () => {
+    for (const t of templates) {
+      const keys = t.sessionTypes.map((s) => s.key)
+      expect(new Set(keys).size, t.key).toBe(keys.length)
+      for (const s of t.sessionTypes) {
+        expect(ALL_SERVICE_TYPES, t.key).toContain(s.key)
+        expect(s.label.length).toBeGreaterThan(0)
+        expect(s.workerLabel.length).toBeGreaterThan(0)
+      }
+      expect(keys, t.key).toContain(t.mainSessionType)
+      expect(keys, t.key).toContain('other')
+    }
+  })
+
+  it('sections: known, unique, and always include "other" (where a skill with no section is listed)', () => {
+    for (const t of templates) {
+      expect(new Set(t.sections).size, t.key).toBe(t.sections.length)
+      for (const s of t.sections) expect(ALL_INSTRUMENT_SECTIONS).toContain(s)
+      expect(t.sections, t.key).toContain('other')
+    }
+  })
+
+  it('presets: unique, and a blank project is always one of them when there is a picker', () => {
+    for (const t of templates) {
+      expect(new Set(t.projectPresets).size, t.key).toBe(t.projectPresets.length)
+      if (t.projectPresets.length > 0) expect(t.projectPresets, t.key).toContain('custom')
     }
   })
 })

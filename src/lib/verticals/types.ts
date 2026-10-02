@@ -1,5 +1,6 @@
 import type { PositionInfo } from '@/lib/orchestra-positions'
 import type { InstrumentSection } from '@/lib/validations/instruments'
+import type { ServiceType } from '@/lib/validations/projects'
 
 /**
  * Vertical templates: per-organization-type configuration for outward-facing
@@ -18,6 +19,7 @@ export const VERTICAL_KEYS = [
   'dance',
   'church_worship',
   'event_agency',
+  'production_crew',
 ] as const
 
 export type VerticalKey = (typeof VERTICAL_KEYS)[number]
@@ -59,6 +61,13 @@ export type VerticalFeatures = {
   useEnsembleDetection: boolean
   /** Show the books ("Saved Ensembles") nav tab */
   showBooksTab: boolean
+  /**
+   * The leader fee exists here: the service form's Leader Fee field and the
+   * Send Offer "include leader fee" box are shown. Off: both are hidden and a
+   * new service is written with a leader fee of 0 (the column's database
+   * default is 50, and every reader treats 0 as "no leader fee").
+   */
+  useLeaderFee: boolean
 }
 
 /** Stable ids — routes and icons live in the sidebar's NAV_META, keyed by these. */
@@ -93,8 +102,7 @@ export type TitleRules = {
 
 /**
  * Rows seeded into the org's `instruments` table on creation.
- * section must come from the existing INSTRUMENT_SECTIONS enum (zod-enforced
- * app-wide); non-music taxonomies use 'other' until per-vertical sections ship.
+ * section must be one of the vertical's own `sections` (registry test).
  */
 export type SkillSeed = {
   name: string
@@ -103,16 +111,73 @@ export type SkillSeed = {
   sort_order: number
 }
 
+/**
+ * One kind of session (services.service_type) as this vertical offers it.
+ *   label        what admins see (the service form's Type list)
+ *   workerLabel  what a worker sees after the session's name on the gig page.
+ *                For the music verticals this is the raw type, exactly as the
+ *                gig page has always printed it.
+ */
+export type SessionTypeOption = {
+  key: ServiceType
+  label: string
+  workerLabel: string
+}
+
+/**
+ * Who leads a gig when no admin named a lead: the confirmed person in this
+ * skill, lowest rank first (after-gig/rules.ts gigLead). `matches` decides
+ * which skill names count ("Violin 1" also matches "Violin I").
+ */
+export type LeadFallbackSkill = {
+  label: string
+  matches: (skillName: string | null | undefined) => boolean
+}
+
+/** The new-project presets (project-form-dialog's template picker). */
+export type ProjectPresetKey =
+  | 'string-quartet'
+  | 'string-trio'
+  | 'duo'
+  | 'solo'
+  | 'orchestra'
+  | 'three-call-show'
+  | 'custom'
+
+/**
+ * Product name and home URL shown in the wordmark, browser tab and the
+ * worker-facing email footers ("via Overhire"). Absent means Podium (brand.ts).
+ */
+export type VerticalBrand = {
+  name: string
+  url: string
+}
+
 export type VerticalTemplate = {
   key: VerticalKey
   /** Shown on the onboarding picker card */
   displayName: string
   /** One-liner under the card title */
   description: string
+  /** Optional product brand; omitted for Podium (every vertical but production_crew) */
+  brand?: VerticalBrand
   terms: TermDictionary
   nav: NavConfig
   features: VerticalFeatures
   titleRules: TitleRules
   /** 'sql' = seeded by the create_organization_with_owner RPC (music verticals) */
   skillSeeds: SkillSeed[] | 'sql'
+  /** The session types offered, in order */
+  sessionTypes: readonly SessionTypeOption[]
+  /**
+   * The type of a gig's main session: the one a blank project creates, and the
+   * one whose times the project form edits for a one-day gig.
+   */
+  mainSessionType: ServiceType
+  /** The sections skills are grouped under, in order (labels: SECTION_LABELS) */
+  sections: readonly InstrumentSection[]
+  /** Who leads a gig nobody picked a lead for; null: an admin must always pick */
+  leadFallbackSkill: LeadFallbackSkill | null
+  /** New-project presets offered, in order; empty: no picker, straight to the blank form */
+  projectPresets: readonly ProjectPresetKey[]
 }

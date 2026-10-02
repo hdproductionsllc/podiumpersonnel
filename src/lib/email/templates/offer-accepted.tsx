@@ -9,7 +9,7 @@ import {
   Preview,
 } from '@react-email/components'
 import { PodiumFooter } from './podium-footer'
-import { term, DEFAULT_TERMS, type TermDictionary } from '@/lib/verticals'
+import { term, DEFAULT_TERMS, type TermDictionary, type VerticalBrand } from '@/lib/verticals'
 
 interface OfferAcceptedEmailProps {
   musicianName: string
@@ -29,6 +29,8 @@ interface OfferAcceptedEmailProps {
   calendarUrl?: string
   googleCalendarUrl?: string
   terms?: TermDictionary
+  /** The vertical's own product brand ("via Overhire"); omitted for Podium */
+  brand?: VerticalBrand
 }
 
 export function OfferAcceptedEmail({
@@ -43,6 +45,7 @@ export function OfferAcceptedEmail({
   calendarUrl,
   googleCalendarUrl,
   terms,
+  brand,
 }: OfferAcceptedEmailProps) {
   const t = terms ?? DEFAULT_TERMS
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
@@ -121,6 +124,7 @@ export function OfferAcceptedEmail({
           <PodiumFooter
             organizationName={organizationName}
             verb="confirmation"
+            brand={brand}
           />
         </Container>
       </Body>

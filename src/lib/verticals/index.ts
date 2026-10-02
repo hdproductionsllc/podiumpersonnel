@@ -5,9 +5,17 @@ export type { TermKey, TermOpts } from './terms'
 export { canUseChairs, canInferTitles, canDetectEnsembles, showBooksTab } from './features'
 export { orchestralTitleRules, plainTitleRules } from './title-rules'
 export { VERTICAL_KEYS } from './types'
+export { brandFor, productTitleFor, DEFAULT_BRAND } from './brand'
+export { isViolinOne, VIOLIN_ONE_LEAD, MUSIC_SESSION_TYPES, MUSIC_SECTIONS, MUSIC_PROJECT_PRESETS } from './defaults'
+export { threeCallShowServices, leaderFeeForNewService, mainSessionLabel } from './presets'
+export type { PresetService } from './presets'
 export type {
   VerticalKey,
   VerticalTemplate,
+  VerticalBrand,
+  SessionTypeOption,
+  LeadFallbackSkill,
+  ProjectPresetKey,
   TermDictionary,
   TermForms,
   VerticalFeatures,

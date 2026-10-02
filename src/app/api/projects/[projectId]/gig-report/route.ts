@@ -1,7 +1,6 @@
 import { requireOrgAdmin, apiSuccess, apiError } from '@/lib/api-helpers'
 import { createServiceClient } from '@/lib/supabase/server'
-import { AFTER_GIG_PROJECT_SELECT, requestGigReports } from '@/lib/after-gig/run'
-import { gigLead, type PositionForAfterGig } from '@/lib/after-gig/rules'
+import { AFTER_GIG_PROJECT_SELECT, leadOfGig, requestGigReports } from '@/lib/after-gig/run'
 
 /**
  * POST: ask this gig's ONE lead for a gig report now, or ask again.
@@ -26,8 +25,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ pr
     return apiError('Not found', 404)
   }
 
-  const shaped = project as unknown as { project_positions: PositionForAfterGig[]; gig_lead_musician_id: string | null }
-  if (!gigLead(shaped.project_positions, shaped.gig_lead_musician_id).lead) {
+  if (!leadOfGig(project).lead) {
     return apiError('Pick the gig lead first.', 400)
   }
 

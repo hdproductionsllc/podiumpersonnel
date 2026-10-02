@@ -9,6 +9,10 @@
 
 import { acceptedOfferPay, computeGigPay, type OfferForPay } from '@/lib/payments/compute'
 import { servicesFor, type PositionScope } from '@/lib/staffing/scope'
+import { isViolinOne, VIOLIN_ONE_LEAD } from '@/lib/verticals/defaults'
+import type { LeadFallbackSkill } from '@/lib/verticals/types'
+
+export { isViolinOne }
 
 /** Wait this long after the last service ends: the gig may run a little over. */
 export const AFTER_GIG_DELAY_MS = 30 * 60 * 1000
@@ -80,19 +84,16 @@ export interface GigLead {
   email: string | null
 }
 
-/** True for the "Violin 1" instrument (the chair that usually leads the gig). */
-export function isViolinOne(instrumentName: string | null | undefined): boolean {
-  return /^\s*violin\s*(1|i)\s*$/i.test(instrumentName || '')
-}
-
 /**
  * Who leads THIS gig. There is exactly one (David, 2026-09-27).
  *
  *   'chosen'    an admin named the lead (projects.gig_lead_musician_id) and
  *               that musician is confirmed on the gig
- *   'violin-1'  nobody was named: the musician confirmed in Violin 1, lowest
- *               chair ("the leader of the gig is usually violin 1")
- *   'needs-pick' nobody named and no confirmed Violin 1: an admin must pick,
+ *   'violin-1'  nobody was named: the person confirmed in the vertical's
+ *               lead skill (`fallback`; music: Violin 1), lowest chair ("the
+ *               leader of the gig is usually violin 1")
+ *   'needs-pick' nobody named and nobody confirmed in that skill, or the
+ *               vertical has none (production_crew): an admin must pick,
  *               and nobody is asked for a report until they do
  *
  * musicians.is_leader is deliberately NOT used: it means someone CAN lead,
@@ -101,6 +102,7 @@ export function isViolinOne(instrumentName: string | null | undefined): boolean 
 export function gigLead(
   positions: PositionForAfterGig[] | null | undefined,
   chosenMusicianId: string | null | undefined,
+  fallback: LeadFallbackSkill | null = VIOLIN_ONE_LEAD,
 ): { lead: GigLead | null; source: 'chosen' | 'violin-1' | 'needs-pick' } {
   const seated = confirmed(positions)
   const toLead = (m: NonNullable<PositionForAfterGig['musician']>): GigLead => ({
@@ -113,9 +115,11 @@ export function gigLead(
   const chosen = chosenMusicianId ? seated.find((p) => p.musician!.id === chosenMusicianId) : undefined
   if (chosen) return { lead: toLead(chosen.musician!), source: 'chosen' }
 
-  const violinOne = seated
-    .filter((p) => isViolinOne(p.instrument?.name))
-    .sort((a, b) => (a.chair_number ?? 99) - (b.chair_number ?? 99))[0]
+  const violinOne = fallback
+    ? seated
+        .filter((p) => fallback.matches(p.instrument?.name))
+        .sort((a, b) => (a.chair_number ?? 99) - (b.chair_number ?? 99))[0]
+    : undefined
   if (violinOne) return { lead: toLead(violinOne.musician!), source: 'violin-1' }
 
   return { lead: null, source: 'needs-pick' }

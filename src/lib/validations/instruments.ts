@@ -1,5 +1,9 @@
 import { z } from 'zod'
 
+/**
+ * The music sections, in the order music organizations see them. Every music
+ * vertical's `sections` list is exactly this (frozen by vertical-identity.test.ts).
+ */
 export const INSTRUMENT_SECTIONS = [
   'strings',
   'woodwinds',
@@ -8,7 +12,33 @@ export const INSTRUMENT_SECTIONS = [
   'other',
 ] as const
 
-export type InstrumentSection = (typeof INSTRUMENT_SECTIONS)[number]
+/**
+ * A production crew's departments (the production_crew vertical's `sections`,
+ * target architecture section 5). 'other' is shared with the music list.
+ */
+export const CREW_SECTIONS = [
+  'audio',
+  'lighting',
+  'video',
+  'staging',
+  'rigging',
+  'management',
+  'labor',
+  'other',
+] as const
+
+/**
+ * Every section any vertical uses: what an instrument row may hold. Which of
+ * them an organization sees, and in what order, is its vertical's `sections`.
+ */
+export const ALL_INSTRUMENT_SECTIONS = [
+  ...INSTRUMENT_SECTIONS,
+  ...CREW_SECTIONS.filter((s) => s !== 'other'),
+] as const
+
+export type InstrumentSection =
+  | (typeof INSTRUMENT_SECTIONS)[number]
+  | (typeof CREW_SECTIONS)[number]
 
 export const instrumentSchema = z.object({
   name: z
@@ -21,7 +51,7 @@ export const instrumentSchema = z.object({
     .optional()
     .or(z.literal('')),
   section: z
-    .enum(INSTRUMENT_SECTIONS)
+    .enum(ALL_INSTRUMENT_SECTIONS as unknown as [InstrumentSection, ...InstrumentSection[]])
     .optional()
     .or(z.literal('')),
   sort_order: z
@@ -38,6 +68,13 @@ export const SECTION_LABELS: Record<InstrumentSection, string> = {
   brass: 'Brass',
   percussion: 'Percussion',
   other: 'Other',
+  audio: 'Audio',
+  lighting: 'Lighting',
+  video: 'Video',
+  staging: 'Staging',
+  rigging: 'Rigging',
+  management: 'Management',
+  labor: 'Labor',
 }
 
 export const STANDARD_INSTRUMENTS: {

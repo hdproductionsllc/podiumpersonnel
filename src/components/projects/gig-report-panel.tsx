@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { isViolinOne } from '@/lib/after-gig/rules'
+import { useVertical } from '@/components/providers/vertical-provider'
 
 /**
  * The lead musician's after-gig report, on the gig's row.
@@ -112,6 +112,8 @@ function ReportItem({ label, report, when }: { label: string; report: GigReportR
 }
 
 export function GigReportPanel({ projectId, positions, chosenLeadId, reports, timezone }: GigReportPanelProps) {
+  // Who leads when nobody was picked (music: Violin 1; null: always pick). The same rule as gigLead.
+  const { leadFallbackSkill } = useVertical()
   const router = useRouter()
   const [sending, setSending] = useState(false)
   const [savingLead, setSavingLead] = useState(false)
@@ -124,9 +126,11 @@ export function GigReportPanel({ projectId, positions, chosenLeadId, reports, ti
         .map((p) => [p.musician_id!, p.musician])
     ).entries()
   )
-  const violinOne = positions
-    .filter((p) => p.status === 'confirmed' && p.musician_id && isViolinOne(p.instrument?.name))
-    .sort((a, b) => (a.chair_number ?? 99) - (b.chair_number ?? 99))[0]
+  const violinOne = leadFallbackSkill
+    ? positions
+        .filter((p) => p.status === 'confirmed' && p.musician_id && leadFallbackSkill.matches(p.instrument?.name))
+        .sort((a, b) => (a.chair_number ?? 99) - (b.chair_number ?? 99))[0]
+    : undefined
   const chosenIsConfirmed = !!chosenLeadId && confirmed.some(([id]) => id === chosenLeadId)
   const leadId = chosenIsConfirmed ? chosenLeadId : violinOne?.musician_id ?? null
   const source: 'chosen' | 'violin-1' | 'needs-pick' = chosenIsConfirmed ? 'chosen' : leadId ? 'violin-1' : 'needs-pick'
@@ -208,7 +212,7 @@ export function GigReportPanel({ projectId, positions, chosenLeadId, reports, ti
           onChange={(e) => void setLead(e.target.value || null)}
         >
           <option value="">
-            {source === 'violin-1' ? `Violin 1: ${name(leads[0]?.[1])}` : 'Pick the gig lead…'}
+            {source === 'violin-1' ? `${leadFallbackSkill?.label}: ${name(leads[0]?.[1])}` : 'Pick the gig lead…'}
           </option>
           {confirmed.map(([id, m]) => (
             <option key={id} value={id}>
@@ -217,7 +221,7 @@ export function GigReportPanel({ projectId, positions, chosenLeadId, reports, ti
           ))}
         </select>
         {source === 'violin-1' && (
-          <span className="text-xs text-muted-foreground">Violin 1 leads by default. Pick someone else to override.</span>
+          <span className="text-xs text-muted-foreground">{leadFallbackSkill?.label} leads by default. Pick someone else to override.</span>
         )}
       </div>
 

@@ -18,7 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
-import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
+import { SECTION_LABELS } from '@/lib/validations/instruments'
 import type { Service } from '@/types'
 import { usePlan } from '@/components/providers/plan-provider'
 import { useVertical } from '@/components/providers/vertical-provider'
@@ -218,7 +218,7 @@ export function ProjectPositions({
   callScope = null,
 }: ProjectPositionsProps) {
   const plan = usePlan()
-  const { titleRules, terms } = useVertical()
+  const { titleRules, terms, sections, features } = useVertical()
   const { getPositionTitle, checkGroupDrift } = titleRules
   const [importOpen, setImportOpen] = useState(false)
   const [addPositionOpen, setAddPositionOpen] = useState(false)
@@ -305,7 +305,8 @@ export function ProjectPositions({
   const basePay = servicesWithPay.length > 0
     ? servicesWithPay.reduce((sum, s) => sum + (s.base_pay ?? 0), 0)
     : null
-  const leaderFee = (firstService as any)?.leader_fee ?? 50
+  // No leader fee in this vertical: none is suggested and the box is hidden.
+  const leaderFee = features.useLeaderFee ? (firstService as any)?.leader_fee ?? 50 : null
 
   // Get the project's end date for deadline context
   // We'll compute it from the latest service end_time or start_time
@@ -453,7 +454,7 @@ export function ProjectPositions({
   }
 
   // Group positions by section
-  const grouped = INSTRUMENT_SECTIONS.reduce((acc, section) => {
+  const grouped = sections.reduce((acc, section) => {
     acc[section] = positions
       .filter((p) => (p.instrument?.section || 'other') === section)
       .sort((a, b) => {
@@ -747,7 +748,7 @@ export function ProjectPositions({
               </tr>
             </thead>
             <tbody className="divide-y">
-              {INSTRUMENT_SECTIONS.map((section) => {
+              {sections.map((section) => {
                 const sectionPositions = grouped[section]
                 if (sectionPositions.length === 0) return null
                 return (
@@ -1087,6 +1088,7 @@ export function ProjectPositions({
         existingOfferMusicianIds={offerExistingIds}
         basePay={offerBasePay}
         leaderFee={leaderFee}
+        showLeaderFee={features.useLeaderFee}
         suggestedCustomPay={offerSuggestedPay}
         projectEndDate={projectEndDate}
         timezone={timezone}

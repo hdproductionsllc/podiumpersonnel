@@ -46,13 +46,8 @@ vi.mock('@/lib/supabase/server', () => ({
 
 vi.mock('@/lib/api-helpers', () => ({
   getOrgPlan: vi.fn(async () => null),
-  getOrgVertical: vi.fn(async () => ({
-    terms: {
-      person: { singular: 'Musician', plural: 'Musicians' },
-      work: { singular: 'Project', plural: 'Projects' },
-      rank: { singular: 'Chair', plural: 'Chairs' },
-    },
-  })),
+  // The real music template, as getOrgVertical returns for every organization today.
+  getOrgVertical: vi.fn(async () => (await import('@/lib/verticals')).VERTICALS.music_contractor),
 }))
 
 vi.mock('@/lib/email/send', () => {

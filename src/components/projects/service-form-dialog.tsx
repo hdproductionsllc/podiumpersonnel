@@ -9,7 +9,6 @@ import { fromZonedTime } from 'date-fns-tz/fromZonedTime'
 import {
   serviceSchema,
   type ServiceInput,
-  SERVICE_TYPES,
   SERVICE_TYPE_LABELS,
 } from '@/lib/validations/projects'
 import {
@@ -34,7 +33,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { formatTimezoneLabel } from '@/lib/utils'
-import { useTerms } from '@/components/providers/vertical-provider'
+import { useVertical } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
 import type { Service } from '@/types'
 
@@ -103,7 +102,10 @@ export function ServiceFormDialog({
   existingServiceCounts,
   onSuccess,
 }: ServiceFormDialogProps) {
-  const terms = useTerms()
+  const { terms, sessionTypes, features } = useVertical()
+  // No leader fee in this vertical: the field is hidden and the service says 0
+  // ("none"). Where there is one, everything below is exactly as it was.
+  const defaultLeaderFee = features.useLeaderFee ? 50 : 0
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dateWarning, setDateWarning] = useState<string | null>(null)
@@ -131,7 +133,7 @@ export function ServiceFormDialog({
       end_time: '',
       notes: '',
       base_pay: null,
-      leader_fee: 50,
+      leader_fee: defaultLeaderFee,
     },
   })
 
@@ -159,7 +161,7 @@ export function ServiceFormDialog({
           end_time: etLocal,
           notes: service.notes || '',
           base_pay: (service as any).base_pay ?? null,
-          leader_fee: (service as any).leader_fee ?? 50,
+          leader_fee: (service as any).leader_fee ?? defaultLeaderFee,
         })
       } else {
         const serviceType = initialServiceType || 'rehearsal'
@@ -198,14 +200,14 @@ export function ServiceFormDialog({
           end_time: etFull,
           notes: '',
           base_pay: null,
-          leader_fee: 50,
+          leader_fee: defaultLeaderFee,
         })
       }
       setShowVenue2(!!(service?.venue_2 || service?.venue_id_2))
       setError(null)
       setDateWarning(null)
     }
-  }, [open, service, form, initialServiceType, existingServiceCounts, projectStartDate, projectEndDate])
+  }, [open, service, form, initialServiceType, existingServiceCounts, projectStartDate, projectEndDate, defaultLeaderFee])
 
   // Sync form hidden fields whenever date/time parts change
   function syncFormFields(date: string, call: string, start: string, end: string) {
@@ -312,7 +314,7 @@ export function ServiceFormDialog({
           end_time: finalEndTime ? datetimeLocalToISO(finalEndTime, timezone) : null,
           notes: data.notes || null,
           base_pay: data.base_pay ?? null,
-          leader_fee: data.leader_fee ?? 50,
+          leader_fee: features.useLeaderFee ? data.leader_fee ?? 50 : 0,
         })
         .eq('id', service.id)
 
@@ -343,7 +345,7 @@ export function ServiceFormDialog({
           end_time: finalEndTime ? datetimeLocalToISO(finalEndTime, timezone) : null,
           notes: data.notes || null,
           base_pay: data.base_pay ?? null,
-          leader_fee: data.leader_fee ?? 50,
+          leader_fee: features.useLeaderFee ? data.leader_fee ?? 50 : 0,
         })
 
       if (insertError) {
@@ -407,11 +409,18 @@ export function ServiceFormDialog({
                       className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                       {...field}
                     >
-                      {SERVICE_TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {SERVICE_TYPE_LABELS[t]}
+                      {sessionTypes.map((t) => (
+                        <option key={t.key} value={t.key}>
+                          {t.label}
                         </option>
                       ))}
+                      {/* A type this vertical does not offer (set elsewhere) stays
+                          selectable, so saving the form never changes it silently. */}
+                      {field.value && !sessionTypes.some((t) => t.key === field.value) && (
+                        <option value={field.value}>
+                          {SERVICE_TYPE_LABELS[field.value as ServiceInput['service_type']] || field.value}
+                        </option>
+                      )}
                     </select>
                   </FormControl>
                   <FormMessage />
@@ -633,27 +642,29 @@ export function ServiceFormDialog({
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="leader_fee"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Leader Fee ($)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          placeholder="e.g. 50"
-                          value={field.value ?? 50}
-                          onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 50)}
-                        />
-                      </FormControl>
-                      <p className="text-xs text-muted-foreground">Added to Violin 1 / {term(terms, 'rank')} 1</p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {features.useLeaderFee && (
+                  <FormField
+                    control={form.control}
+                    name="leader_fee"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Leader Fee ($)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            placeholder="e.g. 50"
+                            value={field.value ?? 50}
+                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 50)}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">Added to Violin 1 / {term(terms, 'rank')} 1</p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
               </div>
             </div>
 

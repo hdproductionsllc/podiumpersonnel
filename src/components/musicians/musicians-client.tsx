@@ -14,11 +14,11 @@ import { CallOrderDialog } from './call-order-dialog'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import type { Musician } from '@/types'
-import { INSTRUMENT_SECTIONS, SECTION_LABELS, type InstrumentSection } from '@/lib/validations/instruments'
+import { SECTION_LABELS, type InstrumentSection } from '@/lib/validations/instruments'
 import { usePlan } from '@/components/providers/plan-provider'
 import { canAddMusician, canBulkImport, canUseEmailFeatures, PLAN_LIMITS } from '@/lib/plan'
 import { UpgradePrompt } from '@/components/billing/upgrade-prompt'
-import { useTerms } from '@/components/providers/vertical-provider'
+import { useTerms, useVertical } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
 
 function formatPhoneNumber(phone: string | null): string {
@@ -110,6 +110,8 @@ export function MusiciansClient({
   const router = useRouter()
   const plan = usePlan()
   const terms = useTerms()
+  // The sections this vertical groups its skills under (music: strings..other)
+  const sections = useVertical().sections
   const [formOpen, setFormOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [editingMusician, setEditingMusician] = useState<MusicianWithInstruments | null>(null)
@@ -210,7 +212,7 @@ export function MusiciansClient({
         m.musician_instruments.map((mi) => mi.instrument.section).filter((s): s is string => !!s)
       )
     )
-  ).filter((s) => INSTRUMENT_SECTIONS.includes(s as InstrumentSection)) as InstrumentSection[]
+  ).filter((s) => sections.includes(s as InstrumentSection)) as InstrumentSection[]
 
   // Count musicians with missing info
   const missingInfoCount = musicians.filter((m) => !m.email || !m.phone).length
@@ -411,8 +413,8 @@ export function MusiciansClient({
     }
     unassigned.sort(sortFn)
 
-    // Sort groups: by INSTRUMENT_SECTIONS order, then by sort_order
-    const sectionOrder = INSTRUMENT_SECTIONS as readonly string[]
+    // Sort groups: by the vertical's section order, then by sort_order
+    const sectionOrder = sections as readonly string[]
     const sorted = Array.from(groups.values()).sort((a, b) => {
       const aSec = sectionOrder.indexOf(a.instrument.section || 'other')
       const bSec = sectionOrder.indexOf(b.instrument.section || 'other')
@@ -421,7 +423,7 @@ export function MusiciansClient({
     })
 
     return { groups: sorted, unassigned }
-  }, [filteredMusicians, instruments, sortColumn, sortDirection])
+  }, [filteredMusicians, instruments, sortColumn, sortDirection, sections])
 
   function toggleSection(instrumentId: string) {
     setCollapsedSections((prev) => {

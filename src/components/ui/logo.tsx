@@ -4,16 +4,18 @@ interface LogoProps {
   variant?: 'light' | 'dark'
   className?: string
   size?: 'sm' | 'md' | 'lg'
+  /** The product name (brandFor(vertical).name). Defaults to Podium, so existing callers render unchanged. */
+  name?: string
 }
 
 /**
- * Podium logo — single italic P monogram with gold accent bar.
+ * Podium logo — single italic monogram (the name's first letter) with gold accent bar.
  * Uses the actual Next.js-loaded Playfair Display font.
  *
  * - "light" = cream/gold for dark backgrounds (sidebar, auth panel)
  * - "dark"  = navy/brass for light backgrounds (mobile auth)
  */
-export function Logo({ variant = 'light', className, size = 'md' }: LogoProps) {
+export function Logo({ variant = 'light', className, size = 'md', name = 'Podium' }: LogoProps) {
   const isLight = variant === 'light'
 
   const sizes = {
@@ -28,7 +30,7 @@ export function Logo({ variant = 'light', className, size = 'md' }: LogoProps) {
     <div
       className={cn('flex flex-col items-center select-none', className)}
       role="img"
-      aria-label="Podium"
+      aria-label={name}
     >
       <span
         className={cn(
@@ -37,7 +39,7 @@ export function Logo({ variant = 'light', className, size = 'md' }: LogoProps) {
           isLight ? 'text-[#F5F0E8]' : 'text-[#1E293B]'
         )}
       >
-        P
+        {name[0]}
       </span>
       <div
         className={cn(
@@ -53,7 +55,7 @@ export function Logo({ variant = 'light', className, size = 'md' }: LogoProps) {
           isLight ? 'text-[#F5F0E8]' : 'text-[#1E293B]'
         )}
       >
-        PODIUM
+        {name.toUpperCase()}
       </span>
     </div>
   )

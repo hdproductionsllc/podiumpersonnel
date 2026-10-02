@@ -9,9 +9,10 @@
  * explicit sign-off: they ARE the promise that live orgs see zero change.
  */
 import { describe, it, expect } from 'vitest'
-import { resolveVertical, VERTICALS, DEFAULT_VERTICAL, term } from '@/lib/verticals'
+import { resolveVertical, VERTICALS, DEFAULT_VERTICAL, VERTICAL_KEYS, term, brandFor, productTitleFor, leaderFeeForNewService, mainSessionLabel } from '@/lib/verticals'
 import { getPositionTitle } from '@/lib/orchestra-positions'
 import { checkEnsembleDrift } from '@/lib/ensemble-detection'
+import { gigLead, isViolinOne, type PositionForAfterGig } from '@/lib/after-gig/rules'
 
 const FROZEN_DEFAULT_TERMS = {
   person: { singular: 'Musician', plural: 'Musicians' },
@@ -82,6 +83,10 @@ describe('vertical identity: default template = today, frozen', () => {
       useTitleInference: true,
       useEnsembleDetection: true,
       showBooksTab: true,
+      // Added with the production_crew vertical (target architecture 5). True
+      // is what the app always did: the Leader Fee field and "Add leader fee"
+      // shown, new services left to the database's 50 default.
+      useLeaderFee: true,
     })
   })
 
@@ -146,5 +151,68 @@ describe('resolveVertical fail-safe (deploy-order tolerance)', () => {
     expect(() => resolveVertical('__proto__')).not.toThrow()
     expect(resolveVertical('__proto__').key).toBe('music_contractor')
     expect(resolveVertical('toString').key).toBe('music_contractor')
+  })
+})
+
+/**
+ * The lists and rules target architecture section 5 moved into the template.
+ * For every vertical that existed before production_crew they are today's
+ * literal values, frozen here against inline copies: the service form's Type
+ * list, the gig page's "(performance)", the section groups, Violin 1 leading
+ * by default, the String Quartet picker, the "<name> Performance" blank gig,
+ * the Podium brand. Do not change these without David's sign-off.
+ */
+const FROZEN_SESSION_TYPES = [
+  { key: 'rehearsal', label: 'Rehearsal', workerLabel: 'rehearsal' },
+  { key: 'performance', label: 'Performance', workerLabel: 'performance' },
+  { key: 'dress_rehearsal', label: 'Dress Rehearsal', workerLabel: 'dress_rehearsal' },
+  { key: 'sectional', label: 'Sectional', workerLabel: 'sectional' },
+  { key: 'other', label: 'Other', workerLabel: 'other' },
+]
+const FROZEN_SECTIONS = ['strings', 'woodwinds', 'brass', 'percussion', 'other']
+const FROZEN_MUSIC_PRESETS = ['string-quartet', 'string-trio', 'duo', 'solo', 'orchestra', 'custom']
+
+const BEFORE_CREW = VERTICAL_KEYS.filter((k) => k !== 'production_crew')
+
+describe('vertical identity: the section 5 values are unchanged for every vertical before production_crew', () => {
+  it.each(BEFORE_CREW)('%s: session types, sections, main session, lead, leader fee and brand are unchanged', (key) => {
+    const v = VERTICALS[key]
+    expect(v.sessionTypes).toEqual(FROZEN_SESSION_TYPES)
+    expect(v.sections).toEqual(FROZEN_SECTIONS)
+    expect(v.mainSessionType).toBe('performance')
+    expect(mainSessionLabel(v)).toBe('Performance')
+    expect(v.leadFallbackSkill?.label).toBe('Violin 1')
+    expect(v.leadFallbackSkill?.matches).toBe(isViolinOne)
+    expect(v.features.useLeaderFee).toBe(true)
+    expect(leaderFeeForNewService(v)).toEqual({})
+    expect(v.brand).toBeUndefined()
+    expect(brandFor(v).name).toBe('Podium')
+    expect(productTitleFor(v)).toBe('Podium Personnel')
+  })
+
+  it('the template picker: the music verticals keep their six presets in order, the others still have none', () => {
+    expect(VERTICALS.music_contractor.projectPresets).toEqual(FROZEN_MUSIC_PRESETS)
+    expect(VERTICALS.orchestra_band.projectPresets).toEqual(FROZEN_MUSIC_PRESETS)
+    for (const key of BEFORE_CREW) {
+      // The picker used to be shown exactly when title inference was on.
+      expect(VERTICALS[key].projectPresets.length > 0, key).toBe(VERTICALS[key].features.useTitleInference)
+    }
+  })
+
+  it('gigLead with the music template is gigLead with no template at all (Violin 1, lowest chair)', () => {
+    const seat = (id: string, instrument: string, chair: number): PositionForAfterGig => ({
+      id: `p-${id}`,
+      status: 'confirmed',
+      musician_id: id,
+      chair_number: chair,
+      instrument: { name: instrument },
+      musician: { id, first_name: id, last_name: 'X', email: `${id}@example.test`, is_leader: id === 'cello' },
+    })
+    const quartet = [seat('cello', 'Cello', 1), seat('v1b', 'Violin I', 2), seat('v1a', 'Violin 1', 1), seat('v2', 'Violin 2', 1)]
+    const fallback = VERTICALS.music_contractor.leadFallbackSkill
+    for (const chosen of [null, 'v2', 'nobody']) {
+      expect(gigLead(quartet, chosen, fallback)).toEqual(gigLead(quartet, chosen))
+    }
+    expect(gigLead(quartet, null, fallback)).toMatchObject({ source: 'violin-1', lead: { musicianId: 'v1a' } })
   })
 })

@@ -3,8 +3,27 @@ import { z } from 'zod'
 export const PROJECT_STATUSES = ['draft', 'active', 'completed', 'cancelled'] as const
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number]
 
+/**
+ * The music session types, in the order music organizations see them. Every
+ * music vertical's `sessionTypes` list is exactly this (frozen by
+ * vertical-identity.test.ts).
+ */
 export const SERVICE_TYPES = ['rehearsal', 'performance', 'dress_rehearsal', 'sectional', 'other'] as const
-export type ServiceType = (typeof SERVICE_TYPES)[number]
+
+/** A production crew's call types (the production_crew vertical's `sessionTypes`). */
+export const CREW_SERVICE_TYPES = ['load_in', 'rehearsal', 'show_call', 'breakout', 'strike', 'other'] as const
+
+/**
+ * Every session type any vertical uses: what a service row may hold (the
+ * column itself is free text). Which of them an organization is offered, and in
+ * what order, is its vertical's `sessionTypes`.
+ */
+export const ALL_SERVICE_TYPES = [
+  ...SERVICE_TYPES,
+  ...CREW_SERVICE_TYPES.filter((t) => !(SERVICE_TYPES as readonly string[]).includes(t)),
+] as const
+
+export type ServiceType = (typeof SERVICE_TYPES)[number] | (typeof CREW_SERVICE_TYPES)[number]
 
 export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: 'Draft',
@@ -39,6 +58,10 @@ export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   dress_rehearsal: 'Dress Rehearsal',
   sectional: 'Sectional',
   other: 'Other',
+  load_in: 'Load-in',
+  show_call: 'Show',
+  breakout: 'Breakout',
+  strike: 'Strike',
 }
 
 export const projectSchema = z.object({
@@ -119,7 +142,7 @@ export const serviceSchema = z.object({
     .string()
     .min(1, 'Service name is required')
     .max(255, 'Service name must be less than 255 characters'),
-  service_type: z.enum(SERVICE_TYPES),
+  service_type: z.enum(ALL_SERVICE_TYPES as unknown as [ServiceType, ...ServiceType[]]),
   venue: z
     .string()
     .max(255, 'Venue must be less than 255 characters')

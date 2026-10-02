@@ -5,10 +5,10 @@ import type { SkillSeed } from './types'
  * of non-music verticals (music verticals keep the SQL seed inside the
  * create_organization_with_owner RPC for deploy-gap safety).
  *
- * section is 'other' across the board: INSTRUMENT_SECTIONS is a fixed enum
- * (strings/woodwinds/brass/percussion/other) enforced by zod app-wide.
- * Per-vertical section sets are a v1.1 item; until then these group under a
- * single heading.
+ * Each seed's section must be one of its vertical's `sections` (registry
+ * test). The verticals that share the music sections use 'other' throughout,
+ * so they group under a single heading; production_crew has its own
+ * departments.
  */
 
 export const CHOIR_SEEDS: SkillSeed[] = [
@@ -73,4 +73,29 @@ export const EVENT_AGENCY_SEEDS: SkillSeed[] = [
   { name: 'MC / Host', abbreviation: 'MC', section: 'other', sort_order: 103 },
   { name: 'Specialty Act', abbreviation: 'Act', section: 'other', sort_order: 104 },
   { name: 'Sound Technician', abbreviation: 'Sound', section: 'other', sort_order: 105 },
+]
+
+/**
+ * Production crew roles, in the order a crew coordinator writes a call:
+ * audio, lighting, video, then rigging, hands and leadership. Abbreviations
+ * are the ones techs use on a call sheet ("A1", "L1", "V1"). Each sits in its
+ * department (the production_crew vertical's `sections`).
+ */
+export const PRODUCTION_CREW_SEEDS: SkillSeed[] = [
+  { name: 'A1 (FOH Audio Engineer)', abbreviation: 'A1', section: 'audio', sort_order: 100 },
+  { name: 'A2 (Monitor / Stage Audio)', abbreviation: 'A2', section: 'audio', sort_order: 101 },
+  { name: 'Breakout Tech', abbreviation: 'Breakout', section: 'audio', sort_order: 102 },
+  { name: 'L1 (Lighting Designer)', abbreviation: 'L1', section: 'lighting', sort_order: 200 },
+  { name: 'L2 (Lighting Tech)', abbreviation: 'L2', section: 'lighting', sort_order: 201 },
+  { name: 'V1 (Video Director)', abbreviation: 'V1', section: 'video', sort_order: 300 },
+  { name: 'V2 (Video Tech)', abbreviation: 'V2', section: 'video', sort_order: 301 },
+  { name: 'Camera Operator', abbreviation: 'Cam', section: 'video', sort_order: 302 },
+  { name: 'Graphics Operator', abbreviation: 'GFX', section: 'video', sort_order: 303 },
+  { name: 'Projectionist', abbreviation: 'Proj', section: 'video', sort_order: 304 },
+  { name: 'LED Tech', abbreviation: 'LED', section: 'video', sort_order: 305 },
+  { name: 'Rigger', abbreviation: 'Rig', section: 'rigging', sort_order: 500 },
+  { name: 'Stagehand', abbreviation: 'Hand', section: 'labor', sort_order: 600 },
+  { name: 'Truck / Driver', abbreviation: 'Truck', section: 'labor', sort_order: 601 },
+  { name: 'Stage Manager', abbreviation: 'SM', section: 'management', sort_order: 700 },
+  { name: 'Show Caller', abbreviation: 'Caller', section: 'management', sort_order: 701 },
 ]

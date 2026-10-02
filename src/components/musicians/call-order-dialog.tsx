@@ -31,8 +31,8 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Star } from 'lucide-react'
-import { INSTRUMENT_SECTIONS, SECTION_LABELS, type InstrumentSection } from '@/lib/validations/instruments'
-import { useTerms } from '@/components/providers/vertical-provider'
+import { SECTION_LABELS, type InstrumentSection } from '@/lib/validations/instruments'
+import { useTerms, useVertical } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
 import type { MusicianWithInstruments, InstrumentOption } from './musicians-client'
 
@@ -102,6 +102,8 @@ export function CallOrderDialog({
 }: CallOrderDialogProps) {
   const router = useRouter()
   const terms = useTerms()
+  // The sections this vertical groups its skills under (music: strings..other)
+  const sections = useVertical().sections
   const [selectedInstrument, setSelectedInstrument] = useState('')
   const [orderedMusicians, setOrderedMusicians] = useState<SortableMusician[]>([])
   const [isSaving, setIsSaving] = useState(false)
@@ -130,7 +132,7 @@ export function CallOrderDialog({
 
     const grouped: { section: InstrumentSection; label: string; instruments: (InstrumentOption & { count: number })[] }[] = []
 
-    for (const section of INSTRUMENT_SECTIONS) {
+    for (const section of sections) {
       const sectionInstruments = instruments
         .filter((inst) => inst.section === section && instrumentMusicians.has(inst.id))
         .map((inst) => ({ ...inst, count: instrumentMusicians.get(inst.id) || 0 }))
@@ -158,7 +160,7 @@ export function CallOrderDialog({
     }
 
     return grouped
-  }, [musicians, instruments])
+  }, [musicians, instruments, sections])
 
   function handleInstrumentSelect(instrumentId: string) {
     setSelectedInstrument(instrumentId)

@@ -8,6 +8,18 @@ import { OrgFlagsProvider } from '@/components/providers/org-flags-provider'
 import { TrialBanner } from '@/components/billing/trial-banner'
 import { resolveOrgPlan } from '@/lib/plan'
 import type { OrgBilling } from '@/lib/plan'
+import { productTitleFor } from '@/lib/verticals'
+import { getServerVertical } from '@/lib/verticals/server'
+import type { Metadata } from 'next'
+
+/**
+ * The browser tab: "Podium Personnel" (the root layout's title) for every
+ * vertical but one that carries its own brand ("Overhire"). getServerVertical
+ * fails open to the default template, so this can only ever fall back to today.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: productTitleFor(await getServerVertical()) }
+}
 
 export default async function DashboardLayout({
   children,

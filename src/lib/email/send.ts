@@ -33,7 +33,7 @@ import { GigReportSubmittedEmail, type GigReportAnswers } from './templates/gig-
 import type { PaySummaryLine } from '@/lib/after-gig/rules'
 import { render } from '@react-email/render'
 import { type EmailBranding } from './templates/email-layout'
-import { term, type TermDictionary, DEFAULT_TERMS } from '@/lib/verticals'
+import { term, type TermDictionary, DEFAULT_TERMS, type VerticalBrand } from '@/lib/verticals'
 import { getOrgVertical } from '@/lib/api-helpers'
 
 export type { EmailBranding }
@@ -58,6 +58,25 @@ async function resolveEmailTerms(
     }
   }
   return DEFAULT_TERMS
+}
+
+/**
+ * Terms and brand for the worker-facing sends that carry the vertical's brand
+ * in their footer (offer, reminder, accepted, gig details). The same single
+ * lookup resolveEmailTerms makes; brand is the vertical's own (undefined for
+ * Podium, so those footers render exactly as before). Never blocks a send.
+ */
+async function resolveEmailVertical(
+  explicit: TermDictionary | undefined,
+  organizationId: string | undefined
+): Promise<{ terms: TermDictionary; brand: VerticalBrand | undefined }> {
+  if (!organizationId) return { terms: explicit ?? DEFAULT_TERMS, brand: undefined }
+  try {
+    const vertical = await getOrgVertical(organizationId)
+    return { terms: explicit ?? vertical.terms, brand: vertical.brand }
+  } catch {
+    return { terms: explicit ?? DEFAULT_TERMS, brand: undefined }
+  }
 }
 
 /**
@@ -215,7 +234,7 @@ interface SendContractOfferParams {
 }
 
 export async function sendContractOfferEmail(params: SendContractOfferParams) {
-  const terms = await resolveEmailTerms(params.terms, params.organizationId)
+  const { terms, brand } = await resolveEmailVertical(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Call: ${params.projectName} - ${params.instrument}`, getSubjectDate(params.services)),
@@ -238,6 +257,7 @@ export async function sendContractOfferEmail(params: SendContractOfferParams) {
       ensembleType: params.ensembleType,
       branding: params.branding,
       terms,
+      brand,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,
@@ -264,7 +284,7 @@ interface SendOfferReminderParams {
 }
 
 export async function sendOfferReminderEmail(params: SendOfferReminderParams) {
-  const terms = await resolveEmailTerms(params.terms, params.organizationId)
+  const { terms, brand } = await resolveEmailVertical(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Reminder: ${params.projectName} - response needed`, params.performanceDate || ''),
@@ -280,6 +300,7 @@ export async function sendOfferReminderEmail(params: SendOfferReminderParams) {
       daysRemaining: params.daysRemaining,
       branding: params.branding,
       terms,
+      brand,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,
@@ -315,7 +336,7 @@ interface SendOfferAcceptedParams {
 }
 
 export async function sendOfferAcceptedEmail(params: SendOfferAcceptedParams) {
-  const terms = await resolveEmailTerms(params.terms, params.organizationId)
+  const { terms, brand } = await resolveEmailVertical(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Confirmed: You're booked for ${params.projectName}`, getSubjectDate(params.services)),
@@ -331,6 +352,7 @@ export async function sendOfferAcceptedEmail(params: SendOfferAcceptedParams) {
       calendarUrl: params.calendarUrl,
       googleCalendarUrl: params.googleCalendarUrl,
       terms,
+      brand,
     }),
     fromName: params.organizationName,
     replyTo: params.contactEmail || undefined,
@@ -1075,7 +1097,7 @@ interface SendGigDetailsEmailParams {
 }
 
 export async function sendGigDetailsEmail(params: SendGigDetailsEmailParams) {
-  const terms = await resolveEmailTerms(params.terms, params.organizationId)
+  const { terms, brand } = await resolveEmailVertical(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
     subject: withDate(`Gig details: ${params.projectName}`, getSubjectDate(params.services)),
@@ -1090,6 +1112,7 @@ export async function sendGigDetailsEmail(params: SendGigDetailsEmailParams) {
       notes: params.notes,
       branding: params.branding,
       terms,
+      brand,
     }),
     fromName: params.organizationName,
     replyToOrgId: params.organizationId,

@@ -5,6 +5,23 @@ Quartet companies see nothing new except what each step lists under "What
 people will notice". Every email, recipient, subject, pay amount and cron is
 unchanged (the quartet fixture and the golden-email tests hold this).
 
+## At a glance: the whole order
+
+All four pastes go in BEFORE the one push, in this order. Each one stops and
+changes nothing if the one before it is missing, and each is safe to run
+twice.
+
+1. `scripts/sql/097-email-logs-channel.paste.sql` (step 1)
+2. `scripts/sql/098-position-services.paste.sql` (step 2)
+3. `scripts/sql/099-requirements.paste.sql` (step 3)
+4. `scripts/sql/100-production-crew-vertical.paste.sql` (step 4)
+5. Claude runs the read-only lookups listed under steps 2 to 4 (every one
+   must answer `200 []`).
+6. One push of the branch to `master` (one Vercel build).
+
+Each step's section below says what it adds, what people will notice and
+what happens if the code lands before its paste.
+
 ## Step 1: one send path (notify), failed sends on record, "Text from my phone"
 
 ### Before the deploy
@@ -216,3 +233,118 @@ unchanged (the quartet fixture and the golden-email tests hold this).
   database update first. Nothing was changed." Paste step 3.
 - To undo in the database: no chair has a `requirement_id` and no
   requirement exists until a company with the switch on adds one.
+
+## Step 4: the production_crew vertical ("Overhire")
+
+### Before the deploy
+
+1. Supabase > SQL Editor > New query: paste
+   `scripts/sql/100-production-crew-vertical.paste.sql` and Run (after step
+   3; if 098 is missing it stops and changes nothing). Every RESULTS row
+   should say PASS (INFO rows are counts). It:
+   - allows a new kind of organization, `production_crew` ("Production
+     Company");
+   - makes a NEW production company start with `call_scoped_requirements`
+     on (Add crew, the Calls button) and, through 096's existing rule,
+     `allow_worker_drop` on. `auto_cascade` stays off, as for everyone;
+   - makes an organization's kind (`vertical`) something only Podium can
+     change, like billing. Nothing in the app changes it after sign-up.
+   No existing organization changes: all six are `music_contractor` (checked
+   read-only on 2026-10-02) and keep every switch.
+
+2. Right after the paste, before the deploy: Claude runs these read-only
+   lookups (zero rows each). Every one must answer `200 []`:
+
+   ```
+   GET /rest/v1/organizations?select=id,vertical&limit=0
+   GET /rest/v1/projects?select=id,organization:organizations(id,name,timezone,vertical,email_logo_url,email_brand_color,email_footer_text)&limit=0
+   GET /rest/v1/organizations?select=call_scoped_requirements&limit=0
+   ```
+
+   Recorded 2026-10-02, before 098: the first two answered `200 []` (the
+   `vertical` column is from 065, live since July), the third `400 42703`
+   (098 not pasted yet), which step 2's paste fixes.
+
+### Deploy
+
+3. Same single push as steps 1 to 3.
+
+### What people will notice
+
+- Quartet companies (every company today): nothing. The words, the lists,
+  the template picker, the emails, the pay and the gig page are the same
+  values as before, now read from the music template instead of written into
+  each screen. `vertical-identity.test.ts` freezes every one of them against
+  an inline copy, and `brand-emails-identity.test.ts` sends the offer,
+  reminder, accepted and gig-details emails for a music company and compares
+  them byte for byte (sender, recipient, reply-to, subject, HTML, text) with
+  golden files written from master's code.
+- New sign-ups: the onboarding picker gets an eighth card, **Production
+  Company** ("Book freelance crew onto shows: A1, L1, hands, and everyone in
+  between").
+- A production company sees:
+  - **Words**: Shows, Calls, Roles, Crew / Tech, Slots, Crew Lists, Show
+    Docs. The gig page's policy link reads "Tech Policy".
+  - **Brand**: the sidebar wordmark and the browser tab say Overhire; the
+    offer, reminder, accepted and gig-details emails end "sent by <company>
+    via Overhire" with a link to overhire.app. The sender address is still
+    hello@podiumpersonnel.com (there is no Overhire sending domain).
+  - **Roles** seeded in departments (Audio, Lighting, Video, Rigging, Labor,
+    Management): A1, A2, Breakout Tech, L1, L2, V1, V2, Camera, Graphics,
+    Projectionist, LED Tech, Rigger, Stagehand, Truck / Driver, Stage
+    Manager, Show Caller. Every grouped list (Roles, Crew, Add Position, Add
+    crew, Call order, the staffing table) groups by those departments.
+  - **Call types** in the call form: Load-in, Rehearsal, Show, Breakout,
+    Strike, Other. The gig page prints them as "(load-in)", "(show)".
+  - **New show**: a picker with **Three-call show** (Load-in, Show Day and
+    Strike, then add the crew) and a blank show. A blank show's first call is
+    a "Show" call.
+  - **No leader fee**: the call form has no Leader Fee field, Send Offer has
+    no "Add leader fee" box, and every call is saved with a leader fee of 0.
+  - **Gig lead**: nobody leads by role. The after-gig report asks for an
+    admin to pick the crew chief ("Pick the gig lead") instead of defaulting
+    to Violin 1.
+  - **Add crew** and **Calls** (step 3) are on from the start, and so is
+    "I can't make it" on the gig page (Release 1). Auto-offer is off.
+  - No Saved Ensembles tab.
+
+### Demo org
+
+- Sign up a fresh account, choose **Production Company**, then fill it:
+
+  ```
+  node scripts/seed-crew-demo.js --org <the new org's id>                               # dry run: reads only
+  node scripts/seed-crew-demo.js --org <the new org's id> --inbox you@gmail.com --apply
+  ```
+
+  It refuses any org that is not `production_crew` or has the switch off. It
+  adds 12 crew (emails are plus-addresses on `--inbox`), a Houston venue, and
+  "Acme Corp General Session" next Friday and Saturday with the three calls
+  and its crew list as requirements (A1 and L1 every call; A2, V1, LED the
+  show day; 4 hands the load-in, 2 the strike; a rigger load-in and strike).
+  It emails nobody. Safe to re-run. See `docs/overhire-demo.md`.
+
+### If something goes wrong
+
+- Code live but 100 missing: everything works as before for every company,
+  but choosing "Production Company" at sign-up fails (the database refuses
+  the new kind) and the person sees the sign-up error. Paste step 4.
+- A production company made before 100 was pasted cannot exist (the
+  database refused it), so none can be left with its switch off.
+- To undo in the database: no organization is `production_crew` until one
+  signs up. Removing the vertical again means re-running 065's CHECK list
+  without it (only if none exists).
+
+### Not done on purpose
+
+- No `pay_basis` anywhere: a requirement's `default_pay` is the amount for
+  the whole engagement per person (owner decision).
+- Leader-fee logic is untouched: a crew simply has no leader fee (0 on each
+  call). Generate Payments' gig-lead labelling of older offers still uses
+  the music rule; a crew has no leader fee for it to label.
+- No SMS. "Text from my phone" (step 1) works for crew as for everyone.
+- The other worker emails (rescinded, released, substitute and music emails,
+  pre-gig notice) still say "via Podium" for a crew: only the four the demo
+  walks through carry the brand.
+- The `photo_video` and `staging` templates in the plan's row 20 are not
+  added; the database refuses them.

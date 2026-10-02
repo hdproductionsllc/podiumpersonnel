@@ -54,13 +54,8 @@ vi.mock('@/lib/api-helpers', () => ({
   apiError: (message: string, status = 400) => NextResponse.json({ error: message }, { status }),
   serverError: (message: string) => NextResponse.json({ error: message }, { status: 500 }),
   getOrgPlan: vi.fn(async () => null),
-  getOrgVertical: vi.fn(async () => ({
-    terms: {
-      person: { singular: 'Musician', plural: 'Musicians' },
-      work: { singular: 'Project', plural: 'Projects' },
-      rank: { singular: 'Chair', plural: 'Chairs' },
-    },
-  })),
+  // The real music template, as getOrgVertical returns for every organization today.
+  getOrgVertical: vi.fn(async () => (await import('@/lib/verticals')).VERTICALS.music_contractor),
 }))
 
 // Every sender is replaced (nothing can be sent) and records its arguments.

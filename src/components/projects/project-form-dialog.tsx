@@ -36,7 +36,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { useVertical } from '@/components/providers/vertical-provider'
-import { term } from '@/lib/verticals'
+import { term, leaderFeeForNewService, mainSessionLabel, type ProjectPresetKey } from '@/lib/verticals'
 import {
   parseContract,
   contractDescription,
@@ -52,7 +52,7 @@ import {
 } from '@/lib/venue-lookup'
 import type { ProjectWithServices } from './projects-client'
 
-type TemplateType = 'string-quartet' | 'string-trio' | 'duo' | 'solo' | 'orchestra' | 'custom'
+type TemplateType = ProjectPresetKey
 
 const ENSEMBLE_LABELS: Partial<Record<TemplateType, string>> = {
   'string-quartet': 'String Quartet',
@@ -62,7 +62,11 @@ const ENSEMBLE_LABELS: Partial<Record<TemplateType, string>> = {
   'orchestra': 'Orchestra',
 }
 
-const TEMPLATES: Record<TemplateType, { label: string; description: string; defaultName: string; singleDay?: boolean }> = {
+/**
+ * ownTimes: the preset sets each service's times itself, so the form shows no
+ * call/start/end pickers for it.
+ */
+const TEMPLATES: Record<TemplateType, { label: string; description: string; defaultName: string; singleDay?: boolean; ownTimes?: boolean }> = {
   'string-quartet': {
     label: 'String Quartet Gig',
     description: '1 performance — Violin 1, Violin 2, Viola, Cello',
@@ -91,6 +95,13 @@ const TEMPLATES: Record<TemplateType, { label: string; description: string; defa
     label: 'Orchestra Concert',
     description: '2 rehearsals + 1 performance',
     defaultName: 'Orchestra Concert',
+    ownTimes: true,
+  },
+  'three-call-show': {
+    label: 'Three-call show',
+    description: 'Load-in, show day and strike. Add the crew after',
+    defaultName: 'Show',
+    ownTimes: true,
   },
   'custom': {
     label: 'Custom Project',
@@ -123,11 +134,12 @@ export function ProjectFormDialog({
 }: ProjectFormDialogProps) {
   const vertical = useVertical()
   const terms = vertical.terms
-  // The quick-start templates are instrumentation-specific (String Quartet,
-  // Orchestra Concert...). Only music verticals see the picker; other verticals
-  // go straight to the blank form (audit finding: choir admins were greeted
-  // with "String Quartet Gig" as the first screen of the core workflow).
-  const hasMusicTemplates = vertical.features.useTitleInference
+  // The quick-start templates belong to a vertical (String Quartet for music,
+  // Three-call show for a production crew). A vertical with none goes straight
+  // to the blank form (audit finding: choir admins were greeted with "String
+  // Quartet Gig" as the first screen of the core workflow).
+  const presets = vertical.projectPresets
+  const hasPresets = presets.length > 0
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showTemplatePicker, setShowTemplatePicker] = useState(false)
@@ -158,7 +170,7 @@ export function ProjectFormDialog({
   // contract always carries its own times and venue, even when its ensemble has
   // no template and the gig falls back to "custom".
   const createsPerformance = !isEditing && selectedTemplate !== null && (selectedTemplate !== 'custom' || fromContract)
-  const hasTimePicker = createsPerformance && selectedTemplate !== 'orchestra'
+  const hasTimePicker = createsPerformance && !TEMPLATES[selectedTemplate].ownTimes
   const today = new Date().toISOString().split('T')[0]
 
   /** Extract "HH:mm" from a UTC ISO string, converted to the org's timezone */
@@ -222,7 +234,7 @@ export function ProjectFormDialog({
         setIsSingleDay(singleDay)
         // Pre-populate times from the first performance service (or first service)
         if (singleDay && project.services?.length) {
-          const perf = project.services.find(s => s.service_type === 'performance') || project.services[0]
+          const perf = project.services.find(s => s.service_type === vertical.mainSessionType) || project.services[0]
           if (perf.call_time) setCallTime(isoToLocalTime(perf.call_time))
           if (perf.start_time) setStartTime(isoToLocalTime(perf.start_time))
           if (perf.end_time) setEndTime(isoToLocalTime(perf.end_time))
@@ -248,9 +260,9 @@ export function ProjectFormDialog({
           coordinator_email: '',
           coordinator_phone: '',
         })
-        // Template picker for new projects — music verticals only
-        setShowTemplatePicker(hasMusicTemplates)
-        setSelectedTemplate(hasMusicTemplates ? null : 'custom')
+        // Template picker for new projects: only verticals that have presets
+        setShowTemplatePicker(hasPresets)
+        setSelectedTemplate(hasPresets ? null : 'custom')
         setIsSingleDay(false)
         setBookingOpen(false)
         setCallTime('18:30')
@@ -475,7 +487,7 @@ export function ProjectFormDialog({
         const ctISO = fromZonedTime(`${dateStr}T${callTime}`, timezone).toISOString()
         const etISO = fromZonedTime(`${dateStr}T${endTime}`, timezone).toISOString()
 
-        const perf = project.services?.find(s => s.service_type === 'performance')
+        const perf = project.services?.find(s => s.service_type === vertical.mainSessionType)
           || project.services?.[0]
 
         if (perf) {
@@ -497,8 +509,9 @@ export function ProjectFormDialog({
           // No services exist — create a performance service
           const { error: serviceError } = await supabase.from('services').insert({
             project_id: project.id,
-            name: `${data.name} Performance`,
-            service_type: 'performance',
+            name: `${data.name} ${mainSessionLabel(vertical)}`,
+            service_type: vertical.mainSessionType,
+            ...leaderFeeForNewService(vertical),
             start_time: stISO,
             call_time: ctISO,
             end_time: etISO,
@@ -661,7 +674,7 @@ export function ProjectFormDialog({
               <p className="font-medium">Paste a Contract</p>
               <p className="text-sm text-muted-foreground">Fills in the client, date, venue, times and fee from the contract</p>
             </button>
-            {(Object.keys(TEMPLATES) as TemplateType[]).map((key) => {
+            {presets.map((key) => {
               const t = TEMPLATES[key]
               return (
                 <button

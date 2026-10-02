@@ -42,6 +42,8 @@ interface SendOfferDialogProps {
   existingOfferMusicianIds: string[]
   basePay?: number | null
   leaderFee?: number | null
+  /** The vertical has a leader fee (features.useLeaderFee). False hides "Add leader fee". */
+  showLeaderFee?: boolean
   suggestedCustomPay?: string
   projectEndDate?: string | null
   timezone?: string
@@ -72,6 +74,7 @@ export function SendOfferDialog({
   existingOfferMusicianIds,
   basePay,
   leaderFee,
+  showLeaderFee = true,
   suggestedCustomPay,
   projectEndDate,
   timezone,
@@ -1098,39 +1101,41 @@ export function SendOfferDialog({
                 />
               </div>
 
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="includeLeaderFee"
-                  checked={includeLeaderFee}
-                  onChange={(e) => {
-                    const checked = e.target.checked
-                    setIncludeLeaderFee(checked)
-                    if (checked) {
-                      setPersonalMessage((prev) => prev === '' ? DEFAULT_LEADER_MESSAGE : prev)
-                    } else {
-                      setPersonalMessage((prev) => prev === DEFAULT_LEADER_MESSAGE ? '' : prev)
-                    }
-                  }}
-                  className="h-4 w-4 rounded border-gray-300"
-                />
-                <label htmlFor="includeLeaderFee" className="text-sm">
-                  Add leader fee
-                </label>
-                {includeLeaderFee && (
-                  <div className="flex items-center gap-1">
-                    <span className="text-sm text-muted-foreground">+$</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={leaderFeeAmount}
-                      onChange={(e) => setLeaderFeeAmount(e.target.value)}
-                      className="w-20 rounded-md border bg-background px-2 py-1 text-sm"
-                    />
-                  </div>
-                )}
-              </div>
+              {showLeaderFee && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="includeLeaderFee"
+                    checked={includeLeaderFee}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      setIncludeLeaderFee(checked)
+                      if (checked) {
+                        setPersonalMessage((prev) => prev === '' ? DEFAULT_LEADER_MESSAGE : prev)
+                      } else {
+                        setPersonalMessage((prev) => prev === DEFAULT_LEADER_MESSAGE ? '' : prev)
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <label htmlFor="includeLeaderFee" className="text-sm">
+                    Add leader fee
+                  </label>
+                  {includeLeaderFee && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm text-muted-foreground">+$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={leaderFeeAmount}
+                        onChange={(e) => setLeaderFeeAmount(e.target.value)}
+                        className="w-20 rounded-md border bg-background px-2 py-1 text-sm"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {finalPay != null && (customPay || basePay != null) && (

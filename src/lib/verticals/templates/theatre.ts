@@ -1,5 +1,6 @@
 import { plainTitleRules } from '../title-rules'
 import { THEATRE_SEEDS } from '../seeds'
+import { MUSIC_SECTIONS, MUSIC_SESSION_TYPES, VIOLIN_ONE_LEAD } from '../defaults'
 import type { VerticalTemplate } from '../types'
 
 /** Theatre companies and school programs — cast & crew across productions. */
@@ -31,7 +32,13 @@ export const theatre: VerticalTemplate = {
     useTitleInference: false,
     useEnsembleDetection: false,
     showBooksTab: true,
+    useLeaderFee: true,
   },
   titleRules: plainTitleRules(null),
   skillSeeds: THEATRE_SEEDS,
+  sessionTypes: MUSIC_SESSION_TYPES,
+  mainSessionType: 'performance',
+  sections: MUSIC_SECTIONS,
+  leadFallbackSkill: VIOLIN_ONE_LEAD,
+  projectPresets: [],
 }

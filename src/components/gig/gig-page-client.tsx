@@ -79,6 +79,14 @@ interface GigPageClientProps {
   workTerm?: string
   /** Its word for the chair, lowercase, or '' when the vertical has none. */
   rankTerm?: string
+  /** Its word for the person, Title Case ("Musician"): the policy link reads "<person> Policy". */
+  personTerm?: string
+  /**
+   * What to print after each session's name, by type (the vertical's
+   * sessionTypes workerLabel). A type not listed prints as stored, which is
+   * what the music verticals' labels are anyway.
+   */
+  sessionTypeLabels?: Record<string, string>
   /**
    * Offer "I can't make it": accepted, the gig not started, and the
    * organization allows workers to drop (organizations.allow_worker_drop).
@@ -121,6 +129,8 @@ export function GigPageClient({
   chairHeldByOther = false,
   workTerm,
   rankTerm,
+  personTerm = 'Musician',
+  sessionTypeLabels,
   canDrop = false,
   releasedReason = null,
 }: GigPageClientProps) {
@@ -280,7 +290,7 @@ export function GigPageClient({
                         <div className="flex flex-wrap items-baseline gap-1">
                           <span className="font-medium">{service.name}</span>
                           <span className="text-muted-foreground text-xs">
-                            ({service.service_type})
+                            ({sessionTypeLabels?.[service.service_type] ?? service.service_type})
                           </span>
                         </div>
                         <div className="text-muted-foreground mt-1">
@@ -543,7 +553,7 @@ export function GigPageClient({
                       rel="noopener noreferrer"
                       className="text-primary underline hover:text-primary/80"
                     >
-                      Musician Policy
+                      {personTerm} Policy
                     </a>
                     .
                   </p>

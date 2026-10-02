@@ -38,8 +38,8 @@ import {
 } from '@/lib/validations/projects'
 import { usePlan } from '@/components/providers/plan-provider'
 import { useOrgFlags } from '@/components/providers/org-flags-provider'
-import { useTerms } from '@/components/providers/vertical-provider'
-import { term } from '@/lib/verticals'
+import { useTerms, useVertical } from '@/components/providers/vertical-provider'
+import { term, threeCallShowServices, leaderFeeForNewService, mainSessionLabel } from '@/lib/verticals'
 import { canCreateProject, canUseEmailFeatures, PLAN_LIMITS } from '@/lib/plan'
 import { UpgradePrompt } from '@/components/billing/upgrade-prompt'
 import { GigReportPanel, type GigReportRow } from '@/components/projects/gig-report-panel'
@@ -334,7 +334,8 @@ export function ProjectsClient({
   const router = useRouter()
   const plan = usePlan()
   const { intakeEnabled } = useOrgFlags()
-  const terms = useTerms()
+  const vertical = useVertical()
+  const terms = vertical.terms
 
   // Project dialog state
   const [projectFormOpen, setProjectFormOpen] = useState(false)
@@ -712,15 +713,34 @@ export function ProjectsClient({
             },
           ]))
         }
+      } else if (newProject.template === 'three-call-show') {
+        // Load-in, show day, strike: services only. The crew is added role by
+        // role afterwards (there is no fixed line-up to seed, as a quartet has).
+        const calls = threeCallShowServices(newProject.name, newProject.start_date, newProject.end_date)
+        if (calls.length > 0) {
+          trackTemplateWrite('services', await supabase.from('services').insert(
+            calls.map((c) => ({
+              project_id: newProject.id,
+              name: c.name,
+              service_type: c.service_type,
+              start_time: toISO(c.date, c.start),
+              end_time: toISO(c.date, c.end),
+              call_time: toISO(c.date, c.call),
+              ...leaderFeeForNewService(vertical),
+              ...venueFields,
+            }))
+          ))
+        }
       } else if (newProject.template === 'custom') {
-        // Auto-create a performance: default times, or the contract's own when
+        // Auto-create the main session: default times, or the contract's own when
         // the gig came from a pasted contract whose ensemble has no template
         const dateStr = newProject.start_date || newProject.end_date
         if (dateStr) {
           trackTemplateWrite('services', await supabase.from('services').insert({
             project_id: newProject.id,
-            name: `${newProject.name} Performance`,
-            service_type: 'performance',
+            name: `${newProject.name} ${mainSessionLabel(vertical)}`,
+            service_type: vertical.mainSessionType,
+            ...leaderFeeForNewService(vertical),
             start_time: toISO(dateStr, newProject.startTime || '19:00'),
             end_time: toISO(dateStr, newProject.endTime || '22:00'),
             call_time: toISO(dateStr, newProject.callTime || '18:30'),
@@ -878,7 +898,7 @@ export function ProjectsClient({
             <tbody className="divide-y">
               {filteredProjects.map((project) => {
                 const isExpanded = expandedRows.has(project.id)
-                const primary = project.services?.find((s) => s.service_type === 'performance') || project.services?.[0]
+                const primary = project.services?.find((s) => s.service_type === vertical.mainSessionType) || project.services?.[0]
                 const venue = primary ? getVenueDisplay(primary) : ''
                 const venueName = venue ? venue.split(',')[0] : ''
                 const confirmedCount = project.project_positions.filter((p) => p.status === 'confirmed').length

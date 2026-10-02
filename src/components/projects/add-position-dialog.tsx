@@ -12,9 +12,9 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useTerms } from '@/components/providers/vertical-provider'
+import { useTerms, useVertical } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
-import { INSTRUMENT_SECTIONS, SECTION_LABELS, type InstrumentSection } from '@/lib/validations/instruments'
+import { SECTION_LABELS, type InstrumentSection } from '@/lib/validations/instruments'
 
 interface Instrument {
   id: string
@@ -101,6 +101,8 @@ export function AddPositionDialog({
   onSuccess,
 }: AddPositionDialogProps) {
   const terms = useTerms()
+  // The sections this vertical groups its skills under (music: strings..other)
+  const sections = useVertical().sections
   const [instruments, setInstruments] = useState<Instrument[]>([])
   const [savedPresets, setSavedPresets] = useState<SavedPreset[]>([])
   const [mode, setMode] = useState<'presets' | 'single'>('presets')
@@ -324,7 +326,7 @@ export function AddPositionDialog({
   }
 
   // Group instruments by section
-  const groupedInstruments = INSTRUMENT_SECTIONS.reduce((acc, section) => {
+  const groupedInstruments = sections.reduce((acc, section) => {
     acc[section] = instruments.filter(i => i.section === section)
     return acc
   }, {} as Record<InstrumentSection, Instrument[]>)
@@ -432,7 +434,7 @@ export function AddPositionDialog({
                 onChange={(e) => setSelectedInstrumentId(e.target.value)}
               >
                 <option value="">-- Select {term(terms, 'skill', { case: 'lower' })} --</option>
-                {INSTRUMENT_SECTIONS.map((section) => {
+                {sections.map((section) => {
                   const sectionInstruments = groupedInstruments[section]
                   if (sectionInstruments.length === 0) return null
                   return (

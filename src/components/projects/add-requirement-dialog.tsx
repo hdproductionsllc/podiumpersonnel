@@ -13,9 +13,9 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useTerms } from '@/components/providers/vertical-provider'
+import { useTerms, useVertical } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
-import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
+import { SECTION_LABELS } from '@/lib/validations/instruments'
 import { MAX_REQUIREMENT_QUANTITY } from '@/lib/staffing/requirement-rules'
 import { CallChoice, type CallOption } from './call-choice'
 
@@ -56,6 +56,8 @@ export function AddRequirementDialog({
   onSuccess,
 }: AddRequirementDialogProps) {
   const terms = useTerms()
+  // The sections this vertical groups its skills under (music: strings..other)
+  const sections = useVertical().sections
   const [roles, setRoles] = useState<Role[]>([])
   const [roleId, setRoleId] = useState('')
   const [quantity, setQuantity] = useState('1')
@@ -162,7 +164,7 @@ export function AddRequirementDialog({
                 onChange={(e) => setRoleId(e.target.value)}
               >
                 <option value="">-- Select {skill.toLowerCase()} --</option>
-                {INSTRUMENT_SECTIONS.map((section) => {
+                {sections.map((section) => {
                   const inSection = roles.filter((r) => (r.section || 'other') === section)
                   if (inSection.length === 0) return null
                   return (

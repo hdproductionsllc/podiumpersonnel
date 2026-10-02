@@ -9,7 +9,7 @@ import { Logo } from '@/components/ui/logo'
 import { usePlan } from '@/components/providers/plan-provider'
 import { useOrgFlags } from '@/components/providers/org-flags-provider'
 import { useVertical } from '@/components/providers/vertical-provider'
-import { NAV_ROUTES } from '@/lib/verticals'
+import { NAV_ROUTES, brandFor } from '@/lib/verticals'
 import type { NavItemId } from '@/lib/verticals'
 
 function HomeIcon({ className }: { className?: string }) {
@@ -230,11 +230,12 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function Sidebar() {
+  const vertical = useVertical()
   return (
     <aside className="hidden md:flex h-full w-64 flex-col border-r border-sidebar-border bg-sidebar">
       <div className="flex h-36 items-center justify-center px-4">
         <Link href="/dashboard">
-          <Logo variant="light" size="lg" />
+          <Logo variant="light" size="lg" name={brandFor(vertical).name} />
         </Link>
       </div>
       <Separator className="bg-sidebar-border" />

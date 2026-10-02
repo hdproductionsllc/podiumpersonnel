@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
 import { BookSectionGroup } from './book-section-group'
-import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
-import { useTerms } from '@/components/providers/vertical-provider'
+import { SECTION_LABELS } from '@/lib/validations/instruments'
+import { useTerms, useVertical } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
 import { toast } from 'sonner'
 import type { BookWithEntries, InstrumentOption, MusicianForDropdown } from './books-client'
@@ -26,6 +26,8 @@ export function BookDetail({
   onEntryChange,
 }: BookDetailProps) {
   const terms = useTerms()
+  // The sections this vertical groups its skills under (music: strings..other)
+  const sections = useVertical().sections
   const [showAddInstrument, setShowAddInstrument] = useState(false)
 
   // Get instruments that have entries in this book
@@ -34,7 +36,7 @@ export function BookDetail({
   const instrumentsNotInBook = instruments.filter((i) => !instrumentIdsInBook.has(i.id))
 
   // Group only instruments that are in this book
-  const grouped = INSTRUMENT_SECTIONS.reduce((acc, section) => {
+  const grouped = sections.reduce((acc, section) => {
     acc[section] = instrumentsInBook
       .filter((i) => (i.section || 'other') === section)
       .sort((a, b) => a.sort_order - b.sort_order)
@@ -42,7 +44,7 @@ export function BookDetail({
   }, {} as Record<string, InstrumentOption[]>)
 
   // Group available instruments for adding
-  const availableGrouped = INSTRUMENT_SECTIONS.reduce((acc, section) => {
+  const availableGrouped = sections.reduce((acc, section) => {
     acc[section] = instrumentsNotInBook
       .filter((i) => (i.section || 'other') === section)
       .sort((a, b) => a.sort_order - b.sort_order)
@@ -82,7 +84,7 @@ export function BookDetail({
         <div className="rounded-lg border bg-muted/30 p-4">
           <h4 className="font-medium mb-3">{`Select ${term(terms, 'skill', { plural: true, case: 'lower' })} to add:`}</h4>
           <div className="space-y-4 max-h-64 overflow-y-auto">
-            {INSTRUMENT_SECTIONS.map((section) => {
+            {sections.map((section) => {
               if (availableGrouped[section].length === 0) return null
               return (
                 <div key={section}>
@@ -152,7 +154,7 @@ export function BookDetail({
         </div>
       ) : (
         <div className="space-y-8">
-          {INSTRUMENT_SECTIONS.map((section) => {
+          {sections.map((section) => {
             if (grouped[section].length === 0) return null
             return (
               <BookSectionGroup

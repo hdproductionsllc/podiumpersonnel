@@ -24,6 +24,7 @@ import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import type { ScopeSelect } from '@/lib/staffing/scope'
 import { buildPaySummary, gigEndedAt, gigLead } from './rules'
+import { resolveVertical } from '@/lib/verticals/registry'
 
 type Supabase = any
 
@@ -40,7 +41,7 @@ export const afterGigProjectSelect = (scope: ScopeSelect | '' = '') => `
   organization_id,
   pay_summary_sent_at,
   gig_lead_musician_id,
-  organization:organizations(id, name, timezone, email_logo_url, email_brand_color, email_footer_text),
+  organization:organizations(id, name, timezone, vertical, email_logo_url, email_brand_color, email_footer_text),
   services(id, name, start_time, end_time, base_pay, leader_fee),
   project_positions(
     id,
@@ -55,6 +56,19 @@ export const afterGigProjectSelect = (scope: ScopeSelect | '' = '') => `
 
 /** The select without the chairs' scope: for readers that only need the gig's lead. */
 export const AFTER_GIG_PROJECT_SELECT = afterGigProjectSelect()
+
+/**
+ * This gig's lead (gigLead), with its organization's vertical deciding who
+ * leads when nobody was picked (music: Violin 1; production_crew: nobody).
+ * An organization row without a vertical resolves to the music default.
+ */
+export function leadOfGig(project: any) {
+  return gigLead(
+    project.project_positions,
+    project.gig_lead_musician_id,
+    resolveVertical(project.organization?.vertical).leadFallbackSkill,
+  )
+}
 
 function branding(org: any) {
   return {
@@ -130,7 +144,7 @@ export async function sendPaySummaryOnce(supabase: Supabase, project: any): Prom
             grandTotal,
             paymentsUrl: `${getAppUrl()}/dashboard/payments?project=${project.id}`,
             // No lead worked out: say so, so a missing gig report is never a silent gap.
-            needsGigLead: gigLead(project.project_positions, project.gig_lead_musician_id).lead === null,
+            needsGigLead: leadOfGig(project).lead === null,
             projectUrl: `${getAppUrl()}/dashboard/projects?expand=${project.id}`,
             branding: branding(org),
           }),
@@ -160,7 +174,7 @@ export async function requestGigReports(
   project: any,
   { force = false }: { force?: boolean } = {},
 ): Promise<ReportRequestOutcome[]> {
-  const { lead } = gigLead(project.project_positions, project.gig_lead_musician_id)
+  const { lead } = leadOfGig(project)
   const leads = lead ? [lead] : []
   const outcomes: ReportRequestOutcome[] = []
   const org = project.organization

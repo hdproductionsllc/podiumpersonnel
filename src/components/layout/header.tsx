@@ -18,6 +18,8 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { SidebarNav } from '@/components/layout/sidebar'
 import { Separator } from '@/components/ui/separator'
 import { Logo } from '@/components/ui/logo'
+import { useVertical } from '@/components/providers/vertical-provider'
+import { brandFor } from '@/lib/verticals'
 
 interface HeaderProps {
   user: {
@@ -27,6 +29,7 @@ interface HeaderProps {
 
 export function Header({ user }: HeaderProps) {
   const router = useRouter()
+  const vertical = useVertical()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   async function handleSignOut() {
@@ -149,7 +152,7 @@ export function Header({ user }: HeaderProps) {
         <SheetContent side="left" className="w-64 p-0 bg-sidebar text-sidebar-foreground border-sidebar-border">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <div className="flex h-20 items-center justify-center px-4">
-            <Logo variant="light" size="sm" />
+            <Logo variant="light" size="sm" name={brandFor(vertical).name} />
           </div>
           <Separator className="bg-sidebar-border" />
           <SidebarNav onNavigate={() => setMobileMenuOpen(false)} />

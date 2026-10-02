@@ -7,7 +7,6 @@ import { createClient } from '@/lib/supabase/client'
 import {
   instrumentSchema,
   type InstrumentInput,
-  INSTRUMENT_SECTIONS,
   SECTION_LABELS,
 } from '@/lib/validations/instruments'
 import {
@@ -29,7 +28,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import type { Instrument } from '@/types'
-import { useTerms } from '@/components/providers/vertical-provider'
+import { useTerms, useVertical } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
 
 interface InstrumentFormDialogProps {
@@ -51,6 +50,8 @@ export function InstrumentFormDialog({
   const [error, setError] = useState<string | null>(null)
   const isEditing = !!instrument
   const terms = useTerms()
+  // The sections this vertical groups its skills under (music: strings..other)
+  const sections = useVertical().sections
 
   const form = useForm<InstrumentInput>({
     resolver: zodResolver(instrumentSchema),
@@ -190,7 +191,7 @@ export function InstrumentFormDialog({
                       onChange={field.onChange}
                     >
                       <option value="">No section</option>
-                      {INSTRUMENT_SECTIONS.map((s) => (
+                      {sections.map((s) => (
                         <option key={s} value={s}>
                           {SECTION_LABELS[s]}
                         </option>

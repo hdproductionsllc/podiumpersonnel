@@ -37,7 +37,8 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/api-helpers', () => ({
   serverError: (message: string) => NextResponse.json({ error: message }, { status: 500 }),
   getOrgPlan: vi.fn(async () => null),
-  getOrgVertical: vi.fn(async () => ({ terms: { person: { singular: 'Musician', plural: 'Musicians' } } })),
+  // The real music template, as getOrgVertical returns for every organization today.
+  getOrgVertical: vi.fn(async () => (await import('@/lib/verticals')).VERTICALS.music_contractor),
 }))
 
 vi.mock('@/lib/email/send', () => {

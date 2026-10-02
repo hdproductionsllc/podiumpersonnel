@@ -177,8 +177,10 @@ export default async function GigPage({ params }: GigPageProps) {
   let personTerm = 'Musician'
   let workTerm = 'project'
   let rankTerm = 'chair'
+  let sessionTypeLabels: Record<string, string> | undefined
   if (position?.project?.organization_id) {
-    const { terms } = await getOrgVertical(position.project.organization_id)
+    const { terms, sessionTypes } = await getOrgVertical(position.project.organization_id)
+    sessionTypeLabels = Object.fromEntries(sessionTypes.map((t) => [t.key, t.workerLabel]))
     personTerm = term(terms, 'person')
     workTerm = term(terms, 'work', { case: 'lower' })
     rankTerm = term(terms, 'rank', { case: 'lower' })
@@ -322,6 +324,8 @@ export default async function GigPage({ params }: GigPageProps) {
       chairHeldByOther={chairHeldByOther}
       workTerm={workTerm}
       rankTerm={rankTerm}
+      personTerm={personTerm}
+      sessionTypeLabels={sessionTypeLabels}
       canDrop={canDrop}
       releasedReason={releasedReason}
     />

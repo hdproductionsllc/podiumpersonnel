@@ -11,7 +11,7 @@ import { DeleteInstrumentDialog } from './delete-instrument-dialog'
 import { PrepopulateButton } from './prepopulate-button'
 import { AddMissingButton } from './add-missing-button'
 import { SeedVerticalButton } from './seed-vertical-button'
-import { INSTRUMENT_SECTIONS, SECTION_LABELS } from '@/lib/validations/instruments'
+import { SECTION_LABELS } from '@/lib/validations/instruments'
 import type { Instrument } from '@/types'
 import { useVertical } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
@@ -44,6 +44,7 @@ export function InstrumentsClient({
 }: InstrumentsClientProps) {
   const router = useRouter()
   const vertical = useVertical()
+  const sections = vertical.sections
   const terms = vertical.terms
   // The standard-orchestra buttons only make sense for music verticals; other
   // verticals seed/re-seed their own taxonomy via the seed-skills route
@@ -71,7 +72,7 @@ export function InstrumentsClient({
     return true
   })
 
-  const grouped = INSTRUMENT_SECTIONS.reduce((acc, section) => {
+  const grouped = sections.reduce((acc, section) => {
     acc[section] = filteredInstruments.filter(
       (i) => (i.section || 'other') === section
     )
@@ -152,7 +153,7 @@ export function InstrumentsClient({
             onChange={(e) => setSectionFilter(e.target.value)}
           >
             <option value="">All sections</option>
-            {INSTRUMENT_SECTIONS.map((s) => (
+            {sections.map((s) => (
               <option key={s} value={s}>{SECTION_LABELS[s]}</option>
             ))}
           </select>
@@ -192,7 +193,7 @@ export function InstrumentsClient({
         <EmptyState title={`No ${term(terms, 'skill', { plural: true, case: 'lower' })} match your filters`} />
       ) : (
         <div className="space-y-8">
-          {INSTRUMENT_SECTIONS.map((section) => {
+          {sections.map((section) => {
             if (grouped[section].length === 0) return null
             return (
               <InstrumentSectionGroup
