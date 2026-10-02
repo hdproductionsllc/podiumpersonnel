@@ -349,6 +349,15 @@ describe('replacing the previous offer', () => {
     expect(events()[3].after).toMatchObject({ status: 'pending', musician_id: R.v1[0] })
   })
 
+  it('a failed send keeps the chair on offer when the earlier offer comes back', async () => {
+    q().sendOffer('v1', R.v1[0])
+    state.sendOfferFails = true
+
+    await offer('pos-v1', { musicianId: R.v1[1] })
+
+    expect(q().chair('v1').status).toBe('offered')
+  })
+
   it('puts a viewed offer back as viewed', async () => {
     const anna = q().sendOffer('v1', R.v1[0])
     anna.status = 'viewed'
@@ -429,6 +438,18 @@ describe('the musician cannot be read', () => {
     expect(mailCalls(email.sendContractOfferEmail)).toHaveLength(0)
     expect(events().map((e: Row) => e.action)).toEqual(['offer.superseded', 'offer.created', 'offer.withdrawn', 'offer.restored'])
     expect(events()[2].after).toMatchObject({ reason: 'musician_unreadable' })
+  })
+
+  it('an undone offer on an empty chair puts the chair back to vacant', async () => {
+    // create_offer marked the chair 'offered'; with its only offer undone it must
+    // not keep reading as out on offer.
+    state.musicianRead = { data: null, error: null }
+
+    const res = await offer('pos-v1', { musicianId: R.v1[1] })
+
+    expect(res.status).toBe(500)
+    expect(q().offers('v1')).toHaveLength(0)
+    expect(q().chair('v1')).toMatchObject({ status: 'vacant', musician_id: null })
   })
 })
 

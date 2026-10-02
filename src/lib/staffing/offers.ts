@@ -374,8 +374,38 @@ async function undoOffer(service: SupabaseClient, ctx: UndoContext): Promise<Ret
     return null
   }
   const restored = await restoreSuperseded(service, ctx.positionId, restorable(ctx.retired))
+  await reopenChairIfNothingLive(service, ctx.positionId)
   await logEvent(withdrawnEvents({ ...ctx, restored }))
   return restored
+}
+
+/**
+ * create_offer marked the chair 'offered'. With the new offer withdrawn and
+ * nothing live left on it, put an empty chair back to 'vacant' so it does not
+ * read as out on offer. Guarded so a chair someone holds is never touched.
+ */
+async function reopenChairIfNothingLive(service: SupabaseClient, positionId: string): Promise<void> {
+  const { data: live, error: liveError } = await service
+    .from('contract_offers')
+    .select('id')
+    .eq('project_position_id', positionId)
+    .in('status', [...LIVE_OFFER_STATUSES])
+    .limit(1)
+  if (liveError) {
+    console.error(`createOffer: could not check chair ${positionId} after withdrawing an offer:`, liveError)
+    return
+  }
+  if (live && live.length > 0) return
+
+  const { error } = await service
+    .from('project_positions')
+    .update({ status: 'vacant' })
+    .eq('id', positionId)
+    .eq('status', 'offered')
+    .is('musician_id', null)
+  if (error) {
+    console.error(`createOffer: could not reopen chair ${positionId} after withdrawing an offer:`, error)
+  }
 }
 
 /** The history of a withdrawn offer: it was taken back, and what it replaced came back. */
