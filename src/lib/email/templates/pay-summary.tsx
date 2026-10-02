@@ -12,6 +12,11 @@ interface PaySummaryEmailProps {
   grandTotal: number
   paymentsUrl: string
   needsGigLead?: boolean
+  /**
+   * The vertical's lead role ('Violin 1', the default when omitted), named in
+   * the no-lead notice; null where no role leads by default (production_crew).
+   */
+  leadFallbackLabel?: string | null
   projectUrl?: string
   branding?: EmailBranding
 }
@@ -32,6 +37,7 @@ export function PaySummaryEmail({
   grandTotal,
   paymentsUrl,
   needsGigLead,
+  leadFallbackLabel = 'Violin 1',
   projectUrl,
   branding,
 }: PaySummaryEmailProps) {
@@ -78,7 +84,10 @@ export function PaySummaryEmail({
 
         {needsGigLead && (
           <Text style={emailStyles.paragraph}>
-            <strong>No gig report was requested:</strong> nobody is confirmed in Violin 1 and no gig lead was picked.{' '}
+            <strong>No gig report was requested:</strong>
+            {leadFallbackLabel
+              ? ` nobody is confirmed in ${leadFallbackLabel} and no gig lead was picked.`
+              : ' no gig lead was picked.'}{' '}
             {projectUrl ? <a href={projectUrl}>Pick the gig lead</a> : 'Pick the gig lead on the gig'} and
             send the request from its Gig report panel.
           </Text>

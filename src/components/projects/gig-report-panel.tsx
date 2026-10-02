@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useVertical } from '@/components/providers/vertical-provider'
+import { noLeadReason } from '@/lib/after-gig/rules'
 
 /**
  * The lead musician's after-gig report, on the gig's row.
@@ -227,7 +228,7 @@ export function GigReportPanel({ projectId, positions, chosenLeadId, reports, ti
 
       {source === 'needs-pick' && (
         <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-          Nobody is confirmed in Violin 1, so pick who is leading this gig. Nobody is asked for a report until you do.
+          {`${noLeadReason(leadFallbackSkill)}, so pick who is leading this gig. Nobody is asked for a report until you do.`}
         </p>
       )}
 

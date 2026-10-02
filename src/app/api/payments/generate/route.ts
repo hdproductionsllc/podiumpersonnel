@@ -1,6 +1,7 @@
 import { requireOrgAdmin, apiSuccess, apiError } from '@/lib/api-helpers'
 import { acceptedOfferIncludesLeaderFee, acceptedOfferPay, computeGigPay, type OfferForPay } from '@/lib/payments/compute'
 import { gigLead, type PositionForAfterGig } from '@/lib/after-gig/rules'
+import { resolveVertical } from '@/lib/verticals/registry'
 import { isScoped, servicesFor, withScope, type PositionScope } from '@/lib/staffing/scope'
 
 export async function POST(request: Request) {
@@ -28,6 +29,7 @@ export async function POST(request: Request) {
             name,
             organization_id,
             gig_lead_musician_id,
+            organization:organizations(vertical),
             services(
               id,
               name,
@@ -89,14 +91,20 @@ export async function POST(request: Request) {
     // silently. Always empty for a chair on the whole gig.
     const agreedFeeNoServices: string[] = []
 
-    // Each gig's lead (the admin's pick, else Violin 1 chair 1), for labelling
-    // older offers that did not record the leader-fee choice.
+    // Each gig's lead (gigLead: the admin's pick, else the vertical's lead
+    // role, Violin 1 chair 1 for music), for labelling older offers that did
+    // not record the leader-fee choice.
     const leadByProject = new Map<string, string | null>()
     for (const projectId of new Set(positions.map((p) => p.project_id as string))) {
       const seated = positions.filter((p) => p.project_id === projectId) as unknown as PositionForAfterGig[]
-      const chosen = (positions.find((p) => p.project_id === projectId)!.projects as unknown as { gig_lead_musician_id: string | null })
-        .gig_lead_musician_id
-      leadByProject.set(projectId, gigLead(seated, chosen).lead?.musicianId ?? null)
+      const project = positions.find((p) => p.project_id === projectId)!.projects as unknown as {
+        gig_lead_musician_id: string | null
+        organization: { vertical: string | null } | null
+      }
+      leadByProject.set(
+        projectId,
+        gigLead(seated, project.gig_lead_musician_id, resolveVertical(project.organization?.vertical).leadFallbackSkill).lead?.musicianId ?? null
+      )
     }
 
     for (const position of positions) {

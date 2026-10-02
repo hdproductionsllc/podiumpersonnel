@@ -62,6 +62,8 @@ export const productionCrew: VerticalTemplate = {
     label: SERVICE_TYPE_LABELS[key],
     workerLabel: SERVICE_TYPE_LABELS[key].toLowerCase(),
   })),
+  // Every call type but 'other' (still on the call form's Type list).
+  addSessionTypes: CREW_SERVICE_TYPES.filter((key) => key !== 'other'),
   mainSessionType: 'show_call',
   sections: CREW_SECTIONS,
   // Nobody leads a show by role: the admin always names the crew chief.

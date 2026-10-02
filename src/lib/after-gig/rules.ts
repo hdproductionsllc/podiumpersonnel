@@ -125,6 +125,15 @@ export function gigLead(
   return { lead: null, source: 'needs-pick' }
 }
 
+/**
+ * Why a gig has no lead, for the "pick the gig lead" notice on the gig page.
+ * Music: "Nobody is confirmed in Violin 1", as it always said; a vertical
+ * where no role leads by default (production_crew): nobody was picked.
+ */
+export function noLeadReason(fallback: LeadFallbackSkill | null): string {
+  return fallback ? `Nobody is confirmed in ${fallback.label}` : 'No gig lead was picked'
+}
+
 export interface PaySummaryLine {
   musicianId: string
   name: string

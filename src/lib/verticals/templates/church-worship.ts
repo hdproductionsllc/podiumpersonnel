@@ -1,6 +1,6 @@
 import { plainTitleRules } from '../title-rules'
 import { CHURCH_WORSHIP_SEEDS } from '../seeds'
-import { MUSIC_SECTIONS, MUSIC_SESSION_TYPES, VIOLIN_ONE_LEAD } from '../defaults'
+import { MUSIC_SECTIONS, MUSIC_SESSION_TYPES, MUSIC_ADD_SESSION_TYPES, VIOLIN_ONE_LEAD } from '../defaults'
 import type { VerticalTemplate } from '../types'
 
 /**
@@ -41,6 +41,7 @@ export const churchWorship: VerticalTemplate = {
   titleRules: plainTitleRules(null),
   skillSeeds: CHURCH_WORSHIP_SEEDS,
   sessionTypes: MUSIC_SESSION_TYPES,
+  addSessionTypes: MUSIC_ADD_SESSION_TYPES,
   mainSessionType: 'performance',
   sections: MUSIC_SECTIONS,
   leadFallbackSkill: VIOLIN_ONE_LEAD,

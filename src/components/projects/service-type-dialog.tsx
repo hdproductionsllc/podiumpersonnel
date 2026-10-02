@@ -8,13 +8,15 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { useTerms } from '@/components/providers/vertical-provider'
-import { term } from '@/lib/verticals'
+import { useVertical } from '@/components/providers/vertical-provider'
+import { addSessionChoices, term } from '@/lib/verticals'
+import type { ServiceType } from '@/lib/validations/projects'
 
 interface ServiceTypeDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSelect: (type: 'rehearsal' | 'performance') => void
+  /** The vertical's choices (addSessionChoices): music offers rehearsal and performance */
+  onSelect: (type: ServiceType) => void
 }
 
 export function ServiceTypeDialog({
@@ -22,7 +24,8 @@ export function ServiceTypeDialog({
   onOpenChange,
   onSelect,
 }: ServiceTypeDialogProps) {
-  const terms = useTerms()
+  const vertical = useVertical()
+  const { terms } = vertical
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -34,27 +37,19 @@ export function ServiceTypeDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-3 py-4">
-          <Button
-            variant="outline"
-            className="h-auto py-4 flex flex-col items-start"
-            onClick={() => onSelect('rehearsal')}
-          >
-            <span className="font-semibold">Rehearsal</span>
-            <span className="text-sm text-muted-foreground font-normal">
-              Practice session for the {term(terms, 'person', { plural: true, case: 'lower' })}
-            </span>
-          </Button>
-
-          <Button
-            variant="outline"
-            className="h-auto py-4 flex flex-col items-start"
-            onClick={() => onSelect('performance')}
-          >
-            <span className="font-semibold">Performance</span>
-            <span className="text-sm text-muted-foreground font-normal">
-              Concert or public performance
-            </span>
-          </Button>
+          {addSessionChoices(vertical).map((choice) => (
+            <Button
+              key={choice.key}
+              variant="outline"
+              className="h-auto py-4 flex flex-col items-start"
+              onClick={() => onSelect(choice.key)}
+            >
+              <span className="font-semibold">{choice.label}</span>
+              {choice.description && (
+                <span className="text-sm text-muted-foreground font-normal">{choice.description}</span>
+              )}
+            </Button>
+          ))}
         </div>
 
         <div className="flex justify-end">

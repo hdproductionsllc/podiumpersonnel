@@ -39,7 +39,7 @@ import {
 import { usePlan } from '@/components/providers/plan-provider'
 import { useOrgFlags } from '@/components/providers/org-flags-provider'
 import { useTerms, useVertical } from '@/components/providers/vertical-provider'
-import { term, threeCallShowServices, leaderFeeForNewService, mainSessionLabel } from '@/lib/verticals'
+import { term, threeCallShowServices, leaderFeeForNewService, mainSessionLabel, countSessionTypes } from '@/lib/verticals'
 import { canCreateProject, canUseEmailFeatures, PLAN_LIMITS } from '@/lib/plan'
 import { UpgradePrompt } from '@/components/billing/upgrade-prompt'
 import { GigReportPanel, type GigReportRow } from '@/components/projects/gig-report-panel'
@@ -351,7 +351,7 @@ export function ProjectsClient({
   const [deletingService, setDeletingService] = useState<Service | null>(null)
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const [activeProjectDates, setActiveProjectDates] = useState<{ start: string | null; end: string | null }>({ start: null, end: null })
-  const [selectedServiceType, setSelectedServiceType] = useState<'rehearsal' | 'performance'>('rehearsal')
+  const [selectedServiceType, setSelectedServiceType] = useState<ServiceType>('rehearsal')
 
   // Expandable row state
   const searchParams = useSearchParams()
@@ -470,7 +470,7 @@ export function ProjectsClient({
     setServiceTypeOpen(true)
   }
 
-  function handleServiceTypeSelect(type: 'rehearsal' | 'performance') {
+  function handleServiceTypeSelect(type: ServiceType) {
     setSelectedServiceType(type)
     setServiceTypeOpen(false)
     setServiceFormOpen(true)
@@ -1254,14 +1254,7 @@ export function ProjectsClient({
         organizationId={organizationId}
         timezone={timezone}
         initialServiceType={editingService ? undefined : selectedServiceType}
-        existingServiceCounts={(() => {
-          const p = projects.find(proj => proj.id === activeProjectId)
-          if (!p) return { rehearsal: 0, performance: 0 }
-          return {
-            rehearsal: p.services.filter(s => s.service_type === 'rehearsal').length,
-            performance: p.services.filter(s => s.service_type === 'performance').length,
-          }
-        })()}
+        existingServiceCounts={countSessionTypes(projects.find(proj => proj.id === activeProjectId)?.services ?? [])}
         onSuccess={handleSuccess}
       />
 

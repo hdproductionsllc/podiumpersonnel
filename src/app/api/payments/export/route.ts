@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getOrgPlan, serverError } from '@/lib/api-helpers'
+import { getOrgPlan, getOrgVertical, serverError } from '@/lib/api-helpers'
+import { sessionTypeText } from '@/lib/verticals'
 import { canExport } from '@/lib/plan'
 import { DEFAULT_TIMEZONE } from '@/lib/utils'
 import * as XLSX from 'xlsx'
@@ -43,6 +44,8 @@ export async function POST(request: Request) {
     .eq('id', membership.organization_id)
     .single()
   const timezone = org?.timezone || DEFAULT_TIMEZONE
+  // Session types print as they always have for music (the raw type); a crew's as "show", "load-in".
+  const vertical = await getOrgVertical(membership.organization_id)
 
   try {
     const body = await request.json()
@@ -166,7 +169,7 @@ export async function POST(request: Request) {
           'Phone': musician.phone || '',
           'Project': service.project.name,
           'Service': service.name,
-          'Service Type': service.service_type,
+          'Service Type': service.service_type ? sessionTypeText(vertical, service.service_type) : service.service_type,
           'Service Date': serviceDate,
           'Amount': payment.amount,
           'Payment Type': paymentType,

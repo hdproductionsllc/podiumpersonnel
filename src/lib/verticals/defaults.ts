@@ -1,5 +1,5 @@
 import { INSTRUMENT_SECTIONS } from '@/lib/validations/instruments'
-import { SERVICE_TYPES, SERVICE_TYPE_LABELS } from '@/lib/validations/projects'
+import { SERVICE_TYPES, SERVICE_TYPE_LABELS, type ServiceType } from '@/lib/validations/projects'
 import type { LeadFallbackSkill, ProjectPresetKey, SessionTypeOption } from './types'
 
 /**
@@ -19,6 +19,9 @@ export const MUSIC_SESSION_TYPES: readonly SessionTypeOption[] = SERVICE_TYPES.m
   label: SERVICE_TYPE_LABELS[key],
   workerLabel: key,
 }))
+
+/** The "Add session" dialog's two buttons, as they have always been. */
+export const MUSIC_ADD_SESSION_TYPES: readonly ServiceType[] = ['rehearsal', 'performance']
 
 /** The instrument sections as they have always been grouped. */
 export const MUSIC_SECTIONS = INSTRUMENT_SECTIONS

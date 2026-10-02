@@ -9,6 +9,7 @@ import { fromZonedTime } from 'date-fns-tz/fromZonedTime'
 import {
   serviceSchema,
   type ServiceInput,
+  type ServiceType,
   SERVICE_TYPE_LABELS,
 } from '@/lib/validations/projects'
 import {
@@ -34,7 +35,7 @@ import {
 } from '@/components/ui/form'
 import { formatTimezoneLabel } from '@/lib/utils'
 import { useVertical } from '@/components/providers/vertical-provider'
-import { term } from '@/lib/verticals'
+import { newSessionDefaults, term, type SessionCounts } from '@/lib/verticals'
 import type { Service } from '@/types'
 
 /** Convert a UTC ISO string to a datetime-local value in the org's timezone */
@@ -56,25 +57,10 @@ interface ServiceFormDialogProps {
   projectEndDate?: string | null
   organizationId: string
   timezone: string
-  initialServiceType?: 'rehearsal' | 'performance'
-  existingServiceCounts?: { rehearsal: number; performance: number }
+  initialServiceType?: ServiceType
+  /** How many sessions of each type the gig has (countSessionTypes), for the default name */
+  existingServiceCounts?: SessionCounts
   onSuccess: () => void
-}
-
-function getDefaultServiceName(
-  type: 'rehearsal' | 'performance',
-  counts: { rehearsal: number; performance: number }
-): string {
-  if (type === 'rehearsal') {
-    const next = counts.rehearsal + 1
-    if (next === 1) return 'Rehearsal 1'
-    if (next === 2) return 'Dress Rehearsal'
-    return `Rehearsal ${next}`
-  }
-  // performance
-  const next = counts.performance + 1
-  if (next === 1) return 'Performance'
-  return `Performance ${next}`
 }
 
 /** Extract date part ("YYYY-MM-DD") from a datetime-local string */
@@ -102,7 +88,8 @@ export function ServiceFormDialog({
   existingServiceCounts,
   onSuccess,
 }: ServiceFormDialogProps) {
-  const { terms, sessionTypes, features } = useVertical()
+  const vertical = useVertical()
+  const { terms, sessionTypes, features } = vertical
   // No leader fee in this vertical: the field is hidden and the service says 0
   // ("none"). Where there is one, everything below is exactly as it was.
   const defaultLeaderFee = features.useLeaderFee ? 50 : 0
@@ -165,13 +152,12 @@ export function ServiceFormDialog({
         })
       } else {
         const serviceType = initialServiceType || 'rehearsal'
-        const counts = existingServiceCounts || { rehearsal: 0, performance: 0 }
-        const defaultName = getDefaultServiceName(serviceType, counts)
+        const defaults = newSessionDefaults(vertical, serviceType, existingServiceCounts || {})
+        const defaultName = defaults.name
 
         const dateToUse = projectStartDate || projectEndDate || ''
-        const defaultStartTimeStr = serviceType === 'rehearsal' ? '10:00' : '19:00'
-        const defaultEndH = serviceType === 'rehearsal' ? 13 : 22
-        const defaultEndTimeStr = `${String(defaultEndH).padStart(2, '0')}:00`
+        const defaultStartTimeStr = defaults.start
+        const defaultEndTimeStr = defaults.end
 
         // Call time: 30 min before start
         const [sh, sm] = defaultStartTimeStr.split(':').map(Number)
@@ -207,7 +193,7 @@ export function ServiceFormDialog({
       setError(null)
       setDateWarning(null)
     }
-  }, [open, service, form, initialServiceType, existingServiceCounts, projectStartDate, projectEndDate, defaultLeaderFee])
+  }, [open, service, form, initialServiceType, existingServiceCounts, projectStartDate, projectEndDate, defaultLeaderFee, vertical])
 
   // Sync form hidden fields whenever date/time parts change
   function syncFormFields(date: string, call: string, start: string, end: string) {

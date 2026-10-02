@@ -97,6 +97,10 @@ describe('verticals registry invariants', () => {
       }
       expect(keys, t.key).toContain(t.mainSessionType)
       expect(keys, t.key).toContain('other')
+      // The Add session dialog only offers the vertical's own types, its main one among them.
+      expect(t.addSessionTypes.length, t.key).toBeGreaterThan(0)
+      for (const a of t.addSessionTypes) expect(keys, t.key).toContain(a)
+      expect(t.addSessionTypes, t.key).toContain(t.mainSessionType)
     }
   })
 

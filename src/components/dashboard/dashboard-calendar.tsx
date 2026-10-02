@@ -18,6 +18,8 @@ import { toZonedTime } from 'date-fns-tz'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useVertical } from '@/components/providers/vertical-provider'
+import { sessionColorKey, sessionTypeText } from '@/lib/verticals'
 
 export interface CalendarService {
   id: string
@@ -63,6 +65,7 @@ const STAFFING_INDICATORS: Record<string, { color: string; label: string }> = {
 }
 
 export function DashboardCalendar({ services, timezone }: DashboardCalendarProps) {
+  const vertical = useVertical()
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
 
@@ -182,7 +185,7 @@ export function DashboardCalendar({ services, timezone }: DashboardCalendarProps
           const hasServices = dayServices.length > 0
 
           // Get unique service types for this day
-          const serviceTypes = [...new Set(dayServices.map((s) => s.service_type || 'other'))]
+          const serviceTypes = [...new Set(dayServices.map((s) => sessionColorKey(vertical, s.service_type)))]
 
           return (
             <button
@@ -252,7 +255,8 @@ export function DashboardCalendar({ services, timezone }: DashboardCalendarProps
           {selectedDayServices.length > 0 ? (
             <div className="space-y-2">
               {selectedDayServices.map((service) => {
-                const typeColors = SERVICE_TYPE_COLORS[service.service_type] || SERVICE_TYPE_COLORS.other
+                const colorKey = sessionColorKey(vertical, service.service_type)
+                const typeColors = SERVICE_TYPE_COLORS[colorKey] || SERVICE_TYPE_COLORS.other
                 const staffing = STAFFING_INDICATORS[service.staffingStatus]
 
                 return (
@@ -262,9 +266,9 @@ export function DashboardCalendar({ services, timezone }: DashboardCalendarProps
                     className={cn(
                       'block rounded-lg p-3 transition-all hover:shadow-sm border-l-3',
                       typeColors.bg,
-                      service.service_type === 'performance'
+                      colorKey === 'performance'
                         ? 'border-l-purple-400'
-                        : service.service_type === 'rehearsal'
+                        : colorKey === 'rehearsal'
                           ? 'border-l-blue-400'
                           : 'border-l-emerald-400'
                     )}
@@ -298,7 +302,7 @@ export function DashboardCalendar({ services, timezone }: DashboardCalendarProps
                           </div>
                         )}
                         <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', typeColors.text)}>
-                          {service.service_type || 'other'}
+                          {sessionTypeText(vertical, service.service_type) || 'other'}
                         </span>
                       </div>
                     </div>

@@ -169,6 +169,8 @@ export type VerticalTemplate = {
   skillSeeds: SkillSeed[] | 'sql'
   /** The session types offered, in order */
   sessionTypes: readonly SessionTypeOption[]
+  /** The choices the "Add session" dialog offers, in order (music: rehearsal, performance) */
+  addSessionTypes: readonly ServiceType[]
   /**
    * The type of a gig's main session: the one a blank project creates, and the
    * one whose times the project form edits for a one-day gig.

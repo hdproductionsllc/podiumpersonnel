@@ -1,5 +1,5 @@
 import { orchestralTitleRules } from '../title-rules'
-import { MUSIC_PROJECT_PRESETS, MUSIC_SECTIONS, MUSIC_SESSION_TYPES, VIOLIN_ONE_LEAD } from '../defaults'
+import { MUSIC_PROJECT_PRESETS, MUSIC_SECTIONS, MUSIC_SESSION_TYPES, MUSIC_ADD_SESSION_TYPES, VIOLIN_ONE_LEAD } from '../defaults'
 import type { VerticalTemplate } from '../types'
 
 /**
@@ -40,6 +40,7 @@ export const musicContractor: VerticalTemplate = {
   titleRules: orchestralTitleRules,
   skillSeeds: 'sql',
   sessionTypes: MUSIC_SESSION_TYPES,
+  addSessionTypes: MUSIC_ADD_SESSION_TYPES,
   mainSessionType: 'performance',
   sections: MUSIC_SECTIONS,
   leadFallbackSkill: VIOLIN_ONE_LEAD,

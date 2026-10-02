@@ -145,6 +145,7 @@ export async function sendPaySummaryOnce(supabase: Supabase, project: any): Prom
             paymentsUrl: `${getAppUrl()}/dashboard/payments?project=${project.id}`,
             // No lead worked out: say so, so a missing gig report is never a silent gap.
             needsGigLead: leadOfGig(project).lead === null,
+            leadFallbackLabel: resolveVertical(project.organization?.vertical).leadFallbackSkill?.label ?? null,
             projectUrl: `${getAppUrl()}/dashboard/projects?expand=${project.id}`,
             branding: branding(org),
           }),

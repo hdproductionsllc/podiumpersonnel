@@ -1338,6 +1338,8 @@ interface SendPaySummaryParams {
   paymentsUrl: string
   /** True when the gig has no lead to ask for a report (no Violin 1 confirmed, none picked). */
   needsGigLead?: boolean
+  /** The vertical's lead role for that notice ('Violin 1' when omitted; null: none) */
+  leadFallbackLabel?: string | null
   projectUrl?: string
   branding?: EmailBranding
 }
@@ -1354,6 +1356,7 @@ export async function sendPaySummaryEmail(params: SendPaySummaryParams) {
       grandTotal: params.grandTotal,
       paymentsUrl: params.paymentsUrl,
       needsGigLead: params.needsGigLead,
+      leadFallbackLabel: params.leadFallbackLabel,
       projectUrl: params.projectUrl,
       branding: params.branding,
     }),
