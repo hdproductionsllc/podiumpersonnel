@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { SettingsClient } from '@/components/settings/settings-client'
+import { getOrgStaffingSettings } from '@/lib/staffing/settings'
 
 export default async function SettingsPage({
   searchParams,
@@ -41,9 +42,14 @@ export default async function SettingsPage({
     email_footer_text: string | null
   }
 
+  // Read on their own so the page still loads if migration 096 is not applied
+  // yet (null: the two switches are not shown).
+  const staffingSettings = await getOrgStaffingSettings(supabase, organization.id)
+
   return (
     <SettingsClient
       organization={organization}
+      staffingSettings={staffingSettings}
       role={membership.role}
       currentUserId={user.id}
       showSetupPrompt={setup === 'musician_policy'}

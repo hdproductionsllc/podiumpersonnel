@@ -1049,7 +1049,7 @@ export function SendOfferDialog({
               <option value="2">48 hours (recommended)</option>
               <option value="7">1 week</option>
               <option value="custom">Custom date</option>
-              <option value="">No expiration</option>
+              <option value="">{`Until the first ${term(terms, 'session', { case: 'lower' })} starts`}</option>
             </select>
             {expiresIn === 'custom' && (
               <input
@@ -1238,7 +1238,7 @@ export function SendOfferDialog({
               {expiresIn === '0.17' ? '4 hours' :
                expiresIn === 'custom' ? (customDeadline || 'No date selected') :
                expiresIn ? `${expiresIn} day${expiresIn === '1' ? '' : 's'}` :
-               'No expiration'}
+               `When the first ${term(terms, 'session', { case: 'lower' })} starts`}
             </span>
           </div>
           {personalMessage.trim() && (

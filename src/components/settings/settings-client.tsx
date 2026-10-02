@@ -13,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { X, PartyPopper } from 'lucide-react'
 import { useTerms } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
+import type { OrgStaffingSettings } from '@/lib/staffing/settings'
 
 const tabs = [
   { id: 'organization', label: 'Organization' },
@@ -37,13 +38,15 @@ interface SettingsClientProps {
     email_brand_color?: string | null
     email_footer_text?: string | null
   }
+  /** Migration 096's switches; null when they could not be read. */
+  staffingSettings?: OrgStaffingSettings | null
   role: 'owner' | 'admin' | 'member'
   currentUserId: string
   showSetupPrompt?: boolean
   openBillingTab?: boolean
 }
 
-export function SettingsClient({ organization, role, currentUserId, showSetupPrompt, openBillingTab }: SettingsClientProps) {
+export function SettingsClient({ organization, staffingSettings = null, role, currentUserId, showSetupPrompt, openBillingTab }: SettingsClientProps) {
   const router = useRouter()
   const terms = useTerms()
   const [activeTab, setActiveTab] = useState<TabId>(openBillingTab ? 'billing' : 'organization')
@@ -107,7 +110,7 @@ export function SettingsClient({ organization, role, currentUserId, showSetupPro
 
       <div>
         {activeTab === 'organization' && (
-          <OrganizationSection organization={organization} role={role} />
+          <OrganizationSection organization={organization} staffingSettings={staffingSettings} role={role} />
         )}
         {activeTab === 'email-branding' && (
           <EmailBrandingSection organization={organization} role={role} />

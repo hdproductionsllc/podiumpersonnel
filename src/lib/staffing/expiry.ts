@@ -15,7 +15,10 @@ export type OfferExpiry =
   | { kind: 'hours'; hours: number }
   /** Answer by this instant (ISO). The dialog's "Custom date" is end of that day, admin's local time. */
   | { kind: 'until'; at: string }
-  /** No deadline: the offer stays open until answered or withdrawn. */
+  /**
+   * No deadline chosen: open until answered or withdrawn, but never past the
+   * gig's first service start (capNoExpiryAtGigStart, applied by createOffer).
+   */
   | { kind: 'none' }
 
 const HOUR_MS = 60 * 60 * 1000
@@ -45,6 +48,27 @@ export function resolveExpiresAt(expiry: OfferExpiry, now: number = Date.now()):
     case 'none':
       return null
   }
+}
+
+/**
+ * "No expiration" means "until the gig starts" (the plan, B1.2): an offer
+ * nobody answers must not hold a chair past the moment it is needed. An offer
+ * with no deadline gets the start of the gig's first service still ahead; an
+ * offer with a deadline is returned unchanged, and so is one on a gig with no
+ * service still to come (there is nothing to cap it at).
+ *
+ * New offers only: createOffer applies it; existing rows are not rewritten.
+ */
+export function capNoExpiryAtGigStart(
+  expiresAt: string | null,
+  serviceStarts: readonly (string | null | undefined)[],
+  now: number = Date.now()
+): string | null {
+  if (expiresAt !== null) return expiresAt
+  const ahead = serviceStarts
+    .map((s) => (s ? new Date(s).getTime() : NaN))
+    .filter((t) => Number.isFinite(t) && t > now)
+  return ahead.length > 0 ? new Date(Math.min(...ahead)).toISOString() : null
 }
 
 /**

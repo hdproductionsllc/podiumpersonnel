@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { SubRequestForm } from './sub-request-form'
-import { hasLapsed, hasLiveStatus } from '@/lib/staffing/live'
+import { describeGigOffer, type GigOfferTone } from '@/lib/staffing/gig-offer-state'
 
 interface Service {
   id: string
@@ -67,6 +67,23 @@ interface GigPageClientProps {
   instruments: Instrument[]
   existingSubRequest: SubRequest | null
   subsEnabled?: boolean
+  /** projects.status; a cancelled or finished gig has its own sentence. */
+  projectStatus?: string | null
+  /** musicians.is_active; false closes a live offer. */
+  musicianActive?: boolean | null
+  /** Someone else holds the chair now (never true for a substitute's offer). */
+  chairHeldByOther?: boolean
+  /** The org vertical's word for the gig, lowercase ("project"). */
+  workTerm?: string
+  /** Its word for the chair, lowercase, or '' when the vertical has none. */
+  rankTerm?: string
+}
+
+const TONE_CLASSES: Record<GigOfferTone, string> = {
+  success: 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200',
+  danger: 'bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200',
+  warning: 'bg-amber-50 dark:bg-amber-950 text-amber-800 dark:text-amber-200',
+  neutral: 'bg-muted text-muted-foreground',
 }
 
 export function GigPageClient({
@@ -90,6 +107,11 @@ export function GigPageClient({
   instruments,
   existingSubRequest,
   subsEnabled = true,
+  projectStatus = null,
+  musicianActive = null,
+  chairHeldByOther = false,
+  workTerm,
+  rankTerm,
 }: GigPageClientProps) {
   const [showSubRequestForm, setShowSubRequestForm] = useState(false)
   const [subRequestSubmitted, setSubRequestSubmitted] = useState(false)
@@ -98,12 +120,21 @@ export function GigPageClient({
   // avoid double-taps on slow mobile connections (the POST does a full redirect).
   const [submitting, setSubmitting] = useState<false | 'accept' | 'decline'>(false)
 
-  const isExpired = hasLapsed(expiresAt)
-  const canRespond = hasLiveStatus(offerStatus)
+  const offerState = describeGigOffer({
+    offerStatus,
+    expiresAt,
+    projectStatus,
+    musicianActive,
+    chairHeldByOther,
+    workTerm,
+    rankTerm,
+    organizationName,
+  })
+  const canRespond = offerState.key === 'open'
   // Sub requests never needed an account: /api/gig/[token]/request-sub authorizes
   // on the token alone and enforces the plan gate server-side. Requiring one here
   // only hid the button from the musicians most likely to need it.
-  const canRequestSub = offerStatus === 'accepted' && !currentSubRequest && subsEnabled
+  const canRequestSub = offerState.key === 'accepted' && !currentSubRequest && subsEnabled
 
   function handleSubRequestSuccess() {
     setShowSubRequestForm(false)
@@ -310,10 +341,16 @@ export function GigPageClient({
                 </div>
               )}
 
-              {offerStatus === 'accepted' && (
+              {offerState.message && offerState.key !== 'accepted' && (
+                <div className={`rounded-md p-4 ${TONE_CLASSES[offerState.tone]}`} data-offer-state={offerState.key}>
+                  {offerState.message}
+                </div>
+              )}
+
+              {offerState.key === 'accepted' && (
                 <div className="space-y-3">
-                  <div className="rounded-md bg-green-50 dark:bg-green-950 p-4 text-green-800 dark:text-green-200">
-                    You have accepted this offer.
+                  <div className={`rounded-md p-4 ${TONE_CLASSES.success}`} data-offer-state="accepted">
+                    {offerState.message}
                   </div>
 
                   {/* Sub request status */}
@@ -426,37 +463,7 @@ export function GigPageClient({
                 </div>
               )}
 
-              {offerStatus === 'declined' && (
-                <div className="rounded-md bg-red-50 dark:bg-red-950 p-4 text-red-800 dark:text-red-200">
-                  You have declined this offer.
-                </div>
-              )}
-
-              {offerStatus === 'rescinded' && (
-                <div className="rounded-md bg-amber-50 dark:bg-amber-950 p-4 text-amber-800 dark:text-amber-200">
-                  This offer was withdrawn by the organization. No response is needed.
-                </div>
-              )}
-
-              {offerStatus === 'superseded' && (
-                <div className="rounded-md bg-amber-50 dark:bg-amber-950 p-4 text-amber-800 dark:text-amber-200">
-                  This offer has been replaced and is no longer open. No response is needed. If you received a newer offer, please answer that one.
-                </div>
-              )}
-
-              {offerStatus === 'released' && (
-                <div className="rounded-md bg-muted p-4 text-muted-foreground">
-                  You have been released from this engagement. No action is needed.
-                </div>
-              )}
-
-              {isExpired && canRespond && (
-                <div className="rounded-md bg-yellow-50 dark:bg-yellow-950 p-4 text-yellow-800 dark:text-yellow-200">
-                  This offer has expired.
-                </div>
-              )}
-
-              {canRespond && !isExpired && (
+              {canRespond && (
                 <div className="space-y-4">
                   <p className="text-xs text-muted-foreground text-center px-2">
                     By accepting this offer, you agree to our{' '}

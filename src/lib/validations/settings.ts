@@ -6,6 +6,9 @@ export const updateOrganizationSchema = z.object({
   timezone: z.string().min(1, 'Timezone is required'),
   musician_policy: z.string().max(10000).optional().nullable(),
   disable_staffing_alerts: z.boolean().optional(),
+  // Migration 096. Sent only when the page could read them (absent before 096).
+  auto_cascade: z.boolean().optional(),
+  allow_worker_drop: z.boolean().optional(),
 })
 
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>

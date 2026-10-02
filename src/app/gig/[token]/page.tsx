@@ -84,6 +84,7 @@ export default async function GigPage({ params }: GigPageProps) {
       project_position:project_positions(
         id,
         chair_number,
+        musician_id,
         instrument:instruments(id, name),
         project:projects(
           id,
@@ -112,6 +113,7 @@ export default async function GigPage({ params }: GigPageProps) {
   const position = offerData.project_position as {
     id: string
     chair_number: number
+    musician_id: string | null
     instrument: { id: string; name: string } | null
     project: {
       id: string
@@ -168,8 +170,13 @@ export default async function GigPage({ params }: GigPageProps) {
   // Greeting fallback when a musician record has no first name. Follows the
   // org's vertical so a theatre company greets "Hi Performer," not "Hi Musician,".
   let personTerm = 'Musician'
+  let workTerm = 'project'
+  let rankTerm = 'chair'
   if (position?.project?.organization_id) {
-    personTerm = term((await getOrgVertical(position.project.organization_id)).terms, 'person')
+    const { terms } = await getOrgVertical(position.project.organization_id)
+    personTerm = term(terms, 'person')
+    workTerm = term(terms, 'work', { case: 'lower' })
+    rankTerm = term(terms, 'rank', { case: 'lower' })
   }
 
   let subsEnabled = true
@@ -197,11 +204,19 @@ export default async function GigPage({ params }: GigPageProps) {
 
   // An offer on a cancelled/completed gig, or to a deactivated musician, still
   // says pending but can no longer be answered (the accept/decline routes refuse
-  // it), so show it as withdrawn rather than with buttons that do nothing.
+  // it). It is not marked viewed, and the page shows it closed with the reason
+  // (describeGigOffer in src/lib/staffing/gig-offer-state.ts) instead of
+  // buttons that would do nothing.
   const offerClosed =
     hasLiveStatus(offerData.status) &&
     isOfferClosed(position?.project, musician)
-  const displayStatus = offerClosed ? 'rescinded' : offerData.status
+
+  // Someone else holds the chair now. A substitute's offer (093) is made on a
+  // chair the person they replace still holds, so it never counts.
+  const chairHeldByOther =
+    !!position?.musician_id &&
+    position.musician_id !== offerData.musician_id &&
+    offerData.is_substitution !== true
 
   // Mark as viewed if pending, unless this is the organization's own staff
   // previewing the offer rather than the musician reading it.
@@ -249,7 +264,7 @@ export default async function GigPage({ params }: GigPageProps) {
     <GigPageClient
       token={token}
       offerId={offerData.id}
-      offerStatus={displayStatus}
+      offerStatus={offerData.status}
       expiresAt={offerData.expires_at}
       musicianFirstName={musician?.first_name || personTerm}
       organizationName={position?.project?.organization?.name || 'Organization'}
@@ -267,6 +282,11 @@ export default async function GigPage({ params }: GigPageProps) {
       instruments={instruments}
       existingSubRequest={existingSubRequest}
       subsEnabled={subsEnabled}
+      projectStatus={position?.project?.status ?? null}
+      musicianActive={musician?.is_active ?? null}
+      chairHeldByOther={chairHeldByOther}
+      workTerm={workTerm}
+      rankTerm={rankTerm}
     />
   )
 }

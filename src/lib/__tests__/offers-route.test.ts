@@ -276,8 +276,35 @@ describe('the one expiry policy', () => {
     expect(Math.round((await span({ kind: 'hours', hours: 4 }))!)).toBe(4)
   })
 
-  it('"No expiration" stores no deadline', async () => {
+  /** Move the gig's two services to these instants (relative to the real clock). */
+  const servicesAt = (ceremony: number, cocktail: number) => {
+    q().db.row('services', 'svc-ceremony')!.start_time = new Date(ceremony).toISOString()
+    q().db.row('services', 'svc-cocktail')!.start_time = new Date(cocktail).toISOString()
+    q().hydrate()
+  }
+
+  it('"No expiration" ends when the gig\'s first service starts (B1.2)', async () => {
+    const ceremony = Date.now() + 72 * HOUR
+    servicesAt(ceremony + 2 * HOUR, ceremony) // listed out of order on purpose
+    const res = await offer('pos-v1', { musicianId: R.v1[0], expiry: { kind: 'none' } })
+    expect(row(res.body.offerId).expires_at).toBe(new Date(ceremony).toISOString())
+  })
+
+  it('"No expiration" on a gig already under way ends at the next service still ahead', async () => {
+    const cocktail = Date.now() + 2 * HOUR
+    servicesAt(Date.now() - HOUR, cocktail)
+    const res = await offer('pos-v1', { musicianId: R.v1[0], expiry: { kind: 'none' } })
+    expect(row(res.body.offerId).expires_at).toBe(new Date(cocktail).toISOString())
+  })
+
+  it('"No expiration" with no service still ahead stores no deadline', async () => {
+    servicesAt(Date.now() - 3 * HOUR, Date.now() - HOUR)
     expect(await span({ kind: 'none' })).toBeNull()
+  })
+
+  it('a deadline is never moved, even one after the gig starts', async () => {
+    servicesAt(Date.now() + 2 * HOUR, Date.now() + 3 * HOUR)
+    expect(Math.round((await span({ kind: 'hours', hours: 48 }))!)).toBe(48)
   })
 
   it('a custom date is stored as the instant the browser resolved', async () => {

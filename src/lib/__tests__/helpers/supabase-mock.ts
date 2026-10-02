@@ -3,7 +3,7 @@
  *
  * Scope: only the query-builder surface the offer-lifecycle routes actually
  * use — from / select / update / insert / delete / eq / neq / in / is / not /
- * lt / gte / lte / ilike / order / limit / single / maybeSingle, plus `select('*', { count: 'exact', head: true })`.
+ * lt / gt / gte / lte / ilike / order / limit / single / maybeSingle, plus `select('*', { count: 'exact', head: true })`.
  * Unknown filter operators throw loudly rather than silently matching.
  *
  * Behavior is driven by a plain in-memory table map: filters are applied to
@@ -221,6 +221,11 @@ class MockQueryBuilder implements PromiseLike<MockResult> {
     return this
   }
 
+  gt(column: string, value: unknown): this {
+    this.filters.push({ method: 'gt', args: [column, value] })
+    return this
+  }
+
   gte(column: string, value: unknown): this {
     this.filters.push({ method: 'gte', args: [column, value] })
     return this
@@ -280,6 +285,8 @@ class MockQueryBuilder implements PromiseLike<MockResult> {
         case 'lt':
           return !isNullish(row[col]) && (row[col] as any) < (args[1] as any)
         // Compared as strings: callers use these for ISO dates, which sort as text.
+        case 'gt':
+          return !isNullish(row[col]) && String(row[col]) > String(args[1])
         case 'gte':
           return !isNullish(row[col]) && String(row[col]) >= String(args[1])
         case 'lte':

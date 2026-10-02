@@ -21,7 +21,7 @@ import { ApproveReminderDialog } from './approve-reminder-dialog'
 import { ProjectFilesSection } from './project-files-section'
 import { IntakePanel } from '@/components/intake/intake-panel'
 import { detectConflicts } from './project-positions'
-import type { PositionJoined, BookForImport } from './project-positions'
+import type { PositionJoined, BookForImport, AutoCascadeSwitches } from './project-positions'
 import type { MusicianForOffer } from './send-offer-dialog'
 import type { Project, Service } from '@/types'
 import { toast } from 'sonner'
@@ -68,6 +68,8 @@ interface ProjectsClientProps {
   userId?: string
   dismissedTooltips?: string[]
   gigReports?: GigReportRow[]
+  /** The auto-offer switches (096); null when they could not be read. */
+  autoCascade?: AutoCascadeSwitches | null
 }
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
@@ -312,6 +314,7 @@ export function ProjectsClient({
   userId,
   dismissedTooltips = [],
   gigReports = [],
+  autoCascade = null,
 }: ProjectsClientProps) {
   const router = useRouter()
   const plan = usePlan()
@@ -980,6 +983,7 @@ export function ProjectsClient({
                               onPositionChange={handleSuccess}
                               waterfallTrigger={waterfallTrigger}
                               onWaterfallHandled={() => setWaterfallTrigger(null)}
+                              autoCascade={autoCascade}
                             />
                             <SubRequests
                               requests={project.project_positions.flatMap((p) =>

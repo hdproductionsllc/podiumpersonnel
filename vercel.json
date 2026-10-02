@@ -3,15 +3,15 @@
   "crons": [
     {
       "path": "/api/cron/expire-offers",
-      "schedule": "17 * * * *"
+      "schedule": "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
     },
     {
       "path": "/api/cron/offer-reminders",
-      "schedule": "23 12 * * *"
+      "schedule": "23 * * * *"
     },
     {
       "path": "/api/cron/complete-projects",
-      "schedule": "37 9 * * *"
+      "schedule": "38 9 * * *"
     },
     {
       "path": "/api/cron/keepalive",

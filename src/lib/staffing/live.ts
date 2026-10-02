@@ -2,8 +2,8 @@
  * "Is this offer still live?" — the one definition.
  *
  * An offer is live while it is waiting on an answer: status pending or viewed
- * AND not past its expires_at. The expire cron only flips the status once an
- * hour, so between the deadline and the next run the row still says pending;
+ * AND not past its expires_at. The expire cron only flips the status every five
+ * minutes, so between the deadline and the next run the row still says pending;
  * every reader that cares about the deadline must look at both. The audit
  * found this rule spelled out by hand in nine places with two different
  * meanings (status only vs status + deadline). It now lives here.

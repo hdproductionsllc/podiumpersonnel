@@ -52,10 +52,13 @@ describe('an admin preview does not mark an offer viewed', () => {
   })
 
   it('does not mark or offer buttons on a closed offer', () => {
-    // Cancelled/completed gig or deactivated musician: shown as withdrawn.
+    // Cancelled/completed gig or deactivated musician: not marked viewed, and
+    // the client is told why it is closed (describeGigOffer turns these into
+    // the sentence and hides the buttons; gig-offer-state.test.ts).
     expect(src).toContain('isOfferClosed(position?.project, musician)')
     expect(src).toContain("if (offerData.status === 'pending' && !offerClosed) {")
-    expect(src).toContain('offerStatus={displayStatus}')
+    expect(src).toContain('projectStatus={position?.project?.status ?? null}')
+    expect(src).toContain('musicianActive={musician?.is_active ?? null}')
   })
 
   it('marks it as before when nobody is logged in', () => {

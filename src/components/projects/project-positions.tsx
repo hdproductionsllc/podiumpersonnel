@@ -100,6 +100,15 @@ export type WaterfallTrigger = {
   isFollowUp?: boolean
 }
 
+/**
+ * The auto-offer switches (migration 096): the organization's, and the chairs
+ * switched out of it. Null when they could not be read (096 not applied).
+ */
+export type AutoCascadeSwitches = {
+  orgEnabled: boolean
+  disabledChairIds: string[]
+}
+
 interface ProjectPositionsProps {
   positions: PositionJoined[]
   projectId: string
@@ -113,6 +122,7 @@ interface ProjectPositionsProps {
   onPositionChange: () => void
   waterfallTrigger?: WaterfallTrigger | null
   onWaterfallHandled?: () => void
+  autoCascade?: AutoCascadeSwitches | null
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -181,6 +191,7 @@ export function ProjectPositions({
   onPositionChange,
   waterfallTrigger,
   onWaterfallHandled,
+  autoCascade = null,
 }: ProjectPositionsProps) {
   const plan = usePlan()
   const { titleRules, terms } = useVertical()
@@ -204,6 +215,7 @@ export function ProjectPositions({
   const [unassigning, setUnassigning] = useState(false)
   const [rescindPosition, setRescindPosition] = useState<PositionJoined | null>(null)
   const [rescinding, setRescinding] = useState(false)
+  const [savingAutoOfferId, setSavingAutoOfferId] = useState<string | null>(null)
   const [preSelectedMusicianId, setPreSelectedMusicianId] = useState<string | null>(null)
   /** False once "Someone else" opened the dialog, so it does not pre-pick a name. */
   const [offerAutoSelect, setOfferAutoSelect] = useState(true)
@@ -410,6 +422,42 @@ export function ProjectPositions({
     } finally {
       setUnassigning(false)
       setUnassignPosition(null)
+    }
+  }
+
+  /**
+   * The chair's "don't auto-offer" switch, or null when it is not shown. Shown
+   * while the organization has auto-offer on, and on any chair already switched
+   * out (so it can be switched back even after the organization turns it off).
+   */
+  function autoOfferState(position: PositionJoined): { disabled: boolean } | null {
+    if (!autoCascade) return null
+    const disabled = autoCascade.disabledChairIds.includes(position.id)
+    return autoCascade.orgEnabled || disabled ? { disabled } : null
+  }
+
+  // "chair" for verticals with chairs, "spot" for the ones without.
+  const rankWord = term(terms, 'rank', { case: 'lower' }) || 'spot'
+
+  async function handleToggleAutoOffer(position: PositionJoined, disabled: boolean) {
+    setSavingAutoOfferId(position.id)
+    try {
+      const response = await fetch(`/api/positions/${position.id}/auto-cascade`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ disabled }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        toast.error(result.error || `Failed to update this ${rankWord}`)
+        return
+      }
+      toast.success(disabled ? `This ${rankWord} will not be auto-offered` : `This ${rankWord} will be auto-offered again`)
+      onPositionChange()
+    } catch {
+      toast.error(`Failed to update this ${rankWord}`)
+    } finally {
+      setSavingAutoOfferId(null)
     }
   }
 
@@ -724,6 +772,19 @@ export function ProjectPositions({
                                   Unassign
                                 </Button>
                               )}
+                              {autoOfferState(position) && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={savingAutoOfferId === position.id}
+                                  onClick={() => handleToggleAutoOffer(position, !autoOfferState(position)!.disabled)}
+                                  title={autoOfferState(position)!.disabled
+                                    ? `Auto-offer is off for this ${rankWord}: if someone declines or drops out, you pick who is next. Click to turn it back on.`
+                                    : `If someone declines or drops out, Podium offers this ${rankWord} to the next person automatically. Click to turn that off for this ${rankWord}.`}
+                                >
+                                  {autoOfferState(position)!.disabled ? 'Auto-offer off' : 'Auto-offer on'}
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -767,6 +828,16 @@ export function ProjectPositions({
                                   {position.musician_id && (
                                     <DropdownMenuItem onClick={() => handleUnassign(position)}>
                                       Unassign
+                                    </DropdownMenuItem>
+                                  )}
+                                  {autoOfferState(position) && (
+                                    <DropdownMenuItem
+                                      disabled={savingAutoOfferId === position.id}
+                                      onClick={() => handleToggleAutoOffer(position, !autoOfferState(position)!.disabled)}
+                                    >
+                                      {autoOfferState(position)!.disabled
+                                        ? `Auto-offer this ${rankWord} again`
+                                        : `Don't auto-offer this ${rankWord}`}
                                     </DropdownMenuItem>
                                   )}
                                   <DropdownMenuItem onClick={() => handleDuplicatePosition(position)}>

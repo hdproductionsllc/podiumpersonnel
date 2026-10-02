@@ -2,9 +2,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceClient } from '@/lib/supabase/server'
 import { LIVE_OFFER_STATUSES, isLiveOffer } from './live'
-import { DEFAULT_OFFER_EXPIRY, resolveExpiresAt, type OfferExpiry } from './expiry'
+import { DEFAULT_OFFER_EXPIRY, capNoExpiryAtGigStart, resolveExpiresAt, type OfferExpiry } from './expiry'
 import { adminActor, logEvent, type Actor, type StaffingEvent } from './events'
-import { MIGRATION_094_MISSING, isMissingFunction } from './rpc'
+import { MIGRATION_094_MISSING, isMissingColumn, isMissingFunction } from './rpc'
 import {
   OFFER_EMAIL_ORG_FIELDS,
   OFFER_EMAIL_SERVICE_FIELDS,
@@ -177,7 +177,11 @@ export async function createOffer(
   const service = createServiceClient()
   const services: any[] = project?.services || []
   const nowIso = new Date().toISOString()
-  const expiresAt = resolveExpiresAt(input.expiry ?? DEFAULT_OFFER_EXPIRY)
+  // "No expiration" still ends when the gig starts.
+  const expiresAt = capNoExpiryAtGigStart(
+    resolveExpiresAt(input.expiry ?? DEFAULT_OFFER_EXPIRY),
+    services.map((s) => s.start_time)
+  )
   const personalMessage = input.personalMessage?.trim() || null
   const willEmail = sendEmail && !!musician?.email
 
@@ -554,12 +558,6 @@ export interface OfferTrackingColumns {
   terms_snapshot?: Record<string, unknown> | null
   delivery_status?: 'queued' | 'sent' | 'failed' | 'suppressed' | null
   is_substitution?: boolean
-}
-
-/** PostgREST "column not in schema cache" or Postgres "undefined column". */
-function isMissingColumn(error: unknown): boolean {
-  const code = (error as { code?: string } | null)?.code
-  return code === 'PGRST204' || code === '42703'
 }
 
 /**

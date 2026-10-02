@@ -43,6 +43,7 @@ export type StaffingAction =
   | 'position.assigned' // seated without an offer being accepted (direct assign, book)
   | 'position.unassigned'
   | 'position.repaired' // fixed by scripts/sql/094-repair-before-constraints.paste.sql
+  | 'position.auto_cascade_changed' // an admin switched auto-offer off (or back on) for this chair (096)
   // substitution requests
   | 'substitution.requested'
   | 'substitution.approved'

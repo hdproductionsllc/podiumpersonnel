@@ -29,3 +29,9 @@ export function isMissingFunction(error: unknown, fn: string): boolean {
   // `context`/`hint`, not here.
   return new RegExp(`\\b${fn}\\b`).test(e.message ?? '')
 }
+
+/** PostgREST "column not in schema cache" (PGRST204), or Postgres "undefined column" (42703). */
+export function isMissingColumn(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code
+  return code === 'PGRST204' || code === '42703'
+}

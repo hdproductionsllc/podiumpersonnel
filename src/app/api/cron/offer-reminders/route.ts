@@ -4,6 +4,7 @@ import { sendOfferReminderEmail, sendOfferExpiringSoonEmail, formatPerformanceDa
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
 import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
+import { isDueForReminder, reminderHorizon } from '@/lib/staffing/reminders'
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request)
@@ -17,16 +18,20 @@ export async function GET(request: NextRequest) {
   const baseUrl = getAppUrl()
 
   const now = new Date()
-  const in24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000)
 
-  // Find offers expiring within the next 24 hours that haven't been reminded yet
-  const { data: expiringOffers, error: fetchError } = await withCronRetry(
+  // Open offers not yet reminded whose deadline is close enough to be due
+  // (src/lib/staffing/reminders.ts: the last 12 hours, and past the halfway
+  // point of the offer's own response window). This runs hourly.
+  const { data: candidates, error: fetchError } = await withCronRetry(
     'offer-reminders: fetch expiring offers',
     () => supabase
       .from('contract_offers')
       .select(`
         id,
+        status,
+        sent_at,
         expires_at,
+        reminder_sent_at,
         token,
         custom_pay,
         project_position_id,
@@ -60,13 +65,15 @@ export async function GET(request: NextRequest) {
       .in('status', ['pending', 'viewed'])
       .not('expires_at', 'is', null)
       .gt('expires_at', now.toISOString())
-      .lte('expires_at', in24Hours.toISOString())
+      .lte('expires_at', reminderHorizon(now).toISOString())
       .is('reminder_sent_at', null),
   )
 
   if (fetchError) {
     throw fetchError
   }
+
+  const expiringOffers = (candidates || []).filter((offer) => isDueForReminder(offer, now))
 
   if (!expiringOffers || expiringOffers.length === 0) {
     return NextResponse.json({ reminded: 0 })

@@ -40,6 +40,20 @@ describe('vercel.json cron schedules', () => {
     }
   })
 
+  const job = (path: string) => config.crons.find((c) => c.path === path)!
+
+  it('collects lapsed offers every five minutes (the plan, B1.2)', () => {
+    const [minute, ...rest] = job('/api/cron/expire-offers').schedule.split(' ')
+    expect(rest).toEqual(['*', '*', '*', '*'])
+    const minutes = minute.split(',').map(Number)
+    expect(minutes).toHaveLength(12)
+    minutes.slice(1).forEach((m, i) => expect(m - minutes[i]).toBe(5))
+  })
+
+  it('sends offer reminders hourly, once an hour (B1.2)', () => {
+    expect(job('/api/cron/offer-reminders').schedule).toMatch(/^\d{1,2} \* \* \* \*$/)
+  })
+
   it('spreads the jobs across different minutes so they never pile up together', () => {
     const minutes = config.crons.flatMap((c) => minutesOf(c.schedule))
     expect(new Set(minutes).size).toBe(minutes.length)

@@ -35,6 +35,12 @@ export async function PATCH(request: Request) {
       ...(parsed.data.disable_staffing_alerts !== undefined && {
         disable_staffing_alerts: parsed.data.disable_staffing_alerts,
       }),
+      ...(parsed.data.auto_cascade !== undefined && {
+        auto_cascade: parsed.data.auto_cascade,
+      }),
+      ...(parsed.data.allow_worker_drop !== undefined && {
+        allow_worker_drop: parsed.data.allow_worker_drop,
+      }),
     })
     .eq('id', membership!.organization_id)
 

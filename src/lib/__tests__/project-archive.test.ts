@@ -32,11 +32,11 @@ describe('project archive rule', () => {
     expect(isReadyToComplete(SATURDAY, saturdayNightLA, LA)).toBe(false)
   })
 
-  it('the daily cron at 09:37 UTC completes Monday morning for both US zones', () => {
-    const mondayCronRun = new Date('2026-09-28T09:37:00Z')
+  it('the daily cron at 09:38 UTC completes Monday morning for both US zones', () => {
+    const mondayCronRun = new Date('2026-09-28T09:38:00Z')
     expect(isReadyToComplete(SATURDAY, mondayCronRun, CHICAGO)).toBe(true)
     expect(isReadyToComplete(SATURDAY, mondayCronRun, LA)).toBe(true)
-    const sundayCronRun = new Date('2026-09-27T09:37:00Z')
+    const sundayCronRun = new Date('2026-09-27T09:38:00Z')
     expect(isReadyToComplete(SATURDAY, sundayCronRun, CHICAGO)).toBe(false)
     expect(isReadyToComplete(SATURDAY, sundayCronRun, LA)).toBe(false)
   })

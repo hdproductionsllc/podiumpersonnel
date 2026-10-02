@@ -6,6 +6,7 @@ import { DEFAULT_TIMEZONE } from '@/lib/utils'
 import { isReadyToComplete } from '@/lib/projects/archive'
 import type { GigReportRow } from '@/components/projects/gig-report-panel'
 import { attachVenueDetails } from '@/lib/venue-attach'
+import { getAutoCascadeDisabledChairIds, getOrgStaffingSettings } from '@/lib/staffing/settings'
 
 export default async function ProjectsPage() {
   const supabase = await createClient()
@@ -137,6 +138,17 @@ export default async function ProjectsPage() {
     .order('requested_at', { ascending: true })
   if (gigReportsError) console.error('Projects page: could not read gig reports:', gigReportsError.message)
 
+  // Auto-offer switches (096), read on their own and tolerantly: before 096 is
+  // applied both are null and the per-chair switch is simply not shown.
+  const [staffingSettings, autoCascadeDisabledChairIds] = await Promise.all([
+    getOrgStaffingSettings(supabase, organization!.id),
+    getAutoCascadeDisabledChairIds(supabase, organization!.id),
+  ])
+  const autoCascade =
+    staffingSettings && autoCascadeDisabledChairIds
+      ? { orgEnabled: staffingSettings.autoCascade, disabledChairIds: autoCascadeDisabledChairIds }
+      : null
+
   // Fetch tutorial state for tooltips
   const { data: tutorialState } = await supabase
     .from('user_tutorial_state')
@@ -157,6 +169,7 @@ export default async function ProjectsPage() {
       userId={user!.id}
       dismissedTooltips={tutorialState?.dismissed_tooltips ?? []}
       gigReports={(gigReports as unknown as GigReportRow[]) ?? []}
+      autoCascade={autoCascade}
     />
   )
 }

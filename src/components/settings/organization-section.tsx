@@ -22,6 +22,7 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { resolveVertical, term } from '@/lib/verticals'
 import { useTerms } from '@/components/providers/vertical-provider'
+import type { OrgStaffingSettings } from '@/lib/staffing/settings'
 
 const TIMEZONE_OPTIONS = [
   { value: 'America/New_York', label: 'Eastern Time (ET)' },
@@ -35,10 +36,12 @@ const TIMEZONE_OPTIONS = [
 
 interface OrganizationSectionProps {
   organization: { id: string; name: string; slug: string; timezone: string; vertical?: string; musician_policy?: string | null; disable_staffing_alerts?: boolean }
+  /** Migration 096's switches; null when they could not be read (the switches are then not shown). */
+  staffingSettings?: OrgStaffingSettings | null
   role: 'owner' | 'admin' | 'member'
 }
 
-export function OrganizationSection({ organization, role }: OrganizationSectionProps) {
+export function OrganizationSection({ organization, staffingSettings = null, role }: OrganizationSectionProps) {
   const router = useRouter()
   const terms = useTerms()
   const [isLoading, setIsLoading] = useState(false)
@@ -46,6 +49,8 @@ export function OrganizationSection({ organization, role }: OrganizationSectionP
   const [success, setSuccess] = useState(false)
 
   const canEdit = role === 'owner' || role === 'admin'
+  // "chair" for verticals with chairs, "spot" for the ones without.
+  const rankOrSpot = term(terms, 'rank', { case: 'lower' }) || 'spot'
 
   const form = useForm<UpdateOrganizationInput>({
     resolver: zodResolver(updateOrganizationSchema),
@@ -55,6 +60,9 @@ export function OrganizationSection({ organization, role }: OrganizationSectionP
       timezone: organization.timezone,
       musician_policy: organization.musician_policy || '',
       disable_staffing_alerts: organization.disable_staffing_alerts || false,
+      // Left undefined when unreadable, so a save never writes columns that may not exist.
+      auto_cascade: staffingSettings?.autoCascade,
+      allow_worker_drop: staffingSettings?.allowWorkerDrop,
     },
   })
 
@@ -225,6 +233,58 @@ export function OrganizationSection({ organization, role }: OrganizationSectionP
                 </FormItem>
               )}
             />
+            {staffingSettings && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="auto_cascade"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="auto_cascade">Auto-offer to the next person</Label>
+                          <FormDescription>
+                            When someone declines, lets an offer run out, or drops out, Podium offers the {rankOrSpot} to the next available {term(terms, 'person', { case: 'lower' })} on your list at the same pay and emails you who it went to.
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            id="auto_cascade"
+                            checked={!!field.value}
+                            onCheckedChange={field.onChange}
+                            disabled={!canEdit}
+                          />
+                        </FormControl>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="allow_worker_drop"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="allow_worker_drop">Let people drop out themselves</Label>
+                          <FormDescription>
+                            Lets a {term(terms, 'person', { case: 'lower' })} who has accepted release themselves from a {term(terms, 'work', { case: 'lower' })} on their offer page, and emails you straight away; when off, they have to ask you or request a substitute instead.
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            id="allow_worker_drop"
+                            checked={!!field.value}
+                            onCheckedChange={field.onChange}
+                            disabled={!canEdit}
+                          />
+                        </FormControl>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
             {canEdit && (
               <Button type="submit" disabled={isLoading}>
                 {isLoading ? 'Saving...' : 'Save Changes'}
