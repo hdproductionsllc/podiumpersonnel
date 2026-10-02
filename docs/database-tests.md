@@ -1,0 +1,104 @@
+# Database tests, and how migrations are tracked
+
+Two things live here: the CI job that tests the database for real, and the rule
+for recording which migrations have actually been applied.
+
+## 1. Database tests (Postgres in CI)
+
+`npm test` never touches a database. `npm run test:db` does: it connects to a
+throwaway Supabase Postgres, replays every file in `supabase/migrations/` in
+filename order, then runs the tests in `src/lib/__tests__/db/`.
+
+| File | What it proves |
+|---|---|
+| `global-setup.ts` | Every migration, 001 to the latest, applies cleanly to a fresh Supabase Postgres. A failure names the file and Postgres's error. |
+| `rls-tenant-isolation.test.ts` | Two organizations, an admin in each. For `musicians`, `projects`, `contract_offers` and `payments`: an admin reads their own rows, sees none of the other org's, cannot update, delete or insert across orgs, and a signed-out visitor sees nothing. |
+| `constraints.test.ts` | One standard payment per musician/service/fee type (adjustments still allowed), services with payments cannot be deleted, one organization per account, status CHECKs on offers and projects. |
+| `helpers.ts` | `asUser()` runs a query as the `authenticated` role with a JWT `sub`, the way PostgREST does, inside a transaction that is always rolled back. `createTenant()` builds one org with one of each row. |
+
+The tests use synthetic data only (random ids, `example.test` addresses). This
+repo is public and so are its CI logs: never point `DB_TEST_URL` at a real
+Supabase project, and never add a test that prints row contents.
+
+### In CI
+
+The `database` job in `.github/workflows/ci.yml` runs on every pull request and
+every push to master. It starts `supabase/postgres:17.11.0.002` as a service
+container (the same image the nightly backup restore test uses), waits for the
+image's own init scripts, and runs `npm run test:db`.
+
+The image's superuser is `supabase_admin`; its `postgres` role is not one.
+The image also has no `storage` schema (the Storage service creates it on a real
+project), so `storage-stub.sql` stands in for it; migrations 032, 041 and 085
+need it.
+
+### Locally
+
+Needs Docker. Use a fresh container each time (the replay is skipped if the app
+schema already exists):
+
+```
+docker run -d --name podium-db-test -p 54329:5432 -e POSTGRES_PASSWORD=postgres supabase/postgres:17.11.0.002
+# wait about 20 seconds for the image's init scripts, then:
+DB_TEST_URL=postgresql://supabase_admin:postgres@localhost:54329/postgres npm run test:db
+docker rm -f podium-db-test
+```
+
+### Adding a test
+
+Every new migration that adds a table should get a row in the `TABLES` list in
+`rls-tenant-isolation.test.ts` if the table is tenant-owned. Every migration that
+adds a constraint or unique index the code relies on should get a case in
+`constraints.test.ts`. Concurrency tests (two connections racing on a chair) go
+here too once the `claim_chair` RPC exists.
+
+## 2. How migrations are tracked
+
+**Merged is not applied.** Merging a PR ships the code; it does not run the SQL.
+Production's schema is changed by hand, in the Supabase SQL editor, so the repo
+and the database can silently disagree (080 and 081 sat unapplied for days).
+
+Hand-applying stays allowed. What changes is that it is recorded, in the table
+the Supabase CLI itself uses, so the question "is migration N live?" has one
+answer that a query can give.
+
+### Recording an application
+
+After pasting a migration into the SQL editor and running its `-- verify:`
+queries, record it in the same session:
+
+```sql
+create schema if not exists supabase_migrations;
+create table if not exists supabase_migrations.schema_migrations (
+  version text primary key,
+  statements text[],
+  name text
+);
+insert into supabase_migrations.schema_migrations (version, name)
+values ('091', '091_example_name')
+on conflict (version) do nothing;
+```
+
+(The `create` lines are a no-op once the table exists. Use the migration's
+numeric prefix as `version` and its file name without `.sql` as `name`.)
+
+### Checking what is live
+
+```sql
+select version, name from supabase_migrations.schema_migrations order by version;
+```
+
+Compare against `ls supabase/migrations`. Anything in the folder but not in the
+table is merged but not applied, or applied but not recorded. Resolve it either
+way before pushing code that depends on it (the house rule stands: migration
+first, then code, and code tolerates the migration being absent).
+
+Migrations 001 to 090 predate this table. Backfill them once, after confirming
+by the audit in `docs/hardening-2026-09.md` that they are all live.
+
+### Not the source of truth
+
+`supabase/schema.sql` is a historical baseline from before migration 019 and is
+**not** a description of the database. It is labelled as such in its header.
+The source of truth is the migrations folder, which the `database` CI job
+replays from empty on every change.
