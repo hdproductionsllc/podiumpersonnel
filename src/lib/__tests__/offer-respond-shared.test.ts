@@ -25,7 +25,7 @@ vi.mock('@/lib/email/send', () => ({
   sendSubDeclinedFindAnotherEmail: (...a: any[]) => sendSubDeclinedFindAnotherEmail(...a),
 }))
 
-vi.mock('@/lib/email/log', () => ({
+vi.mock('@/lib/email/log', () => ({ hasRecentFailure: async () => false,
   logEmail: (...a: any[]) => logEmail(...a),
 }))
 

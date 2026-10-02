@@ -15,7 +15,7 @@ import { termsSnapshot } from '@/lib/staffing/offers'
 // offers.ts sits on top of the email stack; only its pure helpers are used here.
 vi.mock('@/lib/supabase/server', () => ({}))
 vi.mock('@/lib/email/send', () => ({}))
-vi.mock('@/lib/email/log', () => ({}))
+vi.mock('@/lib/email/log', () => ({ hasRecentFailure: async () => false }))
 
 /**
  * The one expiry policy (src/lib/staffing/expiry.ts) and the 093 files.

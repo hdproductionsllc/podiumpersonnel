@@ -68,7 +68,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 vi.mock('@/lib/email/send', () => ({ sendEmail: async () => ({ success: true }) }))
-vi.mock('@/lib/email/log', () => ({ logEmail: async () => {} }))
+vi.mock('@/lib/email/log', () => ({ hasRecentFailure: async () => false, logEmail: async () => {} }))
 
 async function submit() {
   const { POST } = await import('@/app/api/w9/[token]/route')

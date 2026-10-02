@@ -103,7 +103,7 @@ vi.mock('@/lib/email/send', () => ({
   sendAdminOfferSentEmail: vi.fn(async () => ({ id: 'em-admin', subject: 'Offer sent', emailHtml: '<p>ok</p>' })),
 }))
 
-vi.mock('@/lib/email/log', () => ({ logEmail: vi.fn(async () => {}) }))
+vi.mock('@/lib/email/log', () => ({ hasRecentFailure: async () => false, logEmail: vi.fn(async () => {}) }))
 
 import { POST as approvePOST } from '@/app/api/substitutions/[requestId]/approve/route'
 import { POST as declinePOST } from '@/app/api/substitutions/[requestId]/decline/route'

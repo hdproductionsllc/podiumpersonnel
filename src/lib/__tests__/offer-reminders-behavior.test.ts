@@ -36,7 +36,7 @@ vi.mock('@/lib/email/send', () => ({
   sendEmail: vi.fn(async () => ({ id: 'ops' })),
 }))
 
-vi.mock('@/lib/email/log', () => ({ logEmail: vi.fn(async () => {}) }))
+vi.mock('@/lib/email/log', () => ({ hasRecentFailure: async () => false, logEmail: vi.fn(async () => {}) }))
 
 import { GET } from '@/app/api/cron/offer-reminders/route'
 import * as email from '@/lib/email/send'

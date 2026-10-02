@@ -22,7 +22,7 @@ vi.mock('@/lib/email/send', () => ({
   sendGigReportRequestEmail: vi.fn(async () => ({ id: 'em-req', subject: 'How did it go?', emailHtml: '<p/>', suppressed: false })),
 }))
 
-vi.mock('@/lib/email/log', () => ({ logEmail: vi.fn(async () => {}) }))
+vi.mock('@/lib/email/log', () => ({ hasRecentFailure: async () => false, logEmail: vi.fn(async () => {}) }))
 
 import { buildPaySummary, gigEndedAt, gigLead, isAfterGigDue, isViolinOne, type PositionForAfterGig, type ServiceForAfterGig } from '@/lib/after-gig/rules'
 import { requestGigReports, sendPaySummaryOnce } from '@/lib/after-gig/run'

@@ -102,3 +102,32 @@ export async function logEmail(params: LogEmailParams): Promise<void> {
     console.warn('Failed to log email:', err)
   }
 }
+
+/**
+ * Whether this same send (organization, type, recipient, project, offer)
+ * already has a failed row written within the last `withinMs`. A job that
+ * retries a refused send (the after-gig pay summary every 15 minutes, a
+ * staffing alert the next day) would otherwise add an identical red row on
+ * every attempt. Any read problem answers false, so a failure is never lost
+ * because the check itself failed.
+ */
+export async function hasRecentFailure(params: LogEmailParams, withinMs: number): Promise<boolean> {
+  try {
+    const supabase = createServiceClient()
+    let query = supabase
+      .from('email_logs')
+      .select('id')
+      .eq('organization_id', params.organizationId)
+      .eq('email_type', params.emailType)
+      .eq('recipient_email', params.recipientEmail)
+      .eq('status', 'failed')
+      .gte('sent_at', new Date(Date.now() - withinMs).toISOString())
+    query = params.projectId ? query.eq('project_id', params.projectId) : query.is('project_id', null)
+    query = params.offerId ? query.eq('offer_id', params.offerId) : query.is('offer_id', null)
+    const { data, error } = await query.limit(1)
+    if (error) return false
+    return (data?.length ?? 0) > 0
+  } catch {
+    return false
+  }
+}

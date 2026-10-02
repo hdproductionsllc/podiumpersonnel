@@ -35,7 +35,7 @@ vi.mock('@/lib/email/send', () => ({
   sendEmail: vi.fn(async () => ({ id: 'em-generic' })),
 }))
 
-vi.mock('@/lib/email/log', () => ({
+vi.mock('@/lib/email/log', () => ({ hasRecentFailure: async () => false,
   logEmail: vi.fn(async () => {}),
 }))
 

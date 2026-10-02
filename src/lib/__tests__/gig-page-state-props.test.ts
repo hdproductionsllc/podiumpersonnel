@@ -34,7 +34,7 @@ vi.mock('@/lib/api-helpers', () => ({
 
 // Opening the page never emails anyone; the modules are replaced so nothing could.
 vi.mock('@/lib/email/send', () => ({}))
-vi.mock('@/lib/email/log', () => ({ logEmail: vi.fn() }))
+vi.mock('@/lib/email/log', () => ({ hasRecentFailure: async () => false, logEmail: vi.fn() }))
 vi.mock('@/lib/email/client', () => ({ logEmailConfig: vi.fn() }))
 
 vi.mock('next/navigation', () => ({

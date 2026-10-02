@@ -14,9 +14,9 @@ import { join, resolve } from 'path'
  *     email_logs or calls a send function outside a notify() payload.
  */
 
-vi.mock('@/lib/email/log', () => ({ logEmail: vi.fn(async () => {}) }))
+vi.mock('@/lib/email/log', () => ({ logEmail: vi.fn(async () => {}), hasRecentFailure: vi.fn(async () => false) }))
 
-import { logEmail } from '@/lib/email/log'
+import { hasRecentFailure, logEmail } from '@/lib/email/log'
 import { notify, describeFailure } from '@/lib/notify'
 
 const logged = () => vi.mocked(logEmail).mock.calls.map((c) => c[0])
@@ -35,6 +35,8 @@ const row = (r: { id?: string | null; subject?: string } | null) => ({
 
 beforeEach(() => {
   vi.mocked(logEmail).mockClear()
+  vi.mocked(hasRecentFailure).mockReset()
+  vi.mocked(hasRecentFailure).mockResolvedValue(false)
 })
 
 describe('a send that goes out', () => {
@@ -110,6 +112,21 @@ describe('a send the provider refuses', () => {
       )
     ).rejects.toThrow('down')
     expect(logged()).toEqual([expect.objectContaining({ emailType: 'admin_offer_sent', status: 'failed' })])
+  })
+
+  it('a send that keeps failing is recorded once a day, not on every retry, and still rethrows', async () => {
+    vi.mocked(hasRecentFailure).mockResolvedValue(true)
+    const error = new Error('down')
+    await expect(
+      notify({ type: 'offer_reminder', record: row }, { email: async () => { throw error } })
+    ).rejects.toBe(error)
+    expect(hasRecentFailure).toHaveBeenCalledWith(row(null), 24 * 60 * 60 * 1000)
+    expect(logEmail).not.toHaveBeenCalled()
+  })
+
+  it('never asks about earlier failures for a send that went out', async () => {
+    await notify({ type: 'offer_reminder', record: row }, { email: async () => ({ id: 'r' }) })
+    expect(hasRecentFailure).not.toHaveBeenCalled()
   })
 
   it('a record function that cannot describe the failure never hides the error', async () => {

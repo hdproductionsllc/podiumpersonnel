@@ -67,7 +67,7 @@ vi.mock('@/lib/email/send', () => {
   }
 })
 
-vi.mock('@/lib/email/log', () => ({ logEmail: vi.fn(async () => {}) }))
+vi.mock('@/lib/email/log', () => ({ hasRecentFailure: async () => false, logEmail: vi.fn(async () => {}) }))
 vi.mock('@/lib/email/client', () => ({ logEmailConfig: vi.fn() }))
 vi.mock('@/lib/venue-attach', () => ({ attachVenueDetails: vi.fn(async () => {}) }))
 vi.mock('next/navigation', () => ({

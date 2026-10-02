@@ -1,4 +1,4 @@
-import { logEmail, type LogEmailParams } from '@/lib/email/log'
+import { hasRecentFailure, logEmail, type LogEmailParams } from '@/lib/email/log'
 import { emailProvider } from './providers/email'
 import type { Channel, NotifyContent } from './types'
 
@@ -51,6 +51,13 @@ export interface NotifyEvent<R> {
 /** The longest provider message kept on a failed row. */
 const MAX_FAILURE_REASON = 500
 
+/**
+ * A send that keeps failing is recorded once per this window, not once per
+ * attempt: retrying jobs (the after-gig pay summary runs every 15 minutes)
+ * would otherwise fill a company's Emails page with identical red rows.
+ */
+const FAILURE_REPEAT_WINDOW_MS = 24 * 60 * 60 * 1000
+
 export async function notify<R>(event: NotifyEvent<R>, content: NotifyContent<R>): Promise<R> {
   // One channel today. Choosing channels per organization and person (and a
   // provider the company connects itself) is where this grows; until then
@@ -94,6 +101,7 @@ async function recordFailure<R>(event: NotifyEvent<R>, channel: Channel, error: 
     return
   }
   for (const row of planned) {
+    if (await hasRecentFailure(row, FAILURE_REPEAT_WINDOW_MS)) continue
     await logEmail({
       ...row,
       subject: subject || row.subject,

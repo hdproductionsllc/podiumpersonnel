@@ -96,7 +96,7 @@ vi.mock('@/lib/email/send', () => ({
     return { id: 're_1', emailHtml: p.html }
   },
 }))
-vi.mock('@/lib/email/log', () => ({ logEmail: async () => {} }))
+vi.mock('@/lib/email/log', () => ({ hasRecentFailure: async () => false, logEmail: async () => {} }))
 
 async function download() {
   const { GET } = await import('@/app/api/music-download/[fileId]/route')

@@ -17,7 +17,7 @@ vi.mock('@/lib/supabase/server', () => ({
   createServiceClient: () => (state.serviceClient ? state.serviceClient() : state.db),
 }))
 vi.mock('@/lib/email/send', () => ({}))
-vi.mock('@/lib/email/log', () => ({}))
+vi.mock('@/lib/email/log', () => ({ hasRecentFailure: async () => false }))
 
 import { logEvent, LOG_TIMEOUT_MS, SYSTEM, adminActor, musicianActor, type StaffingEvent } from '@/lib/staffing/events'
 import { releaseSeat } from '@/lib/staffing/seats'

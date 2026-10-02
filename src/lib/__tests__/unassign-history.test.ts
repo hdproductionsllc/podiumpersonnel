@@ -33,7 +33,7 @@ vi.mock('@/lib/email/send', () => ({
   sendEmail: vi.fn(async () => ({ id: 'em-generic' })),
 }))
 
-vi.mock('@/lib/email/log', () => ({ logEmail: vi.fn(async () => {}) }))
+vi.mock('@/lib/email/log', () => ({ hasRecentFailure: async () => false, logEmail: vi.fn(async () => {}) }))
 
 import { POST as unassignPOST } from '@/app/api/positions/[positionId]/unassign/route'
 

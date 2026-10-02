@@ -33,7 +33,7 @@ vi.mock('@/lib/email/send', () => ({
   sendSubDeclinedFindAnotherEmail: vi.fn(async () => ({ id: 'em-subdecl', subject: 'Sub declined', emailHtml: '<p>ok</p>' })),
 }))
 
-vi.mock('@/lib/email/log', () => ({ logEmail: vi.fn(async () => {}) }))
+vi.mock('@/lib/email/log', () => ({ hasRecentFailure: async () => false, logEmail: vi.fn(async () => {}) }))
 
 import { POST as rescindPOST } from '@/app/api/positions/[positionId]/rescind-offer/route'
 import { sendOfferRescindedEmail, sendAdminOfferResponseEmail } from '@/lib/email/send'
