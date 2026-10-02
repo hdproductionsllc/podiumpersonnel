@@ -3,7 +3,7 @@ import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferDeclinedEmail, sendAdminOfferResponseEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
-import { markOfferDeclined, vacateChair, notifySubDeclined, countChairs } from '@/lib/offers/respond'
+import { markOfferDeclined, vacateChair, notifySubDeclined, countChairs, isOfferClosed } from '@/lib/offers/respond'
 
 export async function POST(
   _request: Request,
@@ -33,7 +33,7 @@ async function handleDecline(_request: Request, token: string) {
       musician_id,
       expires_at,
       response_notes,
-      musician:musicians(id, first_name, last_name, email),
+      musician:musicians(id, first_name, last_name, email, is_active),
       project_position:project_positions(
         id,
         chair_number,
@@ -41,6 +41,7 @@ async function handleDecline(_request: Request, token: string) {
         project:projects(
           id,
           name,
+          status,
           organization_id,
           organization:organizations(id, name, timezone),
           services(start_time)
@@ -70,6 +71,13 @@ async function handleDecline(_request: Request, token: string) {
   const project = position?.project as any
   const organization = project?.organization as any
   const instrument = position?.instrument as any
+
+  // A cancelled or completed gig, or a deactivated musician, closes the offer
+  // even though its own status still says pending. The gig page shows it closed.
+  if (isOfferClosed(project, musician)) {
+    return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
+  }
+
   const services = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
   const timezone = organization?.timezone || DEFAULT_TIMEZONE
   const performanceDate = services[0] ? formatPerformanceDateForSubject(services[0].start_time, timezone) : ''

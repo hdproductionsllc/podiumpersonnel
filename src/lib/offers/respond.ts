@@ -28,6 +28,24 @@ import { getAppUrl } from '@/lib/utils'
 /** Statuses an offer can still be answered from. */
 export const RESPONDABLE_STATUSES = ['pending', 'viewed'] as const
 
+/**
+ * Whether an offer that is still pending can actually be answered. Cancelling
+ * or completing a project, or deactivating a musician, does not touch their
+ * offers, so without this check a musician could accept a cancelled gig and be
+ * emailed "Confirmed". The gig page uses the same rule to show the offer as
+ * closed instead of offering buttons that would be refused.
+ */
+export function isOfferClosed(
+  project: { status?: string | null } | null | undefined,
+  musician: { is_active?: boolean | null } | null | undefined
+): boolean {
+  return (
+    project?.status === 'cancelled' ||
+    project?.status === 'completed' ||
+    musician?.is_active === false
+  )
+}
+
 export type ClaimResult =
   /** The offer was accepted and the chair is now held by this musician. */
   | { outcome: 'claimed' }
@@ -165,6 +183,11 @@ export async function markOfferDeclined(
  * Called after the musician's decline has already been recorded, so a failure
  * here must not turn their successful answer into an error — but it does leave
  * a declined musician sitting on the chair, so it is logged loudly.
+ *
+ * Only a chair nobody holds is freed. A pending offer never seats anyone, so a
+ * decline has no one to remove; if the chair has a musician in it, that is
+ * someone else who got it another way (accepted a second offer, book import,
+ * direct assignment) and a decline must not evict them.
  */
 export async function vacateChair(
   supabase: SupabaseClient,
@@ -174,6 +197,7 @@ export async function vacateChair(
     .from('project_positions')
     .update({ musician_id: null, status: 'vacant' })
     .eq('id', projectPositionId)
+    .is('musician_id', null)
 
   if (error) {
     console.error(`Failed to vacate chair ${projectPositionId} after decline:`, error)
@@ -244,12 +268,15 @@ export async function notifyMusicianReleased(
 }
 
 /**
- * A substitute declined: tell the original musician they still need to find
+ * A substitute fell through: tell the original musician they still need to find
  * cover, and record it. Links back to their own gig page so they can try again.
+ * `reason` keeps the email truthful: a sub who let the offer run out did not
+ * decline it.
  */
 export async function notifySubDeclined(
   supabase: SupabaseClient,
-  ctx: SubstitutionContext
+  ctx: SubstitutionContext,
+  reason: 'declined' | 'expired' = 'declined'
 ): Promise<void> {
   const { offer, subRequest, musician, position, project, organization, instrument } = ctx
   const originalMusician = subRequest?.requesting_musician
@@ -284,6 +311,7 @@ export async function notifySubDeclined(
         subRequest.suggested_sub_name || `${musician?.first_name} ${musician?.last_name}`,
       gigUrl: originalOffer ? `${baseUrl}/gig/${originalOffer.token}` : baseUrl,
       performanceDate: ctx.performanceDate,
+      reason,
     }).catch((err) => {
       console.warn('Failed to send sub declined email:', err)
       return null

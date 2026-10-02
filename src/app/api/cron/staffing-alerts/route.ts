@@ -5,9 +5,7 @@ import { sendStaffingAlertEmail } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
-
-// Alert thresholds in days — one email per project per threshold
-const THRESHOLDS = [14, 7, 3]
+import { staffingAlertThreshold } from '@/lib/projects/staffing-alerts'
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request)
@@ -83,12 +81,9 @@ export async function GET(request: NextRequest) {
     const gigTime = new Date(earliestService.start_time).getTime()
     const daysAway = Math.floor((gigTime - now.getTime()) / (1000 * 60 * 60 * 24))
 
-    // Only alert within our threshold windows (up to 14 days out)
-    if (daysAway > THRESHOLDS[0] || daysAway < 0) continue
-
-    // Find which threshold we're at (use the tightest matching threshold)
-    const threshold = THRESHOLDS.find((t) => daysAway <= t)
-    if (!threshold) continue
+    // Only alert within a threshold window, using the tightest one that applies
+    const threshold = staffingAlertThreshold(daysAway)
+    if (threshold === null) continue
 
     // Skip if org has opted out of staffing alerts
     const organization = project.organization as any

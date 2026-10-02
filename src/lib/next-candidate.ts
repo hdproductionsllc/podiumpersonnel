@@ -89,16 +89,20 @@ export async function getNextCandidates(
     .filter(o => o.status === 'accepted' || !o.expires_at || new Date(o.expires_at) > now)
     .map(o => o.musician_id)
 
-  // Also exclude musicians who already declined THIS specific position
-  const { data: declinedOffers } = await supabase
+  // Also exclude musicians who already had their turn at THIS chair: declined,
+  // let it expire, had it withdrawn, or were released from it. Suggesting the
+  // person who just timed out as "next" sends the admin straight back to them.
+  // Re-offering on purpose is the separate follow-up action, which names the
+  // musician directly and does not go through this list.
+  const { data: pastOffersOnChair } = await supabase
     .from('contract_offers')
     .select('musician_id')
     .eq('project_position_id', positionId)
-    .eq('status', 'declined')
+    .in('status', ['declined', 'expired', 'rescinded', 'released'])
 
-  const declinedMusicianIds = (declinedOffers || []).map(o => o.musician_id)
+  const hadTheirTurnIds = (pastOffersOnChair || []).map(o => o.musician_id)
   const excludedMusicianIds = [
-    ...new Set([...seatedMusicianIds, ...offeredMusicianIds, ...declinedMusicianIds]),
+    ...new Set([...seatedMusicianIds, ...offeredMusicianIds, ...hadTheirTurnIds]),
   ]
 
   // Get musicians who play this instrument, sorted by call_order

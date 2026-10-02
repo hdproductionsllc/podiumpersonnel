@@ -344,7 +344,7 @@ describe('decline route — race safety', () => {
   it('declines a pending offer and vacates the chair', async () => {
     state.db = new MockSupabaseDb({
       contract_offers: [makeOffer()],
-      project_positions: [makePosition({ musician_id: 'mus-1' })],
+      project_positions: [makePosition()],
     })
 
     const res = await declinePOST(gigRequest('tok-1', 'decline'), routeParams('tok-1'))
@@ -451,6 +451,92 @@ describe('decline route — race safety', () => {
     expect(state.db.row('substitution_requests', 'sub-1')!.status).toBe('sub_declined')
     expect(sendSubDeclinedFindAnotherEmail).toHaveBeenCalledTimes(1)
     expect(vi.mocked(sendSubDeclinedFindAnotherEmail).mock.calls[0][0].to).toBe('olive@example.com')
+    expect(errorSpy).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Cascade guards (Release 0, A0.3)
+// ---------------------------------------------------------------------------
+
+describe('decline never evicts whoever holds the chair (audit R-2)', () => {
+  it('leaves a chair someone else holds exactly as it was', async () => {
+    // Mia's offer is still live, but the chair went to Rebecca another way
+    // (a second accepted offer, a book import, or a direct assignment).
+    state.db = new MockSupabaseDb({
+      contract_offers: [makeOffer()],
+      project_positions: [makePosition({ musician_id: 'mus-rebecca', status: 'confirmed' })],
+    })
+
+    await declinePOST(gigRequest('tok-1', 'decline'), routeParams('tok-1'))
+
+    expect(state.db.row('contract_offers', 'offer-1')!.status).toBe('declined')
+    const position = state.db.row('project_positions', 'pos-1')!
+    expect(position.musician_id).toBe('mus-rebecca')
+    expect(position.status).toBe('confirmed')
+
+    // The vacate write itself requires an empty chair.
+    const vacate = state.db.ops('project_positions', 'update')[0]
+    expect(vacate.filters).toContainEqual({ method: 'is', args: ['musician_id', null] })
+    expect(errorSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('a closed offer cannot be answered (audit R-5, R-9)', () => {
+  const withProjectStatus = (status: string): Partial<Row> => ({
+    project_position: { ...makeOffer().project_position, project: { ...PROJECT, status } },
+  })
+
+  const closedCases: [string, Partial<Row>][] = [
+    ['the gig was cancelled', withProjectStatus('cancelled')],
+    ['the gig is already completed', withProjectStatus('completed')],
+    ['the musician was deactivated', { musician: { ...makeOffer().musician, is_active: false } }],
+  ]
+
+  it.each(closedCases)('accept is refused when %s', async (_label, over) => {
+    state.db = new MockSupabaseDb({
+      contract_offers: [makeOffer(over)],
+      project_positions: [makePosition()],
+    })
+
+    const res = await acceptPOST(gigRequest('tok-1', 'accept'), routeParams('tok-1'))
+
+    expect(res.headers.get('location')).toContain('/gig/tok-1')
+    expect(state.db.row('contract_offers', 'offer-1')!.status).toBe('pending')
+    expect(state.db.row('project_positions', 'pos-1')!.musician_id).toBeNull()
+    expect(state.db.ops('contract_offers', 'update')).toHaveLength(0)
+    expect(state.db.ops('project_positions', 'update')).toHaveLength(0)
+    // Nobody is told "Confirmed" for a gig that is not happening.
+    expect(sendOfferAcceptedEmail).not.toHaveBeenCalled()
+    expect(sendAdminOfferResponseEmail).not.toHaveBeenCalled()
+    expect(errorSpy).not.toHaveBeenCalled()
+  })
+
+  it.each(closedCases)('decline is refused when %s', async (_label, over) => {
+    state.db = new MockSupabaseDb({
+      contract_offers: [makeOffer(over)],
+      project_positions: [makePosition()],
+    })
+
+    await declinePOST(gigRequest('tok-1', 'decline'), routeParams('tok-1'))
+
+    expect(state.db.row('contract_offers', 'offer-1')!.status).toBe('pending')
+    expect(state.db.ops('contract_offers', 'update')).toHaveLength(0)
+    expect(sendOfferDeclinedEmail).not.toHaveBeenCalled()
+    expect(sendAdminOfferResponseEmail).not.toHaveBeenCalled()
+    expect(errorSpy).not.toHaveBeenCalled()
+  })
+
+  it.each(['draft', 'active'])('a %s gig still accepts as before', async (status) => {
+    state.db = new MockSupabaseDb({
+      contract_offers: [makeOffer(withProjectStatus(status))],
+      project_positions: [makePosition()],
+    })
+
+    await acceptPOST(gigRequest('tok-1', 'accept'), routeParams('tok-1'))
+
+    expect(state.db.row('contract_offers', 'offer-1')!.status).toBe('accepted')
+    expect(state.db.row('project_positions', 'pos-1')!.musician_id).toBe('mus-1')
     expect(errorSpy).not.toHaveBeenCalled()
   })
 })

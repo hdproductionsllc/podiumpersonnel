@@ -5,6 +5,7 @@ import { sendOfferExpiredEmail, formatPerformanceDateForSubject } from '@/lib/em
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
 import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
+import { notifySubDeclined } from '@/lib/offers/respond'
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request)
@@ -102,6 +103,50 @@ export async function GET(request: NextRequest) {
 
     processed++
 
+    // 1a. A substitute's offer running out ends that substitution attempt, the
+    // same as a decline does. Without this the request stayed "approved" forever:
+    // the original musician could not ask for another sub and was never told.
+    const { data: subRequest } = await supabase
+      .from('substitution_requests')
+      .select(`
+        id,
+        requesting_musician_id,
+        suggested_sub_name,
+        requesting_musician:musicians!requesting_musician_id(id, first_name, last_name, email),
+        service:services(id, name)
+      `)
+      .eq('offer_id', offer.id)
+      .eq('status', 'approved')
+      .maybeSingle()
+
+    if (subRequest) {
+      const { data: endedRows, error: subError } = await supabase
+        .from('substitution_requests')
+        .update({ status: 'sub_declined' })
+        .eq('id', subRequest.id)
+        .eq('status', 'approved')
+        .select('id')
+
+      if (subError) {
+        console.error(`Failed to mark substitution request ${subRequest.id} sub_declined after offer ${offer.id} expired:`, subError)
+      } else if (endedRows && endedRows.length > 0) {
+        await notifySubDeclined(
+          supabase,
+          {
+            offer,
+            subRequest,
+            musician,
+            position,
+            project,
+            organization,
+            instrument,
+            performanceDate,
+          },
+          'expired'
+        )
+      }
+    }
+
     // 1b. Reset position — but only if no other active or accepted offer exists.
     // Including 'accepted' protects the substitution flow: when a substitute's
     // pending offer expires, the chair is still held by the original musician's
@@ -114,11 +159,15 @@ export async function GET(request: NextRequest) {
       .neq('id', offer.id)
       .limit(1)
 
+    // The update itself also requires an empty chair: the check above and this
+    // write are separate requests, and a pending offer never seats anyone, so a
+    // chair with a musician in it was filled some other way and is not ours to free.
     if (!otherActiveOffers || otherActiveOffers.length === 0) {
       const { error: positionError } = await supabase
         .from('project_positions')
         .update({ musician_id: null, status: 'vacant' })
         .eq('id', position.id)
+        .is('musician_id', null)
 
       if (positionError) {
         console.error(`Failed to reset position ${position.id}:`, positionError)

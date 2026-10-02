@@ -93,10 +93,16 @@ function fakeClient(f: Fixture) {
                 error: null,
               })
             }
-            return chain({
-              data: offers.filter((o) => o.status === 'declined'),
-              error: null,
-            })
+            // Past offers on this chair: honour the statuses the code asks for,
+            // so the test pins which outcomes count as "had their turn".
+            const pastOffers = {
+              eq() {
+                return this
+              },
+              in: (_col: string, statuses: string[]) =>
+                chain({ data: offers.filter((o) => statuses.includes(o.status)), error: null }),
+            }
+            return pastOffers
           }
 
           if (table === 'musicians') {
@@ -193,6 +199,24 @@ describe('next-in-line never suggests someone already on the gig', () => {
 
     expect(names(candidates)).toEqual(['Ben'])
   })
+
+  // The expiry email used to recommend, as "next in line", the very musician
+  // whose offer had just run out. Re-offering on purpose is the follow-up action.
+  it.each(['expired', 'rescinded', 'released'])(
+    'excludes whoever had a %s offer on this chair',
+    async (status) => {
+      const { candidates } = await getNextCandidates(
+        fakeClient({
+          positions: [{ id: CHAIR_2, musician_id: null }],
+          offers: [{ musician_id: ANNA.id, status, expires_at: null }],
+          players: [ANNA, BEN],
+        }),
+        CHAIR_2
+      )
+
+      expect(names(candidates)).toEqual(['Ben'])
+    }
+  )
 
   it('suggests everyone when every chair is vacant', async () => {
     // A vacant chair carries a null musician_id, which must not exclude anyone.

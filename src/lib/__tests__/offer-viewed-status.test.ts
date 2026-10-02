@@ -42,6 +42,22 @@ describe('an admin preview does not mark an offer viewed', () => {
     expect(src).toContain('if (musicianUserId && user.id === musicianUserId) return false')
   })
 
+  it('only a still-pending offer can become viewed', () => {
+    // The page loads, then writes. An accept, decline or expiry landing in
+    // between must not be overwritten by "viewed" (audit R-3).
+    const write = src.indexOf("status: 'viewed'")
+    const guard = src.indexOf(".eq('status', 'pending')", write)
+    expect(guard, 'viewed write is not guarded on pending').toBeGreaterThan(write)
+    expect(guard - write).toBeLessThan(400)
+  })
+
+  it('does not mark or offer buttons on a closed offer', () => {
+    // Cancelled/completed gig or deactivated musician: shown as withdrawn.
+    expect(src).toContain('isOfferClosed(position?.project, musician)')
+    expect(src).toContain("if (offerData.status === 'pending' && !offerClosed) {")
+    expect(src).toContain('offerStatus={displayStatus}')
+  })
+
   it('marks it as before when nobody is logged in', () => {
     // The common case: a token link opened from email, with no session at all.
     expect(src).toContain('if (!user) return false')

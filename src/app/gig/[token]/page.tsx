@@ -5,6 +5,7 @@ import { getOrgPlan, getOrgVertical } from '@/lib/api-helpers'
 import { term } from '@/lib/verticals'
 import { canUseSubstitutions } from '@/lib/plan'
 import { DEFAULT_TIMEZONE } from '@/lib/utils'
+import { isOfferClosed } from '@/lib/offers/respond'
 
 interface GigPageProps {
   params: Promise<{ token: string }>
@@ -75,7 +76,8 @@ export default async function GigPage({ params }: GigPageProps) {
         first_name,
         last_name,
         email,
-        user_id
+        user_id,
+        is_active
       ),
       project_position:project_positions(
         id,
@@ -88,6 +90,7 @@ export default async function GigPage({ params }: GigPageProps) {
           ensemble_type,
           start_date,
           end_date,
+          status,
           organization_id,
           organization:organizations(id, name, timezone)
         )
@@ -103,7 +106,7 @@ export default async function GigPage({ params }: GigPageProps) {
   // Type the nested data - eslint-disable needed for Supabase join queries
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const offerData = offer as any
-  const musician = offerData.musician as { id: string; first_name: string; last_name: string; email: string | null; user_id: string | null } | null
+  const musician = offerData.musician as { id: string; first_name: string; last_name: string; email: string | null; user_id: string | null; is_active: boolean | null } | null
   const position = offerData.project_position as {
     id: string
     chair_number: number
@@ -115,6 +118,7 @@ export default async function GigPage({ params }: GigPageProps) {
       ensemble_type: string | null
       start_date: string | null
       end_date: string | null
+      status: string | null
       organization_id: string
       organization: { id: string; name: string; timezone: string } | null
     } | null
@@ -189,9 +193,17 @@ export default async function GigPage({ params }: GigPageProps) {
     }
   }
 
+  // An offer on a cancelled/completed gig, or to a deactivated musician, still
+  // says pending but can no longer be answered (the accept/decline routes refuse
+  // it), so show it as withdrawn rather than with buttons that do nothing.
+  const offerClosed =
+    (offerData.status === 'pending' || offerData.status === 'viewed') &&
+    isOfferClosed(position?.project, musician)
+  const displayStatus = offerClosed ? 'rescinded' : offerData.status
+
   // Mark as viewed if pending, unless this is the organization's own staff
   // previewing the offer rather than the musician reading it.
-  if (offerData.status === 'pending') {
+  if (offerData.status === 'pending' && !offerClosed) {
     const staffPreview = await isOrgStaffPreviewing(
       position?.project?.organization_id,
       musician?.user_id
@@ -205,6 +217,9 @@ export default async function GigPage({ params }: GigPageProps) {
           viewed_at: new Date().toISOString(),
         })
         .eq('id', offerData.id)
+        // The page loaded a moment ago; an accept, decline or expiry may have
+        // landed since. Only an offer still pending can become "viewed".
+        .eq('status', 'pending')
 
       if (viewedError) {
         // The page still renders; the contractor just won't see "viewed" yet.
@@ -217,7 +232,7 @@ export default async function GigPage({ params }: GigPageProps) {
     <GigPageClient
       token={token}
       offerId={offerData.id}
-      offerStatus={offerData.status}
+      offerStatus={displayStatus}
       expiresAt={offerData.expires_at}
       musicianFirstName={musician?.first_name || personTerm}
       organizationName={position?.project?.organization?.name || 'Organization'}

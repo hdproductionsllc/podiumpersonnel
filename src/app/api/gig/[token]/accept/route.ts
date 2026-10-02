@@ -4,7 +4,7 @@ import { sendOfferAcceptedEmail, sendAdminOfferResponseEmail, formatPerformanceD
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
-import { claimChairForAccept, notifyMusicianReleased, countChairs } from '@/lib/offers/respond'
+import { claimChairForAccept, notifyMusicianReleased, countChairs, isOfferClosed } from '@/lib/offers/respond'
 
 export async function POST(
   _request: Request,
@@ -33,7 +33,7 @@ async function handleAccept(_request: Request, token: string) {
       project_position_id,
       musician_id,
       expires_at,
-      musician:musicians(id, first_name, last_name, email),
+      musician:musicians(id, first_name, last_name, email, is_active),
       project_position:project_positions(
         id,
         chair_number,
@@ -42,6 +42,7 @@ async function handleAccept(_request: Request, token: string) {
         project:projects(
           id,
           name,
+          status,
           organization_id,
           organization:organizations(id, name, timezone),
           services(id, name, service_type, start_time, end_time, venue, venue_id, venue_details:venues!services_venue_id_fkey(name, address, city, state, zip, google_maps_url), venue_2, venue_id_2, venue_2_details:venues!services_venue_id_2_fkey(name, address, city, state, zip, google_maps_url))
@@ -71,6 +72,13 @@ async function handleAccept(_request: Request, token: string) {
   const project = position?.project as any
   const organization = project?.organization as any
   const instrument = position?.instrument as any
+
+  // A cancelled or completed gig, or a deactivated musician, closes the offer
+  // even though its own status still says pending. The gig page shows it closed.
+  if (isOfferClosed(project, musician)) {
+    return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
+  }
+
   const services = project?.services as any[] || []
   const timezone = organization?.timezone || DEFAULT_TIMEZONE
   const sortedServices = [...services].sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())

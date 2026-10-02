@@ -765,6 +765,7 @@ interface SendSubDeclinedFindAnotherParams {
   suggestedSubName: string
   gigUrl: string
   performanceDate?: string
+  reason?: 'declined' | 'expired'
   terms?: TermDictionary
 }
 
@@ -772,7 +773,10 @@ export async function sendSubDeclinedFindAnotherEmail(params: SendSubDeclinedFin
   const terms = await resolveEmailTerms(params.terms, params.organizationId)
   return sendTransactional({
     to: params.to,
-    subject: withDate(`Your sub declined - ${params.projectName}`, params.performanceDate || ''),
+    subject: withDate(
+      `${params.reason === 'expired' ? 'Your sub did not respond' : 'Your sub declined'} - ${params.projectName}`,
+      params.performanceDate || ''
+    ),
     react: SubDeclinedFindAnotherEmail({
       musicianName: params.musicianName,
       organizationName: params.organizationName,
@@ -783,6 +787,7 @@ export async function sendSubDeclinedFindAnotherEmail(params: SendSubDeclinedFin
       serviceName: params.serviceName,
       suggestedSubName: params.suggestedSubName,
       gigUrl: params.gigUrl,
+      reason: params.reason,
       terms,
     }),
     fromName: params.organizationName,

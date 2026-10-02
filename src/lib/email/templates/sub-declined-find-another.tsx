@@ -21,6 +21,8 @@ interface SubDeclinedFindAnotherEmailProps {
   serviceName: string | null
   suggestedSubName: string
   gigUrl: string
+  /** Why the sub fell through: they said no, or they let the offer run out. */
+  reason?: 'declined' | 'expired'
   terms?: TermDictionary
 }
 
@@ -34,15 +36,17 @@ export function SubDeclinedFindAnotherEmail({
   serviceName,
   suggestedSubName,
   gigUrl,
+  reason = 'declined',
   terms,
 }: SubDeclinedFindAnotherEmailProps) {
   const t = terms ?? DEFAULT_TERMS
+  const expired = reason === 'expired'
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
   return (
     <Html>
       <Head />
       <Preview>
-        Your suggested sub declined - please find another substitute for {projectName}
+        {expired ? 'Your suggested sub did not respond in time' : 'Your suggested sub declined'} - please find another substitute for {projectName}
       </Preview>
       <Body style={main}>
         <Container style={container}>
@@ -54,11 +58,16 @@ export function SubDeclinedFindAnotherEmail({
             <Text style={greeting}>Dear {musicianName},</Text>
 
             <Section style={warningBanner}>
-              <Text style={warningText}>Your Suggested Sub Declined</Text>
+              <Text style={warningText}>
+                {expired ? 'Your Suggested Sub Did Not Respond' : 'Your Suggested Sub Declined'}
+              </Text>
             </Section>
 
             <Text style={paragraph}>
-              Unfortunately, <strong>{suggestedSubName}</strong> has declined the contract offer
+              Unfortunately, <strong>{suggestedSubName}</strong>{' '}
+              {expired
+                ? 'did not respond to the contract offer before it expired'
+                : 'has declined the contract offer'}{' '}
               for this engagement. You are still responsible for finding a substitute.
             </Text>
 

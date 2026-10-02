@@ -29,6 +29,8 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/email/send', () => ({
   formatPerformanceDateForSubject: vi.fn(() => 'Fri, Jul 10'),
   sendOfferExpiredEmail: vi.fn(async () => ({ id: 'em-expired', subject: 'Offer Expired', emailHtml: '<p>ok</p>' })),
+  sendSubDeclinedFindAnotherEmail: vi.fn(async () => ({ id: 'em-subdecl', subject: 'Sub did not respond', emailHtml: '<p>ok</p>' })),
+  sendMusicianReleasedEmail: vi.fn(async () => ({ id: 'em-released', subject: 'Released', emailHtml: '<p>ok</p>' })),
   sendEmail: vi.fn(async () => ({ id: 'em-generic' })),
 }))
 
@@ -41,7 +43,7 @@ vi.mock('@/lib/next-candidate', () => ({
 }))
 
 import { GET } from '@/app/api/cron/expire-offers/route'
-import { sendOfferExpiredEmail } from '@/lib/email/send'
+import { sendOfferExpiredEmail, sendSubDeclinedFindAnotherEmail } from '@/lib/email/send'
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -289,7 +291,7 @@ describe('expire-offers cron — chair protection', () => {
       ],
       project_positions: [
         makePosition({ id: 'pos-sub', musician_id: 'mus-orig', status: 'confirmed' }),
-        makePosition({ id: 'pos-solo', musician_id: 'mus-1', status: 'offered' }),
+        makePosition({ id: 'pos-solo', musician_id: null, status: 'offered' }),
       ],
     })
 
@@ -324,6 +326,91 @@ describe('expire-offers cron — chair protection', () => {
       expect(guard.filters).toContainEqual({ method: 'in', args: ['status', ['pending', 'viewed', 'accepted']] })
     }
 
+    expect(errorSpy).not.toHaveBeenCalled()
+  }, 15000)
+})
+
+// ---------------------------------------------------------------------------
+// Cascade guards (Release 0, A0.3)
+// ---------------------------------------------------------------------------
+
+describe('expire-offers cron — never frees a held chair (audit R-4)', () => {
+  it('leaves the chair alone when someone is seated between the check and the write', async () => {
+    state.db = new MockSupabaseDb({
+      contract_offers: [makeCronOffer()],
+      project_positions: [makePosition()],
+    })
+    // The "any other live offer?" check says no; then, just before the vacate
+    // runs, the chair is filled by a direct assignment.
+    state.db.beforeOp = (entry: QueryLogEntry, db: MockSupabaseDb) => {
+      if (entry.table === 'project_positions' && entry.operation === 'update') {
+        const chair = db.row('project_positions', 'pos-1')!
+        chair.musician_id = 'mus-rebecca'
+        chair.status = 'confirmed'
+      }
+    }
+
+    await GET(cronRequest('Bearer test-secret'))
+
+    expect(state.db.row('contract_offers', 'offer-1')!.status).toBe('expired')
+    const chair = state.db.row('project_positions', 'pos-1')!
+    expect(chair.musician_id).toBe('mus-rebecca')
+    expect(chair.status).toBe('confirmed')
+    expect(state.db.ops('project_positions', 'update')[0].filters).toContainEqual({
+      method: 'is',
+      args: ['musician_id', null],
+    })
+  }, 15000)
+})
+
+describe('expire-offers cron — a substitute running out of time (audit R-7)', () => {
+  const subRequest = (over: Partial<Row> = {}): Row => ({
+    id: 'sub-1',
+    offer_id: 'offer-1',
+    status: 'approved',
+    requesting_musician_id: 'mus-orig',
+    suggested_sub_name: null,
+    requesting_musician: { id: 'mus-orig', first_name: 'Olive', last_name: 'Original', email: 'olive@example.com' },
+    service: { id: 'svc-1', name: 'Rehearsal 1' },
+    ...over,
+  })
+
+  it('ends the substitution and tells the original musician the sub did not respond', async () => {
+    state.db = new MockSupabaseDb({
+      contract_offers: [
+        makeCronOffer({ musician: { id: 'mus-sub', first_name: 'Sam', last_name: 'Sub', email: 'sam@example.com' } }),
+        { id: 'offer-orig', token: 'tok-orig', status: 'accepted', project_position_id: 'pos-1', musician_id: 'mus-orig' },
+      ],
+      project_positions: [makePosition({ musician_id: 'mus-orig', status: 'confirmed' })],
+      substitution_requests: [subRequest()],
+    })
+
+    await GET(cronRequest('Bearer test-secret'))
+
+    expect(state.db.row('contract_offers', 'offer-1')!.status).toBe('expired')
+    expect(state.db.row('substitution_requests', 'sub-1')!.status).toBe('sub_declined')
+    // The original musician still holds the chair.
+    expect(state.db.row('project_positions', 'pos-1')!.musician_id).toBe('mus-orig')
+
+    expect(sendSubDeclinedFindAnotherEmail).toHaveBeenCalledTimes(1)
+    const email = vi.mocked(sendSubDeclinedFindAnotherEmail).mock.calls[0][0]
+    expect(email.to).toBe('olive@example.com')
+    expect(email.reason).toBe('expired')
+    expect(email.gigUrl).toContain('/gig/tok-orig')
+    expect(errorSpy).not.toHaveBeenCalled()
+  }, 15000)
+
+  it('leaves substitutions alone for an ordinary offer', async () => {
+    state.db = new MockSupabaseDb({
+      contract_offers: [makeCronOffer()],
+      project_positions: [makePosition()],
+      substitution_requests: [subRequest({ offer_id: 'some-other-offer' })],
+    })
+
+    await GET(cronRequest('Bearer test-secret'))
+
+    expect(state.db.row('substitution_requests', 'sub-1')!.status).toBe('approved')
+    expect(sendSubDeclinedFindAnotherEmail).not.toHaveBeenCalled()
     expect(errorSpy).not.toHaveBeenCalled()
   }, 15000)
 })
