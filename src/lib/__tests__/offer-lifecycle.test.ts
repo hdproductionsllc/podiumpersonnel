@@ -38,14 +38,27 @@ const LIVE = 'src/lib/staffing/live.ts'
 const SEATS = 'src/lib/staffing/seats.ts'
 
 describe('accept path handles substitutions', () => {
+  // The seat claim is the claim_chair database function (migration 094). Its
+  // behaviour is tested against Postgres in db/staffing-rpcs.test.ts and through
+  // the route in offer-lifecycle-behavior.test.ts; these are the tripwires.
   const src = read(SHARED)
+  const sql = read('supabase/migrations/094_cascade_constraints.sql')
+  const claim = sql.slice(sql.indexOf('CREATE OR REPLACE FUNCTION claim_chair'), sql.indexOf('CREATE OR REPLACE FUNCTION create_offer'))
 
-  it('transfers the chair from the original musician on a substitution', () => {
-    expect(src).toContain("positionUpdate.eq('musician_id', subRequest.requesting_musician_id)")
+  it('claims through claim_chair, in one transaction', () => {
+    expect(src).toContain("supabase.rpc('claim_chair', { p_offer_id: offer.id })")
   })
 
-  it('still requires an empty chair for a normal offer', () => {
-    expect(src).toContain("positionUpdate.is('musician_id', null)")
+  it("releases the original musician's accepted offer BEFORE accepting the substitute's", () => {
+    const release = claim.indexOf("UPDATE contract_offers SET status = 'released'")
+    const accept = claim.indexOf("UPDATE contract_offers SET status = 'accepted'")
+    expect(release).toBeGreaterThan(-1)
+    expect(accept).toBeGreaterThan(release)
+  })
+
+  it('a substitute needs the chair still held by the one they replace; anyone else needs it empty', () => {
+    expect(claim).toContain('v_is_sub AND v_pos.musician_id IS DISTINCT FROM v_sub.requesting_musician_id')
+    expect(claim).toContain('NOT v_is_sub AND v_pos.musician_id IS NOT NULL')
   })
 
   acceptRoutes.forEach((route) => {
@@ -53,11 +66,11 @@ describe('accept path handles substitutions', () => {
       expect(read(route)).toContain('claimChairForAccept')
     })
 
-    it(`${route} releases the original musician's accepted offer`, () => {
-      // Still route-local: only the accept paths mark the predecessor released.
+    it(`${route} writes no offer or chair status itself`, () => {
       const routeSrc = read(route)
-      expect(routeSrc).toContain("status: 'released'")
-      expect(routeSrc).toContain("eq('musician_id', subRequest.requesting_musician_id)")
+      expect(routeSrc).not.toContain("status: 'released'")
+      expect(routeSrc).not.toContain("status: 'filled'")
+      expect(routeSrc).not.toContain(".from('project_positions')")
     })
   })
 })

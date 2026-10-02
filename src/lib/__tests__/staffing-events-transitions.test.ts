@@ -245,7 +245,7 @@ describe('offers', () => {
     expect(errorSpy).not.toHaveBeenCalled()
   })
 
-  it('an accept that lost the chair records the attempt (the offer row alone forgets it)', async () => {
+  it('an accept that lost the chair records the attempt, and the offer is retired', async () => {
     const row = q().sendOffer('v1', R.v1[0])
     const chair = q().chair('v1')
     chair.musician_id = R.v1[1]
@@ -253,12 +253,15 @@ describe('offers', () => {
 
     await respond(row, 'accept')
 
-    expect(q().db.row('contract_offers', row.id as string)!.status).toBe('pending')
+    expect(q().db.row('contract_offers', row.id as string)!.status).toBe('superseded')
     expect(events()).toEqual([
       expect.objectContaining({
         actor_type: 'musician',
-        action: 'offer.accept_reverted',
-        after: expect.objectContaining({ status: 'pending', reason: 'position_filled' }),
+        actor_id: R.v1[0],
+        entity_id: row.id,
+        action: 'offer.superseded',
+        before: { status: 'pending' },
+        after: expect.objectContaining({ status: 'superseded', reason: 'position_filled' }),
       }),
     ])
   })
@@ -538,7 +541,7 @@ describe('the history never gets in the way', () => {
     }
   }
 
-  it('an accept still lands, and the musician is still emailed', async () => {
+  it('an accept still lands, and the musician is still emailed (its history is written inside claim_chair)', async () => {
     const row = q().sendOffer('v1', R.v1[0])
     breakHistory()
 
@@ -548,7 +551,11 @@ describe('the history never gets in the way', () => {
     expect(q().chair('v1')).toMatchObject({ musician_id: R.v1[0], status: 'confirmed' })
     const email = await import('@/lib/email/send')
     expect(email.sendOfferAcceptedEmail).toHaveBeenCalledTimes(1)
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('staffing events not recorded (offer.accepted'), expect.any(Error))
+    // The route makes no history write of its own to fail: claim_chair wrote it
+    // in the same transaction as the accept (094 requires 092's table).
+    expect(q().db.ops('staffing_events')).toHaveLength(0)
+    expect(actions()).toEqual(['offer.accepted'])
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 
   it('an admin rescind still succeeds', async () => {

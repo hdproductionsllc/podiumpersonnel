@@ -7,6 +7,7 @@ import {
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
 import { LIVE_OFFER_STATUSES } from './live'
+import { MIGRATION_094_MISSING, isMissingFunction } from './rpc'
 
 /**
  * Shared offer-response logic for the two paths a musician can answer on:
@@ -21,9 +22,9 @@ import { LIVE_OFFER_STATUSES } from './live'
  * released" notice usually never appeared in the contractor's email log — so a
  * musician saying "nobody told me" could not be checked against a record.
  *
- * Keeping the seat claim here matters even more than the logging: it is the
- * only thing preventing two musicians from winning the same chair, and two
- * copies of it is two chances to get it wrong.
+ * Keeping the seat claim here matters even more than the logging: it is what
+ * stops two musicians winning the same chair (now in the database, through
+ * claim_chair), and two copies of it is two chances to get it wrong.
  */
 
 /**
@@ -53,11 +54,17 @@ export function isOfferClosed(
 export type ClaimResult =
   /** The offer was accepted and the chair is now held by this musician. */
   | { outcome: 'claimed' }
-  /** Someone already accepted/declined this offer, or it was rescinded. */
+  /** The offer is gone, already answered or withdrawn, or past its deadline. */
   | { outcome: 'already_responded' }
-  /** The offer was claimed but the chair had gone to someone else; offer reverted. */
+  /** The chair had gone to someone else; the offer was retired as superseded. */
   | { outcome: 'position_filled' }
+  /** The gig was cancelled or completed in the meantime; nothing changed. */
+  | { outcome: 'project_inactive' }
+  /** The musician was deactivated in the meantime; nothing changed. */
+  | { outcome: 'musician_inactive' }
   | { outcome: 'error'; error: unknown }
+
+const CLAIM_OUTCOMES = ['claimed', 'already_responded', 'position_filled', 'project_inactive', 'musician_inactive'] as const
 
 /** How many chairs this instrument has on this project (for "2 of 4" wording). */
 export async function countChairs(
@@ -77,77 +84,49 @@ export async function countChairs(
 }
 
 /**
- * Atomically accept an offer and claim its chair.
+ * Accept an offer and claim its chair: the claim_chair database function
+ * (migration 094), one transaction that locks the chair, then the offer.
  *
- * Two conditional updates, in this order, are what make a double-book
- * impossible without a transaction:
+ * It replaced two conditional updates issued one after the other (offer, then
+ * chair, with a revert when the chair turned out to be taken). Those were
+ * race-safe for two plain offers, but a substitute's accept wrote their
+ * 'accepted' before the original's 'released', a failed revert left an offer
+ * accepted against a chair someone else held, and the loser of a race went
+ * back to 'pending' and was offered Accept again (audit R-11). In the function:
  *
- *   1. contract_offers  ... WHERE status IN ('pending','viewed')
- *      Only one concurrent request can move the offer out of a respondable
- *      state; the loser gets zero rows back.
- *   2. project_positions ... WHERE musician_id IS NULL   (normal offer)
- *                        ... WHERE musician_id = <original>  (substitution)
- *      The chair is claimed only if still free — or, for a substitution,
- *      transferred only if still held by the musician being replaced.
+ *   - a normal offer takes the chair only while it is empty; a substitute's
+ *     only while the musician they replace still holds it, and that musician's
+ *     accepted offer is released first;
+ *   - an offer that lost the chair is retired as 'superseded' (and a losing
+ *     substitute's request closed), never put back;
+ *   - any other open offer on the chair is retired once it is filled;
+ *   - a cancelled/completed gig or a deactivated musician changes nothing;
+ *   - every change is written to staffing_events in the same transaction.
  *
- * If step 2 finds nothing the chair went to someone else in between, so the
- * offer is reverted to pending rather than left falsely accepted.
+ * Whether the offer is a substitute's is decided inside the function, from the
+ * approved substitution request that points at it. If the function is missing
+ * (094 not pasted), the accept is refused and nothing changes (see rpc.ts).
  */
 export async function claimChairForAccept(
   supabase: SupabaseClient,
-  offer: { id: string; project_position_id: string; musician_id: string },
-  subRequest: { requesting_musician_id: string } | null
+  offer: { id: string }
 ): Promise<ClaimResult> {
-  const { data: updatedOffer, error: offerError } = await supabase
-    .from('contract_offers')
-    .update({ status: 'accepted', responded_at: new Date().toISOString() })
-    .eq('id', offer.id)
-    .in('status', RESPONDABLE_STATUSES as unknown as string[])
-    .select('id')
+  const { data, error } = await supabase.rpc('claim_chair', { p_offer_id: offer.id })
 
-  if (offerError) return { outcome: 'error', error: offerError }
-  if (!updatedOffer || updatedOffer.length === 0) return { outcome: 'already_responded' }
-
-  let positionUpdate = supabase
-    .from('project_positions')
-    .update({ musician_id: offer.musician_id, status: 'confirmed' })
-    .eq('id', offer.project_position_id)
-
-  positionUpdate = subRequest
-    ? positionUpdate.eq('musician_id', subRequest.requesting_musician_id)
-    : positionUpdate.is('musician_id', null)
-
-  const { data: updatedPosition, error: positionError } = await positionUpdate.select('id')
-
-  if (positionError) return { outcome: 'error', error: positionError }
-
-  if (!updatedPosition || updatedPosition.length === 0) {
-    // Chair is no longer available to this musician — undo the acceptance so the
-    // offer does not sit "accepted" against a chair someone else holds.
-    const { error: revertError } = await supabase
-      .from('contract_offers')
-      .update({ status: 'pending', responded_at: null })
-      .eq('id', offer.id)
-
-    if (revertError) {
-      // The offer is now stuck "accepted" against a chair this musician does not
-      // hold. That is the exact state this revert exists to prevent, so report
-      // it as an error rather than a clean position_filled.
-      console.error(
-        `Failed to revert offer ${offer.id} after losing chair ${offer.project_position_id}:`,
-        revertError
-      )
-      return { outcome: 'error', error: revertError }
+  if (error) {
+    if (isMissingFunction(error)) {
+      console.error(`Accept of offer ${offer.id} refused, nothing changed: ${MIGRATION_094_MISSING}`)
     }
-
-    return { outcome: 'position_filled' }
+    return { outcome: 'error', error }
   }
-
-  return { outcome: 'claimed' }
+  if ((CLAIM_OUTCOMES as readonly unknown[]).includes(data)) {
+    return { outcome: data as (typeof CLAIM_OUTCOMES)[number] } as ClaimResult
+  }
+  return { outcome: 'error', error: new Error(`claim_chair returned an unknown outcome: ${String(data)}`) }
 }
 
 /**
- * Atomically decline an offer. The same optimistic lock as the accept path, so
+ * Atomically decline an offer: a conditional update on the offer's status, so
  * a stale decline cannot clobber an acceptance that landed first.
  */
 export async function markOfferDeclined(

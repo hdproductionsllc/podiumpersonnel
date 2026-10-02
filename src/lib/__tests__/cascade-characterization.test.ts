@@ -349,18 +349,19 @@ describe('two substitution requests on one chair (S11, audit R-22, R-11)', () =>
     expect(mailCount(email.sendOfferAcceptedEmail)).toBe(2) // Olive's own accept, then the winning sub's
   })
 
-  it.fails('R-11: the substitute who lost the race is not left holding a live "pending" offer', async () => {
+  // Fixed by claim_chair (094): filling the chair retires every other open
+  // offer on it, and closes a competing substitute's request with it.
+  it('R-11: the substitute who lost the race is not left holding a live "pending" offer', async () => {
     const olive = await seatOlive()
     const [subA, subB] = await approveBoth(olive)
 
     await respond(subA, 'accept')
     await respond(subB, 'accept')
 
-    // Today the loser's offer reverts to pending, so their page shows Accept again.
-    expect(offerStatus(subB.id)).not.toBe('pending')
+    expect(offerStatus(subB.id)).toBe('superseded')
   })
 
-  it.fails('S11: the losing substitute\'s request does not stay "approved" forever', async () => {
+  it('S11: the losing substitute\'s request does not stay "approved" forever', async () => {
     const olive = await seatOlive()
     const [subA, subB] = await approveBoth(olive)
 
@@ -368,7 +369,7 @@ describe('two substitution requests on one chair (S11, audit R-22, R-11)', () =>
     await respond(subB, 'accept')
 
     const loserRequest = requests().find((r) => r.offer_id === subB.id)!
-    expect(loserRequest.status).not.toBe('approved')
+    expect(loserRequest.status).toBe('cancelled')
   })
 })
 
@@ -527,12 +528,17 @@ describe('two live offers on one chair (S14, audit R-1, R-13)', () => {
     return { anna, bea }
   }
 
-  it('nothing in the database stops the second live offer being created', () => {
-    twoLive() // R-1: no partial unique index yet (094); a direct insert is not stopped
-    expect(q().liveOffers('v1').map((o) => o.musician_id)).toEqual([R.v1[0], R.v1[1]])
+  it('R-1: under the 094 index a second live offer cannot be written (rows from before it may remain)', async () => {
+    q().db.constraint = oneLiveOfferPerChair
+    const anna = q().sendOffer('v1', R.v1[0])
+
+    const { error } = await q().db.from('contract_offers').insert({ project_position_id: 'pos-v1', musician_id: R.v1[1], status: 'pending' })
+
+    expect(error).toMatchObject({ code: '23505' })
+    expect(q().liveOffers('v1').map((o) => o.id)).toEqual([anna.id])
   })
 
-  it('rescind cannot find "the" offer when there are two: 400, and neither is withdrawn', async () => {
+  it('rescind cannot find "the" offer when there are two (rows from before 094): 400, and neither is withdrawn', async () => {
     const { anna, bea } = twoLive()
 
     const res = await rescind('pos-v1')
@@ -543,12 +549,18 @@ describe('two live offers on one chair (S14, audit R-1, R-13)', () => {
     expect(mailCount(email.sendOfferRescindedEmail)).toBe(0)
   })
 
-  it.fails('R-13: an admin can rescind a chair that has two live offers', async () => {
-    twoLive()
+  // R-13 is closed by making the state impossible: the 094 repair script
+  // retires the older of any two live offers and the 094 index refuses a new
+  // second one, so rescind always finds exactly one. (Postgres proof:
+  // db/staffing-rpcs.test.ts.)
+  it('R-13: once the older of two live offers is retired (094 repair), rescind works', async () => {
+    const { anna, bea } = twoLive()
+    q().db.row('contract_offers', anna.id as string)!.status = 'superseded'
 
     const res = await rescind('pos-v1')
 
     expect(res.status).toBe(200)
+    expect(offerStatus(bea.id)).toBe('rescinded')
   })
 
   it('the first to accept takes the chair; the second finds it filled and cannot take it', async () => {
@@ -563,22 +575,23 @@ describe('two live offers on one chair (S14, audit R-1, R-13)', () => {
     expect(errorSpy).not.toHaveBeenCalled()
   })
 
-  it.fails('R-11: the one who lost is not sent back to a page offering Accept again', async () => {
+  it('R-11: the one who lost is not sent back to a page offering Accept again', async () => {
     const { anna, bea } = twoLive()
 
     await respond(bea, 'accept')
     await respond(anna, 'accept')
 
-    expect(offerStatus(anna.id)).not.toBe('pending')
+    expect(offerStatus(anna.id)).toBe('superseded')
   })
 
-  it('the loser declining afterwards does not evict the winner (R-2 guard)', async () => {
+  it('the loser declining afterwards changes nothing and does not evict the winner (R-2 guard)', async () => {
     const { anna, bea } = twoLive()
     await respond(bea, 'accept')
 
     await respond(anna, 'decline')
 
-    expect(offerStatus(anna.id)).toBe('declined')
+    // Bea's accept already retired Anna's offer, so there is nothing to decline.
+    expect(offerStatus(anna.id)).toBe('superseded')
     expect(q().chair('v1')).toMatchObject({ musician_id: R.v1[1], status: 'confirmed' })
   })
 })

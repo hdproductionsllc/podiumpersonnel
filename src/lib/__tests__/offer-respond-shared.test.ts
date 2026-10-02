@@ -100,108 +100,53 @@ const OFFER = {
   musician_id: 'mus-new',
 }
 
-const SUB_REQUEST = { requesting_musician_id: 'mus-original' }
+/** A client whose rpc() resolves to the given result, recording each call. */
+function rpcClient(result: { data: unknown; error: unknown }) {
+  const calls: { name: string; args: unknown }[] = []
+  return { calls, rpc: async (name: string, args: unknown) => (calls.push({ name, args }), result) } as any
+}
 
-describe('claimChairForAccept', () => {
-  it('claims the chair when the offer and seat are both free', async () => {
-    const supabase = makeSupabase({
-      contract_offers: [{ data: [{ id: 'offer-1' }], error: null }],
-      project_positions: [{ data: [{ id: 'pos-1' }], error: null }],
-    })
+describe('claimChairForAccept (the claim_chair database function, migration 094)', () => {
+  // What the function itself does (locks, release-before-claim, the losing
+  // offer retired, concurrency) is tested against Postgres in
+  // db/staffing-rpcs.test.ts; here, only how the server calls it and reads it.
 
-    const result = await respond.claimChairForAccept(supabase, OFFER, null)
+  it('calls claim_chair with the offer id and nothing else', async () => {
+    const supabase = rpcClient({ data: 'claimed', error: null })
+
+    const result = await respond.claimChairForAccept(supabase, OFFER)
 
     expect(result).toEqual({ outcome: 'claimed' })
+    expect(supabase.calls).toEqual([{ name: 'claim_chair', args: { p_offer_id: 'offer-1' } }])
   })
 
-  it('locks the offer update to respondable statuses', async () => {
-    // Without this filter two concurrent accepts both "win" the offer row.
-    const supabase = makeSupabase({
-      contract_offers: [{ data: [{ id: 'offer-1' }], error: null }],
-      project_positions: [{ data: [{ id: 'pos-1' }], error: null }],
-    })
+  it.each(['already_responded', 'position_filled', 'project_inactive', 'musician_inactive'])(
+    'passes the outcome %s through',
+    async (outcome) => {
+      const result = await respond.claimChairForAccept(rpcClient({ data: outcome, error: null }), OFFER)
+      expect(result).toEqual({ outcome })
+    }
+  )
 
-    await respond.claimChairForAccept(supabase, OFFER, null)
-
-    const offerUpdate = supabase.calls.find(
-      (c: any) => c.table === 'contract_offers' && c.op === 'update'
-    )
-    expect(offerUpdate.filters).toContainEqual(['in', 'status', ['pending', 'viewed']])
-    expect(offerUpdate.values.status).toBe('accepted')
-  })
-
-  it('claims the seat only while it is unassigned (normal offer)', async () => {
-    // The condition that actually prevents a double-booked chair.
-    const supabase = makeSupabase({
-      contract_offers: [{ data: [{ id: 'offer-1' }], error: null }],
-      project_positions: [{ data: [{ id: 'pos-1' }], error: null }],
-    })
-
-    await respond.claimChairForAccept(supabase, OFFER, null)
-
-    const positionUpdate = supabase.calls.find((c: any) => c.table === 'project_positions')
-    expect(positionUpdate.filters).toContainEqual(['is', 'musician_id', null])
-    expect(positionUpdate.values).toEqual({ musician_id: 'mus-new', status: 'confirmed' })
-  })
-
-  it('transfers the seat from the original musician for a substitution', async () => {
-    // A sub's chair is NOT free — it is held by the person being replaced, so
-    // the guard must match that musician instead of NULL.
-    const supabase = makeSupabase({
-      contract_offers: [{ data: [{ id: 'offer-1' }], error: null }],
-      project_positions: [{ data: [{ id: 'pos-1' }], error: null }],
-    })
-
-    await respond.claimChairForAccept(supabase, OFFER, SUB_REQUEST)
-
-    const positionUpdate = supabase.calls.find((c: any) => c.table === 'project_positions')
-    expect(positionUpdate.filters).toContainEqual(['eq', 'musician_id', 'mus-original'])
-    expect(positionUpdate.filters).not.toContainEqual(['is', 'musician_id', null])
-  })
-
-  it('reports already_responded when the offer moved on first', async () => {
-    // Zero rows back from the locked update = someone else answered.
-    const supabase = makeSupabase({
-      contract_offers: [{ data: [], error: null }],
-    })
-
-    const result = await respond.claimChairForAccept(supabase, OFFER, null)
-
-    expect(result).toEqual({ outcome: 'already_responded' })
-    // Must not touch the chair after losing the offer race.
-    expect(supabase.calls.some((c: any) => c.table === 'project_positions')).toBe(false)
-  })
-
-  it('reverts the offer when the chair was taken in between', async () => {
-    // The critical race: this musician won the offer row but lost the seat.
-    const supabase = makeSupabase({
-      contract_offers: [
-        { data: [{ id: 'offer-1' }], error: null }, // accept succeeded
-        { data: [{ id: 'offer-1' }], error: null }, // revert
-      ],
-      project_positions: [{ data: [], error: null }], // seat gone
-    })
-
-    const result = await respond.claimChairForAccept(supabase, OFFER, null)
-
-    expect(result).toEqual({ outcome: 'position_filled' })
-
-    // The offer must not be left falsely "accepted" against someone else's chair.
-    const updates = supabase.calls.filter(
-      (c: any) => c.table === 'contract_offers' && c.op === 'update'
-    )
-    expect(updates).toHaveLength(2)
-    expect(updates[1].values).toEqual({ status: 'pending', responded_at: null })
+  it('treats an outcome it does not know as an error, never as a claim', async () => {
+    const result = await respond.claimChairForAccept(rpcClient({ data: 'maybe', error: null }), OFFER)
+    expect(result.outcome).toBe('error')
   })
 
   it('surfaces a database error rather than reporting success', async () => {
-    const supabase = makeSupabase({
-      contract_offers: [{ data: null, error: { message: 'boom' } }],
-    })
-
-    const result = await respond.claimChairForAccept(supabase, OFFER, null)
-
+    const result = await respond.claimChairForAccept(rpcClient({ data: null, error: { message: 'boom' } }), OFFER)
     expect(result.outcome).toBe('error')
+  })
+
+  it('refuses (fails closed) and says why when migration 094 is not applied', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const result = await respond.claimChairForAccept(
+      rpcClient({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.claim_chair' } }),
+      OFFER
+    )
+    expect(result.outcome).toBe('error')
+    expect(String(error.mock.calls[0][0])).toMatch(/migration 094/)
+    error.mockRestore()
   })
 })
 

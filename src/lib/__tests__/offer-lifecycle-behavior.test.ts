@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest'
 import { MockSupabaseDb, type Row } from './helpers/supabase-mock'
+import { cascadeConstraints } from './helpers/quartet-fixture'
 
 /**
  * BEHAVIORAL tests for the public gig accept/decline routes — the highest
@@ -154,16 +155,12 @@ describe('accept route — normal offer', () => {
     expect(position.musician_id).toBe('mus-1')
     expect(position.status).toBe('confirmed')
 
-    // The accept write must carry the optimistic lock…
-    const acceptUpdate = state.db
-      .ops('contract_offers', 'update')
-      .find((e: any) => (e.payload as Row).status === 'accepted')!
-    expect(acceptUpdate).toBeDefined()
-    expect(acceptUpdate.filters).toContainEqual({ method: 'in', args: ['status', ['pending', 'viewed']] })
-
-    // …and the chair assignment must require the chair to be empty.
-    const positionUpdate = state.db.ops('project_positions', 'update')[0]
-    expect(positionUpdate.filters).toContainEqual({ method: 'is', args: ['musician_id', null] })
+    // The offer and the chair change together, in claim_chair's one transaction
+    // (migration 094); the route writes neither table itself.
+    expect(state.db.ops('claim_chair', 'rpc')).toHaveLength(1)
+    expect(state.db.ops('claim_chair', 'rpc')[0].payload).toEqual({ p_offer_id: 'offer-1' })
+    expect(state.db.ops('contract_offers', 'update')).toHaveLength(0)
+    expect(state.db.ops('project_positions', 'update')).toHaveLength(0)
 
     expect(sendOfferAcceptedEmail).toHaveBeenCalledTimes(1)
     expect(vi.mocked(sendOfferAcceptedEmail).mock.calls[0][0].to).toBe('mia@example.com')
@@ -186,7 +183,7 @@ describe('accept route — normal offer', () => {
     expect(errorSpy).not.toHaveBeenCalled()
   })
 
-  it('does NOT double-assign a chair another musician already won (loser reverted to pending)', async () => {
+  it('does NOT double-assign a chair another musician already won (loser retired as superseded, audit R-11)', async () => {
     // Chair already confirmed for mus-9; a second pending offer for mus-1 races in.
     state.db = new MockSupabaseDb({
       contract_offers: [makeOffer()],
@@ -200,10 +197,11 @@ describe('accept route — normal offer', () => {
     expect(position.musician_id).toBe('mus-9')
     expect(position.status).toBe('confirmed')
 
-    // The losing offer is reverted, not left accepted.
+    // The losing offer is neither left accepted nor put back to pending (which
+    // offered Accept again): the chair is gone, so it is retired.
     const offer = state.db.row('contract_offers', 'offer-1')!
-    expect(offer.status).toBe('pending')
-    expect(offer.responded_at).toBeNull()
+    expect(offer.status).toBe('superseded')
+    expect(offer.responded_at).toBeTruthy()
 
     expect(sendOfferAcceptedEmail).not.toHaveBeenCalled()
     expect(sendAdminOfferResponseEmail).not.toHaveBeenCalled()
@@ -290,6 +288,9 @@ describe('accept route — substitution transfer', () => {
 
   it('transfers the chair from the requesting musician to the substitute', async () => {
     seedSubScenario()
+    // 094's indexes and CHECK: the original is released before the substitute
+    // is accepted, so the chair never holds two accepted offers.
+    state.db.constraint = cascadeConstraints
 
     await acceptPOST(gigRequest('tok-sub', 'accept'), routeParams('tok-sub'))
 
@@ -297,11 +298,6 @@ describe('accept route — substitution transfer', () => {
     const position = state.db.row('project_positions', 'pos-1')!
     expect(position.musician_id).toBe('mus-sub')
     expect(position.status).toBe('confirmed')
-
-    // The transfer was guarded on the ORIGINAL holder, not on an empty chair.
-    const positionUpdate = state.db.ops('project_positions', 'update')[0]
-    expect(positionUpdate.filters).toContainEqual({ method: 'eq', args: ['musician_id', 'mus-orig'] })
-    expect(positionUpdate.filters.some((f: any) => f.method === 'is')).toBe(false)
 
     // Offer statuses: sub accepted, original released, request filled.
     expect(state.db.row('contract_offers', 'offer-sub')!.status).toBe('accepted')
@@ -323,12 +319,13 @@ describe('accept route — substitution transfer', () => {
 
     await acceptPOST(gigRequest('tok-sub', 'accept'), routeParams('tok-sub'))
 
-    // Nothing transfers, the sub's offer reverts, nothing is released/filled.
+    // Nothing transfers and nothing is released. The sub's offer and request
+    // are closed rather than left open forever (audit R-11, S11).
     const position = state.db.row('project_positions', 'pos-1')!
     expect(position.musician_id).toBe('mus-third')
-    expect(state.db.row('contract_offers', 'offer-sub')!.status).toBe('pending')
+    expect(state.db.row('contract_offers', 'offer-sub')!.status).toBe('superseded')
     expect(state.db.row('contract_offers', 'offer-orig')!.status).toBe('accepted')
-    expect(state.db.row('substitution_requests', 'sub-1')!.status).toBe('approved')
+    expect(state.db.row('substitution_requests', 'sub-1')!.status).toBe('cancelled')
 
     expect(sendMusicianReleasedEmail).not.toHaveBeenCalled()
     expect(sendOfferAcceptedEmail).not.toHaveBeenCalled()

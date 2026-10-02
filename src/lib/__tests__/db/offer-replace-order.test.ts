@@ -4,18 +4,19 @@ import type { Client } from 'pg'
 import { adminClient, createTenant, type Tenant } from './helpers'
 
 /**
- * createOffer's write order against the planned 094 index, in real Postgres.
+ * Replacing a chair's offer under 094's index, in real Postgres.
  *
- * 094 adds contract_offers_one_live_per_position: at most one pending/viewed
- * non-substitute offer per chair. createOffer (src/lib/staffing/offers.ts)
- * replaces a chair's offer as: retire the open offers ('superseded'), insert
- * the new one, send the email, and on a failed send delete the new one and put
- * the retired ones back. These are the same statements, in the same order,
- * run with the index in place. The old order (insert, then retire) is shown
- * failing, which is why it was changed.
+ * contract_offers_one_live_per_position (migration 094): at most one
+ * pending/viewed non-substitute offer per chair. create_offer replaces a
+ * chair's offer as: retire the open offers ('superseded'), then insert the new
+ * one; createOffer (src/lib/staffing/offers.ts) undoes that after a failed
+ * send by deleting the new offer and putting the retired ones back. These are
+ * those statements, run against the real index. The old order (insert, then
+ * retire) is shown failing, which is why it was changed.
  *
- * The index is created inside a transaction that is rolled back, and scoped to
- * this test's own chair, so it never touches the other tests' rows.
+ * Each case runs in a transaction that is rolled back, so it never touches the
+ * other tests' rows. (create_offer itself, under concurrency, is in
+ * staffing-rpcs.test.ts.)
  */
 let db: Client
 let t: Tenant
@@ -37,16 +38,10 @@ afterAll(async () => {
   await db?.end()
 })
 
-/** Run `fn` with the 094 index on this chair; everything is rolled back after. */
-async function withIndex(fn: () => Promise<void>) {
+/** Run `fn` in a transaction that is always rolled back. */
+async function rolledBack(fn: () => Promise<void>) {
   await db.query('begin')
   try {
-    // positionId is a generated uuid, not user input; DDL takes no parameters.
-    await db.query(
-      `create unique index contract_offers_one_live_per_position on contract_offers (project_position_id)
-       where status in ('pending', 'viewed') and is_substitution = false
-         and project_position_id = '${t.positionId}'`
-    )
     await fn()
   } finally {
     await db.query('rollback')
@@ -91,14 +86,14 @@ const liveOnChair = async () =>
 
 describe('replacing a chair offer under the one-live-offer index', () => {
   it('the old order (insert, then retire) is refused at the insert', async () => {
-    await withIndex(async () => {
+    await rolledBack(async () => {
       const err = await refused(insertSql, [randomUUID(), t.positionId, beaId])
       expect(err).toMatchObject({ code: '23505', constraint: 'contract_offers_one_live_per_position' })
     })
   })
 
   it("createOffer's order (retire, then insert) succeeds and leaves one live offer", async () => {
-    await withIndex(async () => {
+    await rolledBack(async () => {
       const retired = await retire(t.positionId)
       expect(retired.rows.map((r) => r.id)).toEqual([annaOfferId])
       const newId = randomUUID()
@@ -108,7 +103,7 @@ describe('replacing a chair offer under the one-live-offer index', () => {
   })
 
   it('the undo after a failed send (delete the new offer, put the old back) succeeds', async () => {
-    await withIndex(async () => {
+    await rolledBack(async () => {
       await db.query("update contract_offers set status = 'viewed' where id = $1", [annaOfferId])
       const retired = await retire(t.positionId)
       const newId = randomUUID()
@@ -125,7 +120,7 @@ describe('replacing a chair offer under the one-live-offer index', () => {
   })
 
   it('a put-back that would make a second live offer is refused, so the newer offer stands', async () => {
-    await withIndex(async () => {
+    await rolledBack(async () => {
       const retired = await retire(t.positionId)
       const rivalId = randomUUID() // another admin's offer, landed in between
       await db.query(insertSql, [rivalId, t.positionId, beaId])

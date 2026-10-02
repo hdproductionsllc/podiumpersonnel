@@ -16,6 +16,8 @@ filename order, then runs the tests in `src/lib/__tests__/db/`.
 | `constraints.test.ts` | One standard payment per musician/service/fee type (adjustments still allowed), services with payments cannot be deleted, one organization per account, status CHECKs on offers and projects. |
 | `staffing-events.test.ts` | The staffing history (092): an admin reads only their own org's events, a plain member and a signed-out visitor read nothing, no session can insert, update, delete or call `log_staffing_event()`, the service role can write both ways, history survives the offer it describes being deleted, and `scripts/sql/092-staffing-events.paste.sql` reports all PASS on two consecutive runs. |
 | `offer-columns.test.ts` | The offer columns (093): an offer inserted the way the pre-093 code does still works and gets the defaults, `superseded` is a valid status, `delivery_status` takes only queued / sent / failed / suppressed, there is no `pay_basis`, an org admin's own session can write the new columns, and `scripts/sql/093-offer-columns.paste.sql` backfills `is_substitution` from `substitution_requests.offer_id` and reports all PASS on two consecutive runs. |
+| `offer-replace-order.test.ts` | The statements createOffer uses to replace a chair's offer, against the real one-live-offer index (094): the old order (insert, then retire) is refused, the new order (retire, then insert) works, the put-back after a failed send works, and a put-back that would make a second live offer is refused. |
+| `staffing-rpcs.test.ts` | Migration 094. The indexes and CHECK refuse two open or two accepted offers on a chair and a confirmed chair with nobody in it. `claim_chair`: claims, returns `project_inactive` on a cancelled gig and `musician_inactive` for a deactivated musician without changing anything, moves a chair to a substitute releasing the original first, and retires (not reopens) the loser of a race. `create_offer`: the server's checks in the server's order, retire then insert, history. Concurrency with two connections: two accepts of one offer, two substitutes on one chair, two `create_offer` calls for one chair or one musician; exactly one wins each time. Only the service role may call either function. The repair script fixes bad rows and logs each fix, 094 refuses to run over bad rows, and both paste scripts report all PASS twice. |
 | `helpers.ts` | `asUser()` runs a query as the `authenticated` role with a JWT `sub`, the way PostgREST does, inside a transaction that is always rolled back. `createTenant()` builds one org with one of each row. |
 
 The tests use synthetic data only (random ids, `example.test` addresses). This
@@ -52,7 +54,9 @@ Every new migration that adds a table should get a row in the `TABLES` list in
 `rls-tenant-isolation.test.ts` if the table is tenant-owned. Every migration that
 adds a constraint or unique index the code relies on should get a case in
 `constraints.test.ts`. Concurrency tests (two connections racing on a chair) go
-here too once the `claim_chair` RPC exists.
+in `staffing-rpcs.test.ts`: hold the first call's transaction open, start the
+second on the other connection, wait until `pg_stat_activity` shows it waiting
+on a lock, then commit the first.
 
 ## 2. How migrations are tracked
 

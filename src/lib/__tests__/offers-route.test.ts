@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { NextRequest, NextResponse } from 'next/server'
 import { buildQuartet, oneLiveOfferPerChair, QUARTET_RANKING, type QuartetFixture } from './helpers/quartet-fixture'
 import type { Row } from './helpers/supabase-mock'
+import { MockPgError } from './helpers/staffing-rpcs'
 
 /**
  * POST /api/positions/[positionId]/offers → createOffer (src/lib/staffing/offers.ts),
@@ -206,9 +207,17 @@ describe('a successful offer', () => {
     expect(logEmail).toHaveBeenCalledTimes(1)
   })
 
-  it('records offer.sent with the delivery in the staffing history', async () => {
+  it('records offer.created (in create_offer) then offer.sent with the delivery', async () => {
     const res = await offer('pos-v1', { musicianId: R.v1[0] })
     expect(events()).toEqual([
+      expect.objectContaining({
+        organization_id: 'org-quartet',
+        actor_type: 'admin',
+        actor_id: ADMIN.id,
+        entity_id: res.body.offerId,
+        action: 'offer.created',
+        after: expect.objectContaining({ status: 'pending', position_id: 'pos-v1', musician_id: R.v1[0] }),
+      }),
       expect.objectContaining({
         organization_id: 'org-quartet',
         actor_type: 'admin',
@@ -275,19 +284,28 @@ describe('replacing the previous offer', () => {
     expect(row(anna.id as string)).toMatchObject({ status: 'superseded' })
     expect(row(anna.id as string).responded_at).toBeTruthy()
     expect(res.body.superseded).toBe(1)
-    expect(events().map((e: Row) => e.action)).toEqual(['offer.superseded', 'offer.sent'])
+    expect(events().map((e: Row) => e.action)).toEqual(['offer.superseded', 'offer.created', 'offer.sent'])
     expect(events()[0]).toMatchObject({
       entity_id: anna.id,
       after: expect.objectContaining({ status: 'superseded', replaced_by: res.body.offerId, musician_id: R.v1[0] }),
     })
-    // Retire, then insert, then send: the chair never holds two live offers.
-    const writes = q().db.log.filter((e) => e.table === 'contract_offers' && e.operation !== 'select')
-    expect(writes.map((e) => [e.operation, Object.keys((e.payload ?? {}) as Row).slice(0, 2)])).toEqual([
-      ['update', ['status', 'responded_at']],
-      ['insert', ['project_position_id', 'musician_id']],
-      ['update', ['delivery_status']],
+    // Retire and insert happen inside create_offer, one transaction; then the
+    // email; then the delivery is recorded. Nothing else writes offers.
+    const writes = q().db.log.filter(
+      (e) => e.operation === 'rpc' || (e.table === 'contract_offers' && e.operation !== 'select')
+    )
+    expect(writes.map((e) => [e.table, e.operation])).toEqual([
+      ['create_offer', 'rpc'],
+      ['contract_offers', 'update'],
     ])
-    expect((writes[0].payload as Row).status).toBe('superseded')
+    expect(writes[0].payload).toMatchObject({
+      p_position_id: 'pos-v1',
+      p_musician_id: R.v1[1],
+      p_created_by: ADMIN.id,
+      p_delivery_status: 'queued',
+      p_supersede: true,
+    })
+    expect(writes[1].payload).toEqual({ delivery_status: 'sent' })
     expect(mailCalls(email.sendContractOfferEmail)).toHaveLength(1)
   })
 
@@ -299,7 +317,7 @@ describe('replacing the previous offer', () => {
     expect(row(declined.id as string).status).toBe('declined')
   })
 
-  it('a failed send while someone else is waiting changes nothing and records nothing', async () => {
+  it('a failed send while someone else is waiting changes nothing, and the history says what happened', async () => {
     const anna = q().sendOffer('v1', R.v1[0])
     state.sendOfferFails = true
 
@@ -309,7 +327,13 @@ describe('replacing the previous offer', () => {
     expect(res.body.error).toMatch(/could not be sent \(Resend is down\), so the offer was not created/)
     expect(row(anna.id as string)).toMatchObject({ status: 'pending', responded_at: null })
     expect(q().offers('v1')).toHaveLength(1)
-    expect(events()).toEqual([])
+    expect(events().map((e: Row) => [e.action, e.entity_id])).toEqual([
+      ['offer.superseded', anna.id],
+      ['offer.created', expect.any(String)],
+      ['offer.withdrawn', expect.any(String)],
+      ['offer.restored', anna.id],
+    ])
+    expect(events()[3].after).toMatchObject({ status: 'pending', musician_id: R.v1[0] })
   })
 
   it('puts a viewed offer back as viewed', async () => {
@@ -362,10 +386,29 @@ describe("under 094's one-live-offer-per-chair index", () => {
     expect(q().liveOffers('v1').map((o) => o.id)).toEqual([anna.id])
   })
 
-  it("another admin's offer landing between retire and insert: 409, and theirs stands", async () => {
+  it('create_offer refused by the index (another writer got there first): 409, nothing changed, no email', async () => {
     const anna = q().sendOffer('v1', R.v1[0])
+    const real = q().db.rpcs.create_offer
+    q().db.rpcs.create_offer = (db, args) => {
+      // Whatever create_offer wrote before the refusal is rolled back with it.
+      real(db, args)
+      throw new MockPgError('duplicate key value violates unique constraint "contract_offers_one_live_per_position"', '23505')
+    }
+
+    const res = await offer('pos-v1', { musicianId: R.v1[1] })
+
+    expect(res).toMatchObject({ status: 409, body: { code: 'chair_has_live_offer' } })
+    expect(row(anna.id as string)).toMatchObject({ status: 'pending' })
+    expect(q().offers('v1')).toHaveLength(1)
+    expect(events()).toEqual([])
+    expect(mailCalls(email.sendContractOfferEmail)).toHaveLength(0)
+  })
+
+  it("a put-back the index refuses (someone else's offer landed meanwhile) leaves theirs standing", async () => {
+    const anna = q().sendOffer('v1', R.v1[0])
+    state.sendOfferFails = true
     q().db.beforeOp = (entry, db) => {
-      if (entry.table === 'contract_offers' && entry.operation === 'insert') {
+      if (entry.table === 'contract_offers' && entry.operation === 'delete') {
         db.beforeOp = undefined
         db.tables.contract_offers.push({ id: 'offer-rival', project_position_id: 'pos-v1', musician_id: R.v1[2], status: 'pending' })
       }
@@ -373,73 +416,28 @@ describe("under 094's one-live-offer-per-chair index", () => {
 
     const res = await offer('pos-v1', { musicianId: R.v1[1] })
 
-    expect(res).toMatchObject({ status: 409, body: { code: 'chair_has_live_offer' } })
-    expect(row(anna.id as string).status).toBe('superseded') // the restore is refused: one live offer only
+    expect(res.status).toBe(502)
+    expect(row(anna.id as string).status).toBe('superseded')
     expect(q().liveOffers('v1').map((o) => o.id)).toEqual(['offer-rival'])
-    expect(mailCalls(email.sendContractOfferEmail)).toHaveLength(0)
+    expect(events().map((e: Row) => e.action)).not.toContain('offer.restored')
   })
 })
 
 // ---------------------------------------------------------------------------
 
-describe('before migration 093 is pasted', () => {
-  /** Make contract_offers refuse what 093 adds, the way PostgREST and Postgres do. */
-  function without093() {
-    const db = q().db
-    const from = db.from.bind(db)
-    db.from = (table: string) => {
-      const builder = from(table) as unknown as Record<string, (...a: unknown[]) => unknown>
-      if (table !== 'contract_offers') return builder as never
-      const insert = builder.insert.bind(builder)
-      builder.insert = (r: unknown) => {
-        if ((r as Row).created_by !== undefined) {
-          return { select: () => ({ single: async () => ({ data: null, error: { code: 'PGRST204', message: "Could not find the 'created_by' column" } }) }) }
-        }
-        return insert(r)
-      }
-      const update = builder.update.bind(builder)
-      builder.update = (patch: unknown) => {
-        if ((patch as Row).status === 'superseded') {
-          const refused = { then: (ok: (v: unknown) => unknown) => Promise.resolve({ data: null, error: { code: '23514', message: 'violates check constraint' } }).then(ok) }
-          const chain: Record<string, unknown> = {}
-          for (const m of ['eq', 'neq', 'in', 'select']) chain[m] = () => ({ ...chain, ...refused })
-          return chain
-        }
-        if ((patch as Row).delivery_status !== undefined) {
-          const refused = { then: (ok: (v: unknown) => unknown) => Promise.resolve({ data: null, error: { code: 'PGRST204', message: "Could not find the 'delivery_status' column" } }).then(ok) }
-          return { eq: () => refused }
-        }
-        return update(patch)
-      }
-      return builder as never
-    }
-  }
-
-  it('still makes, sends and supersedes; old replaced offers are written "expired" as before', async () => {
-    without093()
+describe('before migration 094 is pasted (create_offer missing)', () => {
+  it('refuses with 503, changes nothing, sends nothing, and says why in the logs', async () => {
     const anna = q().sendOffer('v1', R.v1[0])
+    delete q().db.rpcs.create_offer
 
     const res = await offer('pos-v1', { musicianId: R.v1[1] })
 
-    expect(res.status).toBe(200)
-    expect(res.body.delivery).toBe('sent')
-    const created = row(res.body.offerId)
-    expect(created.status).toBe('pending')
-    expect(created.created_by).toBeUndefined()
-    expect(row(anna.id as string).status).toBe('expired')
-    expect(events()[0]).toMatchObject({ action: 'offer.superseded', after: expect.objectContaining({ status: 'expired' }) })
-  })
-
-  it('a failed send puts the offer it retired as "expired" back to pending', async () => {
-    without093()
-    const anna = q().sendOffer('v1', R.v1[0])
-    state.sendOfferFails = true
-
-    const res = await offer('pos-v1', { musicianId: R.v1[1] })
-
-    expect(res.status).toBe(502)
-    expect(row(anna.id as string)).toMatchObject({ status: 'pending', responded_at: null })
+    expect(res).toMatchObject({ status: 503, body: { code: 'not_ready' } })
+    expect(row(anna.id as string).status).toBe('pending')
     expect(q().offers('v1')).toHaveLength(1)
+    expect(q().chair('v1').status).toBe('offered')
+    expect(mailCalls(email.sendContractOfferEmail)).toHaveLength(0)
+    expect(vi.mocked(console.error).mock.calls.some((c) => /migration 094/.test(String(c[0])))).toBe(true)
   })
 })
 

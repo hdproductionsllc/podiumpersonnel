@@ -2,9 +2,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceClient } from '@/lib/supabase/server'
 import { LIVE_OFFER_STATUSES, isLiveOffer } from './live'
-import { isOfferClosed } from './respond'
 import { DEFAULT_OFFER_EXPIRY, resolveExpiresAt, type OfferExpiry } from './expiry'
 import { adminActor, logEvent, type Actor, type StaffingEvent } from './events'
+import { MIGRATION_094_MISSING, isMissingFunction } from './rpc'
 import {
   OFFER_EMAIL_ORG_FIELDS,
   OFFER_EMAIL_SERVICE_FIELDS,
@@ -22,22 +22,27 @@ import {
  * it only ran when an email was sent (audit C R-1, R-14, R-20). createOffer
  * does all of it, in this order:
  *
- *   1. check: admin of the gig's organization, musician in the same
- *      organization and active, gig not cancelled/completed, chair not already
- *      filled, musician not already holding an offer on this gig;
- *   2. retire the chair's open offers ('superseded'), then insert the new one
- *      (who sent it, what it offered, expiry from the one policy in
- *      expiry.ts) and mark the chair offered;
+ *   1. read the chair and the musician (the email needs them);
+ *   2. create_offer, a database function (migration 094), in ONE transaction:
+ *      check (admin of the gig's organization, musician in the same
+ *      organization and active, gig not cancelled/completed, chair not
+ *      already filled, musician not already holding an offer on this gig),
+ *      retire the chair's open offers ('superseded'), insert the new one (who
+ *      sent it, what it offered, expiry from the one policy in expiry.ts),
+ *      mark the chair offered, and record it in staffing_events;
  *   3. send the email, if asked;
  *   4. if that email failed while someone else was still waiting on the chair,
- *      undo step 2: delete the new offer and put back exactly the offers this
- *      call retired.
+ *      undo step 2: delete the new offer and put back exactly the offers it
+ *      retired.
  *
- * Retire-then-insert means a chair never holds two live offers, not even for
- * the seconds the email takes: the previous musician cannot accept a chair
- * that is already being offered to someone else, and the planned one-live-
- * offer-per-chair index (094) never sees a second one. Step 4 is the R-14 fix:
- * an old offer is not killed for a call that never went out.
+ * Retire-then-insert inside one transaction means a chair never holds two
+ * live offers, not even for the seconds the email takes, and two admins
+ * sending at once queue on the chair's lock instead of interleaving; the
+ * one-live-offer-per-chair index (094) is the backstop. Step 4 is the R-14
+ * fix: an old offer is not killed for a call that never went out.
+ *
+ * Before 094 is pasted the function does not exist and no offer is made
+ * (503, logged): see rpc.ts for why there is no fallback.
  */
 
 export type OfferDelivery = 'sent' | 'suppressed' | 'failed' | 'no_email' | 'not_requested'
@@ -52,6 +57,7 @@ export type CreateOfferRefusal =
   | 'musician_has_active_offer'
   | 'chair_has_live_offer'
   | 'send_failed'
+  | 'not_ready'
   | 'failed'
 
 export interface CreateOfferInput extends LeaderFeeChoice {
@@ -88,6 +94,25 @@ const refuse = (status: number, code: CreateOfferRefusal, error: string): Create
 /** The no-address message the old send-email route returned; the dialog shows it verbatim. */
 export const NO_EMAIL_MESSAGE = 'Musician does not have an email address'
 
+/** An offer create_offer retired, as it was just before. */
+interface RetiredOffer {
+  id: string
+  musician_id: string
+  previous_status: string
+  expires_at: string | null
+}
+
+type RpcRefusal = Exclude<CreateOfferRefusal, 'send_failed' | 'not_ready' | 'failed'>
+
+/** What create_offer returns (see its comment in migration 094). */
+type CreateOfferRpcResult =
+  | {
+      result: 'created'
+      offer: { id: string; token: string; expires_at: string | null; custom_pay: number | null; personal_message: string | null }
+      superseded: RetiredOffer[]
+    }
+  | { result: RpcRefusal; what?: 'position' | 'musician' }
+
 export async function createOffer(
   supabase: SupabaseClient,
   userId: string,
@@ -96,8 +121,9 @@ export async function createOffer(
   const { positionId, musicianId } = input
   const sendEmail = input.sendEmail !== false
 
-  // -- 1. checks ----------------------------------------------------------------
+  // -- 1. what the email needs ------------------------------------------------------
 
+  // The admin's own session: a chair outside their organization reads as not found.
   const { data: position, error: positionError } = await supabase
     .from('project_positions')
     .select(`
@@ -127,118 +153,53 @@ export async function createOffer(
   const project = pos.project
   const organizationId: string | undefined = project?.organization_id
 
-  const { data: membership } = await supabase
-    .from('organization_members')
-    .select('role')
-    .eq('user_id', userId)
-    .eq('organization_id', organizationId)
-    .single()
-
-  if (!membership || !['owner', 'admin'].includes(membership.role)) {
-    return refuse(403, 'forbidden', 'Permission denied')
-  }
-
-  const { data: musician, error: musicianError } = await supabase
+  const { data: musician } = await supabase
     .from('musicians')
     .select('id, first_name, last_name, email, organization_id, is_active')
     .eq('id', musicianId)
-    .single()
+    .maybeSingle()
 
-  if (musicianError || !musician) return refuse(404, 'not_found', 'Musician not found')
-  if (musician.organization_id !== organizationId) {
-    return refuse(400, 'wrong_organization', 'Musician does not belong to this organization')
-  }
-  if (isOfferClosed(project, null)) {
-    return refuse(409, 'gig_closed', 'This gig is cancelled or completed, so no new offers can go out')
-  }
-  if (isOfferClosed(null, musician)) {
-    return refuse(409, 'musician_inactive', `${musician.first_name} ${musician.last_name} is inactive`)
-  }
-  // An accept on a held chair is refused (claimChairForAccept), so an offer
-  // here could never be taken up.
-  if (pos.musician_id) return refuse(409, 'chair_filled', 'This chair is already filled')
-
-  // The dialogs' duplicate check, unchanged: an offer of any open or accepted
-  // kind for this musician anywhere on the gig, this chair included.
-  const { data: projectPositions } = await supabase
-    .from('project_positions')
-    .select('id')
-    .eq('project_id', pos.project_id)
-  const allPosIds = (projectPositions || []).map((p: { id: string }) => p.id)
-  if (allPosIds.length > 0) {
-    const { data: existingActive } = await supabase
-      .from('contract_offers')
-      .select('id')
-      .eq('musician_id', musicianId)
-      .in('project_position_id', allPosIds)
-      .in('status', ['pending', 'viewed', 'accepted'])
-      .limit(1)
-    if (existingActive && existingActive.length > 0) {
-      return refuse(409, 'musician_has_active_offer', 'This musician already has an active offer on this gig')
-    }
-  }
-
-  // Whoever else is waiting on this chair, and in what state, so a failed send
-  // can put them back exactly as they were.
-  const { data: siblingRows } = await supabase
-    .from('contract_offers')
-    .select('id, status, expires_at')
-    .eq('project_position_id', positionId)
-    .in('status', [...LIVE_OFFER_STATUSES])
-  const siblings: { id: string; status: string; expires_at: string | null }[] = siblingRows || []
-
-  // -- 2. the offer ---------------------------------------------------------------
+  // -- 2. the offer, in one transaction ---------------------------------------------
 
   const service = createServiceClient()
-
-  // Retire first, so the chair never holds two live offers (see the header).
-  const retired = await supersedeLiveOffers(service, positionId)
-  if (retired.error) {
-    console.error(`createOffer: could not retire earlier offers on position ${positionId}; offer not created:`, retired.error)
-    return refuse(500, 'failed', 'Could not replace the chair\'s current offer, so no new offer was made. Please try again.')
-  }
-  const previousStatus = new Map(siblings.map((o) => [o.id, o.status]))
-  const putBack = () => restoreSuperseded(service, positionId, retired, previousStatus)
-
   const services: any[] = project?.services || []
   const nowIso = new Date().toISOString()
   const expiresAt = resolveExpiresAt(input.expiry ?? DEFAULT_OFFER_EXPIRY)
   const personalMessage = input.personalMessage?.trim() || null
-  const willEmail = sendEmail && !!musician.email
+  const willEmail = sendEmail && !!musician?.email
 
-  const base: Record<string, unknown> = {
-    project_position_id: positionId,
-    musician_id: musicianId,
-    status: 'pending',
-    sent_at: nowIso,
-    expires_at: expiresAt,
-    custom_pay: input.customPay ?? null,
-  }
-  if (personalMessage) base.personal_message = personalMessage
-
-  const { data: offer, error: insertError } = await insertOffer(supabase, base, {
-    created_by: userId,
-    terms_snapshot: termsSnapshot(pos, services, input, nowIso),
-    delivery_status: willEmail ? 'queued' : null,
+  const { data: rpcData, error: rpcError } = await service.rpc('create_offer', {
+    p_position_id: positionId,
+    p_musician_id: musicianId,
+    p_created_by: userId,
+    p_expires_at: expiresAt,
+    p_custom_pay: input.customPay ?? null,
+    p_personal_message: personalMessage,
+    p_terms_snapshot: termsSnapshot(pos, services, input, nowIso),
+    p_delivery_status: willEmail ? 'queued' : null,
+    p_supersede: true,
   })
-  if (insertError || !offer) {
-    console.error(`createOffer: insert failed for musician ${musicianId} on position ${positionId}:`, insertError)
-    await putBack()
-    if ((insertError as { code?: string } | null)?.code === '23505') {
-      // Another admin's offer for this chair landed between our two writes (094's index).
+
+  if (rpcError) {
+    if (isMissingFunction(rpcError)) {
+      console.error(`createOffer: offer for musician ${musicianId} on position ${positionId} refused: ${MIGRATION_094_MISSING}`)
+      return refuse(503, 'not_ready', 'Offers cannot be sent until a database update is applied. Nothing was changed.')
+    }
+    console.error(`createOffer: create_offer failed for musician ${musicianId} on position ${positionId}:`, rpcError)
+    if ((rpcError as { code?: string }).code === '23505') {
+      // Another writer's offer for this chair landed first (094's index).
       return refuse(409, 'chair_has_live_offer', 'Another offer for this chair was sent a moment ago. Refresh to see it.')
     }
-    return refuse(500, 'failed', (insertError as any)?.message || 'Failed to create offer')
+    return refuse(500, 'failed', (rpcError as any)?.message || 'Failed to create offer')
   }
 
-  // Advisory only (the open-chair test also reads live offers); never
-  // overwrites a chair someone confirmed in the meantime.
-  const { error: posUpdateError } = await supabase
-    .from('project_positions')
-    .update({ status: 'offered' })
-    .eq('id', positionId)
-    .neq('status', 'confirmed')
-  if (posUpdateError) console.error(`createOffer: could not mark position ${positionId} offered:`, posUpdateError)
+  const created = rpcData as CreateOfferRpcResult | null
+  if (!created || created.result !== 'created' || !musician) {
+    return refusal(created, musician)
+  }
+
+  const offer = created.offer
+  const retired = created.superseded || []
 
   // -- 3. the email ---------------------------------------------------------------
 
@@ -268,23 +229,25 @@ export async function createOffer(
     }
   }
 
+  const actor = adminActor(userId)
+
   // -- 4. a failed send while someone else was waiting: undo ------------------------
 
   // "Waiting" means still answerable: an offer past its deadline that the cron
   // has not collected yet loses nothing by being replaced.
   const now = new Date()
-  const retiredIds = new Set(retired.offers.map((o) => o.id))
-  const someoneWaiting = siblings.some((o) => retiredIds.has(o.id) && isLiveOffer(o, now))
+  const someoneWaiting = retired.some((o) => isLiveOffer({ status: o.previous_status, expires_at: o.expires_at }, now))
 
   if (delivery === 'failed' && someoneWaiting) {
     // R-14: this call never reached anyone. Take the new offer back (nobody has
     // its link) and give the previous musician their offer back.
     const { error: withdrawError } = await service.from('contract_offers').delete().eq('id', offer.id)
     if (!withdrawError) {
-      const restored = await putBack()
+      const restored = await restoreSuperseded(service, positionId, retired)
       console.warn(
-        `createOffer: email to musician ${musicianId} failed; withdrew offer ${offer.id} and restored ${restored} earlier offer(s) on position ${positionId}`
+        `createOffer: email to musician ${musicianId} failed; withdrew offer ${offer.id} and restored ${restored.length} earlier offer(s) on position ${positionId}`
       )
+      await logEvent(withdrawnEvents({ organizationId, actor, positionId, musicianId, offerId: offer.id, restored }))
       return refuse(
         502,
         'send_failed',
@@ -304,14 +267,8 @@ export async function createOffer(
     if (deliveryError) console.error(`createOffer: could not record delivery for offer ${offer.id}:`, deliveryError)
   }
 
-  const actor = adminActor(userId)
-  const events: StaffingEvent[] = supersededEvents(retired, {
-    organizationId,
-    actor,
-    positionId,
-    replacedBy: offer.id,
-  })
-  events.push({
+  // create_offer recorded the offer and what it replaced; this records how the email went.
+  await logEvent({
     organizationId,
     actor,
     entityType: 'offer',
@@ -325,36 +282,102 @@ export async function createOffer(
       delivery,
     },
   })
-  await logEvent(events)
 
-  return { ok: true, offerId: offer.id, delivery, ...(emailError ? { emailError } : {}), superseded: retired.offers.length }
+  return { ok: true, offerId: offer.id, delivery, ...(emailError ? { emailError } : {}), superseded: retired.length }
+}
+
+/** create_offer said no: the status and words the admin sees (unchanged from the old checks). */
+function refusal(
+  rpc: CreateOfferRpcResult | null,
+  musician: { first_name?: string; last_name?: string } | null
+): CreateOfferResult {
+  const result = rpc?.result
+  switch (result) {
+    case 'not_found':
+      return rpc?.what === 'musician'
+        ? refuse(404, 'not_found', 'Musician not found')
+        : refuse(404, 'not_found', 'Position not found')
+    case 'forbidden':
+      return refuse(403, 'forbidden', 'Permission denied')
+    case 'wrong_organization':
+      return refuse(400, 'wrong_organization', 'Musician does not belong to this organization')
+    case 'gig_closed':
+      return refuse(409, 'gig_closed', 'This gig is cancelled or completed, so no new offers can go out')
+    case 'musician_inactive':
+      return refuse(409, 'musician_inactive', `${musician?.first_name} ${musician?.last_name} is inactive`)
+    case 'chair_filled':
+      return refuse(409, 'chair_filled', 'This chair is already filled')
+    case 'musician_has_active_offer':
+      return refuse(409, 'musician_has_active_offer', 'This musician already has an active offer on this gig')
+    case 'chair_has_live_offer':
+      return refuse(409, 'chair_has_live_offer', 'Another offer for this chair was sent a moment ago. Refresh to see it.')
+    default:
+      // 'created' without a musician row cannot happen (create_offer read it);
+      // anything else is a shape this code does not know.
+      console.error('createOffer: create_offer returned an unexpected result:', rpc)
+      return refuse(500, 'failed', 'Failed to create offer')
+  }
+}
+
+/** The history of a withdrawn offer: it was taken back, and what it replaced came back. */
+function withdrawnEvents(ctx: {
+  organizationId: string | undefined
+  actor: Actor
+  positionId: string
+  musicianId: string
+  offerId: string
+  restored: RetiredOffer[]
+}): StaffingEvent[] {
+  return [
+    {
+      organizationId: ctx.organizationId,
+      actor: ctx.actor,
+      entityType: 'offer',
+      entityId: ctx.offerId,
+      action: 'offer.withdrawn',
+      before: { status: 'pending' },
+      after: { reason: 'send_failed', position_id: ctx.positionId, musician_id: ctx.musicianId },
+    },
+    ...ctx.restored.map(
+      (o): StaffingEvent => ({
+        organizationId: ctx.organizationId,
+        actor: ctx.actor,
+        entityType: 'offer',
+        entityId: o.id,
+        action: 'offer.restored',
+        before: { status: 'superseded' },
+        after: { status: o.previous_status, position_id: ctx.positionId, musician_id: o.musician_id, withdrawn: ctx.offerId },
+      })
+    ),
+  ]
 }
 
 /**
- * Undo createOffer's retire step: put each offer it retired back to the
- * status it had (pending or viewed), only while it still carries the status
- * this call gave it. Returns how many came back. Under 094's index a restore
- * that would make a second live offer is refused; that is logged and left.
+ * Undo create_offer's retire step: put each offer it retired back to the
+ * status it had (pending or viewed), only while it still says 'superseded'.
+ * Returns the ones that came back. Under 094's index a restore that would make
+ * a second live offer is refused; that is logged and left.
  */
 async function restoreSuperseded(
   service: SupabaseClient,
   positionId: string,
-  retired: SupersedeResult,
-  previousStatus: Map<string, string>
-): Promise<number> {
-  let restored = 0
+  retired: RetiredOffer[]
+): Promise<RetiredOffer[]> {
+  const restored: RetiredOffer[] = []
   for (const status of LIVE_OFFER_STATUSES) {
-    const ids = retired.offers.map((o) => o.id).filter((id) => (previousStatus.get(id) ?? 'pending') === status)
-    if (ids.length === 0) continue
+    const group = retired.filter((o) => o.previous_status === status)
+    if (group.length === 0) continue
+    const ids = group.map((o) => o.id)
     const { data, error } = await service
       .from('contract_offers')
       .update({ status, responded_at: null })
       .eq('project_position_id', positionId)
       .in('id', ids)
-      .eq('status', retired.status)
+      .eq('status', 'superseded')
       .select('id')
     if (error) console.error(`createOffer: could not restore offers ${ids.join(', ')} on position ${positionId}:`, error)
-    restored += data?.length ?? 0
+    const back = new Set((data || []).map((r: { id: string }) => r.id))
+    restored.push(...group.filter((o) => back.has(o.id)))
   }
   return restored
 }

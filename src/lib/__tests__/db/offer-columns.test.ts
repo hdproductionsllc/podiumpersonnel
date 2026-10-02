@@ -28,13 +28,24 @@ afterAll(async () => {
   await db?.end()
 })
 
+/** A fresh chair on the tenant's gig (094 allows one open offer per chair). */
+async function newChair(): Promise<string> {
+  const id = randomUUID()
+  await db.query(
+    `insert into project_positions (id, project_id, instrument_id, chair_number)
+     select $1, project_id, instrument_id, chair_number + 1 from project_positions where id = $2`,
+    [id, t.positionId]
+  )
+  return id
+}
+
 async function newOffer(): Promise<string> {
   const id = randomUUID()
   // Exactly the columns the pre-093 browser insert named.
   await db.query(
     `insert into contract_offers (id, project_position_id, musician_id, status, sent_at, expires_at, custom_pay)
      values ($1, $2, $3, 'pending', now(), now() + interval '48 hours', 250)`,
-    [id, t.positionId, t.musicianId]
+    [id, await newChair(), t.musicianId]
   )
   return id
 }
@@ -87,12 +98,13 @@ describe('status and delivery_status', () => {
 describe('an org admin writing through their own session (RLS)', () => {
   it('can insert an offer with who sent it, what it offered and how the email went', async () => {
     const id = randomUUID()
+    const chair = await newChair()
     const snapshot = { pay: { custom_pay: 250 }, services: [{ id: t.serviceId }] }
     const res = await asUser(db, t.adminUserId, (q) =>
       q(
         `insert into contract_offers (id, project_position_id, musician_id, status, created_by, terms_snapshot, delivery_status)
          values ($1, $2, $3, 'pending', $4, $5, 'queued') returning terms_snapshot`,
-        [id, t.positionId, t.musicianId, t.adminUserId, JSON.stringify(snapshot)]
+        [id, chair, t.musicianId, t.adminUserId, JSON.stringify(snapshot)]
       )
     )
     expect(res.rows[0].terms_snapshot).toEqual(snapshot)

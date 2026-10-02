@@ -36,7 +36,9 @@ describe('Bug 2 — sending a new offer supersedes the previous one', () => {
     expect(writer).toContain("eq('project_position_id', positionId)")
     expect(writer).toContain("neq('id', scope.exceptOfferId)")
     expect(writer).toContain("in('status', [...LIVE_OFFER_STATUSES])")
-    expect(writer).toContain('const retired = await supersedeLiveOffers(service, positionId)')
+    // createOffer retires inside create_offer (migration 094), in the same transaction as the insert.
+    expect(writer).toContain("service.rpc('create_offer'")
+    expect(writer).toContain('p_supersede: true')
     expect(legacyRoute).toContain('supersedeLiveOffers(createServiceClient(), position.id, { exceptOfferId: offerId })')
   })
 })

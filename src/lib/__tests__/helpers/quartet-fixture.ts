@@ -251,9 +251,9 @@ export class QuartetFixture {
 }
 
 /**
- * The planned 094 index, contract_offers_one_live_per_position: at most one
+ * 094's index contract_offers_one_live_per_position: at most one
  * pending/viewed non-substitute offer per chair. Install with
- * `q.db.constraint = oneLiveOfferPerChair` to run a flow as if 094 were live.
+ * `q.db.constraint = oneLiveOfferPerChair` to run a flow under it.
  */
 export function oneLiveOfferPerChair(table: string, candidate: Row, others: Row[]) {
   if (table !== 'contract_offers') return null
@@ -263,6 +263,32 @@ export function oneLiveOfferPerChair(table: string, candidate: Row, others: Row[
   return clash
     ? { code: '23505', message: 'duplicate key value violates unique constraint "contract_offers_one_live_per_position"' }
     : null
+}
+
+/** 094's index contract_offers_one_accepted_per_position: at most one accepted offer per chair. */
+export function oneAcceptedOfferPerChair(table: string, candidate: Row, others: Row[]) {
+  if (table !== 'contract_offers' || candidate.status !== 'accepted') return null
+  const clash = others.some((o) => o.project_position_id === candidate.project_position_id && o.status === 'accepted')
+  return clash
+    ? { code: '23505', message: 'duplicate key value violates unique constraint "contract_offers_one_accepted_per_position"' }
+    : null
+}
+
+/** 094's CHECK project_positions_confirmed_has_musician. */
+export function confirmedHasMusician(table: string, candidate: Row) {
+  if (table !== 'project_positions') return null
+  return (candidate.status === 'confirmed') !== (candidate.musician_id != null)
+    ? { code: '23514', message: 'new row violates check constraint "project_positions_confirmed_has_musician"' }
+    : null
+}
+
+/** All three of 094's cascade rules at once. */
+export function cascadeConstraints(table: string, candidate: Row, others: Row[]) {
+  return (
+    oneLiveOfferPerChair(table, candidate, others) ??
+    oneAcceptedOfferPerChair(table, candidate, others) ??
+    confirmedHasMusician(table, candidate)
+  )
 }
 
 /** A fresh quartet gig: four vacant chairs, nobody offered anything yet. */

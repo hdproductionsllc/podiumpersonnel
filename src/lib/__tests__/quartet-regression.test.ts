@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest'
 import { NextRequest, NextResponse } from 'next/server'
-import { buildQuartet, QUARTET_CHAIRS, QUARTET_RANKING, QUARTET_ORG, type ChairKey, type QuartetFixture } from './helpers/quartet-fixture'
+import { buildQuartet, cascadeConstraints, QUARTET_CHAIRS, QUARTET_RANKING, QUARTET_ORG, type ChairKey, type QuartetFixture } from './helpers/quartet-fixture'
 import type { Row } from './helpers/supabase-mock'
 
 /**
@@ -99,6 +99,9 @@ beforeEach(() => {
   process.env.CRON_SECRET = 'test-secret'
   delete process.env.CRON_ENABLED
   state.q = buildQuartet()
+  // Run the whole business under 094's indexes and CHECK: no write in the
+  // flow may ever produce two live or two accepted offers on a chair.
+  state.q.db.constraint = cascadeConstraints
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'log').mockImplementation(() => {})

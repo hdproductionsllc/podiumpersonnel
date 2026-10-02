@@ -6,7 +6,6 @@ import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
 import { claimChairForAccept, notifyMusicianReleased, countChairs, isOfferClosed } from '@/lib/staffing/respond'
 import { isLiveOffer } from '@/lib/staffing/live'
-import { logEvent, musicianActor, type StaffingEvent } from '@/lib/staffing/events'
 
 export async function POST(
   _request: Request,
@@ -96,112 +95,23 @@ async function handleAccept(_request: Request, token: string) {
     .eq('status', 'approved')
     .maybeSingle()
 
-  // Accept the offer and claim the chair atomically (shared with the portal
-  // path — see claimChairForAccept for why the two conditional updates are what
-  // stop two musicians winning the same chair).
-  const claim = await claimChairForAccept(supabase, offer as any, subRequest as any)
-  const actor = musicianActor(offer.musician_id)
+  // Accept the offer and claim the chair in one database transaction
+  // (claim_chair, migration 094, via the shared helper). For a substitute it
+  // also releases the original musician and marks the request filled; every
+  // change is written to the staffing history in the same transaction.
+  const claim = await claimChairForAccept(supabase, offer)
 
   if (claim.outcome !== 'claimed') {
     if (claim.outcome === 'error') {
       console.error(`Failed to accept offer ${offer.id}:`, claim.error)
     }
-    if (claim.outcome === 'position_filled') {
-      // The accept landed and was undone because the chair had already gone to
-      // someone else. The offer row shows only "pending" again; this is the one
-      // record that the musician said yes.
-      await logEvent({
-        organizationId: project?.organization_id,
-        actor,
-        entityType: 'offer',
-        entityId: offer.id,
-        action: 'offer.accept_reverted',
-        before: { status: offer.status },
-        after: { status: 'pending', reason: 'position_filled', position_id: offer.project_position_id },
-      })
-    }
-    // already_responded / position_filled / error all land on the gig page,
-    // which renders the status-appropriate message.
+    // already_responded / position_filled / project_inactive / musician_inactive
+    // / error all land on the gig page, which renders the status-appropriate
+    // message.
     return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
   }
 
-  // If this is a substitution, update the substitution request and notify original musician.
-  // The substitute's accept and the chair transfer are already committed above,
-  // so a failure in either bookkeeping write below must not be reported to the
-  // musician as a failed accept — it is logged loudly for the contractor instead.
-  const events: StaffingEvent[] = [{
-    organizationId: project?.organization_id,
-    actor,
-    entityType: 'offer',
-    entityId: offer.id,
-    action: 'offer.accepted',
-    before: { status: offer.status },
-    after: {
-      status: 'accepted',
-      position_id: offer.project_position_id,
-      musician_id: offer.musician_id,
-      ...(subRequest ? { substitution_request_id: subRequest.id } : {}),
-    },
-  }]
-
   if (subRequest) {
-    // Update substitution request to filled
-    // Guarded on 'approved' so a request a concurrent withdraw already ended
-    // is not reopened as filled, and the event is logged only when a row moved.
-    const { data: filledRows, error: fillError } = await supabase
-      .from('substitution_requests')
-      .update({ status: 'filled' })
-      .eq('id', subRequest.id)
-      .eq('status', 'approved')
-      .select('id')
-
-    if (fillError) {
-      console.error(`Failed to mark substitution request ${subRequest.id} filled after accept of offer ${offer.id}:`, fillError)
-    } else if (!filledRows || filledRows.length === 0) {
-      console.error(`Substitution request ${subRequest.id} was no longer approved when offer ${offer.id} was accepted; left as is`)
-    } else {
-      events.push({
-        organizationId: project?.organization_id,
-        actor,
-        entityType: 'substitution_request',
-        entityId: subRequest.id,
-        action: 'substitution.filled',
-        before: { status: 'approved' },
-        after: { status: 'filled', offer_id: offer.id, substitute_musician_id: offer.musician_id },
-      })
-    }
-
-    // Release the original musician's prior accepted offer for this chair so
-    // they are no longer counted as confirmed.
-    const { data: releasedOffers, error: releaseError } = await supabase
-      .from('contract_offers')
-      .update({ status: 'released' })
-      .eq('project_position_id', offer.project_position_id)
-      .eq('musician_id', subRequest.requesting_musician_id)
-      .eq('status', 'accepted')
-      .select('id')
-
-    if (releaseError) {
-      console.error(`Failed to release original musician ${subRequest.requesting_musician_id} from chair ${offer.project_position_id}:`, releaseError)
-    }
-
-    for (const released of releasedOffers || []) {
-      events.push({
-        organizationId: project?.organization_id,
-        actor,
-        entityType: 'offer',
-        entityId: released.id,
-        action: 'offer.released',
-        before: { status: 'accepted' },
-        after: {
-          status: 'released',
-          reason: 'substitute_accepted',
-          musician_id: subRequest.requesting_musician_id,
-          substitution_request_id: subRequest.id,
-        },
-      })
-    }
-
     // Tell the original musician they've been released. Shared with the portal
     // path, which also records it — this route used to send without logging, so
     // the notice never reached the contractor's email log.
@@ -216,8 +126,6 @@ async function handleAccept(_request: Request, token: string) {
       performanceDate,
     })
   }
-
-  await logEvent(events)
 
   // Send confirmation emails (don't block on failure)
   try {

@@ -27,7 +27,10 @@ export type EntityType = 'offer' | 'position' | 'substitution_request'
 
 export type StaffingAction =
   // offers
+  | 'offer.created' // create_offer wrote it (094); offer.sent follows once the email was tried
   | 'offer.sent' // an offer went out (send-email, or a substitute's offer on approval)
+  | 'offer.withdrawn' // its email failed while an earlier offer was still waiting, so it was taken back
+  | 'offer.restored' // an offer retired for one that was then withdrawn, put back as it was
   | 'offer.viewed' // the musician opened the gig page for the first time
   | 'offer.accepted' // musician accepted, or admin assigned the musician holding it
   | 'offer.accept_reverted' // accepted, but the chair had already gone to someone else
@@ -39,6 +42,7 @@ export type StaffingAction =
   // chairs
   | 'position.assigned' // seated without an offer being accepted (direct assign, book)
   | 'position.unassigned'
+  | 'position.repaired' // fixed by scripts/sql/094-repair-before-constraints.paste.sql
   // substitution requests
   | 'substitution.requested'
   | 'substitution.approved'

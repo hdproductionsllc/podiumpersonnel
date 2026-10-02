@@ -33,7 +33,15 @@
  * begins — e.g. flip an offer's status during the mid-request substitution
  * lookup to simulate a concurrent accept/decline landing between the route's
  * initial fetch and its guarded update.
+ *
+ * Database functions: `db.rpc(name, args)` runs `db.rpcs[name]` inside
+ * `db.transaction()`. By default those are the in-memory claim_chair and
+ * create_offer (helpers/staffing-rpcs.ts); delete one to act as if migration
+ * 094 were not applied (PostgREST's PGRST202), or replace it to inject a
+ * failure.
  */
+
+import { MockPgError, STAFFING_RPCS } from './staffing-rpcs'
 
 export type Row = Record<string, any>
 
@@ -44,7 +52,7 @@ export interface AppliedFilter {
 
 export interface QueryLogEntry {
   table: string
-  operation: 'select' | 'update' | 'insert' | 'delete'
+  operation: 'select' | 'update' | 'insert' | 'delete' | 'rpc'
   filters: AppliedFilter[]
   payload?: unknown
   count: boolean
@@ -55,6 +63,9 @@ export interface MockResult {
   error: { message: string; code?: string } | null
   count?: number | null
 }
+
+/** A database function: reads and writes db.tables, throws MockPgError to refuse. */
+export type MockRpc = (db: MockSupabaseDb, args: never) => unknown
 
 export class MockSupabaseDb {
   tables: Record<string, Row[]>
@@ -68,12 +79,60 @@ export class MockSupabaseDb {
    */
   constraint?: (table: string, candidate: Row, others: Row[]) => { message: string; code: string } | null
 
+  /** Database functions by name (see the header). */
+  rpcs: Record<string, MockRpc> = { ...STAFFING_RPCS }
+
   constructor(tables: Record<string, Row[]> = {}) {
     this.tables = tables
   }
 
   from(table: string): MockQueryBuilder {
     return new MockQueryBuilder(this, table)
+  }
+
+  /** supabase.rpc(): logged as operation 'rpc' under the function's name. */
+  async rpc(name: string, args: Record<string, unknown> = {}): Promise<MockResult> {
+    const entry: QueryLogEntry = { table: name, operation: 'rpc', filters: [], payload: args, count: false }
+    this.log.push(entry)
+    this.beforeOp?.(entry, this)
+    const fn = this.rpcs[name]
+    if (!fn) {
+      return { data: null, error: { code: 'PGRST202', message: `Could not find the function public.${name} in the schema cache` } }
+    }
+    try {
+      return { data: this.transaction(() => fn(this, args as never)), error: null }
+    } catch (err) {
+      if (err instanceof MockPgError) return { data: null, error: { code: err.code, message: err.message } }
+      throw err
+    }
+  }
+
+  /**
+   * Run `fn`; if it throws, put every table back as it was (rows keep their
+   * identity, so references tests hold stay valid).
+   */
+  transaction<T>(fn: () => T): T {
+    const saved = Object.entries(this.tables).map(([name, rows]) => ({
+      name,
+      array: rows,
+      members: [...rows],
+      values: rows.map((r) => ({ ...r })),
+    }))
+    const names = new Set(saved.map((t) => t.name))
+    try {
+      return fn()
+    } catch (err) {
+      for (const name of Object.keys(this.tables)) if (!names.has(name)) delete this.tables[name]
+      for (const t of saved) {
+        t.members.forEach((row, i) => {
+          for (const key of Object.keys(row)) delete row[key]
+          Object.assign(row, t.values[i])
+        })
+        t.array.splice(0, t.array.length, ...t.members)
+        this.tables[t.name] = t.array
+      }
+      throw err
+    }
   }
 
   /** Find a seeded row by id. */

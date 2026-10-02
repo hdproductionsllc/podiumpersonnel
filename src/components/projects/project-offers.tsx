@@ -256,8 +256,9 @@ export function ProjectOffers({
       if (!response.ok) {
         if (detail?.code === 'musician_has_active_offer') {
           toast.error(`${candidate.first_name} ${candidate.last_name} already has an active offer for another position in this ${term(terms, 'work', { case: 'lower' })}.`)
-        } else if (typeof detail?.error === 'string' && (response.status < 500 || detail.code === 'send_failed')) {
-          // The server says why (chair filled, gig closed, musician inactive, the email failed...).
+        } else if (typeof detail?.error === 'string' && (response.status < 500 || detail.code === 'send_failed' || detail.code === 'not_ready')) {
+          // The server says why (chair filled, gig closed, musician inactive, the email failed,
+          // a database update not applied yet...).
           toast.error(detail.error)
         } else {
           toast.error('Failed to send offer')
