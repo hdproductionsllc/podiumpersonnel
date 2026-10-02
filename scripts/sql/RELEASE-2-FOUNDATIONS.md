@@ -65,9 +65,31 @@ unchanged (the quartet fixture and the golden-email tests hold this).
    it"'s "has it started"). With every chair on 'all' those answer exactly as
    before, so today's live app is unaffected.
 
+2. Right after the paste, before the deploy: Claude runs four read-only
+   lookups against the live database's web interface (no rows are read:
+   each asks for zero rows, so only "is this question valid" comes back).
+   They prove the new code's questions are understood by the live database
+   before any page asks them. Every one must answer `200 []`:
+
+   ```
+   GET /rest/v1/project_positions?select=id,scope_mode,position_services(service_id)&limit=0
+   GET /rest/v1/project_positions?select=id,position_services(service_id)&limit=0
+   GET /rest/v1/contract_offers?select=id,project_position:project_positions!inner(project_id,scope_mode,position_services(service_id))&limit=0
+   GET /rest/v1/projects?select=id,services(id),project_positions(id,scope_mode,position_services(service_id))&limit=0
+   ```
+
+   Recorded 2026-10-02, BEFORE 098 (expected to fail, and how it fails
+   matters): the first three answered `400 PGRST200 "Could not find a
+   relationship between 'project_positions' and 'position_services'"`. That
+   is exactly the error the code's fallback (`withScope`, `isMissingScope`)
+   recognises, so code deployed ahead of the paste reads without the scope
+   fields instead of failing. `projects?select=id,services(id),project_positions(id)&limit=0`
+   answered `200 []`. If any lookup answers anything but `200 []` after the
+   paste, do not deploy: paste the answer back to Claude.
+
 ### Deploy
 
-2. Same single push as step 1.
+3. Same single push as step 1.
 
 ### What people will notice
 
@@ -103,5 +125,24 @@ unchanged (the quartet fixture and the golden-email tests hold this).
 - Staffing alert: only chairs with a call still ahead count, dated by the
   first call an open chair still has to work. Pre-gig reminder: counts the
   confirmed people who work a call.
+- Send Offer dialog's "booked on another gig" warning: compares the calls
+  this chair works with the calls the person's chairs on the other gig work,
+  the same answer as the server's conflict check.
+- Music emails (send music, music reminder): the subject is dated by the
+  person's first call, like the gig-details email.
 - A chair limited to no calls works nothing (it never widens back to the
-  whole gig): no calendar file, no pay lines.
+  whole gig): no calendar file, no pay lines. An offer for it is refused
+  ("This chair is not set to work any of the gig's services"), the
+  auto-offer skips it (recorded as `cascade.skipped`, reason
+  `chair_works_nothing`), and Generate Payments says how many confirmed
+  chairs have an agreed fee it could not pay, instead of skipping them
+  silently.
+- A chair or service that is paired in `position_services` cannot be moved
+  to another gig (the database refuses; clear the chair's calls first). No
+  screen moves either today.
+
+### Still to adopt when the scope screens land
+
+- The calls picker itself (gated by `call_scoped_requirements`).
+- Anything new that reads "the gig's services" for a person must go through
+  `servicesFor` / `servicesForMusician`.

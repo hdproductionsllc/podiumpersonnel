@@ -1,7 +1,7 @@
 import { requireOrgAdmin, apiSuccess, apiError } from '@/lib/api-helpers'
 import { acceptedOfferIncludesLeaderFee, acceptedOfferPay, computeGigPay, type OfferForPay } from '@/lib/payments/compute'
 import { gigLead, type PositionForAfterGig } from '@/lib/after-gig/rules'
-import { servicesFor, withScope, type PositionScope } from '@/lib/staffing/scope'
+import { isScoped, servicesFor, withScope, type PositionScope } from '@/lib/staffing/scope'
 
 export async function POST(request: Request) {
   const { supabase, membership, error } = await requireOrgAdmin()
@@ -83,6 +83,11 @@ export async function POST(request: Request) {
     }[] = []
     // Rows that carry an offer's whole-gig amount: these dedupe per chair, not per service.
     const wholeGigRows = new Set<(typeof paymentsToInsert)[number]>()
+    // Confirmed chairs with an agreed whole-gig fee that work no services (a
+    // chair limited to some services, its last one deleted): a payment row
+    // needs a service, so none can be made. Said in the reply, never skipped
+    // silently. Always empty for a chair on the whole gig.
+    const agreedFeeNoServices: string[] = []
 
     // Each gig's lead (the admin's pick, else Violin 1 chair 1), for labelling
     // older offers that did not record the leader-fee choice.
@@ -123,6 +128,10 @@ export async function POST(request: Request) {
       // limited to some (scope.ts). A whole-gig amount is still owed once,
       // against the first of them.
       const chairServices = servicesFor(position as unknown as PositionScope, project.services)
+      if (isScoped(position as unknown as PositionScope) && chairServices.length === 0 && offerPay !== null && offerPay > 0) {
+        console.warn(`generate payments: chair ${position.id} has an agreed fee but works no services; no payment made`)
+        agreedFeeNoServices.push(position.id)
+      }
       for (const line of computeGigPay(chairServices, musician.is_leader, offerPay, includesLeaderFee)) {
         if (line.total <= 0) continue
 
@@ -140,8 +149,21 @@ export async function POST(request: Request) {
       }
     }
 
+    // Adds the agreed-fee-but-no-services notice to a reply; a reply with none
+    // to report is passed through exactly as it was.
+    const reply = (body: { created: number; skipped: number; message: string }) =>
+      apiSuccess(
+        agreedFeeNoServices.length === 0
+          ? body
+          : {
+              ...body,
+              message: `${body.message}. ${agreedFeeNoServices.length} confirmed chair(s) have an agreed fee but are not set to work any service, so no payment was made for them: choose their services, then generate again.`,
+              chairs_without_services: agreedFeeNoServices,
+            }
+      )
+
     if (paymentsToInsert.length === 0) {
-      return apiSuccess({
+      return reply({
         created: 0,
         skipped: 0,
         message: 'No payments to generate (services may not have pay amounts set)'
@@ -178,7 +200,7 @@ export async function POST(request: Request) {
     )
 
     if (newPayments.length === 0) {
-      return apiSuccess({
+      return reply({
         created: 0,
         skipped: paymentsToInsert.length,
         message: 'All payments already exist',
@@ -198,7 +220,7 @@ export async function POST(request: Request) {
     const createdCount = inserted?.length || 0
     const skippedCount = paymentsToInsert.length - createdCount
 
-    return apiSuccess({
+    return reply({
       created: createdCount,
       skipped: skippedCount,
       message: `Generated ${createdCount} payment records${skippedCount > 0 ? ` (${skippedCount} already existed)` : ''}`,

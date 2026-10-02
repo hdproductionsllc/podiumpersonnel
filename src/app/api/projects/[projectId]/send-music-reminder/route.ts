@@ -5,6 +5,7 @@ import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getOrgPlan } from '@/lib/api-helpers'
 import { canUseEmailFeatures } from '@/lib/plan'
+import { servicesForMusician, withScope } from '@/lib/staffing/scope'
 
 export async function POST(
   request: NextRequest,
@@ -82,7 +83,7 @@ export async function POST(
           email_brand_color,
           email_footer_text
         ),
-        services(start_time)
+        services(id, start_time)
       `)
       .eq('id', projectId)
       .single()
@@ -93,7 +94,6 @@ export async function POST(
 
     const organization = project.organization as any
     const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
-    const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, organization?.timezone || DEFAULT_TIMEZONE) : ''
 
     // Get files with instrument scoping
     const { data: files } = await supabase
@@ -103,12 +103,20 @@ export async function POST(
 
     // Get each musician's instrument from their position
     const musicianIds = unconfirmed.map((c: any) => c.musician_id)
-    const { data: positions } = await serviceClient
+    const { data: positions } = await withScope((scope) => serviceClient
       .from('project_positions')
-      .select('musician_id, instrument_id')
+      .select(`musician_id, instrument_id${scope}`)
       .eq('project_id', projectId)
       .in('musician_id', musicianIds)
-      .eq('status', 'confirmed')
+      .eq('status', 'confirmed'))
+
+    // The subject is dated by the first call this person works: a chair
+    // limited to some calls (migration 098) is not sent a date it does not
+    // play. Every other chair works the whole gig, so it is the gig's first.
+    const performanceDateFor = (musicianId: string) => {
+      const theirs = servicesForMusician(positions, musicianId, projectServices)
+      return theirs[0] ? formatPerformanceDateForSubject(theirs[0].start_time, organization?.timezone || DEFAULT_TIMEZONE) : ''
+    }
 
     const instrumentByMusician: Record<string, string> = {}
     if (positions) {
@@ -192,7 +200,7 @@ export async function POST(
                   downloadUrl: `${baseUrl}/api/music-download/${f.id}?token=${token}`,
                 })),
                 confirmUrl,
-                performanceDate,
+                performanceDate: performanceDateFor(conf.musician_id),
                 contactEmail,
                 branding,
               }),

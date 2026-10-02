@@ -423,6 +423,40 @@ describe("a chair limited to Cocktail Hour ('selected') is told, paid and checke
     expect(res.status).toBe(404)
   })
 
+  describe('a chair limited to no services (its last one deleted) is for nothing, and says so', () => {
+    const worksNothing = (keys: string[], scenario: () => Promise<unknown>) => async () => {
+      const ids = keys.map((k) => `pos-${k}`)
+      for (const p of q().db.tables.project_positions) if (ids.includes(p.id as string)) p.position_services = []
+      q().db.tables.position_services = q().db.tables.position_services.filter((ps) => !ids.includes(ps.project_position_id as string))
+      return scenario()
+    }
+
+    it('making an offer is refused, before anything is written or sent', async () => {
+      const out = await outcome('selected', worksNothing(['v1'], scenarios['making an offer (createOffer: expiry, terms snapshot, email)']))
+      expect(out.result).toEqual(expect.objectContaining({ ok: false, status: 409, code: 'chair_works_nothing' }))
+      expect(out.queries.filter((x: { operation: string }) => x.operation !== 'select')).toEqual([])
+      expect(out.emails).toEqual([])
+    })
+
+    it('auto-offer skips it', async () => {
+      const out = await outcome('selected', worksNothing(['v2'], scenarios['auto-offer after a decline (candidates, conflicts, cascade terms and email)']))
+      expect(out.queries.some((x: { operation: string; table: string }) => x.operation === 'rpc' && x.table === 'cascade_offer')).toBe(false)
+      expect(argsOf(out, 'sendContractOfferEmail')).toEqual([])
+      expect(JSON.stringify(out.queries)).toContain('chair_works_nothing') // recorded as cascade.skipped, with the reason
+    })
+
+    it('generate payments names a confirmed chair with an agreed fee it cannot pay, instead of skipping it silently', async () => {
+      const out = await outcome('selected', worksNothing(['v2'], scenarios['generate payments']))
+      expect(out.result.body.chairs_without_services).toEqual(['pos-v2'])
+      expect(out.result.body.message).toContain('1 confirmed chair(s) have an agreed fee but are not set to work any service')
+      const rows = out.queries.find((x: { operation: string; table: string }) => x.operation === 'insert' && x.table === 'payments').payload
+      expect(rows.map((r: { project_position_id: string }) => r.project_position_id)).toEqual(['pos-v1', 'pos-viola', 'pos-cello'])
+      // Nothing to report: the reply is exactly as before.
+      const plain = await outcome('selected', scenarios['generate payments'])
+      expect(plain.result.body).not.toHaveProperty('chairs_without_services')
+    })
+  })
+
   it("I can't make it: the gig's rehearsal having started does not stop someone who only works Cocktail Hour", async () => {
     const run = async (variant: Variant) => {
       setUp(variant)

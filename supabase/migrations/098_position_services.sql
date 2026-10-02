@@ -28,7 +28,9 @@
 --      both, each deleted with its chair or its service. Read by members of the
 --      gig's organization, written by its admins (the same rule as
 --      project_positions). A chair and a service from different gigs cannot be
---      paired (trigger trg_position_services_same_project).
+--      paired (trigger trg_position_services_same_project), and a chair or a
+--      service that has such a pairing cannot be moved to another gig
+--      (trg_position_services_project_move, on both tables).
 --   4. A chair can be set to 'selected' only in an organization whose
 --      call_scoped_requirements is on (trigger trg_scope_needs_switch), and the
 --      switch cannot be turned off while any of its chairs is 'selected'
@@ -208,6 +210,42 @@ DROP TRIGGER IF EXISTS trg_position_services_same_project ON position_services;
 CREATE TRIGGER trg_position_services_same_project
   BEFORE INSERT OR UPDATE ON position_services
   FOR EACH ROW EXECUTE FUNCTION position_services_same_project();
+
+-- The same rule from the other side: moving a chair or a service to another
+-- gig would leave its pairings joining two gigs. No flow moves either today;
+-- if one ever does, it must clear the chair's scope first. A move with no
+-- pairings (every chair today) is untouched.
+CREATE OR REPLACE FUNCTION position_services_project_move_guard()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF NEW.project_id IS NOT DISTINCT FROM OLD.project_id THEN RETURN NEW; END IF;
+  IF (TG_TABLE_NAME = 'project_positions'
+        AND EXISTS (SELECT 1 FROM position_services WHERE project_position_id = OLD.id))
+     OR (TG_TABLE_NAME = 'services'
+        AND EXISTS (SELECT 1 FROM position_services WHERE service_id = OLD.id)) THEN
+    RAISE EXCEPTION 'position_service_wrong_project'
+      USING ERRCODE = 'P0001',
+            DETAIL = 'This chair or service is scoped to calls of its gig; clear that scope before moving it to another gig.';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION position_services_project_move_guard() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_position_services_project_move ON project_positions;
+CREATE TRIGGER trg_position_services_project_move
+  BEFORE UPDATE OF project_id ON project_positions
+  FOR EACH ROW EXECUTE FUNCTION position_services_project_move_guard();
+
+DROP TRIGGER IF EXISTS trg_position_services_project_move ON services;
+CREATE TRIGGER trg_position_services_project_move
+  BEFORE UPDATE OF project_id ON services
+  FOR EACH ROW EXECUTE FUNCTION position_services_project_move_guard();
 
 -- ---------------------------------------------------------------------------
 -- 4. 'selected' only where the organization's switch is on

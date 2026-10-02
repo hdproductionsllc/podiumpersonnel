@@ -9,6 +9,7 @@ import { term } from '@/lib/verticals'
 import { findPossibleDuplicates, type PossibleDuplicate } from '@/lib/musicians/duplicates'
 import { expiryFromDialogChoice, resolveExpiresAt } from '@/lib/staffing/expiry'
 import { isViolinOne } from '@/lib/after-gig/rules'
+import { servicesFor, withScope, type PositionScope } from '@/lib/staffing/scope'
 
 export type MusicianScheduleEntry = {
   id: string
@@ -228,34 +229,39 @@ export function SendOfferDialog({
       }
 
       // 2. Check for cross-project scheduling conflicts
-      // First get our project ID and its services
-      const { data: thisPosition } = await supabase
+      // First get our project ID and the services this chair works. A chair
+      // limited to some calls (migration 098) only clashes on those, the same
+      // answer conflicts.ts and cascade_offer give; every other chair works
+      // the whole gig, and servicesFor hands back the full list unchanged.
+      const { data: thisPosition } = await withScope((scope) => supabase
         .from('project_positions')
-        .select('project_id')
+        .select(`project_id${scope}`)
         .eq('id', positionId)
-        .single()
+        .single())
 
       if (cancelled || !thisPosition) { setConflictWarnings([]); return }
 
-      const { data: ourServices } = await supabase
+      const { data: gigServices } = await supabase
         .from('services')
-        .select('start_time, end_time')
+        .select('id, start_time, end_time')
         .eq('project_id', thisPosition.project_id)
+
+      const ourServices = servicesFor(thisPosition, gigServices)
 
       if (cancelled || !ourServices || ourServices.length === 0) { setConflictWarnings([]); return }
 
       // Find the musician's active offers in OTHER projects
-      const { data: otherOffers } = await supabase
+      const { data: otherOffers } = await withScope((scope) => supabase
         .from('contract_offers')
         .select(`
           status,
           project_position:project_positions!inner(
-            project_id,
+            project_id${scope},
             project:projects!inner(name)
           )
         `)
         .eq('musician_id', selectedMusicianId)
-        .in('status', ['pending', 'viewed', 'accepted'])
+        .in('status', ['pending', 'viewed', 'accepted']))
 
       if (cancelled) return
 
@@ -273,7 +279,7 @@ export function SendOfferDialog({
       // Fetch services for those projects
       const { data: otherServices } = await supabase
         .from('services')
-        .select('project_id, start_time, end_time')
+        .select('id, project_id, start_time, end_time')
         .in('project_id', otherProjectIds)
 
       if (cancelled || !otherServices) { setConflictWarnings([]); return }
@@ -288,7 +294,15 @@ export function SendOfferDialog({
       }
 
       for (const otherProjectId of otherProjectIds) {
-        const projectServices = otherServices.filter((s: any) => s.project_id === otherProjectId)
+        // The services the musician works on that gig: everything their
+        // chairs there work (every service, for a chair on the whole gig).
+        const allProjectServices = otherServices.filter((s) => s.project_id === otherProjectId)
+        const worked = new Set(
+          (otherOffers as { project_position?: PositionScope & { project_id?: string } }[])
+            .filter((o) => o.project_position?.project_id === otherProjectId)
+            .flatMap((o) => servicesFor(o.project_position, allProjectServices).map((s) => s.id))
+        )
+        const projectServices = allProjectServices.filter((s) => worked.has(s.id))
         const hasOverlap = projectServices.some((otherSvc: any) => {
           const otherStart = new Date(otherSvc.start_time).getTime()
           const otherEnd = otherSvc.end_time

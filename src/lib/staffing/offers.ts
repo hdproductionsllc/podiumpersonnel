@@ -5,7 +5,7 @@ import { LIVE_OFFER_STATUSES, isLiveOffer } from './live'
 import { DEFAULT_OFFER_EXPIRY, capNoExpiryAtGigStart, resolveExpiresAt, type OfferExpiry } from './expiry'
 import { adminActor, logEvent, type Actor, type StaffingEvent } from './events'
 import { MIGRATION_094_MISSING, isMissingColumn, isMissingFunction } from './rpc'
-import { servicesFor, withScope } from './scope'
+import { isScoped, servicesFor, withScope } from './scope'
 import {
   OFFER_EMAIL_ORG_FIELDS,
   OFFER_EMAIL_SERVICE_FIELDS,
@@ -58,6 +58,7 @@ export type CreateOfferRefusal =
   | 'musician_inactive'
   | 'musician_has_active_offer'
   | 'chair_has_live_offer'
+  | 'chair_works_nothing'
   | 'send_failed'
   | 'not_ready'
   | 'failed'
@@ -109,7 +110,7 @@ interface RetiredOffer {
   is_substitution?: boolean
 }
 
-type RpcRefusal = Exclude<CreateOfferRefusal, 'send_failed' | 'not_ready' | 'failed'>
+type RpcRefusal = Exclude<CreateOfferRefusal, 'chair_works_nothing' | 'send_failed' | 'not_ready' | 'failed'>
 
 /** What create_offer returns (see its comment in migration 094). */
 type CreateOfferRpcResult =
@@ -160,6 +161,18 @@ export async function createOffer(
   const project = pos.project
   const organizationId: string | undefined = project?.organization_id
 
+  // The services this chair works (scope.ts): what the offer is for, so what
+  // caps "no expiration", what the snapshot records and what the email lists.
+  const services: any[] = servicesFor(pos, project?.services || [])
+
+  // A chair limited to some calls with none left (its last one deleted) is
+  // for nothing: no date to end "no expiration" at, nothing to list, nothing
+  // to pay. Refuse rather than send that. A chair on the whole gig is never
+  // refused here, even on a gig with no services yet (as before).
+  if (isScoped(pos) && services.length === 0) {
+    return refuse(409, 'chair_works_nothing', "This chair is not set to work any of the gig's services. Choose its services first.")
+  }
+
   const { data: musician, error: musicianError } = await supabase
     .from('musicians')
     .select('id, first_name, last_name, email, organization_id, is_active')
@@ -176,9 +189,6 @@ export async function createOffer(
   // -- 2. the offer, in one transaction ---------------------------------------------
 
   const service = createServiceClient()
-  // The services this chair works (scope.ts): what the offer is for, so what
-  // caps "no expiration", what the snapshot records and what the email lists.
-  const services: any[] = servicesFor(pos, project?.services || [])
   const nowIso = new Date().toISOString()
   // "No expiration" still ends when the gig starts.
   const expiresAt = capNoExpiryAtGigStart(

@@ -4,7 +4,7 @@ import { getNextCandidates, type Candidate } from './candidates'
 import { cascadeExpiresAt } from './expiry'
 import { LIVE_OFFER_STATUSES } from './live'
 import { isMissingColumn } from './rpc'
-import { servicesFor, withScope, type ScopeSelect } from './scope'
+import { isScoped, servicesFor, withScope, type ScopeSelect } from './scope'
 import { getOrgStaffingSettings } from './settings'
 import { OFFER_EMAIL_ORG_FIELDS, OFFER_EMAIL_SERVICE_FIELDS } from './offer-email-fields'
 
@@ -38,6 +38,7 @@ export type CascadeSkipReason =
   | 'chair_filled' // someone holds the chair
   | 'chair_has_live_offer' // someone is already being asked
   | 'no_time_left' // the gig's first service starts within CASCADE_MIN_LEAD_MS, or has started
+  | 'chair_works_nothing' // a chair limited to some services, with none left (Podium's own check; createOffer refuses it too)
   | 'error' // something failed; logged
 
 /** Ended statuses that can start a cascade: declined, expired, dropped ('released'). */
@@ -250,6 +251,9 @@ async function planEndedOffer(
     .limit(1)
   if (liveError) throw liveError
   if (live && live.length > 0) return skip('chair_has_live_offer')
+
+  // A chair limited to some services with none left is for nothing (offers.ts).
+  if (isScoped(pos) && services.length === 0) return skip('chair_works_nothing')
 
   const expiresAt = cascadeExpiresAt(trigger, services.map((s) => s.start_time), now)
   if (!expiresAt) return skip('no_time_left')

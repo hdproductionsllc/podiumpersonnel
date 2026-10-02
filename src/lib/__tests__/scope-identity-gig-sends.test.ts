@@ -110,6 +110,8 @@ import { POST as gigDetailsReminderPOST } from '@/app/api/projects/[projectId]/s
 import { GET as staffingAlertsGET } from '@/app/api/cron/staffing-alerts/route'
 import { GET as preGigGET } from '@/app/api/cron/pre-gig-reminders/route'
 import ConfirmDetailsPage from '@/app/confirm-details/[token]/page'
+import { POST as sendMusicPOST } from '@/app/api/projects/[projectId]/send-music/route'
+import { POST as sendMusicReminderPOST } from '@/app/api/projects/[projectId]/send-music-reminder/route'
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
@@ -212,6 +214,11 @@ async function seen(res: Response) {
 const argsOf = (out: { emails: { kind: string; args: Record<string, unknown> }[] }, kind: string) =>
   out.emails.filter((e) => e.kind === kind).map((e) => e.args)
 const names = (list: unknown) => (list as { name: string }[]).map((s) => s.name)
+const MUSIC_FILE = { id: 'file-1', file_name: 'Canon in D.pdf', file_size: 1000, scope: 'all', project_file_instruments: [] }
+const musicRequest = (route: string, body: unknown) =>
+  new NextRequest(`http://localhost:3000/api/projects/${QUARTET_PROJECT.id}/${route}`, { method: 'POST', body: JSON.stringify(body) })
+const COCKTAIL_AT = '2026-11-07T22:30:00Z' // the fixture's Cocktail Hour
+const subjectDate = (iso: string) => (email.formatPerformanceDateForSubject as (iso: string, tz?: string) => string)(iso, QUARTET_ORG.timezone)
 
 // ---------------------------------------------------------------------------
 // The scenarios
@@ -278,6 +285,31 @@ const scenarios: Record<string, Scenario> = {
     tables: {},
     run: () => sendPaySummaryOnce(looseDb(), project(v)),
   }),
+  'send music': (v) => ({
+    tables: {
+      organization_members: [{ organization_id: QUARTET_ORG.id }],
+      projects: [project(v)],
+      project_files: [MUSIC_FILE],
+    },
+    run: async () => seen(await sendMusicPOST(musicRequest('send-music', {}), { params: Promise.resolve({ projectId: QUARTET_PROJECT.id }) })),
+  }),
+  'send music reminder': (v) => ({
+    tables: {
+      organization_members: [{ organization_id: QUARTET_ORG.id }],
+      music_sends: [{ id: 'msend-1', project_id: QUARTET_PROJECT.id, organization_id: QUARTET_ORG.id, sent_at: '2026-11-01T16:00:00Z' }],
+      music_confirmations: (['v1', 'viola', 'cello'] as ChairKey[]).map((k, i) => ({
+        id: `mconf-${i}`,
+        token: `tok-mconf-${i}`,
+        musician_id: musician(k).id,
+        musician: musician(k),
+      })),
+      projects: [project(v)],
+      project_files: [MUSIC_FILE],
+      project_positions: chairs(v).filter((c) => c.status === 'confirmed'),
+    },
+    run: async () =>
+      seen(await sendMusicReminderPOST(musicRequest('send-music-reminder', { sendId: 'msend-1' }), { params: Promise.resolve({ projectId: QUARTET_PROJECT.id }) })),
+  }),
 }
 
 async function outcome(name: string, variant: Variant, scopeOf?: (key: ChairKey) => string[]) {
@@ -333,6 +365,26 @@ describe("a chair limited to Cocktail Hour ('selected') hears about Cocktail Hou
     const sent = argsOf(out, 'sendGigDetailsReminderEmail')
     expect(sent).toHaveLength(3)
     for (const args of sent) expect(names(args.services)).toEqual(['Cocktail Hour'])
+  })
+
+  it("music email: the subject is dated by the first call the person works, not the gig's rehearsal", async () => {
+    const cocktail = subjectDate(COCKTAIL_AT)
+    const rehearsal = subjectDate(REHEARSAL.start_time)
+    expect(cocktail).not.toEqual(rehearsal)
+    const sent = argsOf(await outcome('send music', 'selected'), 'sendMusicUploadedEmail')
+    expect(sent.map((a) => a.performanceDate)).toEqual([cocktail, cocktail, cocktail])
+    const mixed = argsOf(await outcome('send music', 'selected', (k) => (k === 'v1' ? ['svc-rehearsal'] : ['svc-cocktail'])), 'sendMusicUploadedEmail')
+    expect(Object.fromEntries(mixed.map((a) => [a.to, a.performanceDate]))).toEqual({
+      'mus-v1-a@example.com': rehearsal,
+      'mus-viola-a@example.com': cocktail,
+      'mus-cello-a@example.com': cocktail,
+    })
+  })
+
+  it('music reminder: the same', async () => {
+    const cocktail = subjectDate(COCKTAIL_AT)
+    const sent = argsOf(await outcome('send music reminder', 'selected'), 'sendMusicReminderEmail')
+    expect(sent.map((a) => a.performanceDate)).toEqual([cocktail, cocktail, cocktail])
   })
 
   it('confirm-details page: only their services', async () => {

@@ -5,6 +5,7 @@ import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getOrgPlan } from '@/lib/api-helpers'
 import { canUseEmailFeatures } from '@/lib/plan'
+import { servicesForMusician, withScope } from '@/lib/staffing/scope'
 
 export async function POST(
   request: Request,
@@ -43,7 +44,7 @@ export async function POST(
     }
 
     // Fetch project with organization, files, and positions
-    const { data: project, error: projectError } = await supabase
+    const { data: project, error: projectError } = await withScope((scope) => supabase
       .from('projects')
       .select(`
         id,
@@ -57,18 +58,18 @@ export async function POST(
           email_brand_color,
           email_footer_text
         ),
-        services(start_time),
+        services(id, start_time),
         project_positions(
           id,
           status,
           musician_id,
-          instrument_id,
+          instrument_id${scope},
           instrument:instruments(id, name),
           musician:musicians(id, first_name, last_name, email)
         )
       `)
       .eq('id', projectId)
-      .single()
+      .single())
 
     if (projectError || !project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
@@ -76,7 +77,13 @@ export async function POST(
 
     const organization = project.organization as any
     const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
-    const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, organization?.timezone || DEFAULT_TIMEZONE) : ''
+    // The subject is dated by the first call this person works: a chair
+    // limited to some calls (migration 098) is not sent a date it does not
+    // play. Every other chair works the whole gig, so it is the gig's first.
+    const performanceDateFor = (musicianId: string) => {
+      const theirs = servicesForMusician(project.project_positions, musicianId, projectServices)
+      return theirs[0] ? formatPerformanceDateForSubject(theirs[0].start_time, organization?.timezone || DEFAULT_TIMEZONE) : ''
+    }
 
     // Get all files for this project
     const { data: files, error: filesError } = await supabase
@@ -221,7 +228,7 @@ export async function POST(
                 })),
                 confirmUrl,
                 notes,
-                performanceDate,
+                performanceDate: performanceDateFor(pos.musician_id),
                 contactEmail,
                 branding,
               }),

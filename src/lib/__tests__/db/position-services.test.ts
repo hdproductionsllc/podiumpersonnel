@@ -217,6 +217,24 @@ describe('position_services', () => {
     expect(await servicesOf(g.chairId)).toEqual([])
   })
 
+  it('a scoped chair or its service cannot be moved to another gig; an unscoped one still can', async () => {
+    const g = await gig({ scoped: true })
+    const other = await gig({ scoped: true })
+    await scope(g, g.chairId, [g.services[0]])
+    await refused(
+      () => db.query('update project_positions set project_id = $2 where id = $1', [g.chairId, other.projectId]),
+      /position_service_wrong_project/
+    )
+    await refused(
+      () => db.query('update services set project_id = $2 where id = $1', [g.services[0], other.projectId]),
+      /position_service_wrong_project/
+    )
+    // Untouched: the same gig, a service with no pairing, a chair on the whole gig.
+    await db.query('update project_positions set project_id = project_id where id = $1', [g.chairId])
+    await db.query('update services set project_id = $2 where id = $1', [g.services[1], other.projectId])
+    await db.query('update project_positions set project_id = $2 where id = $1', [other.chairId, g.projectId])
+  })
+
   it('goes with its chair', async () => {
     const g = await gig({ scoped: true })
     await scope(g, g.chairId, [g.services[0]])
