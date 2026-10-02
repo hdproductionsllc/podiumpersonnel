@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferReminderEmail, sendOfferExpiringSoonEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
-import { getAppUrl } from '@/lib/utils'
+import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
 import { isDueForReminder, reminderHorizon } from '@/lib/staffing/reminders'
 
@@ -73,7 +73,12 @@ export async function GET(request: NextRequest) {
     throw fetchError
   }
 
-  const expiringOffers = (candidates || []).filter((offer) => isDueForReminder(offer, now))
+  // Quiet hours are the organization's local time (reminders.ts).
+  const orgTimezone = (position: unknown) =>
+    (position as { project?: { organization?: { timezone?: string | null } | null } | null } | null)?.project?.organization?.timezone
+  const expiringOffers = (candidates || []).filter((offer) =>
+    isDueForReminder(offer, now, orgTimezone(offer.project_position) || DEFAULT_TIMEZONE)
+  )
 
   if (!expiringOffers || expiringOffers.length === 0) {
     return NextResponse.json({ reminded: 0 })

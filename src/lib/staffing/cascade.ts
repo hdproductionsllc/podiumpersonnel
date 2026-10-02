@@ -112,6 +112,11 @@ export async function advance(service: SupabaseClient, input: AdvanceInput): Pro
   } catch (err) {
     if (err instanceof CascadePlanError) organizationId ??= err.organizationId
     console.error(`cascade: offer ${input.triggerOfferId} on position ${input.positionId} failed; nothing more was done:`, err)
+    // The decline route calls advance() for every org, so a failed read in an
+    // org that never turned auto-offer on must leave no history: nothing was
+    // asked of the cascade. Only an org that has it on gets the 'error' row.
+    const autoOn = await isAutoCascadeOn(service, organizationId).catch(() => false)
+    if (!autoOn) return { outcome: 'skipped', reason: 'error' }
     return skipped(input, 'error', organizationId, { detail: err instanceof Error ? err.message : String(err) }).catch(() => ({
       outcome: 'skipped' as const,
       reason: 'error' as const,
