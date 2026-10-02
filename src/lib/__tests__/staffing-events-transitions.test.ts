@@ -86,6 +86,7 @@ import { POST as approvePOST } from '@/app/api/substitutions/[requestId]/approve
 import { POST as subDeclinePOST } from '@/app/api/substitutions/[requestId]/decline/route'
 import { PUT as autoPopulatePUT } from '@/app/api/projects/[projectId]/auto-populate/route'
 import { GET as expireGET } from '@/app/api/cron/expire-offers/route'
+import { sendContractOfferEmail } from '@/lib/email/send'
 
 const PAST = new Date(Date.now() - 60 * 60 * 1000).toISOString()
 const R = QUARTET_RANKING
@@ -432,7 +433,30 @@ describe('substitutions', () => {
       after: { status: 'approved', offer_id: subOffer.id },
     })
     expect(eventsFor(subOffer.id)).toEqual([
-      expect.objectContaining({ action: 'offer.sent', after: expect.objectContaining({ substitution_request_id: request.id }) }),
+      expect.objectContaining({
+        action: 'offer.sent',
+        after: expect.objectContaining({ substitution_request_id: request.id, delivery: 'sent' }),
+      }),
+    ])
+  })
+
+  it('a substitute\'s offer email that failed or was suppressed is recorded as such, not as sent', async () => {
+    const send = vi.mocked(sendContractOfferEmail)
+
+    send.mockRejectedValueOnce(new Error('resend down'))
+    const first = await seatedWithSubRequest()
+    const failed = await approve(first.request.id as string)
+    expect(eventsFor(failed.id)).toEqual([
+      expect.objectContaining({ action: 'offer.sent', after: expect.objectContaining({ delivery: 'failed' }) }),
+    ])
+
+    state.q = buildQuartet()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    send.mockResolvedValueOnce({ suppressed: true, suppressedRecipients: ['sub@example.com'] } as any)
+    const second = await seatedWithSubRequest()
+    const suppressed = await approve(second.request.id as string)
+    expect(eventsFor(suppressed.id)).toEqual([
+      expect.objectContaining({ action: 'offer.sent', after: expect.objectContaining({ delivery: 'suppressed' }) }),
     ])
   })
 

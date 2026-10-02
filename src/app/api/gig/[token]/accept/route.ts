@@ -146,13 +146,19 @@ async function handleAccept(_request: Request, token: string) {
 
   if (subRequest) {
     // Update substitution request to filled
-    const { error: fillError } = await supabase
+    // Guarded on 'approved' so a request a concurrent withdraw already ended
+    // is not reopened as filled, and the event is logged only when a row moved.
+    const { data: filledRows, error: fillError } = await supabase
       .from('substitution_requests')
       .update({ status: 'filled' })
       .eq('id', subRequest.id)
+      .eq('status', 'approved')
+      .select('id')
 
     if (fillError) {
       console.error(`Failed to mark substitution request ${subRequest.id} filled after accept of offer ${offer.id}:`, fillError)
+    } else if (!filledRows || filledRows.length === 0) {
+      console.error(`Substitution request ${subRequest.id} was no longer approved when offer ${offer.id} was accepted; left as is`)
     } else {
       events.push({
         organizationId: project?.organization_id,

@@ -282,31 +282,15 @@ export async function POST(
     action: 'offer.superseded',
     after: { status: 'expired', musician_id: substituteMusician.id, replaced_by: contractOffer.id },
   }))
-  events.push(
-    {
-      organizationId: project.organization_id,
-      actor,
-      entityType: 'substitution_request',
-      entityId: requestId,
-      action: 'substitution.approved',
-      before: { status: 'pending_approval' },
-      after: { status: 'approved', substitute_musician_id: substituteMusician.id, offer_id: contractOffer.id },
-    },
-    {
-      organizationId: project.organization_id,
-      actor,
-      entityType: 'offer',
-      entityId: contractOffer.id,
-      action: 'offer.sent',
-      after: {
-        status: 'pending',
-        position_id: subRequest.project_position_id,
-        musician_id: substituteMusician.id,
-        expires_at: expiresAt.toISOString(),
-        substitution_request_id: requestId,
-      },
-    }
-  )
+  events.push({
+    organizationId: project.organization_id,
+    actor,
+    entityType: 'substitution_request',
+    entityId: requestId,
+    action: 'substitution.approved',
+    before: { status: 'pending_approval' },
+    after: { status: 'approved', substitute_musician_id: substituteMusician.id, offer_id: contractOffer.id },
+  })
   await logEvent(events)
 
   // Get service name if specific service
@@ -351,6 +335,12 @@ export async function POST(
     }))
 
   const baseUrl = getAppUrl()
+
+  // How the substitute's offer email went, for the offer.sent event below.
+  // Stays 'failed' if the send threw or returned nothing.
+  let subOfferDelivery: 'sent' | 'suppressed' | 'failed' | 'no_email' = subRequest.suggested_sub_email
+    ? 'failed'
+    : 'no_email'
 
   // Send emails (non-blocking)
   try {
@@ -412,6 +402,9 @@ export async function POST(
         console.warn('Failed to send offer email:', err)
         return null
       })
+      if (subOfferResult) {
+        subOfferDelivery = subOfferResult.suppressed === true ? 'suppressed' : 'sent'
+      }
 
       if (subOfferResult && project?.organization_id) {
         await logEmail({
@@ -448,6 +441,24 @@ export async function POST(
   } catch (emailError) {
     console.warn('Email sending failed:', emailError)
   }
+
+  // Logged after the send, like send-email, so the history never says an
+  // offer went out when it did not reach anyone.
+  await logEvent({
+    organizationId: project.organization_id,
+    actor,
+    entityType: 'offer',
+    entityId: contractOffer.id,
+    action: 'offer.sent',
+    after: {
+      status: 'pending',
+      position_id: subRequest.project_position_id,
+      musician_id: substituteMusician.id,
+      expires_at: expiresAt.toISOString(),
+      substitution_request_id: requestId,
+      delivery: subOfferDelivery,
+    },
+  })
 
   return NextResponse.json({
     success: true,
