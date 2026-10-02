@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
+import { isMissingColumn } from '@/lib/staffing/rpc'
 
-interface LogEmailParams {
+export interface LogEmailParams {
   organizationId: string
   recipientEmail: string
   recipientName?: string
@@ -12,8 +13,16 @@ interface LogEmailParams {
   resendEmailId?: string | null
   metadata?: Record<string, unknown>
   body?: string | null
-  /** Defaults to 'sent'. Pass 'suppressed' when safe mode blocked every recipient. */
+  /** Defaults to 'sent'. 'suppressed' when safe mode blocked every recipient, 'failed' when the provider refused the send. */
   status?: string
+  /**
+   * Migration 097. Each is left out of the insert unless given, so the row for
+   * a send that went out is written exactly as before 097 (the database fills
+   * channel = 'email'). The notify layer sets them on a failed send.
+   */
+  channel?: 'email' | 'sms'
+  failedAt?: string | null
+  failureReason?: string | null
 }
 
 /** Convert HTML email to readable plain text for storage */
@@ -40,8 +49,9 @@ function htmlToPlainText(html: string): string {
 }
 
 /**
- * Log a sent email to the email_logs table for audit purposes.
- * This should be called from API routes after successfully sending an email.
+ * Write one row to the email_logs audit table. The notify layer
+ * (src/lib/notify/) calls this for every send it records, the ones that went
+ * out and the ones that failed; send sites go through notify().
  * Failures are logged but never throw — email logging should never break the main flow.
  */
 export async function logEmail(params: LogEmailParams): Promise<void> {
@@ -50,7 +60,7 @@ export async function logEmail(params: LogEmailParams): Promise<void> {
     const plainBody = params.body ? htmlToPlainText(params.body) : null
     // PostgREST reports failures in the result, not by throwing, so the catch
     // below alone would never see a rejected insert.
-    const { error } = await supabase.from('email_logs').insert({
+    const row = {
       organization_id: params.organizationId,
       recipient_email: params.recipientEmail,
       recipient_name: params.recipientName || null,
@@ -63,7 +73,28 @@ export async function logEmail(params: LogEmailParams): Promise<void> {
       status: params.status || 'sent',
       metadata: params.metadata || {},
       body: plainBody,
-    })
+    }
+    const deliveryColumns = {
+      ...(params.channel ? { channel: params.channel } : {}),
+      ...(params.failedAt ? { failed_at: params.failedAt } : {}),
+      ...(params.failureReason ? { failure_reason: params.failureReason } : {}),
+    }
+    let { error } = await supabase.from('email_logs').insert({ ...row, ...deliveryColumns })
+    if (error && Object.keys(deliveryColumns).length > 0 && isMissingColumn(error)) {
+      // 097 not applied yet: keep the record, with the failure in metadata.
+      console.warn(
+        `email_logs: migration 097 (scripts/sql/097-email-logs-channel.paste.sql) has not been applied; ` +
+          `logging this ${params.emailType} row without its delivery columns`
+      )
+      ;({ error } = await supabase.from('email_logs').insert({
+        ...row,
+        metadata: {
+          ...row.metadata,
+          ...(params.failedAt ? { failedAt: params.failedAt } : {}),
+          ...(params.failureReason ? { failureReason: params.failureReason } : {}),
+        },
+      }))
+    }
     if (error) {
       console.warn(`Failed to log ${params.emailType} email to ${params.recipientEmail}:`, error)
     }

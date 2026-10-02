@@ -895,6 +895,11 @@ export interface EmailLog {
   metadata: Record<string, unknown>
   body: string | null
   sent_at: string
+  /** 097: 'email' for every row (Podium sends no texts). Absent before 097. */
+  channel?: string
+  /** 097: set on a send the provider refused (status 'failed'). */
+  failed_at?: string | null
+  failure_reason?: string | null
 }
 export interface GigDetailSend {
   id: string

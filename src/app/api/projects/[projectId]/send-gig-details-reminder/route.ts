@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendGigDetailsReminderEmail } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
 import { getOrgPlan } from '@/lib/api-helpers'
@@ -158,29 +158,36 @@ export async function POST(
       const confirmUrl = `${baseUrl}/confirm-details/${conf.token}`
 
       try {
-        const result = await sendGigDetailsReminderEmail({
-          to: musician.email,
-          musicianName: musician.first_name,
-          organizationName: organization?.name || 'Orchestra',
-          organizationId: organization?.id,
-          projectName: project.name,
-          services: formattedServices,
-          confirmUrl,
-          originalSentDate,
-          branding,
-        })
-
-        await logEmail({
-          organizationId: organization.id,
-          recipientEmail: musician.email,
-          recipientName: `${musician.first_name} ${musician.last_name}`,
-          subject: result?.subject || `Reminder: please confirm ${project.name}`,
-          emailType: 'gig_details_reminder',
-          musicianId: musician.id,
-          projectId: projectId,
-          resendEmailId: result?.id || null,
-          body: result?.emailHtml,
-        })
+        await notify(
+          {
+            type: 'gig_details_reminder',
+            record: (r) => ({
+              organizationId: organization.id,
+              recipientEmail: musician.email,
+              recipientName: `${musician.first_name} ${musician.last_name}`,
+              subject: r?.subject || `Reminder: please confirm ${project.name}`,
+              emailType: 'gig_details_reminder',
+              musicianId: musician.id,
+              projectId: projectId,
+              resendEmailId: r?.id || null,
+              body: r?.emailHtml,
+            }),
+          },
+          {
+            email: () =>
+              sendGigDetailsReminderEmail({
+                to: musician.email,
+                musicianName: musician.first_name,
+                organizationName: organization?.name || 'Orchestra',
+                organizationId: organization?.id,
+                projectName: project.name,
+                services: formattedServices,
+                confirmUrl,
+                originalSentDate,
+                branding,
+              }),
+          }
+        )
 
         sentCount++
       } catch (emailError) {

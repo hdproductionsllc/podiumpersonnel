@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendPositionUnassignedEmail, sendEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { PODIUM_FOOTER_URL } from '@/lib/email/templates/podium-footer'
 import { serverError } from '@/lib/api-helpers'
 import { LIVE_OFFER_STATUSES } from '@/lib/staffing/live'
@@ -177,27 +177,34 @@ export async function POST(
     // Notify the musician if they have an email
     if (musician?.email) {
       emailPromises.push(
-        sendPositionUnassignedEmail({
-          to: musician.email,
-          musicianName: `${musician.first_name} ${musician.last_name}`,
-          organizationName: organization?.name || 'Orchestra',
-          organizationId: organization?.id,
-          projectName: project?.name || 'Project',
-          instrument: instrument?.name || 'Instrument',
-          chairNumber: positionData.chair_number || 1,
-          totalChairs,
-          performanceDate,
-        }).then((result) => {
-          logEmail({
-            organizationId: project?.organization_id,
-            recipientEmail: musician.email,
-            recipientName: `${musician.first_name} ${musician.last_name}`,
-            subject: result?.subject || musicianSubject,
-            emailType: 'position_unassigned',
-            musicianId: musician.id,
-            projectId: project?.id,
-          })
-        }).catch((err) => console.warn('Failed to send musician notification:', err))
+        notify(
+          {
+            type: 'position_unassigned',
+            record: (result) => ({
+              organizationId: project?.organization_id,
+              recipientEmail: musician.email,
+              recipientName: `${musician.first_name} ${musician.last_name}`,
+              subject: result?.subject || musicianSubject,
+              emailType: 'position_unassigned',
+              musicianId: musician.id,
+              projectId: project?.id,
+            }),
+          },
+          {
+            email: () =>
+              sendPositionUnassignedEmail({
+                to: musician.email,
+                musicianName: `${musician.first_name} ${musician.last_name}`,
+                organizationName: organization?.name || 'Orchestra',
+                organizationId: organization?.id,
+                projectName: project?.name || 'Project',
+                instrument: instrument?.name || 'Instrument',
+                chairNumber: positionData.chair_number || 1,
+                totalChairs,
+                performanceDate,
+              }),
+          }
+        ).catch((err) => console.warn('Failed to send musician notification:', err))
       )
     }
 
@@ -219,23 +226,30 @@ export async function POST(
           </div>
         `
         emailPromises.push(
-          sendEmail({
-            to: adminEmails,
-            subject: adminSubject,
-            html: adminEmailHtml,
-          }).then(() => {
-            for (const email of adminEmails) {
-              logEmail({
-                organizationId: project.organization_id,
-                recipientEmail: email,
-                subject: adminSubject,
-                emailType: 'position_unassigned_admin',
-                musicianId: musician?.id,
-                projectId: project?.id,
-                body: adminEmailHtml,
-              })
+          notify(
+            {
+              type: 'position_unassigned_admin',
+              // One row per admin, as this send was always recorded.
+              record: () =>
+                adminEmails.map((email) => ({
+                  organizationId: project.organization_id,
+                  recipientEmail: email,
+                  subject: adminSubject,
+                  emailType: 'position_unassigned_admin',
+                  musicianId: musician?.id,
+                  projectId: project?.id,
+                  body: adminEmailHtml,
+                })),
+            },
+            {
+              email: () =>
+                sendEmail({
+                  to: adminEmails,
+                  subject: adminSubject,
+                  html: adminEmailHtml,
+                }),
             }
-          }).catch((err) => console.warn('Failed to send admin notification:', err))
+          ).catch((err) => console.warn('Failed to send admin notification:', err))
         )
       }
     }

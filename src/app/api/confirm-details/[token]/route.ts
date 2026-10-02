@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 
 export async function POST(
   _request: Request,
@@ -79,24 +79,31 @@ export async function POST(
         const adminEmails = await getOrgAdminEmails(send.organization_id)
 
         if (adminEmails.length > 0) {
-          const result = await sendEmail({
-            to: adminEmails,
-            subject,
-            html,
-          })
-
-          await logEmail({
-            organizationId: send.organization_id,
-            recipientEmail: adminEmails[0],
-            recipientName: undefined,
-            subject,
-            emailType: 'gig_details_confirmed',
-            musicianId: musician.id,
-            projectId: project.id,
-            resendEmailId: result?.id || null,
-            metadata: { allRecipients: adminEmails, allConfirmed },
-            body: result?.emailHtml,
-          })
+          await notify(
+            {
+              type: 'gig_details_confirmed',
+              record: (r) => ({
+                organizationId: send.organization_id,
+                recipientEmail: adminEmails[0],
+                recipientName: undefined,
+                subject,
+                emailType: 'gig_details_confirmed',
+                musicianId: musician.id,
+                projectId: project.id,
+                resendEmailId: r?.id || null,
+                metadata: { allRecipients: adminEmails, allConfirmed },
+                body: r?.emailHtml,
+              }),
+            },
+            {
+              email: () =>
+                sendEmail({
+                  to: adminEmails,
+                  subject,
+                  html,
+                }),
+            }
+          )
         }
       } catch (emailError) {
         // Don't fail the confirmation if email fails

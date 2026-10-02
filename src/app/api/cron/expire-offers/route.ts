@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { getNextCandidates } from '@/lib/staffing/candidates'
 import { sendOfferExpiredEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { getAppUrl } from '@/lib/utils'
 import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
 import { notifySubDeclined } from '@/lib/staffing/respond'
@@ -254,34 +254,41 @@ export async function GET(request: NextRequest) {
         const adminEmails = await getOrgAdminEmails(project.organization_id)
 
         if (adminEmails.length > 0) {
-          const expiredResult = await sendOfferExpiredEmail({
-            to: adminEmails,
-            organizationName: organization?.name || 'Your Organization',
-            projectName: project.name,
-            musicianName: `${musician.first_name} ${musician.last_name}`,
-            instrument: instrument?.name || 'Instrument',
-            chairNumber: position.chair_number || 1,
-            totalChairs,
-            nextCandidate,
-            dashboardUrl: `${baseUrl}/dashboard/projects?expand=${project.id}`,
-            performanceDate,
-            ...(autoOffer ? { autoOffer } : {}),
-          })
+          await notify(
+            {
+              type: 'offer_expired',
+              record: (r) => ({
+                organizationId: project.organization_id,
+                recipientEmail: adminEmails[0],
+                recipientName: undefined,
+                subject: r?.subject || `Offer Expired: ${musician.first_name} ${musician.last_name} - ${project.name}`,
+                emailType: 'offer_expired',
+                musicianId: musician.id,
+                projectId: project.id,
+                offerId: offer.id,
+                resendEmailId: r?.id || null,
+                metadata: { allRecipients: adminEmails },
+                body: r?.emailHtml,
+              }),
+            },
+            {
+              email: () =>
+                sendOfferExpiredEmail({
+                  to: adminEmails,
+                  organizationName: organization?.name || 'Your Organization',
+                  projectName: project.name,
+                  musicianName: `${musician.first_name} ${musician.last_name}`,
+                  instrument: instrument?.name || 'Instrument',
+                  chairNumber: position.chair_number || 1,
+                  totalChairs,
+                  nextCandidate,
+                  dashboardUrl: `${baseUrl}/dashboard/projects?expand=${project.id}`,
+                  performanceDate,
+                  ...(autoOffer ? { autoOffer } : {}),
+                }),
+            }
+          )
           emailsSent++
-
-          await logEmail({
-            organizationId: project.organization_id,
-            recipientEmail: adminEmails[0],
-            recipientName: undefined,
-            subject: expiredResult?.subject || `Offer Expired: ${musician.first_name} ${musician.last_name} - ${project.name}`,
-            emailType: 'offer_expired',
-            musicianId: musician.id,
-            projectId: project.id,
-            offerId: offer.id,
-            resendEmailId: expiredResult?.id || null,
-            metadata: { allRecipients: adminEmails },
-            body: expiredResult?.emailHtml,
-          })
         }
       } catch (emailError) {
         console.error(`Failed to send expiration email for offer ${offer.id}:`, emailError)

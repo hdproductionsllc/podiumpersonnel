@@ -414,7 +414,8 @@ describe('a new offer whose email fails (S12, audit R-14), through createOffer',
     expect(body.code).toBe('send_failed')
     expect(q().liveOffers('v1').map((o) => o.id)).toEqual([anna.id])
     expect(q().chair('v1').status).toBe('offered')
-    expect(logEmail).not.toHaveBeenCalled()
+    // The refused send is on record as failed (notify, migration 097), never as sent.
+    expect(vi.mocked(logEmail).mock.calls.map((c) => [c[0].emailType, c[0].status])).toEqual([['contract_offer', 'failed']])
     expect(mailCount(email.sendAdminOfferSentEmail)).toBe(0)
   })
 
@@ -469,7 +470,7 @@ describe('legacy send-email route (stale browser tabs during a deploy)', () => {
     expect(q().liveOffers('v1')).toHaveLength(1)
   })
 
-  it('a send that throws returns 500, logs nothing, and leaves the new offer pending and undelivered', async () => {
+  it('a send that throws returns 500, is recorded as failed, and leaves the new offer pending and undelivered', async () => {
     const { bea } = await replaceAnnaWithBea()
     state.sendOfferFails = true
 
@@ -478,8 +479,8 @@ describe('legacy send-email route (stale browser tabs during a deploy)', () => {
     expect(res.status).toBe(500)
     expect(offerStatus(bea.id)).toBe('pending')
     expect(q().chair('v1').status).toBe('offered')
-    // No email_logs row for the failure, and no admin "offer sent" mail.
-    expect(logEmail).not.toHaveBeenCalled()
+    // The failure is on record as failed (never as sent), and no admin "offer sent" mail.
+    expect(vi.mocked(logEmail).mock.calls.map((c) => [c[0].emailType, c[0].status])).toEqual([['contract_offer', 'failed']])
     expect(mailCount(email.sendAdminOfferSentEmail)).toBe(0)
   })
 

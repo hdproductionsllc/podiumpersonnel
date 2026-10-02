@@ -20,7 +20,7 @@
 import { randomBytes } from 'crypto'
 import { getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendGigReportRequestEmail, sendPaySummaryEmail } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { buildPaySummary, gigEndedAt, gigLead } from './rules'
 
@@ -95,30 +95,38 @@ export async function sendPaySummaryOnce(supabase: Supabase, project: any): Prom
 
   const org = project.organization
   try {
-    const result = await sendPaySummaryEmail({
-      adminEmails,
-      organizationName: org?.name || 'Your organization',
-      projectName: project.name,
-      gigDate: gigDateLabel(project),
-      lines,
-      grandTotal,
-      paymentsUrl: `${getAppUrl()}/dashboard/payments?project=${project.id}`,
-      // No lead worked out: say so, so a missing gig report is never a silent gap.
-      needsGigLead: gigLead(project.project_positions, project.gig_lead_musician_id).lead === null,
-      projectUrl: `${getAppUrl()}/dashboard/projects?expand=${project.id}`,
-      branding: branding(org),
-    })
-    await logEmail({
-      organizationId: project.organization_id,
-      recipientEmail: adminEmails[0],
-      subject: result.subject,
-      emailType: 'pay_summary',
-      projectId: project.id,
-      resendEmailId: result.id || null,
-      metadata: { allRecipients: adminEmails, grandTotal, people: lines.length },
-      body: result.emailHtml,
-      status: result.suppressed ? 'suppressed' : 'sent',
-    })
+    const result = await notify(
+      {
+        type: 'pay_summary',
+        record: (r) => ({
+          organizationId: project.organization_id,
+          recipientEmail: adminEmails[0],
+          subject: r?.subject || `Pay for ${project.name}`,
+          emailType: 'pay_summary',
+          projectId: project.id,
+          resendEmailId: r?.id || null,
+          metadata: { allRecipients: adminEmails, grandTotal, people: lines.length },
+          body: r?.emailHtml,
+          status: r?.suppressed ? 'suppressed' : 'sent',
+        }),
+      },
+      {
+        email: () =>
+          sendPaySummaryEmail({
+            adminEmails,
+            organizationName: org?.name || 'Your organization',
+            projectName: project.name,
+            gigDate: gigDateLabel(project),
+            lines,
+            grandTotal,
+            paymentsUrl: `${getAppUrl()}/dashboard/payments?project=${project.id}`,
+            // No lead worked out: say so, so a missing gig report is never a silent gap.
+            needsGigLead: gigLead(project.project_positions, project.gig_lead_musician_id).lead === null,
+            projectUrl: `${getAppUrl()}/dashboard/projects?expand=${project.id}`,
+            branding: branding(org),
+          }),
+      }
+    )
     return result.suppressed ? 'suppressed' : 'sent'
   } catch (err) {
     console.error(`After-gig: pay summary send failed for project ${project.id}:`, err)
@@ -196,30 +204,39 @@ export async function requestGigReports(
       created = true
     }
 
+    const leadEmail = lead.email
     try {
-      const result = await sendGigReportRequestEmail({
-        to: lead.email,
-        leadFirstName: lead.firstName,
-        organizationName: org?.name || 'Your organization',
-        organizationId: project.organization_id,
-        projectName: project.name,
-        gigDate: gigDateLabel(project),
-        reportUrl: `${getAppUrl()}/report/${token}`,
-        branding: branding(org),
-      })
-      await logEmail({
-        organizationId: project.organization_id,
-        recipientEmail: lead.email,
-        recipientName: lead.name,
-        subject: result.subject,
-        emailType: 'gig_report_request',
-        musicianId: lead.musicianId,
-        projectId: project.id,
-        resendEmailId: result.id || null,
-        metadata: { reportId, resend: !created },
-        body: result.emailHtml,
-        status: result.suppressed ? 'suppressed' : 'sent',
-      })
+      const result = await notify(
+        {
+          type: 'gig_report_request',
+          record: (r) => ({
+            organizationId: project.organization_id,
+            recipientEmail: leadEmail,
+            recipientName: lead.name,
+            subject: r?.subject || `How did ${project.name} go?`,
+            emailType: 'gig_report_request',
+            musicianId: lead.musicianId,
+            projectId: project.id,
+            resendEmailId: r?.id || null,
+            metadata: { reportId, resend: !created },
+            body: r?.emailHtml,
+            status: r?.suppressed ? 'suppressed' : 'sent',
+          }),
+        },
+        {
+          email: () =>
+            sendGigReportRequestEmail({
+              to: leadEmail,
+              leadFirstName: lead.firstName,
+              organizationName: org?.name || 'Your organization',
+              organizationId: project.organization_id,
+              projectName: project.name,
+              gigDate: gigDateLabel(project),
+              reportUrl: `${getAppUrl()}/report/${token}`,
+              branding: branding(org),
+            }),
+        }
+      )
       outcomes.push({ musicianId: lead.musicianId, name: lead.name, outcome: result.suppressed ? 'suppressed' : 'sent' })
     } catch (err) {
       console.error(`After-gig: report request send failed for ${project.id}/${lead.musicianId}:`, err)

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendSubRequestApprovedEmail, sendContractOfferEmail, sendAdminOfferSentEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
 import { attachVenueDetails } from '@/lib/venue-attach'
@@ -345,97 +345,132 @@ export async function POST(
   try {
     // Send "approved" email to requesting musician
     if (requestingMusician?.email) {
-      const approvedResult = await sendSubRequestApprovedEmail({
-        to: requestingMusician.email,
-        musicianName: `${requestingMusician.first_name} ${requestingMusician.last_name}`,
-        organizationName: organization?.name || 'Orchestra',
-        organizationId: organization?.id,
-        projectName: project?.name || 'Project',
-        instrument: instrument?.name || 'Instrument',
-        chairNumber: position?.chair_number || 1,
-        totalChairs,
-        serviceName,
-        performanceDate,
-        suggestedSubName: subRequest.suggested_sub_name,
-      }).catch((err) => {
+      await notify(
+        {
+          type: 'sub_request_approved',
+          record: (r) =>
+            project?.organization_id
+              ? {
+                  organizationId: project.organization_id,
+                  recipientEmail: requestingMusician.email,
+                  recipientName: `${requestingMusician.first_name} ${requestingMusician.last_name}`,
+                  subject: r?.subject || `Sub Request Approved: ${project?.name || 'Project'}`,
+                  emailType: 'sub_request_approved',
+                  musicianId: requestingMusician.id,
+                  projectId: project.id,
+                  resendEmailId: r?.id || null,
+                  body: r?.emailHtml,
+                }
+              : null,
+        },
+        {
+          email: () =>
+            sendSubRequestApprovedEmail({
+              to: requestingMusician.email,
+              musicianName: `${requestingMusician.first_name} ${requestingMusician.last_name}`,
+              organizationName: organization?.name || 'Orchestra',
+              organizationId: organization?.id,
+              projectName: project?.name || 'Project',
+              instrument: instrument?.name || 'Instrument',
+              chairNumber: position?.chair_number || 1,
+              totalChairs,
+              serviceName,
+              performanceDate,
+              suggestedSubName: subRequest.suggested_sub_name,
+            }),
+        }
+      ).catch((err) => {
         console.warn('Failed to send approved email:', err)
         return null
       })
-
-      if (approvedResult && project?.organization_id) {
-        await logEmail({
-          organizationId: project.organization_id,
-          recipientEmail: requestingMusician.email,
-          recipientName: `${requestingMusician.first_name} ${requestingMusician.last_name}`,
-          subject: approvedResult.subject,
-          emailType: 'sub_request_approved',
-          musicianId: requestingMusician.id,
-          projectId: project.id,
-          resendEmailId: approvedResult.id || null,
-          body: approvedResult.emailHtml,
-        })
-      }
     }
 
     // Send contract offer to substitute
     if (subRequest.suggested_sub_email) {
-      const subOfferResult = await sendContractOfferEmail({
-        to: subRequest.suggested_sub_email,
-        musicianName: subRequest.suggested_sub_name,
-        organizationName: organization?.name || 'Orchestra',
-        organizationId: organization?.id,
-        projectName: project?.name || 'Project',
-        instrument: subInstrument?.name || instrument?.name || 'Instrument',
-        chairNumber: position?.chair_number || 1,
-        totalChairs,
-        services: formattedServices,
-        responseUrl: `${baseUrl}/gig/${offerToken}`,
-        expiresAt: expiresAt.toISOString(),
-        notes: `You have been requested as a substitute by ${requestingMusician.first_name} ${requestingMusician.last_name}.`,
-        branding: {
-          logoUrl: organization?.email_logo_url,
-          brandColor: organization?.email_brand_color,
-          footerText: organization?.email_footer_text,
+      const subOfferResult = await notify(
+        {
+          type: 'contract_offer',
+          record: (r) =>
+            project?.organization_id
+              ? {
+                  organizationId: project.organization_id,
+                  recipientEmail: subRequest.suggested_sub_email,
+                  recipientName: subRequest.suggested_sub_name,
+                  subject: r?.subject || `Call: ${project?.name || 'Project'} - ${subInstrument?.name || instrument?.name || 'Instrument'}`,
+                  emailType: 'contract_offer',
+                  musicianId: substituteMusician.id,
+                  projectId: project.id,
+                  offerId: contractOffer.id,
+                  resendEmailId: r?.id || null,
+                  body: r?.emailHtml,
+                }
+              : null,
         },
-      }).catch((err) => {
+        {
+          email: () =>
+            sendContractOfferEmail({
+              to: subRequest.suggested_sub_email,
+              musicianName: subRequest.suggested_sub_name,
+              organizationName: organization?.name || 'Orchestra',
+              organizationId: organization?.id,
+              projectName: project?.name || 'Project',
+              instrument: subInstrument?.name || instrument?.name || 'Instrument',
+              chairNumber: position?.chair_number || 1,
+              totalChairs,
+              services: formattedServices,
+              responseUrl: `${baseUrl}/gig/${offerToken}`,
+              expiresAt: expiresAt.toISOString(),
+              notes: `You have been requested as a substitute by ${requestingMusician.first_name} ${requestingMusician.last_name}.`,
+              branding: {
+                logoUrl: organization?.email_logo_url,
+                brandColor: organization?.email_brand_color,
+                footerText: organization?.email_footer_text,
+              },
+            }),
+        }
+      ).catch((err) => {
         console.warn('Failed to send offer email:', err)
         return null
       })
       if (subOfferResult) {
         subOfferDelivery = subOfferResult.suppressed === true ? 'suppressed' : 'sent'
       }
-
-      if (subOfferResult && project?.organization_id) {
-        await logEmail({
-          organizationId: project.organization_id,
-          recipientEmail: subRequest.suggested_sub_email,
-          recipientName: subRequest.suggested_sub_name,
-          subject: subOfferResult.subject,
-          emailType: 'contract_offer',
-          musicianId: substituteMusician.id,
-          projectId: project.id,
-          offerId: contractOffer.id,
-          resendEmailId: subOfferResult.id || null,
-          body: subOfferResult.emailHtml,
-        })
-      }
     }
 
     // Send notification to admins
     const adminEmails = await getOrgAdminEmails(project.organization_id)
     if (adminEmails.length > 0) {
-      await sendAdminOfferSentEmail({
-        to: adminEmails,
-        organizationName: organization?.name || 'Orchestra',
-        projectName: project?.name || 'Project',
-        musicianName: subRequest.suggested_sub_name,
-        musicianEmail: subRequest.suggested_sub_email,
-        instrument: subInstrument?.name || instrument?.name || 'Instrument',
-        chairNumber: position?.chair_number || 1,
-        totalChairs,
-        services: formattedServices,
-        dashboardUrl: `${baseUrl}/dashboard/projects/${project.id}`,
-      }).catch((err) => console.warn('Failed to send admin notification:', err))
+      await notify(
+        {
+          type: 'admin_offer_sent',
+          recordSent: false,
+          record: () => ({
+            organizationId: project.organization_id,
+            recipientEmail: adminEmails[0],
+            subject: `Offer Sent: ${subRequest.suggested_sub_name} - ${project?.name || 'Project'}`,
+            emailType: 'admin_offer_sent',
+            musicianId: substituteMusician.id,
+            projectId: project.id,
+            offerId: contractOffer.id,
+            metadata: { allRecipients: adminEmails },
+          }),
+        },
+        {
+          email: () =>
+            sendAdminOfferSentEmail({
+              to: adminEmails,
+              organizationName: organization?.name || 'Orchestra',
+              projectName: project?.name || 'Project',
+              musicianName: subRequest.suggested_sub_name,
+              musicianEmail: subRequest.suggested_sub_email,
+              instrument: subInstrument?.name || instrument?.name || 'Instrument',
+              chairNumber: position?.chair_number || 1,
+              totalChairs,
+              services: formattedServices,
+              dashboardUrl: `${baseUrl}/dashboard/projects/${project.id}`,
+            }),
+        }
+      ).catch((err) => console.warn('Failed to send admin notification:', err))
     }
   } catch (emailError) {
     console.warn('Email sending failed:', emailError)

@@ -5,6 +5,7 @@ import { sendEmail } from '@/lib/email/send'
 import { getAppUrl } from '@/lib/utils'
 import { serverError } from '@/lib/api-helpers'
 import { PaymentFailedEmail, type PaymentFailedEmailProps } from '@/lib/email/templates/payment-failed'
+import { notify } from '@/lib/notify'
 
 /**
  * Dunning email for `invoice.payment_failed` (A8, 2026-09-18 hardening).
@@ -72,12 +73,29 @@ export async function sendPaymentFailedEmail(
       render(react, { plainText: true }),
     ])
 
-    await sendEmail({
-      to: ownerEmail,
-      subject: `Action needed: payment failed for ${organizationName}`,
-      html,
-      text,
-    })
+    const subject = `Action needed: payment failed for ${organizationName}`
+    // Never recorded when it goes out; a failure is, on the company's Emails page.
+    await notify(
+      {
+        type: 'payment_failed',
+        recordSent: false,
+        record: () => ({
+          organizationId: orgId,
+          recipientEmail: ownerEmail,
+          subject,
+          emailType: 'payment_failed',
+        }),
+      },
+      {
+        email: () =>
+          sendEmail({
+            to: ownerEmail,
+            subject,
+            html,
+            text,
+          }),
+      }
+    )
   } catch (error) {
     // Logged + captured to Sentry; response is intentionally discarded — see
     // the doc comment above.

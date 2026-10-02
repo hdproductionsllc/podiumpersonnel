@@ -100,6 +100,24 @@ describe('a suppressed send is reported honestly, not as a success (A6)', () => 
   })
 })
 
+describe('a refused send carries its subject, for the failed email_logs row (notify, 097)', () => {
+  it('the thrown error names the rendered subject; the message is unchanged', async () => {
+    const { sendAdminWelcomeEmail, sendEmail } = await loadSend({ EMAIL_SAFE_MODE: 'false' })
+    resendState.sendMock = vi.fn(async () => ({ data: null, error: { message: 'rate limited' } }))
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(sendAdminWelcomeEmail({ to: 'a@x.com', ...adminWelcomeParams })).rejects.toMatchObject({
+      message: 'Failed to send email: rate limited',
+      subject: 'Welcome to Podium - Test Orchestra is ready',
+    })
+    await expect(sendEmail({ to: 'a@x.com', subject: 'Hello', html: '<p>Hi</p>' })).rejects.toMatchObject({
+      message: 'Failed to send email: rate limited',
+      subject: 'Hello',
+    })
+    err.mockRestore()
+  })
+})
+
 describe('filterRecipients (the kill switch)', () => {
   it('FAIL-SAFE: defaults to safe mode ON when EMAIL_SAFE_MODE is unset', async () => {
     const { isEmailSafeMode, filterRecipients } = await loadClient({

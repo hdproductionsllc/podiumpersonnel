@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { getAppUrl } from '@/lib/utils'
 
 /**
@@ -172,24 +172,33 @@ async function notifyAdmins(
   const name = `${musician.first_name} ${musician.last_name}`.trim()
   const dashboardUrl = `${getAppUrl()}/dashboard/musicians`
 
-  const result = await sendEmail({
-    to: adminEmails,
-    subject: `W-9 received from ${name}`,
-    html:
-      `<p><strong>${name}</strong> has submitted their W-9.</p>` +
-      `<p>It is on file and ready to review in your ` +
-      `<a href="${dashboardUrl}">Musicians dashboard</a>.</p>`,
-  })
-
-  if (result?.id) {
-    await logEmail({
-      organizationId: musician.organization_id,
-      recipientEmail: adminEmails.join(', '),
-      recipientName: 'Organization admins',
-      subject: `W-9 received from ${name}`,
-      emailType: 'w9_received',
-      musicianId: musician.id,
-      resendEmailId: result.id,
-    })
-  }
+  await notify(
+    {
+      type: 'w9_received',
+      // A send safe mode held back (no id) was never recorded here; that stays.
+      record: (r) =>
+        r && !r.id
+          ? null
+          : {
+              organizationId: musician.organization_id,
+              recipientEmail: adminEmails.join(', '),
+              recipientName: 'Organization admins',
+              subject: `W-9 received from ${name}`,
+              emailType: 'w9_received',
+              musicianId: musician.id,
+              resendEmailId: r?.id || null,
+            },
+    },
+    {
+      email: () =>
+        sendEmail({
+          to: adminEmails,
+          subject: `W-9 received from ${name}`,
+          html:
+            `<p><strong>${name}</strong> has submitted their W-9.</p>` +
+            `<p>It is on file and ready to review in your ` +
+            `<a href="${dashboardUrl}">Musicians dashboard</a>.</p>`,
+        }),
+    }
+  )
 }

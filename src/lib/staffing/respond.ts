@@ -4,7 +4,7 @@ import {
   sendMusicianReleasedEmail,
   sendSubDeclinedFindAnotherEmail,
 } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { getAppUrl } from '@/lib/utils'
 import { LIVE_OFFER_STATUSES } from './live'
 import { MIGRATION_094_MISSING, isMissingFunction } from './rpc'
@@ -187,37 +187,45 @@ export async function notifyMusicianReleased(
   const totalChairs = await countChairs(supabase, project?.id, instrument?.id)
 
   try {
-    const result = await sendMusicianReleasedEmail({
-      to: originalMusician.email,
-      musicianName: `${originalMusician.first_name} ${originalMusician.last_name}`,
-      organizationName: organization?.name || 'Orchestra',
-      organizationId: organization?.id,
-      projectName: project?.name || 'Project',
-      instrument: instrument?.name || 'Instrument',
-      chairNumber: position?.chair_number || 1,
-      totalChairs,
-      serviceName: subRequest?.service?.name || null,
-      substituteName: `${musician?.first_name} ${musician?.last_name}`,
-      performanceDate: ctx.performanceDate,
-    }).catch((err) => {
+    await notify(
+      {
+        type: 'musician_released',
+        record: (r) =>
+          project?.organization_id
+            ? {
+              organizationId: project.organization_id,
+              recipientEmail: originalMusician.email,
+              recipientName: `${originalMusician.first_name} ${originalMusician.last_name}`,
+              subject: r?.subject || `You've been released: ${project?.name || 'Project'}`,
+              emailType: 'musician_released',
+              musicianId: originalMusician.id,
+              projectId: project.id,
+              offerId: offer.id,
+              resendEmailId: r?.id || null,
+              body: r?.emailHtml,
+            }
+            : null,
+      },
+      {
+        email: () =>
+          sendMusicianReleasedEmail({
+            to: originalMusician.email,
+            musicianName: `${originalMusician.first_name} ${originalMusician.last_name}`,
+            organizationName: organization?.name || 'Orchestra',
+            organizationId: organization?.id,
+            projectName: project?.name || 'Project',
+            instrument: instrument?.name || 'Instrument',
+            chairNumber: position?.chair_number || 1,
+            totalChairs,
+            serviceName: subRequest?.service?.name || null,
+            substituteName: `${musician?.first_name} ${musician?.last_name}`,
+            performanceDate: ctx.performanceDate,
+          }),
+      }
+    ).catch((err) => {
       console.warn('Failed to send musician released email:', err)
       return null
     })
-
-    if (result && project?.organization_id) {
-      await logEmail({
-        organizationId: project.organization_id,
-        recipientEmail: originalMusician.email,
-        recipientName: `${originalMusician.first_name} ${originalMusician.last_name}`,
-        subject: result.subject,
-        emailType: 'musician_released',
-        musicianId: originalMusician.id,
-        projectId: project.id,
-        offerId: offer.id,
-        resendEmailId: result.id || null,
-        body: result.emailHtml,
-      })
-    }
   } catch (emailError) {
     console.warn('Email sending failed:', emailError)
   }
@@ -253,40 +261,48 @@ export async function notifySubDeclined(
   const baseUrl = getAppUrl()
 
   try {
-    const result = await sendSubDeclinedFindAnotherEmail({
-      to: originalMusician.email,
-      musicianName: `${originalMusician.first_name} ${originalMusician.last_name}`,
-      organizationName: organization?.name || 'Orchestra',
-      organizationId: organization?.id,
-      projectName: project?.name || 'Project',
-      instrument: instrument?.name || 'Instrument',
-      chairNumber: position?.chair_number || 1,
-      totalChairs,
-      serviceName: subRequest?.service?.name || null,
-      suggestedSubName:
-        subRequest.suggested_sub_name || `${musician?.first_name} ${musician?.last_name}`,
-      gigUrl: originalOffer ? `${baseUrl}/gig/${originalOffer.token}` : baseUrl,
-      performanceDate: ctx.performanceDate,
-      reason,
-    }).catch((err) => {
+    await notify(
+      {
+        type: 'sub_declined',
+        record: (r) =>
+          project?.organization_id
+            ? {
+              organizationId: project.organization_id,
+              recipientEmail: originalMusician.email,
+              recipientName: `${originalMusician.first_name} ${originalMusician.last_name}`,
+              subject: r?.subject || `${reason === 'expired' ? 'Your sub did not respond' : 'Your sub declined'} - ${project?.name || 'Project'}`,
+              emailType: 'sub_declined',
+              musicianId: originalMusician.id,
+              projectId: project.id,
+              offerId: offer.id,
+              resendEmailId: r?.id || null,
+              body: r?.emailHtml,
+            }
+            : null,
+      },
+      {
+        email: () =>
+          sendSubDeclinedFindAnotherEmail({
+            to: originalMusician.email,
+            musicianName: `${originalMusician.first_name} ${originalMusician.last_name}`,
+            organizationName: organization?.name || 'Orchestra',
+            organizationId: organization?.id,
+            projectName: project?.name || 'Project',
+            instrument: instrument?.name || 'Instrument',
+            chairNumber: position?.chair_number || 1,
+            totalChairs,
+            serviceName: subRequest?.service?.name || null,
+            suggestedSubName:
+              subRequest.suggested_sub_name || `${musician?.first_name} ${musician?.last_name}`,
+            gigUrl: originalOffer ? `${baseUrl}/gig/${originalOffer.token}` : baseUrl,
+            performanceDate: ctx.performanceDate,
+            reason,
+          }),
+      }
+    ).catch((err) => {
       console.warn('Failed to send sub declined email:', err)
       return null
     })
-
-    if (result && project?.organization_id) {
-      await logEmail({
-        organizationId: project.organization_id,
-        recipientEmail: originalMusician.email,
-        recipientName: `${originalMusician.first_name} ${originalMusician.last_name}`,
-        subject: result.subject,
-        emailType: 'sub_declined',
-        musicianId: originalMusician.id,
-        projectId: project.id,
-        offerId: offer.id,
-        resendEmailId: result.id || null,
-        body: result.emailHtml,
-      })
-    }
   } catch (emailError) {
     console.warn('Email sending failed:', emailError)
   }

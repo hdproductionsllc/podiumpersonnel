@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferReminderEmail, sendOfferExpiringSoonEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
 import { isDueForReminder, reminderHorizon } from '@/lib/staffing/reminders'
@@ -150,34 +150,41 @@ export async function GET(request: NextRequest) {
     if (musician.email) {
       try {
         const responseUrl = `${baseUrl}/gig/${offer.token}`
-        const result = await sendOfferReminderEmail({
-          to: musician.email,
-          musicianName: musician.first_name,
-          organizationName: organization?.name || 'Orchestra',
-          organizationId: organization?.id,
-          projectName: project.name,
-          instrument: instrument?.name || 'Instrument',
-          chairNumber: position.chair_number || 1,
-          totalChairs,
-          responseUrl,
-          expiresAt: offer.expires_at,
-          daysRemaining,
-          performanceDate,
-          branding,
-        })
-
-        await logEmail({
-          organizationId: project.organization_id,
-          recipientEmail: musician.email,
-          recipientName: `${musician.first_name} ${musician.last_name}`,
-          subject: result?.subject || `Reminder: ${project.name} - response needed`,
-          emailType: 'offer_reminder_auto',
-          musicianId: musician.id,
-          projectId: project.id,
-          offerId: offer.id,
-          resendEmailId: result?.id || null,
-          body: result?.emailHtml,
-        })
+        await notify(
+          {
+            type: 'offer_reminder_auto',
+            record: (r) => ({
+              organizationId: project.organization_id,
+              recipientEmail: musician.email,
+              recipientName: `${musician.first_name} ${musician.last_name}`,
+              subject: r?.subject || `Reminder: ${project.name} - response needed`,
+              emailType: 'offer_reminder_auto',
+              musicianId: musician.id,
+              projectId: project.id,
+              offerId: offer.id,
+              resendEmailId: r?.id || null,
+              body: r?.emailHtml,
+            }),
+          },
+          {
+            email: () =>
+              sendOfferReminderEmail({
+                to: musician.email,
+                musicianName: musician.first_name,
+                organizationName: organization?.name || 'Orchestra',
+                organizationId: organization?.id,
+                projectName: project.name,
+                instrument: instrument?.name || 'Instrument',
+                chairNumber: position.chair_number || 1,
+                totalChairs,
+                responseUrl,
+                expiresAt: offer.expires_at,
+                daysRemaining,
+                performanceDate,
+                branding,
+              }),
+          }
+        )
 
         musicianEmails++
       } catch (emailError) {
@@ -191,32 +198,39 @@ export async function GET(request: NextRequest) {
       const adminEmailList = await getOrgAdminEmails(project.organization_id)
 
       if (adminEmailList.length > 0) {
-        const adminResult = await sendOfferExpiringSoonEmail({
-          to: adminEmailList,
-          organizationName: organization?.name || 'Your Organization',
-          projectName: project.name,
-          musicianName: `${musician.first_name} ${musician.last_name}`,
-          instrument: instrument?.name || 'Instrument',
-          chairNumber: position.chair_number || 1,
-          totalChairs,
-          hoursRemaining,
-          dashboardUrl: `${baseUrl}/dashboard/projects?expand=${project.id}`,
-          performanceDate,
-        })
-
-        await logEmail({
-          organizationId: project.organization_id,
-          recipientEmail: adminEmailList[0],
-          recipientName: undefined,
-          subject: adminResult?.subject || `Offer expiring soon: ${musician.first_name} ${musician.last_name} - ${project.name}`,
-          emailType: 'offer_expiring_soon',
-          musicianId: musician.id,
-          projectId: project.id,
-          offerId: offer.id,
-          resendEmailId: adminResult?.id || null,
-          metadata: { allRecipients: adminEmailList },
-          body: adminResult?.emailHtml,
-        })
+        await notify(
+          {
+            type: 'offer_expiring_soon',
+            record: (r) => ({
+              organizationId: project.organization_id,
+              recipientEmail: adminEmailList[0],
+              recipientName: undefined,
+              subject: r?.subject || `Offer expiring soon: ${musician.first_name} ${musician.last_name} - ${project.name}`,
+              emailType: 'offer_expiring_soon',
+              musicianId: musician.id,
+              projectId: project.id,
+              offerId: offer.id,
+              resendEmailId: r?.id || null,
+              metadata: { allRecipients: adminEmailList },
+              body: r?.emailHtml,
+            }),
+          },
+          {
+            email: () =>
+              sendOfferExpiringSoonEmail({
+                to: adminEmailList,
+                organizationName: organization?.name || 'Your Organization',
+                projectName: project.name,
+                musicianName: `${musician.first_name} ${musician.last_name}`,
+                instrument: instrument?.name || 'Instrument',
+                chairNumber: position.chair_number || 1,
+                totalChairs,
+                hoursRemaining,
+                dashboardUrl: `${baseUrl}/dashboard/projects?expand=${project.id}`,
+                performanceDate,
+              }),
+          }
+        )
 
         adminEmails++
       }

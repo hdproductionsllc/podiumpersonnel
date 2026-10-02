@@ -5,6 +5,7 @@ import { getOrgPlan } from '@/lib/api-helpers'
 import { canUseSubstitutions } from '@/lib/plan'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { logEvent, musicianActor } from '@/lib/staffing/events'
+import { notify } from '@/lib/notify'
 
 export async function POST(
   request: Request,
@@ -199,24 +200,42 @@ export async function POST(
 
     if (adminEmails.length > 0) {
       const baseUrl = getAppUrl()
-      await sendAdminSubRequestEmail({
-        to: adminEmails,
-        organizationName: organization?.name || 'Orchestra',
-        projectName: project?.name || 'Project',
-        musicianName: `${musician?.first_name} ${musician?.last_name}`,
-        musicianEmail: musician?.email || null,
-        instrument: instrument?.name || 'Instrument',
-        chairNumber: position?.chair_number || 1,
-        totalChairs,
-        serviceName,
-        reason: reason || null,
-        suggestedSubName: `${subFirstName} ${subLastName}`,
-        suggestedSubEmail: subEmail,
-        suggestedSubPhone: subPhone || null,
-        suggestedSubInstrument: subInstrument?.name || 'Instrument',
-        performanceDate,
-        dashboardUrl: `${baseUrl}/dashboard/projects/${project.id}`,
-      }).catch((err) => console.warn('Failed to send admin notification:', err))
+      await notify(
+        {
+          type: 'admin_sub_request',
+          recordSent: false,
+          record: () => ({
+            organizationId: project.organization_id,
+            recipientEmail: adminEmails[0],
+            subject: `Sub Request: ${musician?.first_name} ${musician?.last_name} needs a sub for ${project?.name || 'Project'}`,
+            emailType: 'admin_sub_request',
+            musicianId: musician?.id,
+            projectId: project.id,
+            metadata: { allRecipients: adminEmails, subRequestId: subRequest.id },
+          }),
+        },
+        {
+          email: () =>
+            sendAdminSubRequestEmail({
+              to: adminEmails,
+              organizationName: organization?.name || 'Orchestra',
+              projectName: project?.name || 'Project',
+              musicianName: `${musician?.first_name} ${musician?.last_name}`,
+              musicianEmail: musician?.email || null,
+              instrument: instrument?.name || 'Instrument',
+              chairNumber: position?.chair_number || 1,
+              totalChairs,
+              serviceName,
+              reason: reason || null,
+              suggestedSubName: `${subFirstName} ${subLastName}`,
+              suggestedSubEmail: subEmail,
+              suggestedSubPhone: subPhone || null,
+              suggestedSubInstrument: subInstrument?.name || 'Instrument',
+              performanceDate,
+              dashboardUrl: `${baseUrl}/dashboard/projects/${project.id}`,
+            }),
+        }
+      ).catch((err) => console.warn('Failed to send admin notification:', err))
     }
   } catch (emailError) {
     console.warn('Email sending failed:', emailError)

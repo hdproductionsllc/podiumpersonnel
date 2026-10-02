@@ -2,7 +2,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getOrgAdminEmails } from '@/lib/supabase/server'
 import { formatPerformanceDateForSubject, sendAdminWorkerDroppedEmail } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { advance, autoOfferNote, type AdvanceResult } from './cascade'
 import { countChairs, isOfferClosed } from './respond'
@@ -179,39 +179,47 @@ async function notifyAdmins(
     .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0]
   const musicianName = `${musician?.first_name ?? ''} ${musician?.last_name ?? ''}`.trim() || 'A worker'
   const autoOffer = autoOfferNote(ctx.cascade, timezone)
+  const totalChairs = await countChairs(service, project?.id, instrument?.id)
 
-  const result = await sendAdminWorkerDroppedEmail({
-    to: adminEmails,
-    organizationName: organization?.name || 'Your Organization',
-    organizationId,
-    projectName: project?.name || 'Project',
-    musicianName,
-    musicianEmail: musician?.email || null,
-    instrument: instrument?.name || 'Instrument',
-    chairNumber: position?.chair_number || 1,
-    totalChairs: await countChairs(service, project?.id, instrument?.id),
-    reason,
-    dashboardUrl: `${getAppUrl()}/dashboard/projects?expand=${project?.id}`,
-    performanceDate: firstStart ? formatPerformanceDateForSubject(firstStart, timezone) : '',
-    ...(autoOffer ? { autoOffer } : {}),
-  })
-
-  await logEmail({
-    organizationId,
-    recipientEmail: adminEmails[0],
-    subject: result?.subject || `${musicianName} can't make it - ${project?.name || 'Project'}`,
-    emailType: 'worker_dropped',
-    musicianId: musician?.id,
-    projectId: project?.id,
-    offerId: ctx.offerId,
-    resendEmailId: result?.id || null,
-    status: result?.suppressed ? 'suppressed' : 'sent',
-    metadata: {
-      allRecipients: adminEmails,
-      positionId: position?.id,
-      reason,
-      cascade: ctx.cascade.outcome,
+  await notify(
+    {
+      type: 'worker_dropped',
+      record: (r) => ({
+        organizationId,
+        recipientEmail: adminEmails[0],
+        subject: r?.subject || `${musicianName} can't make it - ${project?.name || 'Project'}`,
+        emailType: 'worker_dropped',
+        musicianId: musician?.id,
+        projectId: project?.id,
+        offerId: ctx.offerId,
+        resendEmailId: r?.id || null,
+        status: r?.suppressed ? 'suppressed' : 'sent',
+        metadata: {
+          allRecipients: adminEmails,
+          positionId: position?.id,
+          reason,
+          cascade: ctx.cascade.outcome,
+        },
+        body: r?.emailHtml,
+      }),
     },
-    body: result?.emailHtml,
-  })
+    {
+      email: () =>
+        sendAdminWorkerDroppedEmail({
+          to: adminEmails,
+          organizationName: organization?.name || 'Your Organization',
+          organizationId,
+          projectName: project?.name || 'Project',
+          musicianName,
+          musicianEmail: musician?.email || null,
+          instrument: instrument?.name || 'Instrument',
+          chairNumber: position?.chair_number || 1,
+          totalChairs,
+          reason,
+          dashboardUrl: `${getAppUrl()}/dashboard/projects?expand=${project?.id}`,
+          performanceDate: firstStart ? formatPerformanceDateForSubject(firstStart, timezone) : '',
+          ...(autoOffer ? { autoOffer } : {}),
+        }),
+    }
+  )
 }

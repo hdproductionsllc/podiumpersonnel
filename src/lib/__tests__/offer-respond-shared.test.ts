@@ -274,14 +274,23 @@ describe('substitution notifications are logged, not just sent', () => {
     expect(logEmail.mock.calls[0][0]).toMatchObject({ emailType: 'sub_declined' })
   })
 
-  it('does not log when the send failed', async () => {
-    // A failed send must not leave a record claiming the musician was told.
+  it('records a failed send as failed, never as sent', async () => {
+    // A failed send must not leave a record claiming the musician was told;
+    // it is on record as a failure instead (notify, migration 097).
     sendMusicianReleasedEmail.mockRejectedValue(new Error('resend down'))
     const supabase = makeSupabase({ project_positions: [{ count: 4 }] })
 
     await respond.notifyMusicianReleased(supabase, ctx as any)
 
-    expect(logEmail).not.toHaveBeenCalled()
+    expect(logEmail).toHaveBeenCalledOnce()
+    expect(logEmail.mock.calls[0][0]).toMatchObject({
+      emailType: 'musician_released',
+      status: 'failed',
+      channel: 'email',
+      failureReason: 'resend down',
+      resendEmailId: null,
+      body: null,
+    })
   })
 
   it('never throws when email delivery fails', async () => {

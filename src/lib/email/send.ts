@@ -170,7 +170,9 @@ async function sendTransactional(args: {
 
   if (error) {
     console.error(`Failed to send ${args.errorContext} email:`, error)
-    throw new Error(`Failed to send email: ${error.message}`)
+    // The rendered subject rides along so notify() can record the failed send
+    // under the subject it would have had.
+    throw Object.assign(new Error(`Failed to send email: ${error.message}`), { subject: args.subject })
   }
 
   return { ...data, emailHtml, subject: args.subject, suppressed: false as const, suppressedRecipients: [] as string[] }
@@ -1006,7 +1008,7 @@ export async function sendEmail(params: SendEmailParams) {
 
   if (error) {
     console.error('Failed to send email:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
+    throw Object.assign(new Error(`Failed to send email: ${error.message}`), { subject })
   }
 
   return { ...data, emailHtml: html, suppressed: false as const, suppressedRecipients: [] as string[] }

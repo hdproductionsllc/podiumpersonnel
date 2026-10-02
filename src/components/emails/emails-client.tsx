@@ -26,6 +26,11 @@ const EMAIL_TYPE_LABELS: Record<string, string> = {
   music_confirmed: 'Music Confirmed',
   pre_gig_notification: 'Pre-Gig Reminder',
   staffing_alert: 'Staffing Alert',
+  // Sends recorded only when they fail (notify, migration 097).
+  admin_offer_response: 'Admin Notification',
+  admin_sub_request: 'Admin Notification',
+  sub_request_declined: 'Sub Request Declined',
+  payment_failed: 'Billing',
 }
 
 const EMAIL_TYPE_VARIANTS: Record<string, 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline'> = {
@@ -47,6 +52,12 @@ const EMAIL_TYPE_VARIANTS: Record<string, 'default' | 'secondary' | 'success' | 
   music_confirmed: 'success',
   pre_gig_notification: 'warning',
   staffing_alert: 'warning',
+}
+
+/** Why a failed send failed: the 097 column, or metadata when 097 was not applied yet. */
+function failureReason(log: EmailLog): string | null {
+  const fromMetadata = (log.metadata as { failureReason?: unknown } | null)?.failureReason
+  return log.failure_reason || (typeof fromMetadata === 'string' ? fromMetadata : null)
 }
 
 interface EmailsClientProps {
@@ -198,7 +209,11 @@ export function EmailsClient({ emailLogs, timezone }: EmailsClientProps) {
                         </div>
                         {isExpanded && (
                           <div className="mt-3" onClick={(e) => e.stopPropagation()}>
-                            {log.body ? (
+                            {log.status === 'failed' ? (
+                              <p className="text-sm text-destructive py-2">
+                                Not sent: {failureReason(log) || 'the email provider refused it.'}
+                              </p>
+                            ) : log.body ? (
                               <pre className="rounded-md border bg-muted/30 p-4 text-sm whitespace-pre-wrap font-sans max-h-[400px] overflow-auto leading-relaxed">
                                 {log.body}
                               </pre>
@@ -216,7 +231,7 @@ export function EmailsClient({ emailLogs, timezone }: EmailsClientProps) {
                         </Badge>
                       </td>
                       <td className="px-4 py-3 align-top">
-                        <Badge variant="success" className="capitalize">
+                        <Badge variant={log.status === 'failed' ? 'destructive' : 'success'} className="capitalize">
                           {log.status}
                         </Badge>
                       </td>

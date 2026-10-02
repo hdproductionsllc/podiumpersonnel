@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendMusicUploadedEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getOrgPlan } from '@/lib/api-helpers'
 import { canUseEmailFeatures } from '@/lib/plan'
@@ -187,45 +187,47 @@ export async function POST(
       const confirmUrl = `${baseUrl}/confirm-music/${token}`
 
       try {
-        const result = await sendMusicUploadedEmail({
-          to: musician.email,
-          musicianName: musician.first_name,
-          organizationName: organization?.name || 'Orchestra',
-          organizationId: organization?.id,
-          projectName: project.name,
-          files: musicianFiles.map((f: any) => ({
-            name: f.file_name,
-            size: f.file_size,
-            downloadUrl: `${baseUrl}/api/music-download/${f.id}?token=${token}`,
-          })),
-          confirmUrl,
-          notes,
-          performanceDate,
-          contactEmail,
-          branding,
-        })
-
+        await notify(
+          {
+            type: 'music_available',
+            record: (r) => ({
+              organizationId: organization.id,
+              recipientEmail: musician.email,
+              recipientName: `${musician.first_name} ${musician.last_name}`,
+              subject: r?.subject || `Music available: ${project.name}`,
+              emailType: 'music_available',
+              musicianId: musician.id,
+              projectId: projectId,
+              resendEmailId: r?.id || null,
+              metadata: {
+                sendId: sendRecord.id,
+                fileCount: musicianFiles.length,
+              },
+              body: r?.emailHtml,
+            }),
+          },
+          {
+            email: () =>
+              sendMusicUploadedEmail({
+                to: musician.email,
+                musicianName: musician.first_name,
+                organizationName: organization?.name || 'Orchestra',
+                organizationId: organization?.id,
+                projectName: project.name,
+                files: musicianFiles.map((f: any) => ({
+                  name: f.file_name,
+                  size: f.file_size,
+                  downloadUrl: `${baseUrl}/api/music-download/${f.id}?token=${token}`,
+                })),
+                confirmUrl,
+                notes,
+                performanceDate,
+                contactEmail,
+                branding,
+              }),
+          }
+        )
         sentCount++
-
-        try {
-          await logEmail({
-            organizationId: organization.id,
-            recipientEmail: musician.email,
-            recipientName: `${musician.first_name} ${musician.last_name}`,
-            subject: result?.subject || `Music available: ${project.name}`,
-            emailType: 'music_available',
-            musicianId: musician.id,
-            projectId: projectId,
-            resendEmailId: result?.id || null,
-            metadata: {
-              sendId: sendRecord.id,
-              fileCount: musicianFiles.length,
-            },
-            body: result?.emailHtml,
-          })
-        } catch (logError) {
-          console.error(`Email sent but failed to log for ${musician.email}:`, logError)
-        }
       } catch (emailError) {
         failedNames.push(`${musician.first_name} ${musician.last_name}`)
         console.error(`Failed to send music email to ${musician.email}:`, emailError)

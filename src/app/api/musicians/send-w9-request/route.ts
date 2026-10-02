@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendW9RequestEmail } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { getOrgPlan } from '@/lib/api-helpers'
 import { canUseEmailFeatures } from '@/lib/plan'
 import { getAppUrl } from '@/lib/utils'
@@ -102,32 +102,39 @@ export async function POST(request: NextRequest) {
 
         if (tokenError) throw new Error('Could not create an upload link')
 
-        const w9Result = await sendW9RequestEmail({
-          to: musician.email!,
-          musicianName: `${musician.first_name} ${musician.last_name}`,
-          organizationName: organization.name,
-          organizationId: organization.id,
-          adminEmail: user.email || undefined,
-          uploadUrl: `${getAppUrl()}/w9/${uploadToken}`,
-          expiresAt: expiresAt.toISOString(),
-          branding: {
-            logoUrl: organization.email_logo_url,
-            brandColor: organization.email_brand_color,
-            footerText: organization.email_footer_text,
+        await notify(
+          {
+            type: 'w9_request',
+            record: (r) => ({
+              organizationId: organization.id,
+              recipientEmail: musician.email!,
+              recipientName: `${musician.first_name} ${musician.last_name}`,
+              subject: `W-9 Form Request - ${organization.name}`,
+              emailType: 'w9_request',
+              musicianId: musician.id,
+              resendEmailId: r?.id || null,
+              body: r?.emailHtml,
+            }),
           },
-        })
+          {
+            email: () =>
+              sendW9RequestEmail({
+                to: musician.email!,
+                musicianName: `${musician.first_name} ${musician.last_name}`,
+                organizationName: organization.name,
+                organizationId: organization.id,
+                adminEmail: user.email || undefined,
+                uploadUrl: `${getAppUrl()}/w9/${uploadToken}`,
+                expiresAt: expiresAt.toISOString(),
+                branding: {
+                  logoUrl: organization.email_logo_url,
+                  brandColor: organization.email_brand_color,
+                  footerText: organization.email_footer_text,
+                },
+              }),
+          }
+        )
         successCount++
-
-        await logEmail({
-          organizationId: organization.id,
-          recipientEmail: musician.email!,
-          recipientName: `${musician.first_name} ${musician.last_name}`,
-          subject: `W-9 Form Request - ${organization.name}`,
-          emailType: 'w9_request',
-          musicianId: musician.id,
-          resendEmailId: w9Result?.id || null,
-          body: w9Result?.emailHtml,
-        })
       } catch (err) {
         errorCount++
         errors.push(`${musician.first_name} ${musician.last_name}: ${err instanceof Error ? err.message : 'Unknown error'}`)

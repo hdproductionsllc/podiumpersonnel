@@ -1,6 +1,6 @@
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { escapeHtml } from '@/lib/utils'
 
 /**
@@ -96,18 +96,25 @@ async function notifyAdmins(
     ? `${lead}<p style="color: #16a34a; font-weight: bold;">All ${totalCount} musicians now have their music!</p>`
     : `${lead}<p style="color: #6b7280;">${receivedCount ?? 0} of ${totalCount} musicians have their music so far.</p>`
 
-  const result = await sendEmail({ to: adminEmails, subject, html })
-
-  await logEmail({
-    organizationId: send.organization_id,
-    recipientEmail: adminEmails[0],
-    recipientName: undefined,
-    subject,
-    emailType: 'music_confirmed',
-    musicianId: musician.id,
-    projectId: project.id,
-    resendEmailId: result?.id || null,
-    metadata: { allRecipients: adminEmails, allConfirmed: allReceived, source },
-    body: result?.emailHtml,
-  })
+  await notify(
+    {
+      type: 'music_confirmed',
+      record: (r) => ({
+        organizationId: send.organization_id,
+        recipientEmail: adminEmails[0],
+        recipientName: undefined,
+        subject,
+        emailType: 'music_confirmed',
+        musicianId: musician.id,
+        projectId: project.id,
+        resendEmailId: r?.id || null,
+        metadata: { allRecipients: adminEmails, allConfirmed: allReceived, source },
+        body: r?.emailHtml,
+      }),
+    },
+    {
+      email: () =>
+        sendEmail({ to: adminEmails, subject, html }),
+    }
+  )
 }

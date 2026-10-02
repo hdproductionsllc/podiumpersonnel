@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getOrgAdminEmails } from '@/lib/supabase/server'
 import { formatPerformanceDateForSubject, sendCascadeExhaustedEmail } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import type { AutoOfferNote } from '@/lib/email/templates/auto-offer-note'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { logEvent, SYSTEM } from './events'
@@ -306,26 +306,34 @@ async function exhaust(service: SupabaseClient, input: AdvanceInput, plan: Exhau
 
   try {
     const message = await exhaustedEmail(service, input, plan, adminEmails)
-    const result = await sendCascadeExhaustedEmail(message)
-    await logEmail({
-      organizationId: organizationId!,
-      recipientEmail: adminEmails[0],
-      subject: result?.subject || `Nobody left for ${message.instrument} - ${message.projectName}`,
-      emailType: 'cascade_exhausted',
-      musicianId: context.trigger.musician_id,
-      projectId: project?.id,
-      offerId: input.triggerOfferId,
-      resendEmailId: result?.id || null,
-      status: result?.suppressed ? 'suppressed' : 'sent',
-      metadata: {
-        allRecipients: adminEmails,
-        positionId: input.positionId,
-        trigger: input.trigger,
-        skippedConflicts: plan.skippedConflicts,
-        skippedNoEmail: plan.unreachable.map((c) => c.id),
+    await notify(
+      {
+        type: 'cascade_exhausted',
+        record: (r) => ({
+          organizationId: organizationId!,
+          recipientEmail: adminEmails[0],
+          subject: r?.subject || `Nobody left for ${message.instrument} - ${message.projectName}`,
+          emailType: 'cascade_exhausted',
+          musicianId: context.trigger.musician_id,
+          projectId: project?.id,
+          offerId: input.triggerOfferId,
+          resendEmailId: r?.id || null,
+          status: r?.suppressed ? 'suppressed' : 'sent',
+          metadata: {
+            allRecipients: adminEmails,
+            positionId: input.positionId,
+            trigger: input.trigger,
+            skippedConflicts: plan.skippedConflicts,
+            skippedNoEmail: plan.unreachable.map((c) => c.id),
+          },
+          body: r?.emailHtml,
+        }),
       },
-      body: result?.emailHtml,
-    })
+      {
+        email: () =>
+          sendCascadeExhaustedEmail(message),
+      }
+    )
     return { outcome: 'exhausted', notified: true }
   } catch (err) {
     console.error(`cascade: "nobody left" email for position ${input.positionId} (offer ${input.triggerOfferId}) failed:`, err)

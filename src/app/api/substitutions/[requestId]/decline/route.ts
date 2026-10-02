@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { sendSubRequestDeclinedEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { adminActor, logEvent } from '@/lib/staffing/events'
+import { notify } from '@/lib/notify'
 
 export async function POST(
   request: Request,
@@ -150,21 +151,39 @@ export async function POST(
   // Send "declined" email to requesting musician
   try {
     if (requestingMusician?.email) {
-      await sendSubRequestDeclinedEmail({
-        to: requestingMusician.email,
-        musicianName: `${requestingMusician.first_name} ${requestingMusician.last_name}`,
-        organizationName: organization?.name || 'Orchestra',
-        organizationId: organization?.id,
-        projectName: project?.name || 'Project',
-        instrument: instrument?.name || 'Instrument',
-        chairNumber: position?.chair_number || 1,
-        totalChairs,
-        serviceName,
-        suggestedSubName: subRequest.suggested_sub_name,
-        adminNotes,
-        performanceDate,
-        gigUrl,
-      }).catch((err) => console.warn('Failed to send declined email:', err))
+      await notify(
+        {
+          type: 'sub_request_declined',
+          recordSent: false,
+          record: () => ({
+            organizationId: project?.organization_id,
+            recipientEmail: requestingMusician.email,
+            recipientName: `${requestingMusician.first_name} ${requestingMusician.last_name}`,
+            subject: `Sub Request Declined: ${project?.name || 'Project'} - please find another substitute`,
+            emailType: 'sub_request_declined',
+            musicianId: requestingMusician.id,
+            projectId: project?.id,
+          }),
+        },
+        {
+          email: () =>
+            sendSubRequestDeclinedEmail({
+              to: requestingMusician.email,
+              musicianName: `${requestingMusician.first_name} ${requestingMusician.last_name}`,
+              organizationName: organization?.name || 'Orchestra',
+              organizationId: organization?.id,
+              projectName: project?.name || 'Project',
+              instrument: instrument?.name || 'Instrument',
+              chairNumber: position?.chair_number || 1,
+              totalChairs,
+              serviceName,
+              suggestedSubName: subRequest.suggested_sub_name,
+              adminNotes,
+              performanceDate,
+              gigUrl,
+            }),
+        }
+      ).catch((err) => console.warn('Failed to send declined email:', err))
     }
   } catch (emailError) {
     console.warn('Email sending failed:', emailError)

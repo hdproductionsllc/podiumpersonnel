@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferAcceptedEmail, sendAdminOfferResponseEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
 import { claimChairForAccept, notifyMusicianReleased, countChairs, isOfferClosed } from '@/lib/staffing/respond'
@@ -167,35 +167,40 @@ async function handleAccept(_request: Request, token: string) {
       const calendarUrl = `${baseUrl}/api/offers/${offer.id}/calendar?token=${token}`
       const googleCalendarUrl = `${baseUrl}/api/offers/${offer.id}/calendar?token=${token}&format=google`
 
-      const acceptedResult = await sendOfferAcceptedEmail({
-        to: musician.email,
-        musicianName: `${musician.first_name} ${musician.last_name}`,
-        organizationName: organization?.name || 'Orchestra',
-        organizationId: organization?.id,
-        contactEmail: adminEmails[0],
-        projectName: project?.name || 'Project',
-        instrument: instrument?.name || 'Instrument',
-        chairNumber: position?.chair_number || 1,
-        totalChairs,
-        services: formattedServices,
-        calendarUrl,
-        googleCalendarUrl,
-      }).catch((err) => console.warn('Failed to send musician confirmation:', err))
-
-      if (acceptedResult) {
-        await logEmail({
-          organizationId: project.organization_id,
-          recipientEmail: musician.email,
-          recipientName: `${musician.first_name} ${musician.last_name}`,
-          subject: acceptedResult?.subject || `Confirmed: You're booked for ${project?.name || 'Project'}`,
-          emailType: 'offer_accepted',
-          musicianId: musician.id,
-          projectId: project.id,
-          offerId: offer.id,
-          resendEmailId: acceptedResult.id || null,
-          body: acceptedResult?.emailHtml,
-        })
-      }
+      await notify(
+        {
+          type: 'offer_accepted',
+          record: (r) => ({
+            organizationId: project.organization_id,
+            recipientEmail: musician.email,
+            recipientName: `${musician.first_name} ${musician.last_name}`,
+            subject: r?.subject || `Confirmed: You're booked for ${project?.name || 'Project'}`,
+            emailType: 'offer_accepted',
+            musicianId: musician.id,
+            projectId: project.id,
+            offerId: offer.id,
+            resendEmailId: r?.id || null,
+            body: r?.emailHtml,
+          }),
+        },
+        {
+          email: () =>
+            sendOfferAcceptedEmail({
+              to: musician.email,
+              musicianName: `${musician.first_name} ${musician.last_name}`,
+              organizationName: organization?.name || 'Orchestra',
+              organizationId: organization?.id,
+              contactEmail: adminEmails[0],
+              projectName: project?.name || 'Project',
+              instrument: instrument?.name || 'Instrument',
+              chairNumber: position?.chair_number || 1,
+              totalChairs,
+              services: formattedServices,
+              calendarUrl,
+              googleCalendarUrl,
+            }),
+        }
+      ).catch((err) => console.warn('Failed to send musician confirmation:', err))
     }
 
     // Send notification to organization admins
@@ -203,19 +208,38 @@ async function handleAccept(_request: Request, token: string) {
 
       if (adminEmails.length > 0) {
         const baseUrl = getAppUrl()
-        await sendAdminOfferResponseEmail({
-          to: adminEmails,
-          organizationName: organization?.name || 'Orchestra',
-          projectName: project?.name || 'Project',
-          musicianName: `${musician?.first_name} ${musician?.last_name}`,
-          musicianEmail: musician?.email || null,
-          instrument: instrument?.name || 'Instrument',
-          chairNumber: position?.chair_number || 1,
-          totalChairs,
-          status: 'accepted',
-          dashboardUrl: `${baseUrl}/dashboard/projects`,
-          performanceDate,
-        }).catch((err) => console.warn('Failed to send admin notification:', err))
+        await notify(
+          {
+            type: 'admin_offer_response',
+            recordSent: false,
+            record: () => ({
+              organizationId: project.organization_id,
+              recipientEmail: adminEmails[0],
+              subject: `Offer Accepted: ${musician?.first_name} ${musician?.last_name} - ${project?.name || 'Project'}`,
+              emailType: 'admin_offer_response',
+              musicianId: musician?.id,
+              projectId: project.id,
+              offerId: offer.id,
+              metadata: { allRecipients: adminEmails, status: 'accepted' },
+            }),
+          },
+          {
+            email: () =>
+              sendAdminOfferResponseEmail({
+                to: adminEmails,
+                organizationName: organization?.name || 'Orchestra',
+                projectName: project?.name || 'Project',
+                musicianName: `${musician?.first_name} ${musician?.last_name}`,
+                musicianEmail: musician?.email || null,
+                instrument: instrument?.name || 'Instrument',
+                chairNumber: position?.chair_number || 1,
+                totalChairs,
+                status: 'accepted',
+                dashboardUrl: `${baseUrl}/dashboard/projects`,
+                performanceDate,
+              }),
+          }
+        ).catch((err) => console.warn('Failed to send admin notification:', err))
       }
     }
   } catch (emailError) {

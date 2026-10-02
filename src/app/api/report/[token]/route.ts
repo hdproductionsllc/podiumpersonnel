@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { resolveGigReportToken } from '@/lib/after-gig/report-token'
 import { sendGigReportSubmittedEmail } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { rateLimit } from '@/lib/rate-limit'
 
@@ -83,36 +83,44 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
             timeZone: report.timezone || DEFAULT_TIMEZONE,
           })
         : ''
-      const result = await sendGigReportSubmittedEmail({
-        adminEmails,
-        organizationName: report.organizationName,
-        leadName: report.leadName,
-        projectName: report.projectName,
-        gigDate,
-        answers: {
-          overall: a.overall,
-          allOnTime: a.allOnTime,
-          lateNotes: a.allOnTime ? null : a.lateNotes,
-          hiccups: a.hiccups,
-          clientFollowUp: a.clientFollowUp,
-          arrangementNotes: a.arrangementNotes,
-          otherNotes: a.otherNotes,
+      await notify(
+        {
+          type: 'gig_report_submitted',
+          record: (r) => ({
+            organizationId: report.organizationId,
+            recipientEmail: adminEmails[0],
+            subject: r?.subject || `Gig report for ${report.projectName}`,
+            emailType: 'gig_report_submitted',
+            musicianId: report.musicianId,
+            projectId: report.projectId,
+            resendEmailId: r?.id || null,
+            metadata: { reportId: report.reportId, allRecipients: adminEmails },
+            body: r?.emailHtml,
+            status: r?.suppressed ? 'suppressed' : 'sent',
+          }),
         },
-        projectUrl: `${getAppUrl()}/dashboard/projects?expand=${report.projectId}`,
-        branding: report.branding,
-      })
-      await logEmail({
-        organizationId: report.organizationId,
-        recipientEmail: adminEmails[0],
-        subject: result.subject,
-        emailType: 'gig_report_submitted',
-        musicianId: report.musicianId,
-        projectId: report.projectId,
-        resendEmailId: result.id || null,
-        metadata: { reportId: report.reportId, allRecipients: adminEmails },
-        body: result.emailHtml,
-        status: result.suppressed ? 'suppressed' : 'sent',
-      })
+        {
+          email: () =>
+            sendGigReportSubmittedEmail({
+              adminEmails,
+              organizationName: report.organizationName,
+              leadName: report.leadName,
+              projectName: report.projectName,
+              gigDate,
+              answers: {
+                overall: a.overall,
+                allOnTime: a.allOnTime,
+                lateNotes: a.allOnTime ? null : a.lateNotes,
+                hiccups: a.hiccups,
+                clientFollowUp: a.clientFollowUp,
+                arrangementNotes: a.arrangementNotes,
+                otherNotes: a.otherNotes,
+              },
+              projectUrl: `${getAppUrl()}/dashboard/projects?expand=${report.projectId}`,
+              branding: report.branding,
+            }),
+        }
+      )
     }
   } catch (err) {
     console.error(`Gig report ${report.reportId}: admin email failed:`, err)

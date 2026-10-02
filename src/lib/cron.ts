@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import * as Sentry from '@sentry/nextjs'
 import { sendEmail } from '@/lib/email/send'
 import { serverError } from '@/lib/api-helpers'
+import { notify } from '@/lib/notify'
 
 /**
  * Defense-in-depth switch for scheduled jobs. Email safety is already enforced
@@ -108,11 +109,18 @@ export async function notifyOps(jobName: string, error: unknown): Promise<void> 
   if (!to) return
   const detail = describeError(error)
   try {
-    await sendEmail({
-      to,
-      subject: `[Podium cron] ${jobName} failed`,
-      html: `<p>The scheduled job <strong>${jobName}</strong> failed:</p><pre>${escapeHtml(detail)}</pre>`,
-    })
+    // Podium's own ops inbox, not a company's: nothing to record in email_logs.
+    await notify(
+      { type: 'ops_alert', recordSent: false, record: () => null },
+      {
+        email: () =>
+          sendEmail({
+            to,
+            subject: `[Podium cron] ${jobName} failed`,
+            html: `<p>The scheduled job <strong>${jobName}</strong> failed:</p><pre>${escapeHtml(detail)}</pre>`,
+          }),
+      }
+    )
   } catch (e) {
     console.error(`notifyOps failed for ${jobName}:`, e)
   }

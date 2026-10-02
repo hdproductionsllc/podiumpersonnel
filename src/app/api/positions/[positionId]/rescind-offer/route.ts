@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferRescindedEmail, sendAdminOfferResponseEmail, sendSubDeclinedFindAnotherEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { LIVE_OFFER_STATUSES } from '@/lib/staffing/live'
 import { releaseSeat } from '@/lib/staffing/seats'
@@ -221,38 +221,46 @@ export async function POST(
       const gigUrl = originalOffer ? `${baseUrl}/gig/${originalOffer.token}` : baseUrl
 
       if (originalMusician?.email) {
-        const subDeclinedResult = await sendSubDeclinedFindAnotherEmail({
-          to: originalMusician.email,
-          musicianName: `${originalMusician.first_name} ${originalMusician.last_name}`,
-          organizationName: organization?.name || 'Orchestra',
-          organizationId: organization?.id,
-          projectName: project?.name || 'Project',
-          instrument: instrument?.name || 'Instrument',
-          chairNumber: positionData.chair_number || 1,
-          totalChairs,
-          serviceName,
-          suggestedSubName: subRequest.suggested_sub_name || `${musician?.first_name} ${musician?.last_name}`,
-          gigUrl,
-          performanceDate,
-        }).catch((err) => {
+        await notify(
+          {
+            type: 'sub_declined',
+            record: (r) =>
+              project?.organization_id
+                ? {
+                  organizationId: project.organization_id,
+                  recipientEmail: originalMusician.email,
+                  recipientName: `${originalMusician.first_name} ${originalMusician.last_name}`,
+                  subject: r?.subject || `Your sub declined - ${project?.name || 'Project'}`,
+                  emailType: 'sub_declined',
+                  musicianId: originalMusician.id,
+                  projectId: project.id,
+                  offerId: offer.id,
+                  resendEmailId: r?.id || null,
+                  body: r?.emailHtml,
+                }
+                : null,
+          },
+          {
+            email: () =>
+              sendSubDeclinedFindAnotherEmail({
+                to: originalMusician.email,
+                musicianName: `${originalMusician.first_name} ${originalMusician.last_name}`,
+                organizationName: organization?.name || 'Orchestra',
+                organizationId: organization?.id,
+                projectName: project?.name || 'Project',
+                instrument: instrument?.name || 'Instrument',
+                chairNumber: positionData.chair_number || 1,
+                totalChairs,
+                serviceName,
+                suggestedSubName: subRequest.suggested_sub_name || `${musician?.first_name} ${musician?.last_name}`,
+                gigUrl,
+                performanceDate,
+              }),
+          }
+        ).catch((err) => {
           console.warn('Failed to send sub declined email:', err)
           return null
         })
-
-        if (subDeclinedResult && project?.organization_id) {
-          await logEmail({
-            organizationId: project.organization_id,
-            recipientEmail: originalMusician.email,
-            recipientName: `${originalMusician.first_name} ${originalMusician.last_name}`,
-            subject: subDeclinedResult.subject,
-            emailType: 'sub_declined',
-            musicianId: originalMusician.id,
-            projectId: project.id,
-            offerId: offer.id,
-            resendEmailId: subDeclinedResult.id || null,
-            body: subDeclinedResult.emailHtml,
-          })
-        }
       }
     }
 
@@ -270,35 +278,43 @@ export async function POST(
       }
 
       if (musician?.email) {
-        const rescindedResult = await sendOfferRescindedEmail({
-          to: musician.email,
-          musicianName: `${musician.first_name} ${musician.last_name}`,
-          organizationName: organization?.name || 'Orchestra',
-          organizationId: organization?.id,
-          projectName: project?.name || 'Project',
-          instrument: instrument?.name || 'Instrument',
-          chairNumber: positionData.chair_number || 1,
-          totalChairs,
-          performanceDate,
-        }).catch((err) => {
+        await notify(
+          {
+            type: 'offer_rescinded',
+            record: (r) =>
+              project?.organization_id
+                ? {
+                  organizationId: project.organization_id,
+                  recipientEmail: musician.email,
+                  recipientName: `${musician.first_name} ${musician.last_name}`,
+                  subject: r?.subject || `Offer withdrawn - ${project?.name || 'Project'}`,
+                  emailType: 'offer_rescinded',
+                  musicianId: musician.id,
+                  projectId: project.id,
+                  offerId: offer.id,
+                  resendEmailId: r?.id || null,
+                  body: r?.emailHtml,
+                }
+                : null,
+          },
+          {
+            email: () =>
+              sendOfferRescindedEmail({
+                to: musician.email,
+                musicianName: `${musician.first_name} ${musician.last_name}`,
+                organizationName: organization?.name || 'Orchestra',
+                organizationId: organization?.id,
+                projectName: project?.name || 'Project',
+                instrument: instrument?.name || 'Instrument',
+                chairNumber: positionData.chair_number || 1,
+                totalChairs,
+                performanceDate,
+              }),
+          }
+        ).catch((err) => {
           console.warn('Failed to send musician rescinded notification:', err)
           return null
         })
-
-        if (rescindedResult && project?.organization_id) {
-          await logEmail({
-            organizationId: project.organization_id,
-            recipientEmail: musician.email,
-            recipientName: `${musician.first_name} ${musician.last_name}`,
-            subject: rescindedResult.subject,
-            emailType: 'offer_rescinded',
-            musicianId: musician.id,
-            projectId: project.id,
-            offerId: offer.id,
-            resendEmailId: rescindedResult.id || null,
-            body: rescindedResult.emailHtml,
-          })
-        }
       }
 
       if (project?.organization_id) {
@@ -306,20 +322,39 @@ export async function POST(
 
         if (adminEmails.length > 0) {
           const baseUrl = getAppUrl()
-          await sendAdminOfferResponseEmail({
-            to: adminEmails,
-            organizationName: organization?.name || 'Orchestra',
-            projectName: project?.name || 'Project',
-            musicianName: `${musician?.first_name} ${musician?.last_name}`,
-            musicianEmail: musician?.email || null,
-            instrument: instrument?.name || 'Instrument',
-            chairNumber: positionData.chair_number || 1,
-            totalChairs,
-            status: 'rescinded',
-            responseNotes: rescindReason,
-            dashboardUrl: `${baseUrl}/dashboard/projects`,
-            performanceDate,
-          }).catch((err) => console.warn('Failed to send admin notification:', err))
+          await notify(
+            {
+              type: 'admin_offer_response',
+              recordSent: false,
+              record: () => ({
+                organizationId: project.organization_id,
+                recipientEmail: adminEmails[0],
+                subject: `Offer Rescinded: ${musician?.first_name} ${musician?.last_name} - ${project?.name || 'Project'}`,
+                emailType: 'admin_offer_response',
+                musicianId: musician?.id,
+                projectId: project.id,
+                offerId: offer.id,
+                metadata: { allRecipients: adminEmails, status: 'rescinded' },
+              }),
+            },
+            {
+              email: () =>
+                sendAdminOfferResponseEmail({
+                  to: adminEmails,
+                  organizationName: organization?.name || 'Orchestra',
+                  projectName: project?.name || 'Project',
+                  musicianName: `${musician?.first_name} ${musician?.last_name}`,
+                  musicianEmail: musician?.email || null,
+                  instrument: instrument?.name || 'Instrument',
+                  chairNumber: positionData.chair_number || 1,
+                  totalChairs,
+                  status: 'rescinded',
+                  responseNotes: rescindReason,
+                  dashboardUrl: `${baseUrl}/dashboard/projects`,
+                  performanceDate,
+                }),
+            }
+          ).catch((err) => console.warn('Failed to send admin notification:', err))
         }
       }
     } catch (emailError) {

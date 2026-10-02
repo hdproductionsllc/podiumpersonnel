@@ -182,6 +182,13 @@ function openChairIds(positions: PositionJoined[]): string[] {
     .map((p) => p.id)
 }
 
+/** The project's first call (ISO), for the date in a "Text from my phone" message. */
+function firstServiceStart(services: { start_time: string }[] | null | undefined): string | null {
+  const starts = (services || []).map((s) => s.start_time).filter(Boolean)
+  if (starts.length === 0) return null
+  return starts.reduce((a, b) => (new Date(a).getTime() <= new Date(b).getTime() ? a : b))
+}
+
 function ServicesList({
   services,
   projectId,
@@ -1017,6 +1024,8 @@ export function ProjectsClient({
                               canManage={canManage}
                               onOfferChange={handleSuccess}
                               openPositionIds={openChairIds(project.project_positions)}
+                              projectName={project.name}
+                              startsAt={firstServiceStart(project.services)}
                               onSendWaterfall={(positionId, musicianId, customPay, isFollowUp) => {
                                 setWaterfallTrigger({ positionId, musicianId, customPay, isFollowUp })
                               }}

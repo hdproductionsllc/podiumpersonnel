@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendGigDetailsEmail } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { formatVenueFields } from '@/lib/venue-helpers'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -217,35 +217,42 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
     }))
 
     try {
-      const result = await sendGigDetailsEmail({
-        to: member.email,
-        musicianName: member.name.split(' ')[0],
-        organizationName: organization?.name || 'Orchestra',
-        organizationId: organization?.id,
-        projectName: project.name,
-        ensembleType: project.ensemble_type,
-        services: formattedServices,
-        roster: emailRoster,
-        confirmUrl,
-        notes: additionalNotes,
-        branding,
-      })
-
-      await logEmail({
-        organizationId: organization.id,
-        recipientEmail: member.email,
-        recipientName: member.name,
-        subject: result?.subject || `Gig details: ${project.name}`,
-        emailType: 'gig_details',
-        musicianId: member.musicianId,
-        projectId: projectId,
-        resendEmailId: result?.id || null,
-        metadata: {
-          sendId: sendRecord.id,
-          instrument: member.instrument,
+      await notify(
+        {
+          type: 'gig_details',
+          record: (r) => ({
+            organizationId: organization.id,
+            recipientEmail: member.email,
+            recipientName: member.name,
+            subject: r?.subject || `Gig details: ${project.name}`,
+            emailType: 'gig_details',
+            musicianId: member.musicianId,
+            projectId: projectId,
+            resendEmailId: r?.id || null,
+            metadata: {
+              sendId: sendRecord.id,
+              instrument: member.instrument,
+            },
+            body: r?.emailHtml,
+          }),
         },
-        body: result?.emailHtml,
-      })
+        {
+          email: () =>
+            sendGigDetailsEmail({
+              to: member.email,
+              musicianName: member.name.split(' ')[0],
+              organizationName: organization?.name || 'Orchestra',
+              organizationId: organization?.id,
+              projectName: project.name,
+              ensembleType: project.ensemble_type,
+              services: formattedServices,
+              roster: emailRoster,
+              confirmUrl,
+              notes: additionalNotes,
+              branding,
+            }),
+        }
+      )
 
       sentCount++
     } catch (emailError) {

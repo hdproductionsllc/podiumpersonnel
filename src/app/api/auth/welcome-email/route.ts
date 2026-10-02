@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendAdminWelcomeEmail, sendEmail } from '@/lib/email/send'
 import { getAppUrl } from '@/lib/utils'
+import { notify } from '@/lib/notify'
 
 const PLATFORM_ADMIN_EMAIL = process.env.PLATFORM_ADMIN_EMAIL || null
 
@@ -25,12 +26,21 @@ export async function POST(request: Request) {
   }
 
   try {
-    await sendAdminWelcomeEmail({
-      to: email,
-      userName,
-      organizationName,
-      dashboardUrl: `${getAppUrl()}/dashboard`,
-    })
+    // No email_logs row: this route has no organization id to file it under
+    // (and the welcome email was never recorded). It still goes through
+    // notify(), the one send path.
+    await notify(
+      { type: 'admin_welcome', recordSent: false, record: () => null },
+      {
+        email: () =>
+          sendAdminWelcomeEmail({
+            to: email,
+            userName,
+            organizationName,
+            dashboardUrl: `${getAppUrl()}/dashboard`,
+          }),
+      }
+    )
 
     // Notify platform admin of new signup
     if (PLATFORM_ADMIN_EMAIL) {
@@ -43,10 +53,16 @@ export async function POST(request: Request) {
         minute: '2-digit',
       })
 
-      await sendEmail({
-        to: PLATFORM_ADMIN_EMAIL,
-        subject: `New Podium Signup: ${organizationName}`,
-        html: `
+      // Platform-internal (Podium's own inbox, no organization): nothing to record.
+      await notify(
+        { type: 'platform_signup', recordSent: false, record: () => null },
+        {
+          email: () =>
+            sendEmail({
+              to: PLATFORM_ADMIN_EMAIL,
+              subject: `New Podium Signup: ${organizationName}`,
+              // The template's indentation is part of the email; kept as it was.
+              html: `
           <div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
             <h2 style="margin: 0 0 16px;">New Organization Signed Up</h2>
             <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
@@ -57,7 +73,9 @@ export async function POST(request: Request) {
             </table>
           </div>
         `,
-      }).catch(() => {
+            }),
+        }
+      ).catch(() => {
         // Don't fail if platform notification fails
       })
     }

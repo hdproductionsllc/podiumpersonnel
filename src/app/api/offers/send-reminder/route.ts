@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendOfferReminderEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { getAppUrl } from '@/lib/utils'
 import { hasLiveStatus } from '@/lib/staffing/live'
 
@@ -109,33 +109,40 @@ export async function POST(request: NextRequest) {
     const responseUrl = `${baseUrl}/gig/${offer.token}`
 
     // Send the reminder email
-    const result = await sendOfferReminderEmail({
-      to: musician.email,
-      musicianName: `${musician.first_name} ${musician.last_name}`,
-      organizationName: organization?.name || 'Orchestra',
-      organizationId: organization?.id,
-      projectName: project?.name || 'Project',
-      instrument: instrument?.name || 'Instrument',
-      chairNumber: position?.chair_number || 1,
-      totalChairs,
-      responseUrl,
-      expiresAt: offer.expires_at,
-      daysRemaining,
-      performanceDate,
-    })
-
-    await logEmail({
-      organizationId: organization?.id,
-      recipientEmail: musician.email,
-      recipientName: `${musician.first_name} ${musician.last_name}`,
-      subject: result?.subject || `Reminder: ${project?.name} - response needed`,
-      emailType: 'offer_reminder',
-      musicianId: musician.id,
-      projectId: project?.id,
-      offerId,
-      resendEmailId: result?.id || null,
-      body: result?.emailHtml,
-    })
+    await notify(
+      {
+        type: 'offer_reminder',
+        record: (r) => ({
+          organizationId: organization?.id,
+          recipientEmail: musician.email,
+          recipientName: `${musician.first_name} ${musician.last_name}`,
+          subject: r?.subject || `Reminder: ${project?.name} - response needed`,
+          emailType: 'offer_reminder',
+          musicianId: musician.id,
+          projectId: project?.id,
+          offerId,
+          resendEmailId: r?.id || null,
+          body: r?.emailHtml,
+        }),
+      },
+      {
+        email: () =>
+          sendOfferReminderEmail({
+            to: musician.email,
+            musicianName: `${musician.first_name} ${musician.last_name}`,
+            organizationName: organization?.name || 'Orchestra',
+            organizationId: organization?.id,
+            projectName: project?.name || 'Project',
+            instrument: instrument?.name || 'Instrument',
+            chairNumber: position?.chair_number || 1,
+            totalChairs,
+            responseUrl,
+            expiresAt: offer.expires_at,
+            daysRemaining,
+            performanceDate,
+          }),
+      }
+    )
 
     return NextResponse.json({ success: true })
   } catch (error) {

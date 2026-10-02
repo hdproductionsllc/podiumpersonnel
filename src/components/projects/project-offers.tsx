@@ -10,6 +10,7 @@ import { useTerms } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
 import { hasLapsed, hasLiveStatus, isLapsedOffer, isLiveOffer } from '@/lib/staffing/live'
 import { NEXT_IN_LINE_OFFER_EXPIRY } from '@/lib/staffing/expiry'
+import { OfferTextButton } from './offer-text-button'
 
 type PositionPayment = {
   id: string
@@ -30,7 +31,7 @@ export type OfferJoined = {
   responded_at: string | null
   custom_pay: number | null
   personal_message: string | null
-  musician: { id: string; first_name: string; last_name: string; email?: string | null }
+  musician: { id: string; first_name: string; last_name: string; email?: string | null; phone?: string | null }
   position_instrument: string
   position_chair: number
 }
@@ -60,6 +61,9 @@ interface ProjectOffersProps {
    * a chair that is already filled is never the right next step.
    */
   openPositionIds?: string[]
+  /** For "Text from my phone": the project's name and its first call (ISO). */
+  projectName?: string
+  startsAt?: string | null
 }
 
 export const OFFER_STATUS_COLORS: Record<string, string> = {
@@ -92,6 +96,8 @@ export function ProjectOffers({
   onOfferChange,
   onSendWaterfall,
   openPositionIds,
+  projectName,
+  startsAt,
 }: ProjectOffersProps) {
   const router = useRouter()
   const [showHistory, setShowHistory] = useState(false)
@@ -477,6 +483,19 @@ export function ProjectOffers({
                         >
                           View
                         </Button>
+                        {isLiveOffer(offer) && projectName && (
+                          <OfferTextButton
+                            kind="offer"
+                            token={offer.token}
+                            firstName={offer.musician.first_name}
+                            phone={offer.musician.phone}
+                            organizationName={organizationName}
+                            projectName={projectName}
+                            startsAt={startsAt ?? null}
+                            timezone={timezone}
+                            role={`${offer.position_instrument}${hasMultipleChairs ? `, ${term(terms, 'rank')} ${offer.position_chair}` : ''}`}
+                          />
+                        )}
                         {isLiveOffer(offer) && (
                           <Button
                             variant="ghost"

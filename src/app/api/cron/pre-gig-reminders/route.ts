@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendPreGigNotificationEmail } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
 
@@ -165,30 +165,37 @@ export async function GET(request: NextRequest) {
         footerText: organization?.email_footer_text,
       }
 
-      const result = await sendPreGigNotificationEmail({
-        to: adminEmails,
-        organizationName: organization?.name || 'Your Organization',
-        projectName: project.name,
-        gigDate,
-        venueName,
-        musicianCount: confirmedMusicians.length,
-        gigDetailsSent,
-        musicSent,
-        reviewUrl,
-        branding,
-      })
-
-      await logEmail({
-        organizationId: project.organization_id,
-        recipientEmail: adminEmails[0],
-        recipientName: undefined,
-        subject: result?.subject || `Upcoming: ${project.name} is in 2 days - review reminder`,
-        emailType: 'pre_gig_notification',
-        projectId: project.id,
-        resendEmailId: result?.id || null,
-        metadata: { reminderId: reminder.id, allRecipients: adminEmails },
-        body: result?.emailHtml,
-      })
+      await notify(
+        {
+          type: 'pre_gig_notification',
+          record: (r) => ({
+            organizationId: project.organization_id,
+            recipientEmail: adminEmails[0],
+            recipientName: undefined,
+            subject: r?.subject || `Upcoming: ${project.name} is in 2 days - review reminder`,
+            emailType: 'pre_gig_notification',
+            projectId: project.id,
+            resendEmailId: r?.id || null,
+            metadata: { reminderId: reminder.id, allRecipients: adminEmails },
+            body: r?.emailHtml,
+          }),
+        },
+        {
+          email: () =>
+            sendPreGigNotificationEmail({
+              to: adminEmails,
+              organizationName: organization?.name || 'Your Organization',
+              projectName: project.name,
+              gigDate,
+              venueName,
+              musicianCount: confirmedMusicians.length,
+              gigDetailsSent,
+              musicSent,
+              reviewUrl,
+              branding,
+            }),
+        }
+      )
 
       emailsSent++
     } catch (emailError) {

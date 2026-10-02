@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendStaffingAlertEmail } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
 import { staffingAlertThreshold } from '@/lib/projects/staffing-alerts'
@@ -100,12 +100,15 @@ export async function GET(request: NextRequest) {
 
     const confirmedCount = positions.length - unfilled.length
 
-    // Deduplicate: check if we already sent a staffing_alert for this project + threshold
+    // Deduplicate: check if we already sent a staffing_alert for this project + threshold.
+    // A send the provider refused is on record too (status 'failed', notify) but
+    // was never sent, so it must not stop the next run from trying again.
     const { data: existingLog } = await supabase
       .from('email_logs')
       .select('id')
       .eq('email_type', 'staffing_alert')
       .eq('project_id', project.id)
+      .neq('status', 'failed')
       .filter('metadata->>threshold', 'eq', String(threshold))
       .limit(1)
       .maybeSingle()
@@ -146,36 +149,43 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-      const result = await sendStaffingAlertEmail({
-        to: adminEmails,
-        organizationName: organization?.name || 'Your Organization',
-        projectName: project.name,
-        gigDate,
-        venueName,
-        daysAway,
-        totalPositions: positions.length,
-        confirmedCount,
-        unfilledPositions,
-        dashboardUrl,
-        branding,
-      })
-
-      await logEmail({
-        organizationId: project.organization_id,
-        recipientEmail: adminEmails[0],
-        subject: result?.subject || `Staffing Alert: ${project.name} - ${unfilled.length} unfilled positions`,
-        emailType: 'staffing_alert',
-        projectId: project.id,
-        resendEmailId: result?.id || null,
-        metadata: {
-          threshold,
-          daysAway,
-          unfilledCount: unfilled.length,
-          totalPositions: positions.length,
-          allRecipients: adminEmails,
+      await notify(
+        {
+          type: 'staffing_alert',
+          record: (r) => ({
+            organizationId: project.organization_id,
+            recipientEmail: adminEmails[0],
+            subject: r?.subject || `Staffing Alert: ${project.name} - ${unfilled.length} unfilled positions`,
+            emailType: 'staffing_alert',
+            projectId: project.id,
+            resendEmailId: r?.id || null,
+            metadata: {
+              threshold,
+              daysAway,
+              unfilledCount: unfilled.length,
+              totalPositions: positions.length,
+              allRecipients: adminEmails,
+            },
+            body: r?.emailHtml,
+          }),
         },
-        body: result?.emailHtml,
-      })
+        {
+          email: () =>
+            sendStaffingAlertEmail({
+              to: adminEmails,
+              organizationName: organization?.name || 'Your Organization',
+              projectName: project.name,
+              gigDate,
+              venueName,
+              daysAway,
+              totalPositions: positions.length,
+              confirmedCount,
+              unfilledPositions,
+              dashboardUrl,
+              branding,
+            }),
+        }
+      )
 
       emailsSent++
     } catch (emailError) {
