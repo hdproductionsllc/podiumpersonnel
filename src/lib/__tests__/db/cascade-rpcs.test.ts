@@ -529,6 +529,75 @@ describe('worker_drop', () => {
   })
 })
 
+const requestSub = (client: Client, g: Gig, musician = g.musicians[0]) =>
+  client.query(
+    "insert into substitution_requests (project_position_id, requesting_musician_id, status) values ($1, $2, 'pending_approval') returning id",
+    [g.chairId, musician]
+  )
+
+describe('a substitute request and a drop on the same chair (trg_guard_substitution_request_chair)', () => {
+  it('a request from someone still booked goes through', async () => {
+    const g = await gig()
+    await allowDrop(g)
+    await acceptedOffer(g)
+    expect((await requestSub(db, g)).rows).toHaveLength(1)
+  })
+
+  it('a request after the drop is refused', async () => {
+    const g = await gig()
+    await allowDrop(g)
+    const offer = await acceptedOffer(g)
+    expect(await workerDrop(db, offer)).toBe('released')
+    await expect(requestSub(db, g)).rejects.toThrow(/substitution_request_offer_not_accepted/)
+  })
+
+  it('a request racing a drop in flight waits for it, then is refused', async () => {
+    const g = await gig()
+    await allowDrop(g)
+    const offer = await acceptedOffer(g)
+    await other.query('begin')
+    try {
+      expect(await workerDrop(other, offer)).toBe('released')
+      // Blocks on the chair's lock until the drop commits.
+      const pending = requestSub(db, g).then(
+        () => 'inserted',
+        (err: Error) => err.message
+      )
+      await new Promise((r) => setTimeout(r, 200))
+      await other.query('commit')
+      expect(await pending).toMatch(/substitution_request_offer_not_accepted/)
+    } finally {
+      await other.query('rollback').catch(() => {})
+    }
+    const n = await db.query('select count(*)::int as n from substitution_requests where project_position_id = $1', [g.chairId])
+    expect(n.rows[0].n).toBe(0)
+  })
+
+  it('a drop racing a request in flight waits for it, then is refused', async () => {
+    const g = await gig()
+    await allowDrop(g)
+    const offer = await acceptedOffer(g)
+    await other.query('begin')
+    try {
+      await requestSub(other, g)
+      const pending = workerDrop(db, offer)
+      await new Promise((r) => setTimeout(r, 200))
+      await other.query('commit')
+      expect(await pending).toBe('substitution_in_progress')
+    } finally {
+      await other.query('rollback').catch(() => {})
+    }
+    expect(await offerStatus(offer)).toBe('accepted')
+  })
+
+  it('organizations without drop-out (the music default) are not checked, as today', async () => {
+    const g = await gig()
+    await allowDrop(g, false)
+    // No accepted offer at all: today's database accepts it, and still does.
+    expect((await requestSub(db, g)).rows).toHaveLength(1)
+  })
+})
+
 describe('only the server can call them', () => {
   it.each([
     ['worker_drop', `select worker_drop('${randomUUID()}')`],

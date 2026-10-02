@@ -13,8 +13,8 @@
 -- if any statement errors NOTHING is applied — paste the error back to Claude.
 --
 -- WHAT IT DOES, in plain English
---   Adds three switches and the database steps that read them. None of it
---   changes anything today:
+--   Adds three switches (the first three below), two notes on offers, and
+--   the database steps that use them. None of it changes anything today:
 --
 --   * "Auto-offer to the next person" for each organization. OFF for every
 --     organization. While it is off, Podium behaves exactly as it does now.
@@ -39,6 +39,11 @@
 --     chair is empty again, and it is written in the history). It refuses
 --     unless the organization's drop-out switch is on and the gig has not
 --     started, so for your music organizations it does nothing.
+--   * A guard on new substitute requests, for the organizations that allow
+--     dropping out: if someone presses "I can't make it" and "request a
+--     substitute" at the same moment, only one of them goes through. Music
+--     organizations (drop-out off) skip it, so their substitute requests work
+--     exactly as now.
 --
 --   Nothing here changes pay, who is emailed, or what emails say.
 --
@@ -96,6 +101,10 @@ BEGIN;
 --      on and the gig has not started. One transaction: the offer becomes
 --      'released', the chair vacant, and offer.released is recorded with
 --      reason 'dropped'. Service role only. See its own comment.
+--   9. trg_guard_substitution_request_chair: where worker drop is allowed, a
+--      new substitute request takes the chair's lock and needs the worker's
+--      offer to still be accepted, so a drop and a substitute request pressed
+--      at the same instant cannot both succeed. See its own comment.
 --
 -- Nothing in today's code reads these, and every default reproduces today's
 -- behaviour, so this is safe to paste BEFORE the code that uses it (house
@@ -567,6 +576,66 @@ $$;
 REVOKE ALL ON FUNCTION worker_drop(UUID, TEXT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION worker_drop(UUID, TEXT) TO service_role;
 
+-- ---------------------------------------------------------------------------
+-- 9. A substitute request waits for, and respects, a drop on the same chair
+-- ---------------------------------------------------------------------------
+--   Where worker drop is allowed, a new substitute request takes the chair's
+--   lock (the one worker_drop holds) and is refused unless the requesting
+--   worker still has an accepted offer on that chair. Without it, "I can't
+--   make it" and "request a substitute" pressed at the same instant could both
+--   succeed: worker_drop checks for a pending request under the lock, but the
+--   request's insert never took it. With it, whichever comes second sees the
+--   first: a drop after the request gets substitution_in_progress, a request
+--   after the drop is refused here.
+--
+--   The condition is the one the request-sub route already checks before it
+--   inserts (the offer is accepted), so no request that succeeds today is
+--   refused. Organizations with allow_worker_drop off (every music
+--   organization by default) skip it entirely: there is no drop to race.
+CREATE OR REPLACE FUNCTION guard_substitution_request_chair()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_allow BOOLEAN;
+BEGIN
+  IF NEW.status IS DISTINCT FROM 'pending_approval' AND NEW.status IS DISTINCT FROM 'approved' THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT o.allow_worker_drop INTO v_allow
+    FROM project_positions pp
+    JOIN projects p ON p.id = pp.project_id
+    JOIN organizations o ON o.id = p.organization_id
+   WHERE pp.id = NEW.project_position_id;
+  IF v_allow IS NOT TRUE THEN RETURN NEW; END IF;
+
+  -- Waits for a worker_drop in flight on this chair, then reads what it left.
+  PERFORM 1 FROM project_positions WHERE id = NEW.project_position_id FOR UPDATE;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM contract_offers
+     WHERE project_position_id = NEW.project_position_id
+       AND musician_id = NEW.requesting_musician_id
+       AND status = 'accepted'
+  ) THEN
+    RAISE EXCEPTION 'substitution_request_offer_not_accepted'
+      USING ERRCODE = 'P0001',
+            DETAIL = 'The requesting worker no longer has an accepted offer on this chair (they gave it back).';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION guard_substitution_request_chair() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_guard_substitution_request_chair ON substitution_requests;
+CREATE TRIGGER trg_guard_substitution_request_chair
+  BEFORE INSERT ON substitution_requests
+  FOR EACH ROW EXECUTE FUNCTION guard_substitution_request_chair();
+
 -- ===========================================================================
 -- verify:
 -- SELECT vertical, allow_worker_drop, auto_cascade, count(*) FROM organizations GROUP BY 1, 2, 3;
@@ -674,6 +743,13 @@ SELECT
       AND has_function_privilege('service_role', p.oid, 'EXECUTE')
       AND NOT has_function_privilege('authenticated', p.oid, 'EXECUTE')
       AND NOT has_function_privilege('anon', p.oid, 'EXECUTE')
+  ) THEN 'PASS' ELSE 'FAIL - tell Claude' END
+UNION ALL
+SELECT
+  'a substitute request and "I can''t make it" cannot both go through',
+  CASE WHEN EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'trg_guard_substitution_request_chair' AND tgrelid = 'public.substitution_requests'::regclass
   ) THEN 'PASS' ELSE 'FAIL - tell Claude' END
 UNION ALL
 SELECT

@@ -142,6 +142,14 @@ export async function POST(
     .single()
 
   if (createError) {
+    // Migration 096's guard: they gave the gig back ("I can't make it") after
+    // the check above. The request is refused under the chair's lock.
+    if (createError.message?.includes('substitution_request_offer_not_accepted')) {
+      return NextResponse.json(
+        { error: 'Only accepted offers can request a substitute' },
+        { status: 400 }
+      )
+    }
     console.error('Failed to create substitution request:', createError)
     return NextResponse.json(
       { error: 'Failed to create substitution request' },
