@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
+import { hasLiveStatus } from '@/lib/staffing/live'
 import { toast } from 'sonner'
 import { ImportFromBookDialog } from './import-from-book-dialog'
 import { AddPositionDialog } from './add-position-dialog'
@@ -274,7 +275,7 @@ export function ProjectPositions({
   // Collect all musician IDs with active offers across ALL positions in this project
   const projectWideOfferMusicianIds = positions.flatMap(p =>
     p.contract_offers
-      .filter(o => o.status === 'pending' || o.status === 'viewed' || o.status === 'accepted')
+      .filter(o => hasLiveStatus(o.status) || o.status === 'accepted')
       .map(o => o.musician_id)
   )
   const uniqueProjectOfferIds = [...new Set(projectWideOfferMusicianIds)]
@@ -641,7 +642,7 @@ export function ProjectPositions({
                           {(() => {
                             // Find pending offer to show who it's offered to
                             const pendingOffer = position.contract_offers.find(
-                              o => o.status === 'pending' || o.status === 'viewed'
+                              o => hasLiveStatus(o.status)
                             )
                             const offeredToName = pendingOffer
                               ? `${pendingOffer.musician.first_name} ${pendingOffer.musician.last_name}`
@@ -686,7 +687,7 @@ export function ProjectPositions({
                                 : '—'
                             }
                             if (position.status === 'offered') {
-                              const pendingOffer = position.contract_offers.find(o => o.status === 'pending' || o.status === 'viewed')
+                              const pendingOffer = position.contract_offers.find(o => hasLiveStatus(o.status))
                               return pendingOffer?.custom_pay != null ? `$${pendingOffer.custom_pay}` : '—'
                             }
                             return '—'
@@ -887,7 +888,7 @@ export function ProjectPositions({
               .filter((p) => p.id !== assignPositionId)
               .flatMap((p) =>
                 p.contract_offers
-                  .filter((o) => o.status === 'pending' || o.status === 'viewed' || o.status === 'accepted')
+                  .filter((o) => hasLiveStatus(o.status) || o.status === 'accepted')
                   .map((o) => o.musician_id)
               )
           )]
@@ -1017,7 +1018,7 @@ export function ProjectPositions({
 
       {rescindPosition && (() => {
         const pendingOffer = rescindPosition.contract_offers.find(
-          o => o.status === 'pending' || o.status === 'viewed'
+          o => hasLiveStatus(o.status)
         )
         const musicianName = pendingOffer
           ? `${pendingOffer.musician.first_name} ${pendingOffer.musician.last_name}`

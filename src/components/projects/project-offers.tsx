@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { useTerms } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
+import { hasLapsed, hasLiveStatus, isLapsedOffer, isLiveOffer } from '@/lib/staffing/live'
 
 type PositionPayment = {
   id: string
@@ -395,27 +396,21 @@ export function ProjectOffers({
     return new Date(dateStr).toLocaleDateString('en-US', { timeZone: timezone })
   }
 
-  function isExpired(expiresAt: string | null): boolean {
-    if (!expiresAt) return false
-    return new Date(expiresAt) < new Date()
-  }
-
   // What the admin needs now vs. what already happened. Main list: offers
   // still waiting on an answer, accepted offers (they carry "mark paid"), and,
   // for each chair that still needs someone, its most recent declined/expired
   // offer, which anchors the "Next in line" suggestion (once per chair).
   // Everything else is history, folded until asked for.
-  const isLive = (o: OfferJoined) => (o.status === 'pending' || o.status === 'viewed') && !isExpired(o.expires_at)
   const anchorByChair = new Map<string, OfferJoined>()
   for (const o of offers) {
-    if (isLive(o) || o.status === 'accepted') continue
-    if (o.status !== 'declined' && o.status !== 'expired' && !isExpired(o.expires_at)) continue
+    if (isLiveOffer(o) || o.status === 'accepted') continue
+    if (o.status !== 'declined' && o.status !== 'expired' && !hasLapsed(o.expires_at)) continue
     if (openChairs && !openChairs.has(o.project_position_id)) continue
     const current = anchorByChair.get(o.project_position_id)
     if (!current || (o.sent_at || '') > (current.sent_at || '')) anchorByChair.set(o.project_position_id, o)
   }
   const anchorIds = new Set([...anchorByChair.values()].map((o) => o.id))
-  const mainOffers = offers.filter((o) => isLive(o) || o.status === 'accepted' || anchorIds.has(o.id))
+  const mainOffers = offers.filter((o) => isLiveOffer(o) || o.status === 'accepted' || anchorIds.has(o.id))
   const historyOffers = offers.filter((o) => !mainOffers.includes(o))
   const visibleOffers = showHistory ? [...mainOffers, ...historyOffers] : mainOffers
 
@@ -467,10 +462,7 @@ export function ProjectOffers({
               }, {} as Record<string, Set<number>>)
 
               return visibleOffers.map((offer) => {
-                const expired = isExpired(offer.expires_at)
-                const displayStatus = expired && (offer.status === 'pending' || offer.status === 'viewed')
-                  ? 'expired'
-                  : offer.status
+                const displayStatus = isLapsedOffer(offer) ? 'expired' : offer.status
                 const hasMultipleChairs = (chairCountByInstrument[offer.position_instrument]?.size || 0) > 1
                 return (
                   <Fragment key={offer.id}>
@@ -532,7 +524,7 @@ export function ProjectOffers({
                         >
                           View
                         </Button>
-                        {(offer.status === 'pending' || offer.status === 'viewed') && !expired && (
+                        {isLiveOffer(offer) && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -542,7 +534,7 @@ export function ProjectOffers({
                             {sendingReminder === offer.id ? 'Sending...' : 'Remind'}
                           </Button>
                         )}
-                        {(offer.status === 'pending' || offer.status === 'viewed') && (
+                        {hasLiveStatus(offer.status) && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -629,7 +621,7 @@ export function ProjectOffers({
       {/* Expired Offers Summary */}
       {canManage && (() => {
         const expiredOffers = offers.filter(o =>
-          (o.status === 'expired' || (isExpired(o.expires_at) && (o.status === 'pending' || o.status === 'viewed'))) &&
+          (o.status === 'expired' || isLapsedOffer(o)) &&
           (!openChairs || openChairs.has(o.project_position_id))
         )
         if (expiredOffers.length === 0) return null

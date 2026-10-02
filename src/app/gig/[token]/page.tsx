@@ -5,7 +5,9 @@ import { getOrgPlan, getOrgVertical } from '@/lib/api-helpers'
 import { term } from '@/lib/verticals'
 import { canUseSubstitutions } from '@/lib/plan'
 import { DEFAULT_TIMEZONE } from '@/lib/utils'
-import { isOfferClosed } from '@/lib/offers/respond'
+import { isOfferClosed } from '@/lib/staffing/respond'
+import { hasLiveStatus } from '@/lib/staffing/live'
+import { logEvent, musicianActor } from '@/lib/staffing/events'
 
 interface GigPageProps {
   params: Promise<{ token: string }>
@@ -197,7 +199,7 @@ export default async function GigPage({ params }: GigPageProps) {
   // says pending but can no longer be answered (the accept/decline routes refuse
   // it), so show it as withdrawn rather than with buttons that do nothing.
   const offerClosed =
-    (offerData.status === 'pending' || offerData.status === 'viewed') &&
+    hasLiveStatus(offerData.status) &&
     isOfferClosed(position?.project, musician)
   const displayStatus = offerClosed ? 'rescinded' : offerData.status
 
@@ -210,7 +212,7 @@ export default async function GigPage({ params }: GigPageProps) {
     )
 
     if (!staffPreview) {
-      const { error: viewedError } = await supabase
+      const { data: viewedRows, error: viewedError } = await supabase
         .from('contract_offers')
         .update({
           status: 'viewed',
@@ -220,10 +222,25 @@ export default async function GigPage({ params }: GigPageProps) {
         // The page loaded a moment ago; an accept, decline or expiry may have
         // landed since. Only an offer still pending can become "viewed".
         .eq('status', 'pending')
+        .select('id')
 
       if (viewedError) {
         // The page still renders; the contractor just won't see "viewed" yet.
         console.error(`Failed to mark offer ${offerData.id} as viewed:`, viewedError)
+      } else if (viewedRows && viewedRows.length > 0) {
+        // Recorded because it happens at most once per offer (only a pending
+        // offer can move), and "did they ever open it?" is the first question
+        // when a musician says they never got the call. The status itself is
+        // overwritten by the answer; viewed_at is the only other trace.
+        await logEvent({
+          organizationId: position?.project?.organization_id,
+          actor: musicianActor(offerData.musician_id),
+          entityType: 'offer',
+          entityId: offerData.id,
+          action: 'offer.viewed',
+          before: { status: 'pending' },
+          after: { status: 'viewed' },
+        })
       }
     }
   }

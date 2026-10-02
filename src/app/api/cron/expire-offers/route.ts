@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
-import { getNextCandidates } from '@/lib/next-candidate'
+import { getNextCandidates } from '@/lib/staffing/candidates'
 import { sendOfferExpiredEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
 import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
-import { notifySubDeclined } from '@/lib/offers/respond'
+import { notifySubDeclined } from '@/lib/staffing/respond'
+import { LIVE_OFFER_STATUSES } from '@/lib/staffing/live'
+import { releaseSeat } from '@/lib/staffing/seats'
+import { logEvent, SYSTEM, type StaffingEvent } from '@/lib/staffing/events'
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request)
@@ -25,6 +28,7 @@ export async function GET(request: NextRequest) {
       .from('contract_offers')
       .select(`
         id,
+        status,
         project_position_id,
         musician:musicians(
           id,
@@ -46,7 +50,7 @@ export async function GET(request: NextRequest) {
           )
         )
       `)
-      .in('status', ['pending', 'viewed'])
+      .in('status', [...LIVE_OFFER_STATUSES])
       .not('expires_at', 'is', null)
       .lt('expires_at', new Date().toISOString()),
   )
@@ -88,7 +92,7 @@ export async function GET(request: NextRequest) {
       .from('contract_offers')
       .update({ status: 'expired' })
       .eq('id', offer.id)
-      .in('status', ['pending', 'viewed'])
+      .in('status', [...LIVE_OFFER_STATUSES])
       .select('id')
 
     if (updateError) {
@@ -102,6 +106,8 @@ export async function GET(request: NextRequest) {
     }
 
     processed++
+
+    const events: StaffingEvent[] = []
 
     // 1a. A substitute's offer running out ends that substitution attempt, the
     // same as a decline does. Without this the request stayed "approved" forever:
@@ -130,6 +136,15 @@ export async function GET(request: NextRequest) {
       if (subError) {
         console.error(`Failed to mark substitution request ${subRequest.id} sub_declined after offer ${offer.id} expired:`, subError)
       } else if (endedRows && endedRows.length > 0) {
+        events.push({
+          organizationId: project.organization_id,
+          actor: SYSTEM,
+          entityType: 'substitution_request',
+          entityId: subRequest.id,
+          action: 'substitution.ended',
+          before: { status: 'approved' },
+          after: { status: 'sub_declined', reason: 'expired', offer_id: offer.id },
+        })
         await notifySubDeclined(
           supabase,
           {
@@ -155,24 +170,38 @@ export async function GET(request: NextRequest) {
       .from('contract_offers')
       .select('id')
       .eq('project_position_id', position.id)
-      .in('status', ['pending', 'viewed', 'accepted'])
+      .in('status', [...LIVE_OFFER_STATUSES, 'accepted'])
       .neq('id', offer.id)
       .limit(1)
 
-    // The update itself also requires an empty chair: the check above and this
+    // releaseSeat('expired') also requires an empty chair: the check above and this
     // write are separate requests, and a pending offer never seats anyone, so a
     // chair with a musician in it was filled some other way and is not ours to free.
+    let seatReleased = false
     if (!otherActiveOffers || otherActiveOffers.length === 0) {
-      const { error: positionError } = await supabase
-        .from('project_positions')
-        .update({ musician_id: null, status: 'vacant' })
-        .eq('id', position.id)
-        .is('musician_id', null)
+      const seat = await releaseSeat(supabase, position.id, 'expired')
 
-      if (positionError) {
-        console.error(`Failed to reset position ${position.id}:`, positionError)
+      if (seat.error) {
+        console.error(`Failed to reset position ${position.id}:`, seat.error)
       }
+      seatReleased = seat.released
     }
+
+    events.unshift({
+      organizationId: project.organization_id,
+      actor: SYSTEM,
+      entityType: 'offer',
+      entityId: offer.id,
+      action: 'offer.expired',
+      before: { status: offer.status },
+      after: {
+        status: 'expired',
+        position_id: position.id,
+        seat_released: seatReleased,
+        ...(subRequest ? { substitution_request_id: subRequest.id } : {}),
+      },
+    })
+    await logEvent(events)
 
     // 2. Find next candidate
     const { candidates } = await getNextCandidates(supabase, position.id, 1)

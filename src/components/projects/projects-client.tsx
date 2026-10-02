@@ -43,6 +43,7 @@ import { canCreateProject, canUseEmailFeatures, PLAN_LIMITS } from '@/lib/plan'
 import { UpgradePrompt } from '@/components/billing/upgrade-prompt'
 import { GigReportPanel, type GigReportRow } from '@/components/projects/gig-report-panel'
 import { localDate } from '@/lib/projects/archive'
+import { isLiveOffer } from '@/lib/staffing/live'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -172,11 +173,10 @@ function GigSection({ title, hint, accent, children }: {
  * is still waiting on an answer. Next-in-line suggestions only appear for these.
  */
 function openChairIds(positions: PositionJoined[]): string[] {
-  const now = Date.now()
+  const now = new Date()
   return positions
     .filter((p) => p.status === 'vacant' || p.status === 'declined')
-    .filter((p) => !(p.contract_offers || []).some((o) =>
-      (o.status === 'pending' || o.status === 'viewed') && (!o.expires_at || Date.parse(o.expires_at) > now)))
+    .filter((p) => !(p.contract_offers || []).some((o) => isLiveOffer(o, now)))
     .map((p) => p.id)
 }
 

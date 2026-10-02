@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { LIVE_OFFER_STATUSES } from '@/lib/staffing/live'
+import { adminActor, logEvent, type StaffingEvent } from '@/lib/staffing/events'
 
 export async function POST(
   request: NextRequest,
@@ -118,7 +120,7 @@ export async function POST(
         .select('id')
         .eq('musician_id', musicianId)
         .in('project_position_id', otherPosIds)
-        .in('status', ['pending', 'viewed'])
+        .in('status', [...LIVE_OFFER_STATUSES])
         .limit(1)
 
       if (existingOffers && existingOffers.length > 0) {
@@ -159,27 +161,62 @@ export async function POST(
     // The chair itself is already assigned above, so these are logged rather
     // than failing the request.
     const nowIso = new Date().toISOString()
-    const { error: acceptOwnOfferError } = await supabase
+    const { data: acceptedOwnOffers, error: acceptOwnOfferError } = await supabase
       .from('contract_offers')
       .update({ status: 'accepted', responded_at: nowIso })
       .eq('project_position_id', positionId)
       .eq('musician_id', musicianId)
-      .in('status', ['pending', 'viewed'])
+      .in('status', [...LIVE_OFFER_STATUSES])
+      .select('id')
 
     if (acceptOwnOfferError) {
       console.error(`Failed to mark musician ${musicianId}'s own offer accepted on position ${positionId}:`, acceptOwnOfferError)
     }
 
-    const { error: expireOthersError } = await supabase
+    const { data: supersededOffers, error: expireOthersError } = await supabase
       .from('contract_offers')
       .update({ status: 'expired', responded_at: nowIso })
       .eq('project_position_id', positionId)
       .neq('musician_id', musicianId)
-      .in('status', ['pending', 'viewed'])
+      .in('status', [...LIVE_OFFER_STATUSES])
+      .select('id, musician_id')
 
     if (expireOthersError) {
       console.error(`Failed to expire other musicians' offers on position ${positionId}:`, expireOthersError)
     }
+
+    const actor = adminActor(user.id)
+    const organizationId = project?.organization_id
+    const events: StaffingEvent[] = [{
+      organizationId,
+      actor,
+      entityType: 'position',
+      entityId: positionId,
+      action: 'position.assigned',
+      before: { status: positionData.status, musician_id: null },
+      after: { status: 'confirmed', musician_id: musicianId, source: 'direct_assign' },
+    }]
+    for (const own of acceptedOwnOffers || []) {
+      events.push({
+        organizationId,
+        actor,
+        entityType: 'offer',
+        entityId: own.id,
+        action: 'offer.accepted',
+        after: { status: 'accepted', position_id: positionId, musician_id: musicianId, source: 'direct_assign' },
+      })
+    }
+    for (const other of supersededOffers || []) {
+      events.push({
+        organizationId,
+        actor,
+        entityType: 'offer',
+        entityId: other.id,
+        action: 'offer.superseded',
+        after: { status: 'expired', position_id: positionId, musician_id: other.musician_id, reason: 'chair_assigned' },
+      })
+    }
+    await logEvent(events)
 
     return NextResponse.json({ success: true })
   } catch (error) {

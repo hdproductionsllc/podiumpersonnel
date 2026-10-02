@@ -22,7 +22,8 @@ const declineRoutes = [
 
 /**
  * The seat-claim and decline logic these tests used to scan for inline now lives
- * in src/lib/offers/respond.ts. It was extracted when the emailed-link and portal
+ * in src/lib/staffing/respond.ts (moved from src/lib/offers/respond.ts, which
+ * re-exports it), with the status list in live.ts and the chair release in seats.ts. It was extracted when the emailed-link and portal
  * routes were near-duplicates that had drifted; the portal is gone, but the
  * module stays — this is the logic that stops two musicians winning one chair,
  * and it is better tested directly than scanned for as a string in a route.
@@ -32,7 +33,9 @@ const declineRoutes = [
  * versions (simulating a lost race, an already-answered offer, a reverted
  * accept) live in offer-respond-shared.test.ts.
  */
-const SHARED = 'src/lib/offers/respond.ts'
+const SHARED = 'src/lib/staffing/respond.ts'
+const LIVE = 'src/lib/staffing/live.ts'
+const SEATS = 'src/lib/staffing/seats.ts'
 
 describe('accept path handles substitutions', () => {
   const src = read(SHARED)
@@ -63,17 +66,26 @@ describe('decline path is race-safe', () => {
   const src = read(SHARED)
 
   it('uses an optimistic lock on the decline update', () => {
-    expect(src).toContain("RESPONDABLE_STATUSES")
-    expect(src).toContain("['pending', 'viewed']")
+    expect(src).toContain("RESPONDABLE_STATUSES = LIVE_OFFER_STATUSES")
+    expect(read(LIVE)).toContain("LIVE_OFFER_STATUSES = ['pending', 'viewed']")
   })
 
   it('clears musician_id when vacating the chair', () => {
-    expect(src).toContain("musician_id: null, status: 'vacant'")
+    expect(read(SEATS)).toContain("musician_id: null, status: 'vacant'")
+  })
+
+  it('frees the chair only when nobody holds it, except on an unassign', () => {
+    const seats = read(SEATS)
+    expect(seats).toMatch(/reason !== 'unassigned'[\s\S]{0,80}\.is\('musician_id', null\)/)
   })
 
   declineRoutes.forEach((route) => {
     it(`${route} declines through the shared helper`, () => {
       expect(read(route)).toContain('markOfferDeclined')
+    })
+
+    it(`${route} frees the chair through the guarded release`, () => {
+      expect(read(route)).toContain("releaseSeat(supabase, offer.project_position_id, 'declined')")
     })
 
     it(`${route} bails out when the offer was already responded to`, () => {
@@ -91,7 +103,8 @@ describe('decline path is race-safe', () => {
 describe('expiry cron protects confirmed chairs', () => {
   it('does not vacate a position that still has an accepted offer', () => {
     const src = read('src/app/api/cron/expire-offers/route.ts')
-    expect(src).toContain("in('status', ['pending', 'viewed', 'accepted'])")
+    expect(src).toContain("in('status', [...LIVE_OFFER_STATUSES, 'accepted'])")
+    expect(read(LIVE)).toContain("LIVE_OFFER_STATUSES = ['pending', 'viewed']")
   })
 })
 

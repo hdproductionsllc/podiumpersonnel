@@ -4,6 +4,7 @@ import { sendAdminSubRequestEmail, formatPerformanceDateForSubject } from '@/lib
 import { getOrgPlan } from '@/lib/api-helpers'
 import { canUseSubstitutions } from '@/lib/plan'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
+import { logEvent, musicianActor } from '@/lib/staffing/events'
 
 export async function POST(
   request: Request,
@@ -147,6 +148,20 @@ export async function POST(
       { status: 500 }
     )
   }
+
+  await logEvent({
+    organizationId: project?.organization_id,
+    actor: musicianActor(offer.musician_id),
+    entityType: 'substitution_request',
+    entityId: subRequest?.id,
+    action: 'substitution.requested',
+    after: {
+      status: 'pending_approval',
+      position_id: offer.project_position_id,
+      offer_id: offer.id,
+      service_id: serviceId || null,
+    },
+  })
 
   // Get service name if a specific service was selected
   let serviceName: string | null = null

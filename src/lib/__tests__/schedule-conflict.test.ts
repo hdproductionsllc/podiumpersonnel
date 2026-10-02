@@ -325,7 +325,7 @@ describe('every ranking path uses the shared check', () => {
   const read = (rel: string) => readFileSync(resolve(root, rel), 'utf-8')
 
   const rankers = [
-    'src/lib/next-candidate.ts',
+    'src/lib/staffing/candidates.ts',
     'src/app/api/projects/[projectId]/auto-populate/route.ts',
   ]
 

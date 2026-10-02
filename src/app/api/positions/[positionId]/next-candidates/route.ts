@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getNextCandidates } from '@/lib/next-candidate'
+import { getNextCandidates } from '@/lib/staffing/candidates'
 
 export async function GET(
   request: NextRequest,

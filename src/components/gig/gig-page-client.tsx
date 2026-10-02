@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { SubRequestForm } from './sub-request-form'
+import { hasLapsed, hasLiveStatus } from '@/lib/staffing/live'
 
 interface Service {
   id: string
@@ -97,8 +98,8 @@ export function GigPageClient({
   // avoid double-taps on slow mobile connections (the POST does a full redirect).
   const [submitting, setSubmitting] = useState<false | 'accept' | 'decline'>(false)
 
-  const isExpired = expiresAt && new Date(expiresAt) < new Date()
-  const canRespond = offerStatus === 'pending' || offerStatus === 'viewed'
+  const isExpired = hasLapsed(expiresAt)
+  const canRespond = hasLiveStatus(offerStatus)
   // Sub requests never needed an account: /api/gig/[token]/request-sub authorizes
   // on the token alone and enforces the plan gate server-side. Requiring one here
   // only hid the button from the musicians most likely to need it.

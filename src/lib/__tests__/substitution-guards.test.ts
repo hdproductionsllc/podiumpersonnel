@@ -79,6 +79,7 @@ function client(db: MockSupabaseDb, user: unknown) {
 }
 
 vi.mock('@/lib/supabase/server', () => ({
+  createServiceClient: () => state.db,
   createClient: async () => client(state.db, state.user),
   getOrgAdminEmails: vi.fn(async () => ['admin@example.com']),
 }))

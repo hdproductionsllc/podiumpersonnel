@@ -3,7 +3,10 @@ import { createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferDeclinedEmail, sendAdminOfferResponseEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
-import { markOfferDeclined, vacateChair, notifySubDeclined, countChairs, isOfferClosed } from '@/lib/offers/respond'
+import { markOfferDeclined, notifySubDeclined, countChairs, isOfferClosed } from '@/lib/staffing/respond'
+import { isLiveOffer } from '@/lib/staffing/live'
+import { releaseSeat } from '@/lib/staffing/seats'
+import { logEvent, musicianActor, type StaffingEvent } from '@/lib/staffing/events'
 
 export async function POST(
   _request: Request,
@@ -55,13 +58,8 @@ async function handleDecline(_request: Request, token: string) {
     return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
   }
 
-  // Check if expired
-  if (offer.expires_at && new Date(offer.expires_at) < new Date()) {
-    return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
-  }
-
-  // Check if can still respond
-  if (offer.status !== 'pending' && offer.status !== 'viewed') {
+  // Past its deadline, or already answered/withdrawn: nothing to decline.
+  if (!isLiveOffer(offer)) {
     return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
   }
 
@@ -108,10 +106,35 @@ async function handleDecline(_request: Request, token: string) {
   }
 
   // Free the chair so another offer can go out. Substitutions keep the chair
-  // with the original musician, so skip it there.
+  // with the original musician, so skip it there. The decline is already
+  // recorded, so a failure here must not turn the musician's answer into an
+  // error — but it leaves a declined musician's chair marked offered, so it is
+  // logged loudly. releaseSeat only frees a chair nobody holds: if someone is in
+  // it they got it another way, and a decline must not evict them.
+  let seatReleased = false
   if (!subRequest) {
-    await vacateChair(supabase, offer.project_position_id)
+    const seat = await releaseSeat(supabase, offer.project_position_id, 'declined')
+    if (seat.error) {
+      console.error(`Failed to vacate chair ${offer.project_position_id} after decline:`, seat.error)
+    }
+    seatReleased = seat.released
   }
+
+  const actor = musicianActor(offer.musician_id)
+  const events: StaffingEvent[] = [{
+    organizationId: project?.organization_id,
+    actor,
+    entityType: 'offer',
+    entityId: offer.id,
+    action: 'offer.declined',
+    before: { status: offer.status },
+    after: {
+      status: 'declined',
+      position_id: offer.project_position_id,
+      seat_released: seatReleased,
+      ...(subRequest ? { substitution_request_id: subRequest.id } : {}),
+    },
+  }]
 
   // If this is a substitution, update the substitution request and notify original musician.
   // The decline itself is already committed above, so a failure here is logged
@@ -125,6 +148,16 @@ async function handleDecline(_request: Request, token: string) {
 
     if (subDeclineError) {
       console.error(`Failed to mark substitution request ${subRequest.id} sub_declined after decline of offer ${offer.id}:`, subDeclineError)
+    } else {
+      events.push({
+        organizationId: project?.organization_id,
+        actor,
+        entityType: 'substitution_request',
+        entityId: subRequest.id,
+        action: 'substitution.ended',
+        before: { status: 'approved' },
+        after: { status: 'sub_declined', reason: 'declined', offer_id: offer.id },
+      })
     }
 
     // Tell the original musician their sub fell through. Shared with the portal
@@ -141,6 +174,8 @@ async function handleDecline(_request: Request, token: string) {
       performanceDate,
     })
   }
+
+  await logEvent(events)
 
   // Send confirmation emails (don't block on failure)
   try {

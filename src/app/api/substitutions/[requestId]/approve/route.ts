@@ -6,6 +6,8 @@ import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
 import { attachVenueDetails } from '@/lib/venue-attach'
 import { randomBytes } from 'crypto'
+import { LIVE_OFFER_STATUSES } from '@/lib/staffing/live'
+import { adminActor, logEvent, type StaffingEvent } from '@/lib/staffing/events'
 
 export async function POST(
   request: Request,
@@ -199,12 +201,13 @@ export async function POST(
   // send-email route runs. Without it, a retried approval (first attempt failed
   // after the insert, or the admin re-approved a request that was reverted)
   // leaves two live offers on one chair, either of which could be accepted.
-  const { error: supersedeError } = await supabase
+  const { data: supersededOffers, error: supersedeError } = await supabase
     .from('contract_offers')
     .update({ status: 'expired', responded_at: new Date().toISOString() })
     .eq('project_position_id', subRequest.project_position_id)
     .eq('musician_id', substituteMusician.id)
-    .in('status', ['pending', 'viewed'])
+    .in('status', [...LIVE_OFFER_STATUSES])
+    .select('id')
 
   if (supersedeError) {
     console.error('Failed to supersede prior offers for substitute:', supersedeError)
@@ -252,13 +255,59 @@ export async function POST(
       .from('contract_offers')
       .update({ status: 'rescinded', responded_at: new Date().toISOString() })
       .eq('id', contractOffer.id)
-      .in('status', ['pending', 'viewed'])
+      .in('status', [...LIVE_OFFER_STATUSES])
     if (retireError) {
       console.error(`Failed to retire offer ${contractOffer.id} after the attach failed:`, retireError)
+    } else {
+      // The offer row stays behind; say why it exists and why it is dead.
+      await logEvent({
+        organizationId: project.organization_id,
+        actor: adminActor(user.id),
+        entityType: 'offer',
+        entityId: contractOffer.id,
+        action: 'offer.rescinded',
+        after: { status: 'rescinded', reason: 'approval_failed', substitution_request_id: requestId },
+      })
     }
     await releaseClaim(`the substitute and offer could not be attached to request ${requestId}`)
     return NextResponse.json({ error: 'Failed to record the substitution; please try again' }, { status: 500 })
   }
+
+  const actor = adminActor(user.id)
+  const events: StaffingEvent[] = (supersededOffers || []).map((prior): StaffingEvent => ({
+    organizationId: project.organization_id,
+    actor,
+    entityType: 'offer',
+    entityId: prior.id,
+    action: 'offer.superseded',
+    after: { status: 'expired', musician_id: substituteMusician.id, replaced_by: contractOffer.id },
+  }))
+  events.push(
+    {
+      organizationId: project.organization_id,
+      actor,
+      entityType: 'substitution_request',
+      entityId: requestId,
+      action: 'substitution.approved',
+      before: { status: 'pending_approval' },
+      after: { status: 'approved', substitute_musician_id: substituteMusician.id, offer_id: contractOffer.id },
+    },
+    {
+      organizationId: project.organization_id,
+      actor,
+      entityType: 'offer',
+      entityId: contractOffer.id,
+      action: 'offer.sent',
+      after: {
+        status: 'pending',
+        position_id: subRequest.project_position_id,
+        musician_id: substituteMusician.id,
+        expires_at: expiresAt.toISOString(),
+        substitution_request_id: requestId,
+      },
+    }
+  )
+  await logEvent(events)
 
   // Get service name if specific service
   const serviceName = subRequest.service?.name || null

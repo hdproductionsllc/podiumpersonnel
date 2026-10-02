@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { sendOfferReminderEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { getAppUrl } from '@/lib/utils'
+import { hasLiveStatus } from '@/lib/staffing/live'
 
 export async function POST(request: NextRequest) {
   try {
@@ -58,8 +59,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
     }
 
-    // Only send reminders for pending offers
-    if (offer.status !== 'pending' && offer.status !== 'viewed') {
+    // Only send reminders for pending offers. Status only, as before: an offer
+    // past its deadline but not yet collected by the cron still passes here
+    // (audit C section 3.1); the offers table hides the Remind button for it.
+    if (!hasLiveStatus(offer.status)) {
       return NextResponse.json(
         { error: 'Can only send reminders for pending offers' },
         { status: 400 }

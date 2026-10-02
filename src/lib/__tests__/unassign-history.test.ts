@@ -19,6 +19,7 @@ import { MockSupabaseDb, type Row } from './helpers/supabase-mock'
 const state = vi.hoisted(() => ({ db: undefined as any, user: undefined as any }))
 
 vi.mock('@/lib/supabase/server', () => ({
+  createServiceClient: () => state.db,
   createClient: async () => ({
     from: (table: string) => state.db.from(table),
     auth: { getUser: async () => ({ data: { user: state.user } }) },

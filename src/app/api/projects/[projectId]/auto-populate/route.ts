@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { isWithinServiceArea } from '@/lib/zip-distance'
-import { findConflicts, describeConflicts } from '@/lib/schedule-conflict'
+import { findConflicts, describeConflicts } from '@/lib/staffing/conflicts'
+import { adminActor, logEvent, type StaffingEvent } from '@/lib/staffing/events'
 
 export async function POST(
   request: NextRequest,
@@ -236,6 +237,26 @@ export async function PUT(
       { error: 'Could not auto-populate positions. Please try again, or contact support if it continues.' },
       { status: 500 }
     )
+  }
+
+  // Chairs created already holding a musician were seated without any offer;
+  // record where they came from, or "why is she on this gig?" has no answer.
+  const seated = (data || []).filter((p) => p.musician_id)
+  if (seated.length > 0) {
+    const { data: project } = await supabase
+      .from('projects')
+      .select('organization_id')
+      .eq('id', projectId)
+      .maybeSingle()
+
+    await logEvent(seated.map((p): StaffingEvent => ({
+      organizationId: project?.organization_id,
+      actor: adminActor(user.id),
+      entityType: 'position',
+      entityId: p.id,
+      action: 'position.assigned',
+      after: { status: 'confirmed', musician_id: p.musician_id, source: 'book' },
+    })))
   }
 
   return NextResponse.json({

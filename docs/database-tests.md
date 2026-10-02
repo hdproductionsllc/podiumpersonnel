@@ -14,6 +14,7 @@ filename order, then runs the tests in `src/lib/__tests__/db/`.
 | `global-setup.ts` | Every migration, 001 to the latest, applies cleanly to a fresh Supabase Postgres. A failure names the file and Postgres's error. |
 | `rls-tenant-isolation.test.ts` | Two organizations, an admin in each. For `musicians`, `projects`, `contract_offers` and `payments`: an admin reads their own rows, sees none of the other org's, cannot update, delete or insert across orgs, and a signed-out visitor sees nothing. |
 | `constraints.test.ts` | One standard payment per musician/service/fee type (adjustments still allowed), services with payments cannot be deleted, one organization per account, status CHECKs on offers and projects. |
+| `staffing-events.test.ts` | The staffing history (092): an admin reads only their own org's events, a plain member and a signed-out visitor read nothing, no session can insert, update, delete or call `log_staffing_event()`, the service role can write both ways, history survives the offer it describes being deleted, and `scripts/sql/092-staffing-events.paste.sql` reports all PASS on two consecutive runs. |
 | `helpers.ts` | `asUser()` runs a query as the `authenticated` role with a JWT `sub`, the way PostgREST does, inside a transaction that is always rolled back. `createTenant()` builds one org with one of each row. |
 
 The tests use synthetic data only (random ids, `example.test` addresses). This

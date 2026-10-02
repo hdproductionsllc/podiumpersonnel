@@ -69,7 +69,7 @@ vi.mock('@/lib/email/client', () => ({ logEmailConfig: vi.fn() }))
 vi.mock('@/lib/venue-attach', () => ({ attachVenueDetails: vi.fn(async () => {}) }))
 
 // The ranking engine is not under test here; the fixture's ranked list stands in for it.
-vi.mock('@/lib/next-candidate', () => ({
+vi.mock('@/lib/staffing/candidates', () => ({
   getNextCandidates: vi.fn(async (_db: unknown, positionId: string) => {
     const key = (Object.keys(QUARTET_CHAIRS) as ChairKey[]).find((k) => QUARTET_CHAIRS[k].id === positionId)!
     const id = state.q.nextInLine(key)
@@ -272,6 +272,22 @@ describe('quartet wedding, start to finish', () => {
       subRequestToAdmin: 1,
       subApproved: 1,
     })
+
+    // The staffing history (migration 092): one row per transition, all in this org.
+    const history = q().db.tables.staffing_events
+    const tally = history.reduce<Record<string, number>>((acc, e) => ({ ...acc, [e.action]: (acc[e.action] ?? 0) + 1 }), {})
+    expect(tally).toEqual({
+      'offer.sent': 4 + 2 + 1, // as the offer emails above
+      'offer.accepted': 4 + 1, // the four chairs' accepts and the sub's (the accepted emails above)
+      'offer.declined': 1,
+      'offer.expired': 1,
+      'offer.released': 1, // the original viola, when the sub took the chair
+      'substitution.requested': 1,
+      'substitution.approved': 1,
+      'substitution.filled': 1,
+    })
+    expect(history.every((e) => e.organization_id === QUARTET_ORG.id)).toBe(true)
+    expect(history.filter((e) => e.actor_type === 'system').map((e) => e.entity_id)).toEqual([viola.id])
 
     expect(errorSpy).not.toHaveBeenCalled()
   })

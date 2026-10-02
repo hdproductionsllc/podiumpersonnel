@@ -33,6 +33,6 @@ describe('Bug 2 — sending a new offer supersedes the previous one', () => {
   it('retires other outstanding offers on the same chair', () => {
     expect(route).toContain("eq('project_position_id', position.id)")
     expect(route).toContain("neq('id', offerId)")
-    expect(route).toContain("in('status', ['pending', 'viewed'])")
+    expect(route).toContain("in('status', [...LIVE_OFFER_STATUSES])")
   })
 })

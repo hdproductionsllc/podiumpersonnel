@@ -4,6 +4,9 @@ import { sendPositionUnassignedEmail, sendEmail, formatPerformanceDateForSubject
 import { logEmail } from '@/lib/email/log'
 import { PODIUM_FOOTER_URL } from '@/lib/email/templates/podium-footer'
 import { serverError } from '@/lib/api-helpers'
+import { LIVE_OFFER_STATUSES } from '@/lib/staffing/live'
+import { releaseSeat } from '@/lib/staffing/seats'
+import { adminActor, logEvent, type StaffingEvent } from '@/lib/staffing/events'
 
 export async function POST(
   request: NextRequest,
@@ -99,37 +102,71 @@ export async function POST(
     // the offers table and the send-offer dialog all count only pending/viewed/
     // accepted — so the chair reads vacant afterwards. Both updates are
     // idempotent, so a retry after a later failure is a no-op.
-    const { error: releaseOffersError } = await supabase
+    const { data: releasedOffers, error: releaseOffersError } = await supabase
       .from('contract_offers')
       .update({ status: 'released' })
       .eq('project_position_id', positionId)
       .eq('status', 'accepted')
+      .select('id, musician_id')
 
     if (releaseOffersError) {
       return serverError(`Failed to release accepted offers for position ${positionId}`, releaseOffersError)
     }
 
-    const { error: rescindOffersError } = await supabase
+    const { data: rescindedOffers, error: rescindOffersError } = await supabase
       .from('contract_offers')
       .update({ status: 'rescinded', responded_at: new Date().toISOString() })
       .eq('project_position_id', positionId)
-      .in('status', ['pending', 'viewed'])
+      .in('status', [...LIVE_OFFER_STATUSES])
+      .select('id, musician_id')
 
     if (rescindOffersError) {
       return serverError(`Failed to rescind outstanding offers for position ${positionId}`, rescindOffersError)
     }
 
-    // Reset the position to vacant
-    const { error: vacateError } = await supabase
-      .from('project_positions')
-      .update({ musician_id: null, status: 'vacant' })
-      .eq('id', positionId)
+    // Reset the position to vacant. 'unassigned' is the one release that clears
+    // a HELD chair: taking it away from the seated musician is the point.
+    const { error: vacateError } = await releaseSeat(supabase, positionId, 'unassigned')
 
     if (vacateError) {
       // Nothing has been emailed yet; the admin can retry and the two status
       // updates above are no-ops the second time.
       return serverError(`Failed to vacate position ${positionId}`, vacateError)
     }
+
+    const actor = adminActor(user.id)
+    const organizationId = project?.organization_id
+    const events: StaffingEvent[] = [{
+      organizationId,
+      actor,
+      entityType: 'position',
+      entityId: positionId,
+      action: 'position.unassigned',
+      before: { status: positionData.status, musician_id: positionData.musician_id },
+      after: { status: 'vacant', musician_id: null },
+    }]
+    for (const released of releasedOffers || []) {
+      events.push({
+        organizationId,
+        actor,
+        entityType: 'offer',
+        entityId: released.id,
+        action: 'offer.released',
+        before: { status: 'accepted' },
+        after: { status: 'released', reason: 'unassigned', position_id: positionId, musician_id: released.musician_id },
+      })
+    }
+    for (const rescinded of rescindedOffers || []) {
+      events.push({
+        organizationId,
+        actor,
+        entityType: 'offer',
+        entityId: rescinded.id,
+        action: 'offer.rescinded',
+        after: { status: 'rescinded', reason: 'unassigned', position_id: positionId, musician_id: rescinded.musician_id },
+      })
+    }
+    await logEvent(events)
 
     // Send email notifications
     const emailPromises: Promise<any>[] = []

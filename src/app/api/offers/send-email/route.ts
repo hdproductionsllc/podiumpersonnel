@@ -7,6 +7,8 @@ import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
 import { attachVenueDetails } from '@/lib/venue-attach'
 import { serverError } from '@/lib/api-helpers'
+import { LIVE_OFFER_STATUSES } from '@/lib/staffing/live'
+import { adminActor, logEvent, type StaffingEvent } from '@/lib/staffing/events'
 
 export async function POST(request: NextRequest) {
   console.log('📧 Send email API called')
@@ -79,18 +81,31 @@ export async function POST(request: NextRequest) {
     // this position so sending a new call cleanly supersedes the previous one.
     // Without this, a prior pending offer lingers and could still be accepted for
     // a chair that's already moved on to (or been given to) someone else.
+    const actor = adminActor(user.id)
     if (position?.id) {
       const serviceClient = createServiceClient()
-      const { error: expireError } = await serviceClient
+      const { data: supersededOffers, error: expireError } = await serviceClient
         .from('contract_offers')
         .update({ status: 'expired', responded_at: new Date().toISOString() })
         .eq('project_position_id', position.id)
         .neq('id', offerId)
-        .in('status', ['pending', 'viewed'])
+        .in('status', [...LIVE_OFFER_STATUSES])
+        .select('id, musician_id')
 
       if (expireError) {
         // Sending anyway would leave two live offers on one chair — stop here.
         return serverError(`Failed to expire prior offers on position ${position.id} before sending offer ${offerId}`, expireError)
+      }
+
+      if (supersededOffers && supersededOffers.length > 0) {
+        await logEvent(supersededOffers.map((other): StaffingEvent => ({
+          organizationId: organization?.id,
+          actor,
+          entityType: 'offer',
+          entityId: other.id,
+          action: 'offer.superseded',
+          after: { status: 'expired', position_id: position.id, musician_id: other.musician_id, replaced_by: offerId },
+        })))
       }
     }
 
@@ -243,6 +258,21 @@ export async function POST(request: NextRequest) {
         ...(suppressed ? { suppressedRecipients: result?.suppressedRecipients || [musician.email] } : {}),
       },
       body: result?.emailHtml,
+    })
+
+    await logEvent({
+      organizationId: organization?.id,
+      actor,
+      entityType: 'offer',
+      entityId: offerId,
+      action: 'offer.sent',
+      after: {
+        status: 'pending',
+        position_id: position?.id ?? null,
+        musician_id: musician.id,
+        expires_at: offer.expires_at,
+        delivery: suppressed ? 'suppressed' : 'sent',
+      },
     })
 
     // A suppressed send never reached the musician, so an admin "Offer Sent"

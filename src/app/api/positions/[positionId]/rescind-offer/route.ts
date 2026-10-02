@@ -3,6 +3,9 @@ import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendOfferRescindedEmail, sendAdminOfferResponseEmail, sendSubDeclinedFindAnotherEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
+import { LIVE_OFFER_STATUSES } from '@/lib/staffing/live'
+import { releaseSeat } from '@/lib/staffing/seats'
+import { adminActor, logEvent, type StaffingEvent } from '@/lib/staffing/events'
 
 // Admin rescinds an outstanding offer for a position.
 // Distinct from a musician declining: the offer is withdrawn before they responded.
@@ -83,7 +86,7 @@ export async function POST(
         musician:musicians(id, first_name, last_name, email)
       `)
       .eq('project_position_id', positionId)
-      .in('status', ['pending', 'viewed'])
+      .in('status', [...LIVE_OFFER_STATUSES])
       .single()
 
     if (offerError || !offer) {
@@ -118,7 +121,7 @@ export async function POST(
         response_notes: rescindReason,
       })
       .eq('id', offer.id)
-      .in('status', ['pending', 'viewed'])
+      .in('status', [...LIVE_OFFER_STATUSES])
       .select('id')
 
     if (offerUpdateError) {
@@ -140,20 +143,35 @@ export async function POST(
     // claimed it (or an admin assigned it) since the fetch, and marking a
     // held chair 'vacant' would leave musician_id pointing at someone the
     // dashboard no longer shows as seated.
+    let seatReleased = false
     if (!subRequest) {
-      const { data: vacatedPositions, error: positionUpdateError } = await supabase
-        .from('project_positions')
-        .update({ status: 'vacant' })
-        .eq('id', positionId)
-        .is('musician_id', null)
-        .select('id')
+      const seat = await releaseSeat(supabase, positionId, 'rescinded')
 
-      if (positionUpdateError) {
-        console.error('Failed to update position:', positionUpdateError)
-      } else if (!vacatedPositions || vacatedPositions.length === 0) {
+      if (seat.error) {
+        console.error('Failed to update position:', seat.error)
+      } else if (!seat.released) {
         console.warn(`Position ${positionId} was not vacated after rescinding offer ${offer.id}: the chair is held by someone else`)
       }
+      seatReleased = seat.released
     }
+
+    const actor = adminActor(user.id)
+    const events: StaffingEvent[] = [{
+      organizationId: project?.organization_id,
+      actor,
+      entityType: 'offer',
+      entityId: offer.id,
+      action: 'offer.rescinded',
+      before: { status: offer.status },
+      after: {
+        status: 'rescinded',
+        position_id: positionId,
+        musician_id: offer.musician_id,
+        reason: rescindReason,
+        seat_released: seatReleased,
+        ...(subRequest ? { substitution_request_id: subRequest.id } : {}),
+      },
+    }]
 
     // Handle substitution case — the original musician still needs another sub
     if (subRequest) {
@@ -166,6 +184,16 @@ export async function POST(
 
       if (subDeclineError) {
         console.error(`Failed to mark substitution request ${subRequest.id} sub_declined after rescinding offer ${offer.id}:`, subDeclineError)
+      } else {
+        events.push({
+          organizationId: project?.organization_id,
+          actor,
+          entityType: 'substitution_request',
+          entityId: subRequest.id,
+          action: 'substitution.ended',
+          before: { status: 'approved' },
+          after: { status: 'sub_declined', reason: 'rescinded', offer_id: offer.id },
+        })
       }
 
       const originalMusician = subRequest.requesting_musician as any
@@ -227,6 +255,8 @@ export async function POST(
         }
       }
     }
+
+    await logEvent(events)
 
     try {
       let totalChairs = 1

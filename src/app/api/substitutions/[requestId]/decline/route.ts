@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendSubRequestDeclinedEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
+import { adminActor, logEvent } from '@/lib/staffing/events'
 
 export async function POST(
   request: Request,
@@ -109,6 +110,16 @@ export async function POST(
       { status: 409 }
     )
   }
+
+  await logEvent({
+    organizationId: project?.organization_id,
+    actor: adminActor(user.id),
+    entityType: 'substitution_request',
+    entityId: requestId,
+    action: 'substitution.declined',
+    before: { status: 'pending_approval' },
+    after: { status: 'declined', admin_notes: adminNotes },
+  })
 
   // Get service name if specific service
   const serviceName = subRequest.service?.name || null
