@@ -1,3 +1,12 @@
+-- DEAD / HISTORICAL. DO NOT RUN, DO NOT TRUST.
+--
+-- A pre-019 baseline: 13 tables of the 40 that exist, and it still contains the
+-- world-readable "Public can ... contract offers by token" policies that migration
+-- 019 dropped. Bootstrapping a database from this file recreates that hole.
+-- Nothing in the app, scripts or CI reads it. The source of truth is
+-- supabase/migrations/, replayed from empty by the CI "database" job.
+-- See docs/database-tests.md.
+
 -- Podium Personnel Database Schema
 -- Multi-tenant SaaS platform for orchestra personnel management
 

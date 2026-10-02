@@ -41,3 +41,56 @@ jobs:
         env:
           RESEND_API_KEY: re_ci_placeholder
         run: npm test
+
+  database:
+    # Replays every file in supabase/migrations into a real Supabase Postgres,
+    # then runs the tests under src/lib/__tests__/db (RLS tenant isolation,
+    # constraints). Separate from "check" so a slow image pull never delays the
+    # type check, and "npm test" itself stays free of Docker.
+    # Everything here is synthetic data in a throwaway container.
+    # Docs: docs/database-tests.md
+    name: Database (migrations, RLS, constraints)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        # Same image the nightly backup restore test uses. Its superuser is
+        # supabase_admin; the "postgres" role is not one.
+        image: supabase/postgres:17.11.0.002
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 54329:5432
+        options: >-
+          --health-cmd "pg_isready -U supabase_admin -h localhost"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      DB_TEST_URL: postgresql://supabase_admin:postgres@localhost:54329/postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Wait for the image's own init scripts
+        # The image accepts connections before its init scripts have created the
+        # auth schema and Supabase's roles; wait for them.
+        run: |
+          for i in $(seq 1 60); do
+            if psql "$DB_TEST_URL" -Atc "select 1 from pg_roles where rolname = 'authenticated'" | grep -q 1 \
+              && psql "$DB_TEST_URL" -Atc "select to_regprocedure('auth.uid()')" | grep -q uid; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::supabase/postgres did not finish initialising"; exit 1
+
+      - name: Replay migrations and run database tests
+        run: npm run test:db
