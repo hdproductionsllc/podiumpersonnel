@@ -64,6 +64,12 @@ interface ProjectOffersProps {
   /** For "Text from my phone": the project's name and its first call (ISO). */
   projectName?: string
   startsAt?: string | null
+  /**
+   * The first call each chair works, by chair id, for a chair limited to some
+   * calls (098/099). Only given where call_scoped_requirements is on; any
+   * chair not in it uses startsAt.
+   */
+  startsAtByChair?: Record<string, string | null>
 }
 
 export const OFFER_STATUS_COLORS: Record<string, string> = {
@@ -98,6 +104,7 @@ export function ProjectOffers({
   openPositionIds,
   projectName,
   startsAt,
+  startsAtByChair,
 }: ProjectOffersProps) {
   const router = useRouter()
   const [showHistory, setShowHistory] = useState(false)
@@ -491,7 +498,7 @@ export function ProjectOffers({
                             phone={offer.musician.phone}
                             organizationName={organizationName}
                             projectName={projectName}
-                            startsAt={startsAt ?? null}
+                            startsAt={startsAtByChair?.[offer.project_position_id] ?? startsAt ?? null}
                             timezone={timezone}
                             role={`${offer.position_instrument}${hasMultipleChairs ? `, ${term(terms, 'rank')} ${offer.position_chair}` : ''}`}
                           />

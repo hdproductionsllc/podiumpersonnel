@@ -7,6 +7,7 @@ import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
 import { staffingAlertThreshold } from '@/lib/projects/staffing-alerts'
 import { servicesFor, withScope } from '@/lib/staffing/scope'
+import { alertGroupFor, requirementsByChair } from '@/lib/staffing/requirements'
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request)
@@ -41,6 +42,7 @@ export async function GET(request: NextRequest) {
         ),
         services(
           id,
+          name,
           start_time,
           venue,
           venue_id,
@@ -148,11 +150,20 @@ export async function GET(request: NextRequest) {
 
     const venueName = earliestService.venue_details?.name || earliestService.venue || null
 
-    const unfilledPositions = unfilled.map((p: any) => ({
-      instrument: (p.instrument as any)?.name || 'Unknown',
-      chairNumber: p.chair_number,
-      status: p.status as 'vacant' | 'offered' | 'declined',
-    }))
+    // Chairs made by one requirement ("Stagehand x 8", 099) are listed as
+    // that one line. A gig with no requirements (every gig today) gets an
+    // empty map and the list is exactly as before.
+    const requirementOf = await requirementsByChair(supabase, project.id)
+    const unfilledPositions = unfilled.map((p: any) => {
+      const instrument = (p.instrument as any)?.name || 'Unknown'
+      const group = alertGroupFor(p, instrument, requirementOf.get(p.id), services)
+      return {
+        instrument,
+        chairNumber: p.chair_number,
+        status: p.status as 'vacant' | 'offered' | 'declined',
+        ...(group ? { group } : {}),
+      }
+    })
 
     const dashboardUrl = `${baseUrl}/dashboard/projects?expand=${project.id}`
 

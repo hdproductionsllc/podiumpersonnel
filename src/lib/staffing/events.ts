@@ -23,7 +23,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 
 export type ActorType = 'admin' | 'musician' | 'system'
 
-export type EntityType = 'offer' | 'position' | 'substitution_request'
+export type EntityType = 'offer' | 'position' | 'substitution_request' | 'requirement'
 
 export type StaffingAction =
   // offers
@@ -48,6 +48,9 @@ export type StaffingAction =
   | 'position.unassigned'
   | 'position.repaired' // fixed by scripts/sql/094-repair-before-constraints.paste.sql
   | 'position.auto_cascade_changed' // an admin switched auto-offer off (or back on) for this chair (096)
+  | 'position.scope_changed' // an admin chose which calls this chair works (set_position_scope, 099)
+  // requirements ("Stagehand x 8", 099)
+  | 'requirement.created' // a requirement and its chairs were made (create_requirement)
   // substitution requests
   | 'substitution.requested'
   | 'substitution.approved'

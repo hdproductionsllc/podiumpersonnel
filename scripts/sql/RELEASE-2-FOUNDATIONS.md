@@ -146,3 +146,73 @@ unchanged (the quartet fixture and the golden-email tests hold this).
 - The calls picker itself (gated by `call_scoped_requirements`).
 - Anything new that reads "the gig's services" for a person must go through
   `servicesFor` / `servicesForMusician`.
+
+## Step 3: crew by the dozen (requirements) and the call picker
+
+### Before the deploy
+
+1. Supabase > SQL Editor > New query: paste
+   `scripts/sql/099-requirements.paste.sql` and Run (after step 2's 098; if
+   098 is missing it stops and changes nothing). Every RESULTS row should say
+   PASS (INFO rows are counts). It adds: a `requirements` list (role, how
+   many, pay for the whole engagement per person, notes, open/filled), a
+   `requirement_id` on each chair (empty for every chair), a rule that keeps
+   "filled" in step with the chairs, and two database steps the server calls:
+   "make this requirement and its chairs" and "set which calls this chair
+   works". Both refuse a company whose switch is off (every company), so
+   today's live app is unaffected.
+
+2. Right after the paste, before the deploy: Claude runs these read-only
+   lookups (zero rows each). Every one must answer `200 []`:
+
+   ```
+   GET /rest/v1/requirements?select=id,quantity,project_positions(id)&limit=0
+   GET /rest/v1/requirements?select=id,project_id,instrument_id,quantity,default_pay,notes,status,created_at,project:projects!inner(organization_id)&limit=0
+   GET /rest/v1/project_positions?select=id,scope_mode,requirement_id,position_services(service_id),project:projects!inner(organization_id)&limit=0
+   GET /rest/v1/organizations?select=call_scoped_requirements&limit=0
+   ```
+
+   Recorded 2026-10-02, BEFORE 098 and 099: the first two answered `404
+   PGRST205` (no `requirements` table), the third `400 PGRST200` (no
+   `position_services`), the fourth `400 42703` (no switch column). The code
+   copes with each: the projects page reads the switch first and, on 42703,
+   shows nothing new (quietly); the staffing alert reads requirements on their
+   own and, on any error, lists chairs exactly as before.
+
+### Deploy
+
+3. Same single push as steps 1 and 2.
+
+### What people will notice
+
+- Quartet companies (every company today): nothing. Their projects page asks
+  one extra question ("is the switch on?"), gets "no", and renders exactly as
+  before. The staffing alert for a gig with no requirements is the same email
+  (a golden file rendered from master's template proves it byte for byte).
+- Only once Podium turns a company's switch on (none yet; production crew
+  companies get it by default in the next step):
+  - **Add crew** on a gig's Staffing section: role, how many, which calls
+    (every call, or only some), pay per person for the whole engagement,
+    notes. It makes that many slots at once, numbered after the role's
+    existing slots (Stagehand 1-8 for the load-in, then 9-12 for the strike).
+    A double click or retry does not make a second set.
+  - A summary line per requirement above the table: "Stagehand × 8, Load-in,
+    3 of 8 confirmed, 2 offered, $200 each".
+  - Under each slot's role: which calls it works. A **Calls** button sets
+    them (every call, or only some). It is greyed out while someone holds or
+    is considering the slot: their offer named its calls.
+  - Send Offer on a slot of a requirement suggests the requirement's pay; the
+    rate total it shows is over that slot's calls.
+  - "Text from my phone" dates the message by the slot's first call.
+  - Staffing alert: the open slots of one requirement are one line,
+    "Stagehand (Load-in): 3 of 8 still open (...)"; two requirements for one
+    role stay two lines.
+
+### If something goes wrong
+
+- Code live but 099 missing: no company has the switch on, so nothing asks
+  for requirements; the staffing alert's own read fails quietly and it lists
+  chairs as before. Add crew and the Calls button would answer "This needs a
+  database update first. Nothing was changed." Paste step 3.
+- To undo in the database: no chair has a `requirement_id` and no
+  requirement exists until a company with the switch on adds one.

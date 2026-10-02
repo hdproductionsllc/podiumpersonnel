@@ -7,6 +7,7 @@ import { isReadyToComplete } from '@/lib/projects/archive'
 import type { GigReportRow } from '@/components/projects/gig-report-panel'
 import { attachVenueDetails } from '@/lib/venue-attach'
 import { getAutoCascadeDisabledChairIds, getOrgStaffingSettings } from '@/lib/staffing/settings'
+import { getCallScopeView } from '@/lib/staffing/requirements'
 
 export default async function ProjectsPage() {
   const supabase = await createClient()
@@ -140,9 +141,13 @@ export default async function ProjectsPage() {
 
   // Auto-offer switches (096), read on their own and tolerantly: before 096 is
   // applied both are null and the per-chair switch is simply not shown.
-  const [staffingSettings, autoCascadeDisabledChairIds] = await Promise.all([
+  // Chairs' calls and requirements (098/099): read on their own, and only
+  // anything at all for an organization with call_scoped_requirements on. For
+  // every other organization this is null and the page is as it was.
+  const [staffingSettings, autoCascadeDisabledChairIds, callScope] = await Promise.all([
     getOrgStaffingSettings(supabase, organization!.id),
     getAutoCascadeDisabledChairIds(supabase, organization!.id),
+    getCallScopeView(supabase, organization!.id),
   ])
   const autoCascade =
     staffingSettings && autoCascadeDisabledChairIds
@@ -170,6 +175,7 @@ export default async function ProjectsPage() {
       dismissedTooltips={tutorialState?.dismissed_tooltips ?? []}
       gigReports={(gigReports as unknown as GigReportRow[]) ?? []}
       autoCascade={autoCascade}
+      callScope={callScope}
     />
   )
 }

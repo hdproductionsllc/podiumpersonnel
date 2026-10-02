@@ -22,6 +22,8 @@ import { ProjectFilesSection } from './project-files-section'
 import { IntakePanel } from '@/components/intake/intake-panel'
 import { detectConflicts } from './project-positions'
 import type { PositionJoined, BookForImport, AutoCascadeSwitches } from './project-positions'
+import { chairScopeForServicesFor, type CallScopeView } from '@/lib/staffing/requirement-rules'
+import { servicesFor } from '@/lib/staffing/scope'
 import type { MusicianForOffer } from './send-offer-dialog'
 import type { Project, Service } from '@/types'
 import { toast } from 'sonner'
@@ -70,6 +72,12 @@ interface ProjectsClientProps {
   gigReports?: GigReportRow[]
   /** The auto-offer switches (096); null when they could not be read. */
   autoCascade?: AutoCascadeSwitches | null
+  /**
+   * Chairs' calls and requirements (098/099), only for an organization with
+   * call_scoped_requirements on; null everywhere else, and nothing about calls
+   * or requirements is shown.
+   */
+  callScope?: CallScopeView | null
 }
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
@@ -187,6 +195,16 @@ function firstServiceStart(services: { start_time: string }[] | null | undefined
   const starts = (services || []).map((s) => s.start_time).filter(Boolean)
   if (starts.length === 0) return null
   return starts.reduce((a, b) => (new Date(a).getTime() <= new Date(b).getTime() ? a : b))
+}
+
+/** The first call each chair limited to some calls works (098/099), by chair id. */
+function chairStarts(project: ProjectWithServices, callScope: CallScopeView): Record<string, string | null> {
+  const out: Record<string, string | null> = {}
+  for (const p of project.project_positions) {
+    const scope = callScope.chairs[p.id]
+    if (scope?.scopeMode === 'selected') out[p.id] = firstServiceStart(servicesFor(chairScopeForServicesFor(scope), project.services))
+  }
+  return out
 }
 
 function ServicesList({
@@ -322,6 +340,7 @@ export function ProjectsClient({
   dismissedTooltips = [],
   gigReports = [],
   autoCascade = null,
+  callScope = null,
 }: ProjectsClientProps) {
   const router = useRouter()
   const plan = usePlan()
@@ -991,6 +1010,7 @@ export function ProjectsClient({
                               waterfallTrigger={waterfallTrigger}
                               onWaterfallHandled={() => setWaterfallTrigger(null)}
                               autoCascade={autoCascade}
+                              callScope={callScope}
                             />
                             <SubRequests
                               requests={project.project_positions.flatMap((p) =>
@@ -1026,6 +1046,7 @@ export function ProjectsClient({
                               openPositionIds={openChairIds(project.project_positions)}
                               projectName={project.name}
                               startsAt={firstServiceStart(project.services)}
+                              startsAtByChair={callScope ? chairStarts(project, callScope) : undefined}
                               onSendWaterfall={(positionId, musicianId, customPay, isFollowUp) => {
                                 setWaterfallTrigger({ positionId, musicianId, customPay, isFollowUp })
                               }}

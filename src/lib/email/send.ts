@@ -1267,6 +1267,8 @@ interface SendStaffingAlertParams {
     instrument: string
     chairNumber: number
     status: 'vacant' | 'offered' | 'declined'
+    /** The requirement line this chair belongs to (099), if any. */
+    group?: { key: string; label: string; quantity: number }
   }[]
   dashboardUrl: string
   branding?: EmailBranding

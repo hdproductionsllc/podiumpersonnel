@@ -18,6 +18,12 @@ interface UnfilledPosition {
   instrument: string
   chairNumber: number
   status: 'vacant' | 'offered' | 'declined'
+  /**
+   * The requirement this chair was made for ("Stagehand x 8", migration 099):
+   * its chairs are one line, and two requirements for the same role stay two
+   * lines. Absent for every other chair, which is grouped by role as before.
+   */
+  group?: { key: string; label: string; quantity: number }
 }
 
 interface StaffingAlertEmailProps {
@@ -58,12 +64,18 @@ export function StaffingAlertEmail({
   const urgencyColor =
     daysAway <= 3 ? '#dc2626' : daysAway <= 7 ? '#ea580c' : '#ca8a04'
 
-  // Group unfilled positions by instrument
+  // Group unfilled positions by instrument (or by their requirement)
   const grouped: Record<string, UnfilledPosition[]> = {}
   for (const pos of unfilledPositions) {
-    if (!grouped[pos.instrument]) grouped[pos.instrument] = []
-    grouped[pos.instrument].push(pos)
+    const key = pos.group?.key ?? pos.instrument
+    if (!grouped[key]) grouped[key] = []
+    grouped[key].push(pos)
   }
+  const chairList = (positions: UnfilledPosition[]) =>
+    positions.map((p) => {
+      const label = p.status === 'offered' ? 'pending response' : p.status
+      return `${term(t, 'rank')} ${p.chairNumber} — ${label}`
+    }).join(', ')
 
   return (
     <Html>
@@ -115,15 +127,20 @@ export function StaffingAlertEmail({
               <Text style={{ ...detailsItem, fontWeight: 'bold', marginBottom: '8px' }}>
                 Unfilled positions:
               </Text>
-              {Object.entries(grouped).map(([instrument, positions]) => (
-                <Text key={instrument} style={positionItem}>
-                  {instrument}: {positions.length} {positions.length === 1 ? 'seat' : 'seats'}{' '}
-                  ({positions.map((p) => {
-                    const label = p.status === 'offered' ? 'pending response' : p.status
-                    return `${term(t, 'rank')} ${p.chairNumber} — ${label}`
-                  }).join(', ')})
-                </Text>
-              ))}
+              {Object.entries(grouped).map(([key, positions]) => {
+                const group = positions[0].group
+                return group ? (
+                  <Text key={key} style={positionItem}>
+                    {group.label}: {positions.length} of {group.quantity} still open{' '}
+                    ({chairList(positions)})
+                  </Text>
+                ) : (
+                  <Text key={key} style={positionItem}>
+                    {key}: {positions.length} {positions.length === 1 ? 'seat' : 'seats'}{' '}
+                    ({chairList(positions)})
+                  </Text>
+                )
+              })}
             </Section>
 
             <Section style={buttonContainer}>

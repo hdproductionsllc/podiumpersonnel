@@ -34,6 +34,15 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { MusicianFormDialog } from '@/components/musicians/musician-form-dialog'
+import { AddRequirementDialog } from './add-requirement-dialog'
+import { ChairCallsDialog } from './chair-calls-dialog'
+import { servicesFor } from '@/lib/staffing/scope'
+import {
+  chairScopeForServicesFor,
+  requirementFulfilment,
+  type CallScopeView,
+  type RequirementRow,
+} from '@/lib/staffing/requirement-rules'
 import type { MusicianWithInstruments, InstrumentOption } from '@/components/musicians/musicians-client'
 
 export type PositionOfferJoined = {
@@ -123,6 +132,12 @@ interface ProjectPositionsProps {
   waterfallTrigger?: WaterfallTrigger | null
   onWaterfallHandled?: () => void
   autoCascade?: AutoCascadeSwitches | null
+  /**
+   * Chairs' calls and requirements (098/099), present only for an organization
+   * with call_scoped_requirements on. Null: nothing about calls or
+   * requirements is shown, and every chair works the whole gig.
+   */
+  callScope?: CallScopeView | null
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -192,6 +207,7 @@ export function ProjectPositions({
   waterfallTrigger,
   onWaterfallHandled,
   autoCascade = null,
+  callScope = null,
 }: ProjectPositionsProps) {
   const plan = usePlan()
   const { titleRules, terms } = useVertical()
@@ -228,6 +244,8 @@ export function ProjectPositions({
   const [instrumentOptions, setInstrumentOptions] = useState<InstrumentOption[]>([])
   const [editFormOpen, setEditFormOpen] = useState(false)
   const [loadingMusicianId, setLoadingMusicianId] = useState<string | null>(null)
+  const [addCrewOpen, setAddCrewOpen] = useState(false)
+  const [callsChair, setCallsChair] = useState<{ id: string; label: string; serviceIds: string[] | null } | null>(null)
   const prevPositionCountRef = useRef(positions.length)
   const hasMountedRef = useRef(false)
 
@@ -291,6 +309,58 @@ export function ProjectPositions({
       .map(o => o.musician_id)
   )
   const uniqueProjectOfferIds = [...new Set(projectWideOfferMusicianIds)]
+
+  // -- Which calls each chair works, and requirements (only with callScope) --
+  // Without callScope every chair works every service: chairServices returns
+  // `services` itself and none of the call UI below is rendered.
+  function chairServices(position: { id: string }): Service[] {
+    if (!callScope) return services
+    return servicesFor(chairScopeForServicesFor(callScope.chairs[position.id]), services)
+  }
+  const sessionsWord = term(terms, 'session', { plural: true, case: 'lower' })
+  const projectRequirements: RequirementRow[] = callScope
+    ? callScope.requirements.filter((r) => r.project_id === projectId)
+    : []
+  const positionsWithRequirement = positions.map((p) => ({
+    status: p.status,
+    requirement_id: callScope?.chairs[p.id]?.requirementId ?? null,
+  }))
+  function requirementOf(positionId: string | null): RequirementRow | undefined {
+    if (!callScope || !positionId) return undefined
+    const id = callScope.chairs[positionId]?.requirementId
+    return id ? projectRequirements.find((r) => r.id === id) : undefined
+  }
+  /** Someone is seated in the chair, or holds an offer for it that is open or accepted. */
+  function chairInUse(position: PositionJoined): boolean {
+    return !!position.musician_id || position.contract_offers.some((o) => hasLiveStatus(o.status) || o.status === 'accepted')
+  }
+  function callsLabel(position: PositionJoined): string {
+    const scope = callScope?.chairs[position.id]
+    if (!scope || scope.scopeMode === 'all') return `Every ${term(terms, 'session', { case: 'lower' })}`
+    const names = chairServices(position).map((s) => s.name)
+    return names.length > 0 ? names.join(', ') : `No ${sessionsWord}`
+  }
+  function openCalls(position: PositionJoined) {
+    const scope = callScope?.chairs[position.id]
+    setCallsChair({
+      id: position.id,
+      label: `${position.instrument?.name ?? ''} ${position.chair_number}`.trim(),
+      serviceIds: scope && scope.scopeMode === 'selected' ? scope.serviceIds : null,
+    })
+  }
+  // What the Send Offer dialog suggests for the chair it is open on: an amount
+  // the admin chose for the remaining chairs wins, then the chair's
+  // requirement's whole-engagement amount. Its rate total is over the calls
+  // the chair works (every service, without callScope: as before).
+  const offerRequirement = requirementOf(offerPositionId)
+  const offerSuggestedPay = suggestedCustomPay
+    || (offerRequirement?.default_pay != null ? String(offerRequirement.default_pay) : '')
+  const offerChairServices = callScope && offerPositionId ? chairServices({ id: offerPositionId }) : services
+  const offerBasePay = offerChairServices === services
+    ? basePay
+    : offerChairServices.some((s) => s.base_pay != null)
+      ? offerChairServices.reduce((sum, s) => sum + (s.base_pay ?? 0), 0)
+      : null
 
   function handleSendOffer(position: PositionJoined) {
     if (services.length === 0) {
@@ -578,6 +648,11 @@ export function ProjectPositions({
             <Button size="sm" variant="outline" onClick={() => { setAddPositionMode('single'); setAddPositionOpen(true) }}>
               Add Position
             </Button>
+            {callScope && (
+              <Button size="sm" variant="outline" onClick={() => setAddCrewOpen(true)}>
+                Add crew
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={() => setImportOpen(true)} disabled={!canUseSavedEnsembles(plan)} title={!canUseSavedEnsembles(plan) ? 'Pro feature' : undefined}>
               Import from {term(terms, 'groupList')}
             </Button>
@@ -589,6 +664,30 @@ export function ProjectPositions({
           </div>
         )}
       </div>
+
+      {projectRequirements.length > 0 && (
+        <ul className="space-y-1 rounded-md border bg-muted/20 px-3 py-2 text-xs">
+          {projectRequirements.map((r) => {
+            const f = requirementFulfilment(r, positionsWithRequirement)
+            const role = positions.find((p) => p.instrument_id === r.instrument_id)?.instrument?.name ?? term(terms, 'skill')
+            const firstChair = positions.find((p) => callScope?.chairs[p.id]?.requirementId === r.id)
+            return (
+              <li key={r.id} className="flex flex-wrap items-center gap-x-2">
+                <span className="font-medium">{role} × {r.quantity}</span>
+                {firstChair && <span className="text-muted-foreground">{callsLabel(firstChair)}</span>}
+                <span className={f.state === 'filled' ? 'text-green-700 dark:text-green-400' : 'text-muted-foreground'}>
+                  {f.state === 'cancelled' ? 'Cancelled' : `${f.confirmed} of ${f.quantity} confirmed`}
+                  {f.offered > 0 ? `, ${f.offered} offered` : ''}
+                </span>
+                {r.default_pay != null && (
+                  <span className="text-muted-foreground tabular-nums">{`$${r.default_pay.toLocaleString()} each`}</span>
+                )}
+                {r.notes && <span className="text-muted-foreground italic">{r.notes}</span>}
+              </li>
+            )
+          })}
+        </ul>
+      )}
 
       {totalPositions === 0 ? (
         <p className="text-sm text-muted-foreground py-2">
@@ -625,7 +724,14 @@ export function ProjectPositions({
                     </tr>
                     {sectionPositions.map((position) => (
                       <tr key={position.id} className="hover:bg-muted/30">
-                        <td className="px-3 py-2 whitespace-nowrap">{position.instrument?.name}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {position.instrument?.name}
+                          {callScope && (
+                            <span className="block text-xs text-muted-foreground" title={`Which ${sessionsWord} this slot works`}>
+                              {callsLabel(position)}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
                           {(chairCountByInstrument.get(position.instrument_id) || 0) > 1
                             ? (() => {
@@ -646,7 +752,7 @@ export function ProjectPositions({
                                 const hasConflict = m?.competing_schedules?.some((sched) => {
                                   const schedStart = new Date(sched.start_time).getTime()
                                   const schedEnd = new Date(sched.end_time).getTime()
-                                  return services.some((svc) => {
+                                  return chairServices(position).some((svc) => {
                                     const svcStart = new Date(svc.start_time).getTime()
                                     const svcEnd = svc.end_time ? new Date(svc.end_time).getTime() : svcStart + 3600000
                                     return schedStart < svcEnd && schedEnd > svcStart
@@ -772,6 +878,19 @@ export function ProjectPositions({
                                   Unassign
                                 </Button>
                               )}
+                              {callScope && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={chairInUse(position)}
+                                  onClick={() => openCalls(position)}
+                                  title={chairInUse(position)
+                                    ? `Someone holds or is considering this slot. Withdraw the offer or unassign them to change its ${sessionsWord}.`
+                                    : `Choose which ${sessionsWord} this slot works`}
+                                >
+                                  {term(terms, 'session', { plural: true })}
+                                </Button>
+                              )}
                               {autoOfferState(position) && (
                                 <Button
                                   variant="ghost"
@@ -828,6 +947,11 @@ export function ProjectPositions({
                                   {position.musician_id && (
                                     <DropdownMenuItem onClick={() => handleUnassign(position)}>
                                       Unassign
+                                    </DropdownMenuItem>
+                                  )}
+                                  {callScope && (
+                                    <DropdownMenuItem disabled={chairInUse(position)} onClick={() => openCalls(position)}>
+                                      {term(terms, 'session', { plural: true })}
                                     </DropdownMenuItem>
                                   )}
                                   {autoOfferState(position) && (
@@ -887,6 +1011,27 @@ export function ProjectPositions({
         onSuccess={onPositionChange}
       />
 
+      {callScope && (
+        <>
+          <AddRequirementDialog
+            open={addCrewOpen}
+            onOpenChange={setAddCrewOpen}
+            projectId={projectId}
+            organizationId={organizationId}
+            services={services}
+            timezone={timezone}
+            onSuccess={onPositionChange}
+          />
+          <ChairCallsDialog
+            chair={callsChair}
+            onClose={() => setCallsChair(null)}
+            services={services}
+            timezone={timezone}
+            onSuccess={onPositionChange}
+          />
+        </>
+      )}
+
       <SavePresetDialog
         open={savePresetOpen}
         onOpenChange={setSavePresetOpen}
@@ -904,9 +1049,9 @@ export function ProjectPositions({
         chairNumber={offerChairNumber}
         musicians={musicians}
         existingOfferMusicianIds={offerExistingIds}
-        basePay={basePay}
+        basePay={offerBasePay}
         leaderFee={leaderFee}
-        suggestedCustomPay={suggestedCustomPay}
+        suggestedCustomPay={offerSuggestedPay}
         projectEndDate={projectEndDate}
         timezone={timezone}
         nextVacantCount={offerInstrumentId ? positions.filter(p => p.instrument_id === offerInstrumentId && p.status === 'vacant' && p.id !== offerPositionId).length : 0}
