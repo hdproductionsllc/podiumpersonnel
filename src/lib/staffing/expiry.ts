@@ -71,6 +71,9 @@ export function capNoExpiryAtGigStart(
   return ahead.length > 0 ? new Date(Math.min(...ahead)).toISOString() : null
 }
 
+/** The cascade makes no offer once the gig's first service is less than this far away. */
+export const CASCADE_MIN_LEAD_MS = 2 * HOUR_MS
+
 /**
  * The deadline of an offer the auto-cascade makes (owner decision, Release 1
  * batch 2): the same response window the ended offer gave (its expires_at
@@ -79,7 +82,15 @@ export function capNoExpiryAtGigStart(
  * gig's first service start.
  *
  * Returns null when there is no time left to answer: the gig's first service
- * has already started. The cascade then does not offer at all.
+ * starts within CASCADE_MIN_LEAD_MS (or has started). The cascade then does
+ * not offer at all; the admins get their usual decline / expiry email and pick
+ * someone themselves. Without this floor, an offer made minutes before the
+ * downbeat would give its musician minutes to answer, and the expire cron
+ * (every 5 minutes) would walk the whole call list emailing offers nobody can
+ * realistically take up.
+ *
+ * The floor is on the time left before the gig, not on the window: an admin
+ * who chose a short window (e.g. 30 minutes) gets that same short window again.
  */
 export function cascadeExpiresAt(
   ended: { sent_at?: string | null; expires_at?: string | null },
@@ -97,7 +108,7 @@ export function cascadeExpiresAt(
     .map((s) => (s ? new Date(s).getTime() : NaN))
     .filter((t) => Number.isFinite(t))
   const firstStart = starts.length > 0 ? Math.min(...starts) : null
-  if (firstStart !== null && firstStart <= now) return null
+  if (firstStart !== null && firstStart - now < CASCADE_MIN_LEAD_MS) return null
 
   const end = firstStart === null ? now + window : Math.min(now + window, firstStart)
   return new Date(end).toISOString()

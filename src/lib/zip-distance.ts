@@ -24,22 +24,29 @@ function toRad(deg: number): number {
 }
 
 /**
- * Check if a musician is within their service radius of a venue
+ * Check if a musician is within their service radius of a venue.
+ *
+ * `strict`: throw when the coordinate lookup fails, instead of falling back to
+ * the zip-prefix guess (the auto-cascade must not act on a guess it made
+ * because a read failed).
  */
 export async function isWithinServiceArea(
   supabase: any,
   musicianZip: string | null,
   venueZip: string | null,
-  radiusMiles: number | null
+  radiusMiles: number | null,
+  opts: { strict?: boolean } = {}
 ): Promise<boolean> {
   if (!musicianZip || !venueZip) return true // If no zip, assume they can service
   if (!radiusMiles) radiusMiles = 50 // Default 50 miles
 
   // Look up coordinates for both zips
-  const { data: coords } = await supabase
+  const { data: coords, error } = await supabase
     .from('zip_coordinates')
     .select('zip, lat, lng')
     .in('zip', [musicianZip, venueZip])
+
+  if (error && opts.strict) throw error
 
   if (!coords || coords.length < 2) {
     // If we don't have coordinates, fall back to prefix matching

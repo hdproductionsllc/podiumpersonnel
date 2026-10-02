@@ -214,7 +214,9 @@ GRANT EXECUTE ON FUNCTION cascade_refusal(UUID) TO service_role;
 --   One transaction. Locks the chair (the order claim_chair and create_offer
 --   use, so none of them deadlock), checks cascade_refusal, checks the
 --   musician (same organization, active, no live or accepted offer on this
---   gig, under create_offer's per-musician lock), then inserts the offer with
+--   gig, under create_offer's per-musician lock; has not already had a turn at
+--   this chair; not booked on another gig at the same time, under a lock per
+--   musician that every automatic offer takes last), then inserts the offer with
 --   cascaded_from_offer_id = the ended offer, marks the chair offered, and
 --   records offer.created and cascade.offered as the system. created_by stays
 --   NULL: no admin sent it.
@@ -225,7 +227,8 @@ GRANT EXECUTE ON FUNCTION cascade_refusal(UUID) TO service_role;
 --
 --   Returns {result: 'created', offer: {...}} or {result: <reason>}, where the
 --   reason is one of cascade_refusal's or no_time_left, musician_not_found,
---   wrong_organization, musician_inactive, musician_has_active_offer. Two
+--   wrong_organization, musician_inactive, musician_has_active_offer,
+--   musician_had_turn, musician_has_conflict. Two
 --   callers for the same ended offer queue on the chair's lock and the second
 --   gets already_cascaded; if one ever slipped past, the unique index
 --   contract_offers_one_cascade_per_trigger refuses its row and it gets
@@ -294,6 +297,44 @@ BEGIN
     RETURN jsonb_build_object('result', 'musician_has_active_offer');
   END IF;
 
+  -- Their turn at this chair is over: they declined it, let it lapse, had it
+  -- withdrawn or replaced, or dropped it. The caller's candidate list leaves
+  -- them out already; this holds even if that list was read wrong.
+  IF EXISTS (
+    SELECT 1 FROM contract_offers
+    WHERE project_position_id = v_pos.id
+      AND musician_id = p_musician_id
+      AND status IN ('declined', 'expired', 'superseded', 'rescinded', 'released')
+  ) THEN
+    RETURN jsonb_build_object('result', 'musician_had_turn');
+  END IF;
+
+  -- Booked on another gig at the same time: an accepted offer, or one still
+  -- waiting inside its deadline, whose services overlap this gig's (a service
+  -- with no usable end time counts as 3 hours, as src/lib/staffing/conflicts.ts
+  -- does). The caller checked this too, but two automatic offers on different
+  -- gigs could each have read "free"; they queue on this lock, taken last so it
+  -- cannot deadlock with the locks above, and the second sees the first.
+  -- Outside commitments (competing_schedules) are only checked by the caller.
+  PERFORM pg_advisory_xact_lock(hashtextextended('cascade_musician:' || p_musician_id, 0));
+  IF EXISTS (
+    SELECT 1
+      FROM contract_offers o
+      JOIN project_positions opp ON opp.id = o.project_position_id
+      JOIN services theirs ON theirs.project_id = opp.project_id
+      JOIN services ours ON ours.project_id = v_pos.project_id
+     WHERE o.musician_id = p_musician_id
+       AND opp.project_id <> v_pos.project_id
+       AND (o.status = 'accepted'
+            OR (o.status IN ('pending', 'viewed') AND (o.expires_at IS NULL OR o.expires_at >= v_now)))
+       AND theirs.start_time < CASE WHEN ours.end_time > ours.start_time THEN ours.end_time
+                                    ELSE ours.start_time + interval '3 hours' END
+       AND ours.start_time < CASE WHEN theirs.end_time > theirs.start_time THEN theirs.end_time
+                                  ELSE theirs.start_time + interval '3 hours' END
+  ) THEN
+    RETURN jsonb_build_object('result', 'musician_has_conflict');
+  END IF;
+
   BEGIN
     INSERT INTO contract_offers
       (project_position_id, musician_id, status, sent_at, expires_at, custom_pay,
@@ -343,7 +384,15 @@ GRANT EXECUTE ON FUNCTION cascade_offer(UUID, UUID, TIMESTAMPTZ, NUMERIC, JSONB,
 --   the ended offer and records cascade.exhausted as the system. Returns
 --   'marked' (the caller sends the one admin email) or the refusal reason;
 --   a second call for the same offer gets 'already_exhausted'.
-CREATE OR REPLACE FUNCTION mark_cascade_exhausted(p_trigger_offer_id UUID)
+--
+--   p_details: what the caller saw, added to the cascade.exhausted event
+--   (how many were passed over for a conflict, who was free but had no email).
+--
+--   An earlier draft of this file had no p_details; drop that one so only one
+--   mark_cascade_exhausted exists.
+DROP FUNCTION IF EXISTS mark_cascade_exhausted(UUID);
+
+CREATE OR REPLACE FUNCTION mark_cascade_exhausted(p_trigger_offer_id UUID, p_details JSONB DEFAULT NULL)
 RETURNS TEXT
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -370,13 +419,13 @@ BEGIN
    WHERE pp.id = v_pos_id;
   PERFORM log_staffing_event(v_org, 'system', NULL, 'offer', p_trigger_offer_id, 'cascade.exhausted',
     NULL,
-    jsonb_build_object('position_id', v_pos_id));
+    COALESCE(p_details, '{}'::jsonb) || jsonb_build_object('position_id', v_pos_id));
   RETURN 'marked';
 END;
 $$;
 
-REVOKE ALL ON FUNCTION mark_cascade_exhausted(UUID) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION mark_cascade_exhausted(UUID) TO service_role;
+REVOKE ALL ON FUNCTION mark_cascade_exhausted(UUID, JSONB) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION mark_cascade_exhausted(UUID, JSONB) TO service_role;
 
 -- ===========================================================================
 -- verify:

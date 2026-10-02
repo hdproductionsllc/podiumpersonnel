@@ -83,7 +83,7 @@ const REASONS = {
   already_exhausted: 'the list already ran out for it',
   chair_filled: 'the chair is filled',
   chair_has_live_offer: 'someone else is already being asked',
-  no_time_left: "the gig's first service has started",
+  no_time_left: "the gig's first service is less than 2 hours away (or has started), too late for an automatic offer",
   error: 'something failed (see above)',
 }
 
@@ -206,7 +206,8 @@ async function previewOrg(db, planner, org, opts, totals) {
         say(`    ${label}: ${ask}. If it ends unanswered or declined, Podium would offer it to ${name(plan.musician)} at ${describePay(plan.terms)}, answer by ${when(plan.terms.expiresAt, tz)}${plan.skippedConflicts ? ` (passing over ${plan.skippedConflicts} with a conflict)` : ''}.`)
       } else if (plan.kind === 'exhausted') {
         counts.wouldEmailNobodyLeft++
-        say(`    ${label}: ${ask}. If it ends, nobody free is left: Podium would email the admins once ("please pick someone").`)
+        const unreachable = plan.unreachable.length ? ` (free but no email address: ${plan.unreachable.map(name).join(', ')})` : ''
+        say(`    ${label}: ${ask}. If it ends, nobody free is left${unreachable}: Podium would email the admins once ("please pick someone").`)
       } else {
         counts.wouldDoNothing[plan.reason] = (counts.wouldDoNothing[plan.reason] || 0) + 1
         say(`    ${label}: ${ask}. Podium would do nothing: ${REASONS[plan.reason] || plan.reason}.`)

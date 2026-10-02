@@ -10,7 +10,7 @@ import { termsSnapshot, type OfferDelivery } from './offers'
 import { countChairs } from './respond'
 import { isMissingFunction } from './rpc'
 import { getOrgStaffingSettings } from './settings'
-import { planCascade, type CascadeContext, type CascadePlan, type CascadeSkipReason } from './cascade-plan'
+import { CascadePlanError, planCascade, type CascadePlan, type CascadeSkipReason } from './cascade-plan'
 
 export { planCascade, rankForCascade, cascadeTerms, type CascadeSkipReason, type CascadePlan } from './cascade-plan'
 
@@ -72,22 +72,32 @@ export type AdvanceResult =
 const QUIET_SKIPS: readonly CascadeSkipReason[] = ['auto_off', 'not_ready']
 
 /**
- * How many times to re-plan when the musician chosen became unavailable
- * between choosing and offering (offered elsewhere on the gig, deactivated).
+ * How many musicians to try when the one chosen became unavailable between
+ * choosing and offering (offered elsewhere meanwhile, deactivated). Each
+ * refused musician is left out of the next attempt, so this only bounds a run
+ * of genuine races.
  */
 const MAX_ATTEMPTS = 3
 
 /** Refusals from cascade_offer that are about the musician, not the chair: ask the next one. */
-const MUSICIAN_REFUSALS = ['musician_not_found', 'wrong_organization', 'musician_inactive', 'musician_has_active_offer']
+const MUSICIAN_REFUSALS = [
+  'musician_not_found',
+  'wrong_organization',
+  'musician_inactive',
+  'musician_has_active_offer',
+  'musician_had_turn',
+  'musician_has_conflict',
+]
 
 const MIGRATION_096_MISSING =
   'database function missing: migration 096 (scripts/sql/096-auto-cascade-settings.paste.sql) has not been applied'
 
 export async function advance(service: SupabaseClient, input: AdvanceInput): Promise<AdvanceResult> {
   let organizationId: string | undefined
+  const refused: string[] = []
   try {
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      const plan = await planCascade(service, input)
+      const plan = await planCascade(service, { ...input, excludeMusicianIds: refused })
       organizationId = (plan.kind === 'skip' ? plan.organizationId : undefined) ?? plan.context?.project?.organization_id ?? organizationId
 
       if (plan.kind === 'skip') return await skipped(input, plan.reason, organizationId)
@@ -95,10 +105,12 @@ export async function advance(service: SupabaseClient, input: AdvanceInput): Pro
 
       const made = await offerNext(service, input, plan)
       if (made !== 'ask_next') return made
+      refused.push(plan.musician.id)
     }
     console.error(`cascade: offer ${input.triggerOfferId}: gave up after ${MAX_ATTEMPTS} musicians became unavailable`)
-    return await skipped(input, 'error', organizationId, { detail: 'candidates_kept_becoming_unavailable' })
+    return await skipped(input, 'error', organizationId, { detail: 'candidates_kept_becoming_unavailable', refused_musician_ids: refused })
   } catch (err) {
+    if (err instanceof CascadePlanError) organizationId ??= err.organizationId
     console.error(`cascade: offer ${input.triggerOfferId} on position ${input.positionId} failed; nothing more was done:`, err)
     return skipped(input, 'error', organizationId, { detail: err instanceof Error ? err.message : String(err) }).catch(() => ({
       outcome: 'skipped' as const,
@@ -262,7 +274,14 @@ async function exhaust(service: SupabaseClient, input: AdvanceInput, plan: Exhau
   const project = context.project
   const organizationId: string | undefined = project?.organization_id
 
-  const { data, error } = await service.rpc('mark_cascade_exhausted', { p_trigger_offer_id: input.triggerOfferId })
+  const { data, error } = await service.rpc('mark_cascade_exhausted', {
+    p_trigger_offer_id: input.triggerOfferId,
+    p_details: {
+      trigger: input.trigger,
+      skipped_conflicts: plan.skippedConflicts,
+      skipped_no_email: plan.unreachable.map((c) => c.id),
+    },
+  })
   if (error) {
     if (isMissingFunction(error, 'mark_cascade_exhausted')) {
       console.error(`cascade: offer ${input.triggerOfferId}: ${MIGRATION_096_MISSING}`)
@@ -281,7 +300,7 @@ async function exhaust(service: SupabaseClient, input: AdvanceInput, plan: Exhau
   }
 
   try {
-    const message = await exhaustedEmail(service, input, context, adminEmails)
+    const message = await exhaustedEmail(service, input, plan, adminEmails)
     const result = await sendCascadeExhaustedEmail(message)
     await logEmail({
       organizationId: organizationId!,
@@ -293,7 +312,13 @@ async function exhaust(service: SupabaseClient, input: AdvanceInput, plan: Exhau
       offerId: input.triggerOfferId,
       resendEmailId: result?.id || null,
       status: result?.suppressed ? 'suppressed' : 'sent',
-      metadata: { allRecipients: adminEmails, positionId: input.positionId, trigger: input.trigger },
+      metadata: {
+        allRecipients: adminEmails,
+        positionId: input.positionId,
+        trigger: input.trigger,
+        skippedConflicts: plan.skippedConflicts,
+        skippedNoEmail: plan.unreachable.map((c) => c.id),
+      },
       body: result?.emailHtml,
     })
     return { outcome: 'exhausted', notified: true }
@@ -306,10 +331,10 @@ async function exhaust(service: SupabaseClient, input: AdvanceInput, plan: Exhau
 async function exhaustedEmail(
   service: SupabaseClient,
   input: AdvanceInput,
-  context: CascadeContext,
+  plan: ExhaustedPlan,
   adminEmails: string[]
 ): Promise<Parameters<typeof sendCascadeExhaustedEmail>[0]> {
-  const { project, organization, instrument, position, services, trigger } = context
+  const { project, organization, instrument, position, services, trigger } = plan.context
   const firstStart = [...services]
     .map((s) => s.start_time)
     .filter(Boolean)
@@ -326,5 +351,6 @@ async function exhaustedEmail(
     lastOutcome: input.trigger,
     dashboardUrl: `${getAppUrl()}/dashboard/projects?expand=${project?.id}`,
     performanceDate: firstStart ? formatPerformanceDateForSubject(firstStart, timezone) : '',
+    noEmailNames: plan.unreachable.map((c) => `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim()).filter(Boolean),
   }
 }

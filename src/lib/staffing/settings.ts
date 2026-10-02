@@ -11,8 +11,10 @@ import { isMissingColumn } from './rpc'
  *   project_positions.auto_cascade_disabled  per chair, off everywhere
  *
  * 096 is pasted before the code that reads it, but every reader here tolerates
- * the columns being absent (returns null, logs once per call) so a deploy that
- * lands first degrades to "no switches shown" instead of breaking a page.
+ * the columns being absent (returns null) so a deploy that lands first
+ * degrades to "no switches shown" instead of breaking a page. The missing
+ * migration is reported once per server process, not on every decline and
+ * expiry; any other read failure is logged every time.
  */
 
 /**
@@ -35,6 +37,19 @@ export interface OrgStaffingSettings {
 const MIGRATION_096_MISSING =
   'migration 096 (scripts/sql/096-auto-cascade-settings.paste.sql) has not been applied'
 
+let reportedMissing096 = false
+
+/** Log a failed read of the switches: the missing migration once per process, anything else always. */
+function reportReadFailure(what: string, error: unknown) {
+  if (isMissingColumn(error)) {
+    if (reportedMissing096) return
+    reportedMissing096 = true
+    console.warn(`${what} unavailable: ${MIGRATION_096_MISSING} (reported once per server process)`)
+    return
+  }
+  console.error(`${what} unavailable:`, error)
+}
+
 /**
  * The organization's two switches, or null when they cannot be read (096 not
  * applied, or the row is not visible to this client).
@@ -49,10 +64,7 @@ export async function getOrgStaffingSettings(
     .eq('id', organizationId)
     .maybeSingle()
   if (error) {
-    console.error(
-      `staffing settings for org ${organizationId} unavailable${isMissingColumn(error) ? `: ${MIGRATION_096_MISSING}` : ''}:`,
-      error
-    )
+    reportReadFailure(`staffing settings for org ${organizationId}`, error)
     return null
   }
   if (!data) return null
@@ -73,10 +85,7 @@ export async function getAutoCascadeDisabledChairIds(
     .eq('project.organization_id', organizationId)
     .eq('auto_cascade_disabled', true)
   if (error) {
-    console.error(
-      `auto-offer chair switches for org ${organizationId} unavailable${isMissingColumn(error) ? `: ${MIGRATION_096_MISSING}` : ''}:`,
-      error
-    )
+    reportReadFailure(`auto-offer chair switches for org ${organizationId}`, error)
     return null
   }
   return (data || []).map((row: { id: string }) => row.id)

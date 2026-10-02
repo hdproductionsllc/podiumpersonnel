@@ -859,6 +859,8 @@ interface SendCascadeExhaustedParams {
   lastOutcome: 'declined' | 'expired' | 'dropped'
   dashboardUrl: string
   performanceDate?: string
+  /** Free on the call list, but no email address on file. */
+  noEmailNames?: string[]
   terms?: TermDictionary
 }
 
@@ -879,6 +881,7 @@ export async function sendCascadeExhaustedEmail(params: SendCascadeExhaustedPara
       lastOutcome: params.lastOutcome,
       performanceDate: params.performanceDate,
       dashboardUrl: params.dashboardUrl,
+      noEmailNames: params.noEmailNames,
       terms,
     }),
     errorContext: 'cascade exhausted',

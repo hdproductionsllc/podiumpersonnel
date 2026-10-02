@@ -85,6 +85,11 @@ export function anyOverlap(a: TimeWindow[], b: TimeWindow[]): boolean {
  *
  * `excludeProjectId` is the project being staffed — its own offers are not a
  * conflict with itself.
+ *
+ * `strict`: throw when a read fails instead of reporting "no conflicts". The
+ * admin's suggestion list tolerates a failed read (a person looks at it before
+ * anything is sent); the auto-cascade does not, because "no conflicts found"
+ * there means an offer goes out by itself to someone who may be booked.
  */
 export async function findConflicts(
   supabase: SupabaseClient,
@@ -94,6 +99,7 @@ export async function findConflicts(
     excludeProjectId: string
     /** Pre-fetched competing_schedules, keyed by musician id, to avoid a re-query. */
     externalByMusician?: Map<string, { title: string; start_time: string; end_time: string }[]>
+    strict?: boolean
   }
 ): Promise<Map<string, Conflict[]>> {
   const result = new Map<string, Conflict[]>()
@@ -124,7 +130,7 @@ export async function findConflicts(
   }
 
   // ---- 2. Active offers on other Podium projects ---------------------------
-  const { data: otherOffers } = await supabase
+  const { data: otherOffers, error: offersError } = await supabase
     .from('contract_offers')
     .select(`
       musician_id,
@@ -138,6 +144,7 @@ export async function findConflicts(
     .in('musician_id', opts.musicianIds)
     .in('status', ['pending', 'viewed', 'accepted'])
 
+  if (offersError && opts.strict) throw offersError
   if (!otherOffers || otherOffers.length === 0) return result
 
   // A pending offer that has already lapsed holds nothing.
@@ -152,11 +159,12 @@ export async function findConflicts(
 
   const otherProjectIds = [...new Set(relevant.map((o) => o.project_position.project_id))]
 
-  const { data: otherServices } = await supabase
+  const { data: otherServices, error: servicesError } = await supabase
     .from('services')
     .select('project_id, start_time, end_time')
     .in('project_id', otherProjectIds)
 
+  if (servicesError && opts.strict) throw servicesError
   if (!otherServices || otherServices.length === 0) return result
 
   // Which of those projects actually clash with ours, by time.

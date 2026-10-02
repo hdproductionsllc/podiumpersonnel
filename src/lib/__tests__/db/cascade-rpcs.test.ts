@@ -34,6 +34,9 @@ interface Gig {
   projectId: string
   chairId: string
   otherChairId: string
+  instrumentId: string
+  /** The first service's start. */
+  startsAt: string
   musicians: string[]
 }
 
@@ -48,9 +51,11 @@ async function gig(opts: { autoCascade?: boolean; projectStatus?: string } = {})
     projectId: randomUUID(),
     chairId: randomUUID(),
     otherChairId: randomUUID(),
+    instrumentId: randomUUID(),
+    startsAt: FUTURE(),
     musicians: [randomUUID(), randomUUID(), randomUUID()],
   }
-  const instrumentId = randomUUID()
+  const instrumentId = g.instrumentId
   await db.query('insert into auth.users (id, email) values ($1, $2)', [g.adminUserId, `admin-${g.adminUserId}@example.test`])
   await db.query('insert into organizations (id, name, slug, auto_cascade) values ($1, $2, $3, $4)', [
     g.orgId,
@@ -77,7 +82,7 @@ async function gig(opts: { autoCascade?: boolean; projectStatus?: string } = {})
   ])
   await db.query("insert into services (project_id, name, service_type, start_time) values ($1, 'Ceremony', 'performance', $2)", [
     g.projectId,
-    FUTURE(),
+    g.startsAt,
   ])
   await db.query('insert into project_positions (id, project_id, instrument_id, chair_number) values ($1, $2, $3, 1), ($4, $2, $3, 2)', [
     g.chairId,
@@ -100,6 +105,25 @@ async function endedOffer(g: Gig, status = 'declined', musician = g.musicians[0]
   return id
 }
 
+/** Another active gig in the same organization, one chair, its one service starting at `startsAt`. */
+async function sameOrgGig(g: Gig, startsAt: string, endsAt: string | null = null): Promise<{ projectId: string; chairId: string }> {
+  const projectId = randomUUID()
+  const chairId = randomUUID()
+  await db.query("insert into projects (id, organization_id, name, status) values ($1, $2, 'Other gig', 'active')", [projectId, g.orgId])
+  await db.query(
+    "insert into services (project_id, name, service_type, start_time, end_time) values ($1, 'Show', 'performance', $2, $3)",
+    [projectId, startsAt, endsAt]
+  )
+  await db.query('insert into project_positions (id, project_id, instrument_id, chair_number) values ($1, $2, $3, 1)', [
+    chairId,
+    projectId,
+    g.instrumentId,
+  ])
+  return { projectId, chairId }
+}
+
+const HOURS = (iso: string, h: number) => new Date(new Date(iso).getTime() + h * 60 * 60 * 1000).toISOString()
+
 type CascadeResult = { result: string; offer?: { id: string; expires_at: string } }
 
 async function cascade(client: Client, trigger: string, musician: string, expiresAt: string | null = SOON()): Promise<CascadeResult> {
@@ -110,8 +134,10 @@ async function cascade(client: Client, trigger: string, musician: string, expire
   return rows[0].r
 }
 
-async function markExhausted(client: Client, trigger: string): Promise<string> {
-  const { rows } = await client.query('select mark_cascade_exhausted($1) as r', [trigger])
+async function markExhausted(client: Client, trigger: string, details?: Record<string, unknown>): Promise<string> {
+  const { rows } = details
+    ? await client.query('select mark_cascade_exhausted($1, $2) as r', [trigger, JSON.stringify(details)])
+    : await client.query('select mark_cascade_exhausted($1) as r', [trigger])
   return rows[0].r
 }
 
@@ -234,6 +260,73 @@ describe('cascade_offer', () => {
       expect((await cascade(db, trigger, randomUUID())).result).toBe('musician_not_found')
       expect(await cascadedFrom(trigger)).toHaveLength(0)
     })
+
+    it('the musician already had their turn at this chair', async () => {
+      const g = await gig()
+      const trigger = await endedOffer(g, 'declined', g.musicians[0])
+      // Whoever just declined, and anyone who earlier let it lapse, had it withdrawn or dropped it.
+      expect((await cascade(db, trigger, g.musicians[0])).result).toBe('musician_had_turn')
+      for (const status of ['expired', 'superseded', 'rescinded', 'released']) {
+        const m = randomUUID()
+        await db.query('insert into musicians (id, organization_id, first_name, last_name, email) values ($1, $2, $3, $4, $5)', [
+          m,
+          g.orgId,
+          status,
+          'Player',
+          `${status}-${m}@example.test`,
+        ])
+        await endedOffer(g, status, m)
+        expect((await cascade(db, trigger, m)).result).toBe('musician_had_turn')
+      }
+      // A turn at the OTHER chair does not count here.
+      await endedOffer(g, 'declined', g.musicians[1], g.otherChairId)
+      expect((await cascade(db, trigger, g.musicians[1])).result).toBe('created')
+    })
+  })
+
+  describe('booked on another gig at the same time', () => {
+    it('an accepted or still-open offer elsewhere that overlaps is refused; one that does not overlap, or has lapsed, is not', async () => {
+      const g = await gig()
+      const trigger = await endedOffer(g)
+      const m = g.musicians[1]
+
+      // Same evening, an hour after our service starts (ours has no end time: 3 hours assumed).
+      const clash = await sameOrgGig(g, HOURS(g.startsAt, 1))
+      const accepted = await endedOffer(g, 'accepted', m, clash.chairId)
+      expect((await cascade(db, trigger, m)).result).toBe('musician_has_conflict')
+
+      // Still waiting on an answer, inside its deadline: holds them too.
+      await db.query("update contract_offers set status = 'pending', expires_at = $2 where id = $1", [accepted, SOON()])
+      expect((await cascade(db, trigger, m)).result).toBe('musician_has_conflict')
+
+      // Lapsed but not yet collected by the expire cron: holds nobody.
+      await db.query('update contract_offers set expires_at = $2 where id = $1', [accepted, new Date(Date.now() - 60_000).toISOString()])
+      expect((await cascade(db, trigger, m)).result).toBe('created')
+    })
+
+    it('touching end to start, or on another day, is not a conflict', async () => {
+      const g = await gig()
+      const trigger = await endedOffer(g)
+      const m = g.musicians[1]
+      const after = await sameOrgGig(g, HOURS(g.startsAt, 3)) // starts exactly when ours (3 hours assumed) ends
+      await endedOffer(g, 'accepted', m, after.chairId)
+      const nextDay = await sameOrgGig(g, HOURS(g.startsAt, 24), HOURS(g.startsAt, 26))
+      await endedOffer(g, 'accepted', m, nextDay.chairId)
+      expect((await cascade(db, trigger, m)).result).toBe('created')
+    })
+
+    it('two automatic offers on two gigs that night, racing for the same musician: one gets them', async () => {
+      const g = await gig()
+      const m = g.musicians[1]
+      const tonight = await sameOrgGig(g, HOURS(g.startsAt, 1))
+      const here = await endedOffer(g, 'declined', g.musicians[0])
+      const there = await endedOffer(g, 'declined', g.musicians[2], tonight.chairId)
+
+      const results = await Promise.all([cascade(db, here, m), cascade(other, there, m)])
+      expect(results.map((r) => r.result).sort()).toEqual(['created', 'musician_has_conflict'])
+      const live = await db.query("select id from contract_offers where musician_id = $1 and status = 'pending'", [m])
+      expect(live.rowCount).toBe(1)
+    })
   })
 })
 
@@ -250,6 +343,20 @@ describe('mark_cascade_exhausted', () => {
     expect(history.rows).toEqual([{ actor_type: 'system' }])
     // ...and an exhausted offer cascades no more.
     expect((await cascade(db, trigger, g.musicians[1])).result).toBe('already_exhausted')
+  })
+
+  it('records what the caller saw (who was passed over) on the cascade.exhausted event', async () => {
+    const g = await gig()
+    const trigger = await endedOffer(g, 'declined')
+    const details = { trigger: 'declined', skipped_conflicts: 2, skipped_no_email: [g.musicians[2]] }
+    expect(await markExhausted(db, trigger, details)).toBe('marked')
+    const history = await db.query("select after from staffing_events where entity_id = $1 and action = 'cascade.exhausted'", [trigger])
+    expect(history.rows).toEqual([{ after: { ...details, position_id: g.chairId } }])
+  })
+
+  it('exists once (the earlier one-argument draft is gone)', async () => {
+    const { rows } = await db.query("select count(*)::int as n from pg_proc where proname = 'mark_cascade_exhausted'")
+    expect(rows[0].n).toBe(1)
   })
 
   it('two connections at once: one email claim', async () => {

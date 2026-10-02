@@ -40,6 +40,10 @@ const state = vi.hoisted(() => ({
   q: undefined as unknown as QuartetFixture,
   conflicted: new Set<string>(),
   noEmail: new Set<string>(),
+  /** Both violin chairs draw on one pool (v1's players, then v2's), as the real ranking does by instrument. */
+  sharedViolins: false,
+  /** Make the candidate lookup fail, as a database read error does in strict mode. */
+  candidatesError: null as Error | null,
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -72,20 +76,34 @@ vi.mock('@/lib/email/client', () => ({ logEmailConfig: vi.fn() }))
 vi.mock('@/lib/venue-attach', () => ({ attachVenueDetails: vi.fn(async () => {}) }))
 
 /**
- * Stands in for the ranking engine: everyone ranked for the chair who is not
- * seated on the gig, not holding a live or accepted offer on it, and has not
- * had their turn at this chair, best first; state.conflicted marks clashes.
- * Leaders first on chair 1, as the real one sorts for the admin's suggestions.
+ * Stands in for the ranking engine, with its rules: everyone ranked for the
+ * chair who is not seated on the gig, not holding an active offer on it, and
+ * has not had their turn at this chair, best first; state.conflicted marks
+ * clashes. "Active" is deadline-aware (a lapsed pending offer holds nobody),
+ * except with { forCascade: true }, where any pending, viewed or accepted
+ * offer counts, as cascade_offer counts it. Strict reads throw
+ * state.candidatesError.
  */
 vi.mock('@/lib/staffing/candidates', () => ({
-  getNextCandidates: vi.fn(async (_db: unknown, positionId: string) => {
+  getNextCandidates: vi.fn(async (_db: unknown, positionId: string, _limit?: number, options: { forCascade?: boolean } = {}) => {
+    if (state.candidatesError) {
+      if (options.forCascade) throw state.candidatesError
+      return { candidates: [], totalAvailable: 0 }
+    }
     const q = state.q
     const key = (Object.keys(QUARTET_CHAIRS) as ChairKey[]).find((k) => QUARTET_CHAIRS[k].id === positionId)!
     const t = q.db.tables
+    const now = Date.now()
     const seated = new Set(t.project_positions.map((p) => p.musician_id).filter(Boolean))
-    const busy = new Set(t.contract_offers.filter((o) => ['pending', 'viewed', 'accepted'].includes(o.status)).map((o) => o.musician_id))
-    const tried = new Set(q.offers(key).map((o) => o.musician_id))
-    const candidates = QUARTET_RANKING[key]
+    const holds = (o: Row) =>
+      o.status === 'accepted' ||
+      (['pending', 'viewed'].includes(o.status) && (options.forCascade || !o.expires_at || new Date(o.expires_at).getTime() >= now))
+    const busy = new Set(t.contract_offers.filter(holds).map((o) => o.musician_id))
+    const tried = new Set(
+      q.offers(key).filter((o) => ['declined', 'expired', 'superseded', 'rescinded', 'released'].includes(o.status)).map((o) => o.musician_id)
+    )
+    const pool = state.sharedViolins && (key === 'v1' || key === 'v2') ? [...QUARTET_RANKING.v1, ...QUARTET_RANKING.v2] : QUARTET_RANKING[key]
+    const candidates = pool
       .filter((id) => !seated.has(id) && !busy.has(id) && !tried.has(id))
       .map((id) => q.db.row('musicians', id)!)
       .filter((m) => m.is_active !== false)
@@ -107,7 +125,7 @@ vi.mock('@/lib/staffing/candidates', () => ({
 import { POST as declinePOST } from '@/app/api/gig/[token]/decline/route'
 import { GET as expireGET } from '@/app/api/cron/expire-offers/route'
 import { advance, autoOfferNote, rankForCascade, cascadeTerms, planCascade } from '@/lib/staffing/cascade'
-import { cascadeExpiresAt } from '@/lib/staffing/expiry'
+import { cascadeExpiresAt, CASCADE_MIN_LEAD_MS } from '@/lib/staffing/expiry'
 import * as email from '@/lib/email/send'
 import { logEmail } from '@/lib/email/log'
 import { AdminOfferResponseEmail } from '@/lib/email/templates/admin-offer-response'
@@ -127,6 +145,8 @@ beforeEach(() => {
   delete process.env.CRON_ENABLED
   state.conflicted = new Set()
   state.noEmail = new Set()
+  state.sharedViolins = false
+  state.candidatesError = null
   state.q = buildQuartet()
   state.q.db.constraint = cascadeConstraints
   state.q.db.tables.organizations = [{ ...QUARTET_ORG, auto_cascade: true, allow_worker_drop: false }]
@@ -284,6 +304,21 @@ describe('decline -> the next person is offered automatically', () => {
     await decline(first)
     expect(cascadedFrom(first.id).map((o) => o.musician_id)).toEqual([R.viola[2]])
   })
+
+  it('"nobody left" names whoever is free but has no email, and the history records who was passed over', async () => {
+    state.noEmail.add(R.viola[1])
+    state.conflicted.add(R.viola[2])
+    const first = adminOffer('viola', R.viola[0])
+    await decline(first)
+
+    expect(cascadedFrom(first.id)).toHaveLength(0)
+    expect(calls(email.sendCascadeExhaustedEmail)).toEqual([expect.objectContaining({ noEmailNames: ['VIOLAB Player'] })])
+    expect(events('cascade.exhausted')).toEqual([
+      expect.objectContaining({
+        after: expect.objectContaining({ position_id: QUARTET_CHAIRS.viola.id, skipped_conflicts: 1, skipped_no_email: [R.viola[1]] }),
+      }),
+    ])
+  })
 })
 
 describe('expiry -> the next person is offered automatically', () => {
@@ -324,6 +359,28 @@ describe('expiry -> the next person is offered automatically', () => {
     lapsed.sent_at = new Date(Date.now() - 400 * 24 * HOUR).toISOString() // a 400-day window
     await runCron()
     expect(cascadedFrom(lapsed.id)[0].expires_at).toBe(new Date(QUARTET_SERVICES[0].start_time).toISOString())
+  })
+
+  it('two chairs of one instrument lapsing in the same run are both offered on (no one is chosen twice)', async () => {
+    // One violin pool for both chairs, in call order: v1's players, then v2's.
+    state.sharedViolins = true
+    const pool = [...R.v1, ...R.v2]
+    pool.forEach((id, i) => (q().db.row('musicians', id)!.call_order = i + 1))
+    // Chair 1 to the first on the list, chair 2 to the second, same deadline.
+    const x = adminOffer('v1', pool[0], { windowHours: 0.5 })
+    const y = adminOffer('v2', pool[1], { windowHours: 0.5 })
+
+    const out = await runCron()
+    expect(out).toMatchObject({ expired: 2, autoOffered: 2 })
+    // Chair 1 expires first. The second on the list is still 'pending' on chair 2
+    // (lapsed, not yet collected), which cascade_offer refuses, so the planner
+    // leaves them out too and goes straight to the third.
+    expect(cascadedFrom(x.id).map((o) => o.musician_id)).toEqual([pool[2]])
+    // Chair 2: the third is now asked for chair 1; the first's turn was at chair 1,
+    // not chair 2, so they are next here (the same rule the admin's list uses).
+    expect(cascadedFrom(y.id).map((o) => o.musician_id)).toEqual([pool[0]])
+    expect(events('cascade.skipped')).toHaveLength(0)
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 
   it('a failure on one chair does not stop the run for the others', async () => {
@@ -504,6 +561,52 @@ describe('a cascade failure never touches the musician\'s decline', () => {
     const result = await advance(q().db as never, { positionId: QUARTET_CHAIRS.v2.id, triggerOfferId: row.id, trigger: 'declined' })
     expect(result).toMatchObject({ outcome: 'offered', musician: { id: R.v2[2] } })
   })
+
+  it('a musician the database refuses is not chosen again: Podium moves down the list', async () => {
+    const row = adminOffer('v2', R.v2[0])
+    row.status = 'declined'
+    const real = q().db.rpcs.cascade_offer
+    const tried: string[] = []
+    // The database keeps refusing R.v2[1] (say, booked elsewhere since the plan was read).
+    q().db.rpcs.cascade_offer = (db, args: { p_musician_id: string }) => {
+      tried.push(args.p_musician_id)
+      return args.p_musician_id === R.v2[1] ? { result: 'musician_has_conflict' } : real(db, args as never)
+    }
+    const result = await advance(q().db as never, { positionId: QUARTET_CHAIRS.v2.id, triggerOfferId: row.id, trigger: 'declined' })
+    expect(result).toMatchObject({ outcome: 'offered', musician: { id: R.v2[2] } })
+    expect(tried).toEqual([R.v2[1], R.v2[2]])
+  })
+
+  it('everyone left is refused by the database: the list counts as exhausted, not an error', async () => {
+    const row = adminOffer('v2', R.v2[0])
+    row.status = 'declined'
+    q().db.rpcs.cascade_offer = () => ({ result: 'musician_had_turn' })
+    const result = await advance(q().db as never, { positionId: QUARTET_CHAIRS.v2.id, triggerOfferId: row.id, trigger: 'declined' })
+    expect(result).toEqual({ outcome: 'exhausted', notified: true })
+    expect(calls(email.sendCascadeExhaustedEmail)).toHaveLength(1)
+  })
+
+  it('the candidate list cannot be read: nothing is marked exhausted and nobody is told "nobody left"', async () => {
+    state.candidatesError = new Error('upstream request timeout (504)')
+    const markExhausted = vi.spyOn(q().db.rpcs, 'mark_cascade_exhausted')
+    const row = adminOffer('v2', R.v2[0])
+    await decline(row)
+
+    expect(q().db.row('contract_offers', row.id)!.status).toBe('declined')
+    expect(q().db.row('contract_offers', row.id)!.cascade_exhausted_at).toBeFalsy()
+    expect(markExhausted).not.toHaveBeenCalled()
+    expect(calls(email.sendCascadeExhaustedEmail)).toHaveLength(0)
+    expect(calls(email.sendContractOfferEmail)).toHaveLength(0)
+    // The admins get the ordinary decline notice, and the failure is in the history.
+    expect(calls(email.sendAdminOfferResponseEmail)[0].autoOffer).toBeUndefined()
+    expect(events('cascade.skipped')).toEqual([
+      expect.objectContaining({ after: expect.objectContaining({ reason: 'error', detail: 'upstream request timeout (504)' }) }),
+    ])
+    // Not stranded: once the read works, the same ended offer still cascades.
+    state.candidatesError = null
+    const retry = await advance(q().db as never, { positionId: QUARTET_CHAIRS.v2.id, triggerOfferId: row.id, trigger: 'declined' })
+    expect(retry).toMatchObject({ outcome: 'offered', musician: { id: R.v2[1] } })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -534,8 +637,18 @@ describe('rankForCascade: call order only, never "can lead"', () => {
 
   it('skips conflicts and people with no address; no call order goes last', () => {
     const list = [c('busy', 1, { has_conflict: true }), c('silent', 2, { email: '' }), c('unranked', null), c('ok', 9)]
-    expect(rankForCascade(list)).toEqual({ next: expect.objectContaining({ id: 'ok' }), skippedConflicts: 1 })
+    expect(rankForCascade(list)).toEqual({
+      next: expect.objectContaining({ id: 'ok' }),
+      skippedConflicts: 1,
+      unreachable: [expect.objectContaining({ id: 'silent' })],
+    })
     expect(rankForCascade([c('busy', 1, { has_conflict: true })]).next).toBeNull()
+  })
+
+  it('leaves out musicians the database already refused in this run', () => {
+    const list = [c('refused', 1), c('next', 2), c('busy', 3, { has_conflict: true })]
+    expect(rankForCascade(list, ['refused'])).toEqual({ next: expect.objectContaining({ id: 'next' }), skippedConflicts: 1, unreachable: [] })
+    expect(rankForCascade(list, ['refused', 'next']).next).toBeNull()
   })
 })
 
@@ -573,6 +686,13 @@ describe('cascadeTerms and cascadeExpiresAt', () => {
     expect(cascadeExpiresAt({ sent_at: null, expires_at: null }, soon, now)).toBe(soon[0])
     const started = [new Date(now - HOUR).toISOString(), new Date(now + 5 * HOUR).toISOString()]
     expect(cascadeExpiresAt({ sent_at: null, expires_at: null }, started, now)).toBeNull()
+    // Less than CASCADE_MIN_LEAD_MS (2 hours) to the downbeat: no offer nobody could act on.
+    const imminent = [new Date(now + 2 * HOUR - 1).toISOString()]
+    expect(cascadeExpiresAt({ sent_at: null, expires_at: null }, imminent, now)).toBeNull()
+    expect(CASCADE_MIN_LEAD_MS).toBe(2 * HOUR)
+    // A short window the admin chose is kept as it is, not refused.
+    const halfHour = { sent_at: new Date(now - HOUR).toISOString(), expires_at: new Date(now - 0.5 * HOUR).toISOString() }
+    expect(cascadeExpiresAt(halfHour, gig, now)).toBe(new Date(now + 0.5 * HOUR).toISOString())
     expect(cascadeExpiresAt({ sent_at: null, expires_at: null }, [], now)).toBe(new Date(now + 48 * HOUR).toISOString())
   })
 })
@@ -655,5 +775,15 @@ describe('what the admins read', () => {
     )
     expect(theatre).toContain('dropped out')
     expect(theatre).not.toContain('musician')
+  })
+
+  it('the "nobody left" email names people passed over for having no email address', async () => {
+    const plain = await render(CascadeExhaustedEmail({ ...base, lastMusicianName: 'V2C Player', lastOutcome: 'declined' }))
+    expect(plain).not.toContain('no email address')
+    const one = (
+      await render(CascadeExhaustedEmail({ ...base, lastMusicianName: 'V2C Player', lastOutcome: 'declined', noEmailNames: ['Pat Doe'] }))
+    ).replace(/<!-- -->/g, '')
+    expect(one).toContain('free and reachable by email')
+    expect(one).toContain('Pat Doe</strong> is free but has no email address on file')
   })
 })

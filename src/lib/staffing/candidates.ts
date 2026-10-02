@@ -15,6 +15,26 @@ export interface Candidate {
   conflict_reason?: string | null
 }
 
+export interface CandidateOptions {
+  /**
+   * The auto-cascade's reading (cascade-plan.ts), which acts on the answer with
+   * nobody looking first:
+   *
+   *   - every read must succeed. A failed read throws instead of quietly
+   *     shrinking the list: an empty list would read as "nobody left" (a false
+   *     email to the admins, and the chair marked exhausted), a missing history
+   *     would re-offer the chair to someone who already said no, and missing
+   *     conflicts would offer it to someone booked elsewhere that night;
+   *   - anyone with a pending, viewed or accepted offer on this gig is left out
+   *     even when its deadline has passed, the rule cascade_offer (096) applies.
+   *     A lapsed offer is collected by the next expire run, which cascades that
+   *     chair itself; until then the database refuses its musician here.
+   *
+   * The admin's suggestion list keeps the lenient reading.
+   */
+  forCascade?: boolean
+}
+
 /**
  * Find next available candidates for a position, sorted by call order.
  * Filters out musicians already on the gig, checks service area and conflicts.
@@ -22,8 +42,15 @@ export interface Candidate {
 export async function getNextCandidates(
   supabase: SupabaseClient,
   positionId: string,
-  limit?: number
+  limit?: number,
+  options: CandidateOptions = {}
 ): Promise<{ candidates: Candidate[]; totalAvailable: number }> {
+  const strict = options.forCascade === true
+  /** Lenient callers carry on with what they got; the cascade must not. */
+  const check = (error: unknown) => {
+    if (error && strict) throw error
+  }
+
   // Fetch position with instrument and project info
   const { data: position, error: posError } = await supabase
     .from('project_positions')
@@ -44,6 +71,7 @@ export async function getNextCandidates(
     .eq('id', positionId)
     .single()
 
+  check(posError)
   if (posError || !position) {
     return { candidates: [], totalAvailable: 0 }
   }
@@ -61,10 +89,11 @@ export async function getNextCandidates(
   }
 
   // Get all musicians who have active offers for ANY position in this project (to exclude)
-  const { data: projectPositions } = await supabase
+  const { data: projectPositions, error: positionsError } = await supabase
     .from('project_positions')
     .select('id, musician_id')
     .eq('project_id', project.id)
+  check(positionsError)
 
   const allPositionIds = (projectPositions || []).map(p => p.id)
 
@@ -78,16 +107,18 @@ export async function getNextCandidates(
     .map((p) => p.musician_id)
     .filter((id): id is string => !!id)
 
-  const { data: existingOffers } = await supabase
+  const { data: existingOffers, error: offersError } = await supabase
     .from('contract_offers')
     .select('musician_id, status, expires_at')
     .in('project_position_id', allPositionIds)
     .in('status', ['pending', 'viewed', 'accepted'])
+  check(offersError)
 
-  // Only exclude musicians whose offers are truly active (not past expiry)
+  // Only exclude musicians whose offers are truly active (not past expiry).
+  // The cascade excludes by status alone, as the database does (see CandidateOptions).
   const now = new Date()
   const offeredMusicianIds = (existingOffers || [])
-    .filter(o => isActiveOffer(o, now))
+    .filter(o => strict || isActiveOffer(o, now))
     .map(o => o.musician_id)
 
   // Also exclude musicians who already had their turn at THIS chair: declined,
@@ -96,11 +127,12 @@ export async function getNextCandidates(
   // person who just timed out as "next" sends the admin straight back to them.
   // Re-offering on purpose is the separate follow-up action, which names the
   // musician directly and does not go through this list.
-  const { data: pastOffersOnChair } = await supabase
+  const { data: pastOffersOnChair, error: pastError } = await supabase
     .from('contract_offers')
     .select('musician_id')
     .eq('project_position_id', positionId)
     .in('status', ['declined', 'expired', 'superseded', 'rescinded', 'released'])
+  check(pastError)
 
   const hadTheirTurnIds = (pastOffersOnChair || []).map(o => o.musician_id)
   const excludedMusicianIds = [
@@ -127,15 +159,17 @@ export async function getNextCandidates(
     .eq('musician_instruments.instrument_id', position.instrument_id)
     .order('call_order', { ascending: true })
 
+  check(musError)
   if (musError) {
     return { candidates: [], totalAvailable: 0 }
   }
 
   // Get services to check for conflicts
-  const { data: services } = await supabase
+  const { data: services, error: servicesError } = await supabase
     .from('services')
     .select('id, start_time, end_time')
     .eq('project_id', project.id)
+  check(servicesError)
 
   // Filter and sort candidates
   const isLeaderPosition = position.chair_number === 1
@@ -153,7 +187,8 @@ export async function getNextCandidates(
       supabase,
       musician.zip_code,
       venueZip,
-      musician.service_radius_miles
+      musician.service_radius_miles,
+      { strict }
     )
     if (!inArea) continue
 
@@ -179,6 +214,7 @@ export async function getNextCandidates(
     services: services || [],
     excludeProjectId: project.id,
     externalByMusician,
+    strict,
   })
 
   const candidates: Candidate[] = eligible.map((musician) => {

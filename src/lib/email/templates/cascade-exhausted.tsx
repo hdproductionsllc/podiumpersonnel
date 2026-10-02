@@ -27,6 +27,8 @@ interface CascadeExhaustedEmailProps {
   lastOutcome: 'declined' | 'expired' | 'dropped'
   performanceDate?: string
   dashboardUrl: string
+  /** Free on the call list but passed over: no email address on file. */
+  noEmailNames?: string[]
   terms?: TermDictionary
 }
 
@@ -46,12 +48,14 @@ export function CascadeExhaustedEmail({
   lastOutcome,
   performanceDate,
   dashboardUrl,
+  noEmailNames,
   terms,
 }: CascadeExhaustedEmailProps) {
   const t = terms ?? DEFAULT_TERMS
   const showChair = totalChairs !== undefined ? totalChairs > 1 : true
   const position = `${instrument}${showChair && t.rank ? `, ${term(t, 'rank')} ${chairNumber}` : ''}`
   const people = term(t, 'person', { plural: true, case: 'lower' })
+  const noEmail = noEmailNames?.filter(Boolean) ?? []
 
   return (
     <Html>
@@ -72,8 +76,24 @@ export function CascadeExhaustedEmail({
 
             <Text style={paragraph}>
               <strong>{lastMusicianName}</strong> {ENDED[lastOutcome]}. Auto-offer is on, so Podium went down your call
-              list for this position, and nobody left on it is free.
+              list for this position, and nobody left on it is free{noEmail.length > 0 ? ' and reachable by email' : ''}.
             </Text>
+
+            {noEmail.length > 0 && (
+              <Text style={paragraph}>
+                {noEmail.length === 1 ? (
+                  <>
+                    <strong>{noEmail[0]}</strong> is free but has no email address on file, so Podium could not offer it
+                    to them.
+                  </>
+                ) : (
+                  <>
+                    <strong>{noEmail.join(', ')}</strong> are free but have no email address on file, so Podium could
+                    not offer it to them.
+                  </>
+                )}
+              </Text>
+            )}
 
             <Section style={detailsBox}>
               <Text style={detailsTitle}>{projectName}</Text>

@@ -84,7 +84,7 @@ describe('migration 096 and its paste script', () => {
     for (const sig of [
       'cascade_refusal(UUID)',
       'cascade_offer(UUID, UUID, TIMESTAMPTZ, NUMERIC, JSONB, TEXT)',
-      'mark_cascade_exhausted(UUID)',
+      'mark_cascade_exhausted(UUID, JSONB)',
     ]) {
       expect(code(migration)).toMatch(new RegExp(`REVOKE ALL ON FUNCTION ${sig.replace(/[()]/g, '\\$&')}\\s+FROM PUBLIC, anon, authenticated;`))
       expect(code(migration)).toMatch(new RegExp(`GRANT EXECUTE ON FUNCTION ${sig.replace(/[()]/g, '\\$&')}\\s+TO service_role;`))
@@ -160,12 +160,12 @@ const client = () => state.db as unknown as SupabaseClient
 
 const missingColumn = { code: '42703', message: 'column organizations.auto_cascade does not exist' }
 
-/** A client whose reads fail as they would before 096 is applied. */
-function before096(): SupabaseClient {
+/** A client whose reads fail with `error` (by default, as they would before 096 is applied). */
+function before096(error: { code: string; message: string } = missingColumn): SupabaseClient {
   const chain: Record<string, unknown> = {}
   for (const m of ['select', 'eq', 'update']) chain[m] = () => chain
-  chain.maybeSingle = async () => ({ data: null, error: missingColumn })
-  chain.then = (resolve: (v: unknown) => void) => resolve({ data: null, error: missingColumn })
+  chain.maybeSingle = async () => ({ data: null, error })
+  chain.then = (resolve: (v: unknown) => void) => resolve({ data: null, error })
   return { from: () => chain } as unknown as SupabaseClient
 }
 
@@ -188,10 +188,21 @@ describe('reading the switches', () => {
     expect(await getOrgStaffingSettings(client(), 'org-1')).toEqual({ autoCascade: true, allowWorkerDrop: false })
   })
 
-  it('returns null, and says why, before 096 is applied', async () => {
+  it('returns null before 096 is applied, and says why once per server process, not on every decline', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     expect(await getOrgStaffingSettings(before096(), 'org-1')).toBeNull()
     expect(await getAutoCascadeDisabledChairIds(before096(), 'org-1')).toBeNull()
-    expect(String(errorSpy.mock.calls[0][0])).toContain('migration 096')
+    expect(await getOrgStaffingSettings(before096(), 'org-1')).toBeNull()
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(String(warnSpy.mock.calls[0][0])).toContain('migration 096')
+    expect(errorSpy).not.toHaveBeenCalled()
+  })
+
+  it('any other read failure is logged every time', async () => {
+    const timeout = { code: '57014', message: 'canceling statement due to statement timeout' }
+    expect(await getOrgStaffingSettings(before096(timeout), 'org-1')).toBeNull()
+    expect(await getOrgStaffingSettings(before096(timeout), 'org-1')).toBeNull()
+    expect(errorSpy).toHaveBeenCalledTimes(2)
   })
 
   it('setChairAutoCascade refuses with not_ready before 096, changing nothing', async () => {

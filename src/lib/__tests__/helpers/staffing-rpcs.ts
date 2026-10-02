@@ -371,6 +371,19 @@ export function cascadeOffer(db: MockSupabaseDb, args: CascadeOfferArgs): Row {
     return { result: 'musician_has_active_offer' }
   }
 
+  if (
+    table(db, 'contract_offers').some(
+      (o) =>
+        o.project_position_id === pos.id &&
+        o.musician_id === args.p_musician_id &&
+        ['declined', 'expired', 'superseded', 'rescinded', 'released'].includes(o.status)
+    )
+  ) {
+    return { result: 'musician_had_turn' }
+  }
+
+  if (bookedElsewhere(db, args.p_musician_id, pos.project_id)) return { result: 'musician_has_conflict' }
+
   const id = nextId(db, 'contract_offers')
   const offer: Row = {
     id,
@@ -411,7 +424,33 @@ export function cascadeOffer(db: MockSupabaseDb, args: CascadeOfferArgs): Row {
   }
 }
 
-export function markCascadeExhausted(db: MockSupabaseDb, args: { p_trigger_offer_id: string }): string {
+/** A service's window; no usable end time counts as 3 hours (096, conflicts.ts). */
+function serviceWindow(s: Row): [number, number] {
+  const start = new Date(s.start_time).getTime()
+  const end = s.end_time ? new Date(s.end_time).getTime() : NaN
+  return [start, end > start ? end : start + 3 * 60 * 60 * 1000]
+}
+
+/** cascade_offer's musician_has_conflict: an active offer on another gig whose services overlap. */
+function bookedElsewhere(db: MockSupabaseDb, musicianId: string, projectId: unknown): boolean {
+  const now = Date.now()
+  const ours = table(db, 'services').filter((s) => s.project_id === projectId).map(serviceWindow)
+  return table(db, 'contract_offers').some((o) => {
+    if (o.musician_id !== musicianId) return false
+    const active =
+      o.status === 'accepted' ||
+      (LIVE.includes(o.status) && (!o.expires_at || new Date(o.expires_at).getTime() >= now))
+    if (!active) return false
+    const theirProject = db.row('project_positions', o.project_position_id)?.project_id
+    if (theirProject == null || theirProject === projectId) return false
+    return table(db, 'services')
+      .filter((s) => s.project_id === theirProject)
+      .map(serviceWindow)
+      .some(([ts, te]) => ours.some(([os, oe]) => ts < oe && os < te))
+  })
+}
+
+export function markCascadeExhausted(db: MockSupabaseDb, args: { p_trigger_offer_id: string; p_details?: Row | null }): string {
   const trigger = db.row('contract_offers', args.p_trigger_offer_id)
   if (!trigger) return 'not_found'
   const pos = db.row('project_positions', trigger.project_position_id)
@@ -422,7 +461,7 @@ export function markCascadeExhausted(db: MockSupabaseDb, args: { p_trigger_offer
   write(db, 'contract_offers', trigger, { cascade_exhausted_at: new Date().toISOString() })
   logStaffingEvent(db, {
     org: projectOf(db, pos)?.organization_id ?? null, actorType: 'system', actorId: null, entityType: 'offer',
-    entityId: trigger.id, action: 'cascade.exhausted', after: { position_id: pos.id },
+    entityId: trigger.id, action: 'cascade.exhausted', after: { ...(args.p_details ?? {}), position_id: pos.id },
   })
   return 'marked'
 }

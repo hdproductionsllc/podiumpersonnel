@@ -36,7 +36,7 @@ export type CascadeSkipReason =
   | 'already_exhausted' // this offer already ran the list out (admins were told)
   | 'chair_filled' // someone holds the chair
   | 'chair_has_live_offer' // someone is already being asked
-  | 'no_time_left' // the gig's first service has started
+  | 'no_time_left' // the gig's first service starts within CASCADE_MIN_LEAD_MS, or has started
   | 'error' // something failed; logged
 
 /** Ended statuses that can start a cascade: declined, expired, dropped ('released'). */
@@ -79,7 +79,13 @@ export interface CascadeTerms {
 
 export type CascadePlan =
   | { kind: 'skip'; reason: CascadeSkipReason; organizationId?: string; context?: CascadeContext }
-  | { kind: 'exhausted'; context: CascadeContext; skippedConflicts: number }
+  | {
+      kind: 'exhausted'
+      context: CascadeContext
+      skippedConflicts: number
+      /** Free, but no email address on file, so they cannot be offered it. */
+      unreachable: Candidate[]
+    }
   | { kind: 'offer'; context: CascadeContext; musician: Candidate; terms: CascadeTerms; skippedConflicts: number }
 
 export interface PlanInput {
@@ -93,6 +99,12 @@ export interface PlanInput {
    * been declined or had lapsed. advance() never sets these.
    */
   assume?: { autoCascadeOn?: boolean; triggerEnded?: boolean }
+  /**
+   * Musicians cascade_offer has already refused during this advance() (taken
+   * by another chair or gig in the meantime, deactivated). Left out, so the
+   * next attempt moves down the list instead of choosing them again.
+   */
+  excludeMusicianIds?: readonly string[]
 }
 
 const POSITION_SELECT = `
@@ -128,6 +140,20 @@ const TRIGGER_SELECT = `
   musician:musicians(id, first_name, last_name)
 `
 
+/**
+ * A read failed after the chair's organization was known. Carries it, so the
+ * caller can still record the failure in that organization's history.
+ */
+export class CascadePlanError extends Error {
+  constructor(
+    readonly cause: unknown,
+    readonly organizationId: string
+  ) {
+    super(cause instanceof Error ? cause.message : String((cause as { message?: string })?.message ?? cause))
+    this.name = 'CascadePlanError'
+  }
+}
+
 export async function planCascade(service: SupabaseClient, input: PlanInput): Promise<CascadePlan> {
   const now = input.now ?? Date.now()
 
@@ -158,6 +184,23 @@ export async function planCascade(service: SupabaseClient, input: PlanInput): Pr
   if (pos.auto_cascade_disabled === true) return { kind: 'skip', reason: 'chair_opted_out', organizationId }
   if (project?.status === 'cancelled' || project?.status === 'completed') return { kind: 'skip', reason: 'gig_closed', organizationId }
   if (project?.status !== 'active') return { kind: 'skip', reason: 'gig_not_active', organizationId }
+
+  try {
+    return await planEndedOffer(service, input, now, partial, organizationId)
+  } catch (err) {
+    throw new CascadePlanError(err, organizationId)
+  }
+}
+
+async function planEndedOffer(
+  service: SupabaseClient,
+  input: PlanInput,
+  now: number,
+  partial: Omit<CascadeContext, 'trigger'>,
+  organizationId: string
+): Promise<CascadePlan> {
+  const pos = partial.position
+  const services = partial.services
 
   // -- the ended offer ----------------------------------------------------------------
 
@@ -209,9 +252,11 @@ export async function planCascade(service: SupabaseClient, input: PlanInput): Pr
 
   // -- who is next ----------------------------------------------------------------------
 
-  const { candidates } = await getNextCandidates(service, pos.id)
-  const { next, skippedConflicts } = rankForCascade(candidates)
-  if (!next) return { kind: 'exhausted', context, skippedConflicts }
+  // Strict: a failed read throws (advance() turns that into skipped('error'))
+  // rather than reading as "nobody left" or "no conflicts".
+  const { candidates } = await getNextCandidates(service, pos.id, undefined, { forCascade: true })
+  const { next, skippedConflicts, unreachable } = rankForCascade(candidates, input.excludeMusicianIds)
+  if (!next) return { kind: 'exhausted', context, skippedConflicts, unreachable }
 
   return {
     kind: 'offer',
@@ -232,9 +277,17 @@ export async function planCascade(service: SupabaseClient, input: PlanInput): Pr
  * who is offered a chair (owner decision), so the list getNextCandidates
  * returns (leaders first on chair 1, for the admin's suggestions) is re-sorted
  * here, with ties broken by name and id so the choice never depends on it.
+ *
+ * `exclude`: musicians the database refused earlier in the same advance().
+ * `unreachable`: free musicians passed over for having no email address, so the
+ * "nobody left" email can name them.
  */
-export function rankForCascade(candidates: readonly Candidate[]): { next: Candidate | null; skippedConflicts: number } {
-  const free = candidates.filter((c) => !c.has_conflict)
+export function rankForCascade(
+  candidates: readonly Candidate[],
+  exclude: readonly string[] = []
+): { next: Candidate | null; skippedConflicts: number; unreachable: Candidate[] } {
+  const considered = candidates.filter((c) => !exclude.includes(c.id))
+  const free = considered.filter((c) => !c.has_conflict)
   const reachable = free.filter((c) => !!c.email)
   const order = (c: Candidate) => (c.call_order == null ? Number.POSITIVE_INFINITY : c.call_order)
   const ranked = [...reachable].sort(
@@ -244,7 +297,11 @@ export function rankForCascade(candidates: readonly Candidate[]): { next: Candid
       (a.first_name || '').localeCompare(b.first_name || '') ||
       a.id.localeCompare(b.id)
   )
-  return { next: ranked[0] ?? null, skippedConflicts: candidates.length - free.length }
+  return {
+    next: ranked[0] ?? null,
+    skippedConflicts: considered.length - free.length,
+    unreachable: free.filter((c) => !c.email),
+  }
 }
 
 /**
