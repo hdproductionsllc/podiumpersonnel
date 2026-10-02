@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/server'
 import { ConfirmDetailsClient } from '@/components/gig/confirm-details-client'
 import { DEFAULT_TIMEZONE } from '@/lib/utils'
+import { servicesForMusician, withScope } from '@/lib/staffing/scope'
 
 interface ConfirmDetailsPageProps {
   params: Promise<{ token: string }>
@@ -11,8 +12,9 @@ export default async function ConfirmDetailsPage({ params }: ConfirmDetailsPageP
   const { token } = await params
   const supabase = createServiceClient()
 
-  // Fetch confirmation record by token
-  const { data: confirmation } = await supabase
+  // Fetch confirmation record by token, with which services each chair of the
+  // gig works (scope.ts)
+  const { data: confirmation } = await withScope((scope) => supabase
     .from('gig_detail_confirmations')
     .select(`
       id,
@@ -27,12 +29,13 @@ export default async function ConfirmDetailsPage({ params }: ConfirmDetailsPageP
           name,
           ensemble_type,
           start_date,
-          organization:organizations(id, name, timezone)
+          organization:organizations(id, name, timezone),
+          project_positions(musician_id${scope})
         )
       )
     `)
     .eq('token', token)
-    .single()
+    .single())
 
   if (!confirmation) {
     notFound()
@@ -58,7 +61,9 @@ export default async function ConfirmDetailsPage({ params }: ConfirmDetailsPageP
     .eq('project_id', project?.id)
     .order('start_time', { ascending: true })
 
-  const formattedServices = (services || []).map((service: any) => {
+  // The services this person's chair works (every one, unless it is limited to some)
+  const theirServices = servicesForMusician(project?.project_positions, musician?.id, services || [])
+  const formattedServices = theirServices.map((service: any) => {
     const venueName = service.venue_details?.name || service.venue || null
     return {
       name: service.name,

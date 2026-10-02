@@ -382,7 +382,7 @@ export function cascadeOffer(db: MockSupabaseDb, args: CascadeOfferArgs): Row {
     return { result: 'musician_had_turn' }
   }
 
-  if (bookedElsewhere(db, args.p_musician_id, pos.project_id)) return { result: 'musician_has_conflict' }
+  if (bookedElsewhere(db, args.p_musician_id, pos)) return { result: 'musician_has_conflict' }
 
   const id = nextId(db, 'contract_offers')
   const offer: Row = {
@@ -431,20 +431,36 @@ function serviceWindow(s: Row): [number, number] {
   return [start, end > start ? end : start + 3 * 60 * 60 * 1000]
 }
 
-/** cascade_offer's musician_has_conflict: an active offer on another gig whose services overlap. */
-function bookedElsewhere(db: MockSupabaseDb, musicianId: string, projectId: unknown): boolean {
+/**
+ * services_for_position (098): the chair's services. Every service of its gig
+ * unless scope_mode is 'selected', then the listed ones (the chair row's
+ * position_services when a test put them there, else the position_services
+ * table); none listed, none.
+ */
+export function servicesForPosition(db: MockSupabaseDb, pos: Row | null | undefined): Row[] {
+  if (!pos) return []
+  const gig = table(db, 'services').filter((s) => s.project_id === pos.project_id)
+  if (pos.scope_mode !== 'selected') return gig
+  const listed: Row[] = pos.position_services ?? table(db, 'position_services').filter((ps) => ps.project_position_id === pos.id)
+  const ids = new Set(listed.map((ps) => ps.service_id))
+  return gig.filter((s) => ids.has(s.id))
+}
+
+/** cascade_offer's musician_has_conflict: an active offer on another gig whose chair's services overlap this chair's. */
+function bookedElsewhere(db: MockSupabaseDb, musicianId: string, pos: Row): boolean {
   const now = Date.now()
-  const ours = table(db, 'services').filter((s) => s.project_id === projectId).map(serviceWindow)
+  const projectId = pos.project_id
+  const ours = servicesForPosition(db, pos).map(serviceWindow)
   return table(db, 'contract_offers').some((o) => {
     if (o.musician_id !== musicianId) return false
     const active =
       o.status === 'accepted' ||
       (LIVE.includes(o.status) && (!o.expires_at || new Date(o.expires_at).getTime() >= now))
     if (!active) return false
-    const theirProject = db.row('project_positions', o.project_position_id)?.project_id
+    const theirChair = db.row('project_positions', o.project_position_id)
+    const theirProject = theirChair?.project_id
     if (theirProject == null || theirProject === projectId) return false
-    return table(db, 'services')
-      .filter((s) => s.project_id === theirProject)
+    return servicesForPosition(db, theirChair)
       .map(serviceWindow)
       .some(([ts, te]) => ours.some(([os, oe]) => ts < oe && os < te))
   })
@@ -480,7 +496,7 @@ export function workerDrop(db: MockSupabaseDb, args: { p_offer_id: string; p_rea
   if (!project) return 'not_found'
   if (org?.allow_worker_drop !== true) return 'not_allowed'
   if (project.status === 'cancelled' || project.status === 'completed') return 'project_inactive'
-  if (table(db, 'services').some((s) => s.project_id === pos.project_id && new Date(s.start_time).getTime() <= Date.now())) {
+  if (servicesForPosition(db, pos).some((s) => new Date(s.start_time).getTime() <= Date.now())) {
     return 'gig_started'
   }
   if (pos.musician_id !== offer.musician_id) return 'not_seated'

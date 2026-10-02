@@ -10,6 +10,7 @@ import { hasLiveStatus } from '@/lib/staffing/live'
 import { logEvent, musicianActor } from '@/lib/staffing/events'
 import { getOrgStaffingSettings } from '@/lib/staffing/settings'
 import { gigHasStarted } from '@/lib/staffing/drop'
+import { servicesFor, withScope, type PositionScope } from '@/lib/staffing/scope'
 
 interface GigPageProps {
   params: Promise<{ token: string }>
@@ -70,8 +71,8 @@ export default async function GigPage({ params }: GigPageProps) {
   const { token } = await params
   const supabase = createServiceClient()
 
-  // Fetch contract offer by token
-  const { data: offer } = await supabase
+  // Fetch contract offer by token (with the services its chair works: scope.ts)
+  const { data: offer } = await withScope((scope) => supabase
     .from('contract_offers')
     .select(`
       *,
@@ -86,7 +87,7 @@ export default async function GigPage({ params }: GigPageProps) {
       project_position:project_positions(
         id,
         chair_number,
-        musician_id,
+        musician_id${scope},
         instrument:instruments(id, name),
         project:projects(
           id,
@@ -102,7 +103,7 @@ export default async function GigPage({ params }: GigPageProps) {
       )
     `)
     .eq('token', token)
-    .single()
+    .single())
 
   if (!offer) {
     notFound()
@@ -112,7 +113,7 @@ export default async function GigPage({ params }: GigPageProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const offerData = offer as any
   const musician = offerData.musician as { id: string; first_name: string; last_name: string; email: string | null; user_id: string | null; is_active: boolean | null } | null
-  const position = offerData.project_position as {
+  const position = offerData.project_position as (PositionScope & {
     id: string
     chair_number: number
     musician_id: string | null
@@ -128,7 +129,7 @@ export default async function GigPage({ params }: GigPageProps) {
       organization_id: string
       organization: { id: string; name: string; timezone: string } | null
     } | null
-  } | null
+  }) | null
 
   // Get organization timezone for date formatting
   const timezone = position?.project?.organization?.timezone || DEFAULT_TIMEZONE
@@ -144,7 +145,9 @@ export default async function GigPage({ params }: GigPageProps) {
       .eq('project_id', position.project.id)
       .order('start_time', { ascending: true })
 
-    services = serviceData || []
+    // Only the services this chair works: the whole gig unless the chair is
+    // limited to some. Pay, "has it started" and the schedule all follow.
+    services = servicesFor(position, serviceData || [])
 
     // Calculate pay from first service if no custom_pay
     if (payAmount === null && services.length > 0) {

@@ -22,12 +22,18 @@ import { getOrgAdminEmails } from '@/lib/supabase/server'
 import { sendGigReportRequestEmail, sendPaySummaryEmail } from '@/lib/email/send'
 import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
+import type { ScopeSelect } from '@/lib/staffing/scope'
 import { buildPaySummary, gigEndedAt, gigLead } from './rules'
 
 type Supabase = any
 
-/** Everything both sends read about a project, in one select. */
-export const AFTER_GIG_PROJECT_SELECT = `
+/**
+ * Everything both sends read about a project, in one select. `scope` is the
+ * chairs' scope fields from withScope (src/lib/staffing/scope.ts), which the
+ * pay summary needs; '' leaves them out (every chair then reads as working
+ * every service).
+ */
+export const afterGigProjectSelect = (scope: ScopeSelect | '' = '') => `
   id,
   name,
   status,
@@ -40,12 +46,15 @@ export const AFTER_GIG_PROJECT_SELECT = `
     id,
     status,
     musician_id,
-    chair_number,
+    chair_number${scope},
     instrument:instruments(name),
     musician:musicians(id, first_name, last_name, email, is_leader),
     contract_offers(custom_pay, status)
   )
-`
+` as const
+
+/** The select without the chairs' scope: for readers that only need the gig's lead. */
+export const AFTER_GIG_PROJECT_SELECT = afterGigProjectSelect()
 
 function branding(org: any) {
   return {

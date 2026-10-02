@@ -8,6 +8,7 @@ import { isLiveOffer } from '@/lib/staffing/live'
 import { releaseSeat } from '@/lib/staffing/seats'
 import { logEvent, musicianActor, type StaffingEvent } from '@/lib/staffing/events'
 import { advance, autoOfferNote } from '@/lib/staffing/cascade'
+import { servicesFor, withScope } from '@/lib/staffing/scope'
 
 export async function POST(
   _request: Request,
@@ -27,8 +28,9 @@ export async function POST(
 async function handleDecline(_request: Request, token: string) {
   const supabase = createServiceClient()
 
-  // Find the offer by token with all related data for emails
-  const { data: offer, error: fetchError } = await supabase
+  // Find the offer by token with all related data for emails, and the services
+  // its chair works (scope.ts)
+  const { data: offer, error: fetchError } = await withScope((scope) => supabase
     .from('contract_offers')
     .select(`
       id,
@@ -40,7 +42,7 @@ async function handleDecline(_request: Request, token: string) {
       musician:musicians(id, first_name, last_name, email, is_active),
       project_position:project_positions(
         id,
-        chair_number,
+        chair_number${scope},
         instrument:instruments(id, name),
         project:projects(
           id,
@@ -48,12 +50,12 @@ async function handleDecline(_request: Request, token: string) {
           status,
           organization_id,
           organization:organizations(id, name, timezone),
-          services(start_time)
+          services(id, start_time)
         )
       )
     `)
     .eq('token', token)
-    .single()
+    .single())
 
   if (fetchError || !offer) {
     return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
@@ -77,7 +79,7 @@ async function handleDecline(_request: Request, token: string) {
     return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
   }
 
-  const services = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+  const services = servicesFor(position, project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
   const timezone = organization?.timezone || DEFAULT_TIMEZONE
   const performanceDate = services[0] ? formatPerformanceDateForSubject(services[0].start_time, timezone) : ''
 

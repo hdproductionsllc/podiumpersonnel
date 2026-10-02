@@ -210,9 +210,12 @@ export class QuartetFixture {
   hydrate(): void {
     const t = this.db.tables
     const byId = (table: string, id: unknown) => t[table]?.find((r) => r.id === id) ?? null
-    const services = [...t.services].sort((a, b) => String(a.start_time).localeCompare(String(b.start_time)))
-    const project = (): Row => {
-      const p = byId('projects', QUARTET_PROJECT.id)!
+    // A gig with its own services: the wedding, unless a test added another.
+    const project = (projectId: unknown = QUARTET_PROJECT.id): Row => {
+      const p = byId('projects', projectId)!
+      const services = t.services
+        .filter((s) => s.project_id === p.id)
+        .sort((a, b) => String(a.start_time).localeCompare(String(b.start_time)))
       return { ...p, organization: QUARTET_ORG, services }
     }
     const positionEmbed = (positionId: unknown): Row => {
@@ -222,8 +225,13 @@ export class QuartetFixture {
         chair_number: pos.chair_number,
         instrument_id: pos.instrument_id,
         musician_id: pos.musician_id,
+        ...(pos.project_id !== QUARTET_PROJECT.id ? { project_id: pos.project_id } : {}),
+        // The chair's scope (098), only when a test set it: absent is what a
+        // database without 098, and every quartet test before it, reads.
+        ...('scope_mode' in pos ? { scope_mode: pos.scope_mode } : {}),
+        ...('position_services' in pos ? { position_services: pos.position_services } : {}),
         instrument: byId('instruments', pos.instrument_id),
-        project: project(),
+        project: project(pos.project_id),
       }
     }
 
@@ -233,8 +241,8 @@ export class QuartetFixture {
     }
 
     for (const pos of t.project_positions) {
-      pos.projects = project()
-      pos.project = project()
+      pos.projects = project(pos.project_id)
+      pos.project = project(pos.project_id)
       pos.instrument = byId('instruments', pos.instrument_id)
       pos.musician = pos.musician_id ? byId('musicians', pos.musician_id) : null
       pos.contract_offers = t.contract_offers

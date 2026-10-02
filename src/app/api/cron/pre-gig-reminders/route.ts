@@ -5,6 +5,7 @@ import { sendPreGigNotificationEmail } from '@/lib/email/send'
 import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
+import { servicesFor, withScope } from '@/lib/staffing/scope'
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request)
@@ -36,10 +37,11 @@ export async function GET(request: NextRequest) {
   }
   const expiredCount = expiredRows?.length ?? 0
 
-  // 2. Find projects with services 24-72h from now
+  // 2. Find projects with services 24-72h from now (with which services each
+  // chair works: scope.ts)
   const { data: upcomingProjects, error: fetchError } = await withCronRetry(
     'pre-gig-reminders: fetch upcoming projects',
-    () => supabase
+    () => withScope((scope) => supabase
       .from('projects')
       .select(`
         id,
@@ -66,13 +68,13 @@ export async function GET(request: NextRequest) {
         project_positions(
           id,
           status,
-          musician_id,
+          musician_id${scope},
           musician:musicians(id, email)
         ),
         gig_detail_sends(id),
         music_sends(id)
       `)
-      .eq('status', 'active'),
+      .eq('status', 'active')),
   )
 
   if (fetchError) {
@@ -101,10 +103,11 @@ export async function GET(request: NextRequest) {
       continue
     }
 
-    // Count confirmed musicians with emails
+    // Count confirmed musicians with emails, on a chair that works a service
+    // (every chair does, unless it is limited to some: scope.ts)
     const positions = (project.project_positions as any[]) || []
     const confirmedMusicians = positions.filter(
-      (p: any) => p.status === 'confirmed' && p.musician_id && p.musician?.email
+      (p: any) => p.status === 'confirmed' && p.musician_id && p.musician?.email && servicesFor(p, services).length > 0
     )
     if (confirmedMusicians.length === 0) continue
 

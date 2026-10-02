@@ -49,3 +49,59 @@ unchanged (the quartet fixture and the golden-email tests hold this).
 - Bounced addresses are NOT skipped: who is emailed is unchanged. The app
   marks a bouncing musician (migration 087, "Email bouncing" badge) and that
   is all, as before.
+
+## Step 2: which calls a chair works (position_services), no screens yet
+
+### Before the deploy
+
+1. Supabase > SQL Editor > New query: paste
+   `scripts/sql/098-position-services.paste.sql` and Run (after step 1's
+   097). Every RESULTS row should say PASS (INFO rows are counts). It adds:
+   an organization switch `call_scoped_requirements` (off for everyone, and
+   only Podium can change it), a per-chair setting `scope_mode` ('all' for
+   every chair), the `position_services` list (empty), the rules that keep
+   them consistent, and a chair-aware version of the two database steps that
+   look at a gig's services (auto-offer's "booked elsewhere", "I can't make
+   it"'s "has it started"). With every chair on 'all' those answer exactly as
+   before, so today's live app is unaffected.
+
+### Deploy
+
+2. Same single push as step 1.
+
+### What people will notice
+
+- Nothing. No screen sets a chair's calls yet (that is the next step), and
+  the database refuses a chair limited to some calls unless the
+  organization's switch is on, which it is for nobody. Every reader that
+  shows a person their gig, pays them or checks whether they are free now
+  asks "which services does this chair work?" (`src/lib/staffing/scope.ts`,
+  `servicesFor`), and for a chair on the whole gig the answer is the gig's
+  services, the very same list. The identity tests run every one of those
+  readers on the quartet wedding with and without the new fields and compare
+  every email argument, log row, read and write.
+
+### If something goes wrong
+
+- Code live but 098 missing: every reader notices the missing fields, reads
+  again without them (every chair then works the whole gig, which is what
+  every chair is) and the server log says once "migration 098 ... has not
+  been applied". Paste step 2.
+- To undo in the database: nothing reads `position_services` or `scope_mode`
+  unless a chair is 'selected', and none can be while the switch is off.
+
+### What scoping does once a chair is limited to some calls (for the next steps)
+
+- The person is offered, reminded, confirmed, sent gig details, given a
+  calendar file and shown a gig page for those calls only; the date in their
+  email subjects is their first call.
+- Pay: each service's rate for those calls only. An agreed whole-gig amount
+  is still owed once, against their first call.
+- Conflicts (suggestions and auto-offer): a clash only counts during a call
+  this chair works, against a call the other chair works.
+- "I can't make it": allowed until their own first call starts.
+- Staffing alert: only chairs with a call still ahead count, dated by the
+  first call an open chair still has to work. Pre-gig reminder: counts the
+  confirmed people who work a call.
+- A chair limited to no calls works nothing (it never widens back to the
+  whole gig): no calendar file, no pay lines.

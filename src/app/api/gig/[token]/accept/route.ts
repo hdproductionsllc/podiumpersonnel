@@ -6,6 +6,7 @@ import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
 import { claimChairForAccept, notifyMusicianReleased, countChairs, isOfferClosed } from '@/lib/staffing/respond'
 import { isLiveOffer } from '@/lib/staffing/live'
+import { servicesFor, withScope } from '@/lib/staffing/scope'
 
 export async function POST(
   _request: Request,
@@ -25,8 +26,9 @@ export async function POST(
 async function handleAccept(_request: Request, token: string) {
   const supabase = createServiceClient()
 
-  // Find the offer by token with all related data for emails
-  const { data: offer, error: fetchError } = await supabase
+  // Find the offer by token with all related data for emails, and the services
+  // its chair works (scope.ts)
+  const { data: offer, error: fetchError } = await withScope((scope) => supabase
     .from('contract_offers')
     .select(`
       id,
@@ -38,7 +40,7 @@ async function handleAccept(_request: Request, token: string) {
       project_position:project_positions(
         id,
         chair_number,
-        musician_id,
+        musician_id${scope},
         instrument:instruments(id, name),
         project:projects(
           id,
@@ -51,7 +53,7 @@ async function handleAccept(_request: Request, token: string) {
       )
     `)
     .eq('token', token)
-    .single()
+    .single())
 
   if (fetchError || !offer) {
     return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
@@ -75,7 +77,7 @@ async function handleAccept(_request: Request, token: string) {
     return NextResponse.redirect(new URL(`/gig/${token}`, _request.url))
   }
 
-  const services = project?.services as any[] || []
+  const services = servicesFor(position, project?.services as any[] || [])
   const timezone = organization?.timezone || DEFAULT_TIMEZONE
   const sortedServices = [...services].sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
   const performanceDate = sortedServices[0] ? formatPerformanceDateForSubject(sortedServices[0].start_time, timezone) : ''

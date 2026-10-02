@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { isScoped, servicesFor, withScope } from '@/lib/staffing/scope'
 
 // Parse time strings like "2:15pm", "2:15 PM", "14:15"
 function parseTime(timeStr: string): { hours: number; minutes: number } | null {
@@ -105,8 +106,8 @@ export async function GET(
   // Authorization: require either a valid offer token OR authenticated org membership
   const supabase = createServiceClient()
 
-  // Fetch offer with all related data
-  const { data: offer, error } = await supabase
+  // Fetch offer with all related data, and which services its chair works (scope.ts)
+  const { data: offer, error } = await withScope((scope) => supabase
     .from('contract_offers')
     .select(`
       id,
@@ -115,7 +116,7 @@ export async function GET(
       token,
       project_position:project_positions!inner(
         id,
-        chair_number,
+        chair_number${scope},
         instrument:instruments(name),
         project:projects!inner(
           id,
@@ -129,7 +130,7 @@ export async function GET(
       musician:musicians(first_name, last_name, email)
     `)
     .eq('id', offerId)
-    .single()
+    .single())
 
   if (error || !offer) {
     return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
@@ -169,7 +170,7 @@ export async function GET(
   const musician = offer.musician as any
 
   // Fetch services for this project with venue details
-  const { data: services } = await supabase
+  const { data: gigServices } = await supabase
     .from('services')
     .select(`
       id,
@@ -186,6 +187,14 @@ export async function GET(
     `)
     .eq('project_id', project.id)
     .order('start_time', { ascending: true })
+
+  // Only the services this chair works: the whole gig unless the chair is
+  // limited to some. A chair limited to none has nothing to put in a calendar
+  // (the gig's description is not a fallback for it: that is the whole gig).
+  const services = servicesFor(position, gigServices)
+  if (isScoped(position) && (!services || services.length === 0)) {
+    return NextResponse.json({ error: 'No scheduled services for this position.' }, { status: 404 })
+  }
 
   const isLeader = position.chair_number === 1
 

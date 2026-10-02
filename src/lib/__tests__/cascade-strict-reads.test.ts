@@ -120,8 +120,9 @@ function fakeClient(f: Fixture) {
             )
           }
           if (table === 'services') {
-            if (cols.startsWith('project_id')) {
-              return answer('otherServices', [{ project_id: OTHER_PROJECT, start_time: '2026-11-07T22:00:00Z', end_time: null }])
+            // The other gigs' services are read by project_id; ours by our project.
+            if (/\bproject_id\b/.test(cols)) {
+              return answer('otherServices', [{ id: 'svc-other', project_id: OTHER_PROJECT, start_time: '2026-11-07T22:00:00Z', end_time: null }])
             }
             return answer('services', SERVICES)
           }

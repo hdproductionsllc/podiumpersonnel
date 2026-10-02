@@ -2,6 +2,7 @@ import { SupabaseClient } from '@supabase/supabase-js'
 import { isWithinServiceArea } from '@/lib/zip-distance'
 import { findConflicts, describeConflicts } from './conflicts'
 import { isActiveOffer } from './live'
+import { servicesFor, withScope, type PositionScope } from './scope'
 
 export interface Candidate {
   id: string
@@ -51,13 +52,14 @@ export async function getNextCandidates(
     if (error && strict) throw error
   }
 
-  // Fetch position with instrument and project info
-  const { data: position, error: posError } = await supabase
+  // Fetch position with instrument and project info, and which services the
+  // chair works (scope.ts): the venue and the conflict check are about those.
+  const { data: position, error: posError } = await withScope((scope) => supabase
     .from('project_positions')
     .select(`
       id,
       instrument_id,
-      chair_number,
+      chair_number${scope},
       project:projects!inner(
         id,
         organization_id,
@@ -69,7 +71,7 @@ export async function getNextCandidates(
       )
     `)
     .eq('id', positionId)
-    .single()
+    .single())
 
   check(posError)
   if (posError || !position) {
@@ -79,9 +81,10 @@ export async function getNextCandidates(
   const project = position.project as any
   const organizationId = project.organization_id
 
-  // Get venue zip from first service with a venue
+  // Get venue zip from the chair's first service with a venue
   let venueZip: string | null = null
-  for (const service of (project.services || [])) {
+  const projectServices: { id: string; venue?: { zip?: string | null } | null }[] = project.services || []
+  for (const service of servicesFor(position as unknown as PositionScope, projectServices)) {
     if (service.venue?.zip) {
       venueZip = service.venue.zip
       break
@@ -164,12 +167,13 @@ export async function getNextCandidates(
     return { candidates: [], totalAvailable: 0 }
   }
 
-  // Get services to check for conflicts
+  // Get the chair's services to check for conflicts
   const { data: services, error: servicesError } = await supabase
     .from('services')
     .select('id, start_time, end_time')
     .eq('project_id', project.id)
   check(servicesError)
+  const chairServices = servicesFor(position as unknown as PositionScope, services || [])
 
   // Filter and sort candidates
   const isLeaderPosition = position.chair_number === 1
@@ -211,7 +215,7 @@ export async function getNextCandidates(
 
   const conflictsByMusician = await findConflicts(supabase, {
     musicianIds: eligible.map((m) => m.id),
-    services: services || [],
+    services: chairServices,
     excludeProjectId: project.id,
     externalByMusician,
     strict,

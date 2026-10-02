@@ -8,6 +8,7 @@
  */
 
 import { acceptedOfferPay, computeGigPay, type OfferForPay } from '@/lib/payments/compute'
+import { servicesFor, type PositionScope } from '@/lib/staffing/scope'
 
 /** Wait this long after the last service ends: the gig may run a little over. */
 export const AFTER_GIG_DELAY_MS = 30 * 60 * 1000
@@ -28,7 +29,7 @@ export interface ServiceForAfterGig {
   leader_fee: number | null
 }
 
-export interface PositionForAfterGig {
+export interface PositionForAfterGig extends PositionScope {
   id: string
   status: string
   musician_id: string | null
@@ -131,8 +132,10 @@ export interface PaySummaryLine {
 
 /**
  * What each confirmed musician is owed for the whole gig, with the same rule
- * Generate Payments uses (an offer amount once, else each service's rate). One line per chair, so a
- * musician confirmed in two chairs shows both. Largest first, then by name.
+ * Generate Payments uses (an offer amount once, else each service's rate),
+ * over the services their chair works (servicesFor: every service unless the
+ * chair is limited to some). One line per chair, so a musician confirmed in
+ * two chairs shows both. Largest first, then by name.
  */
 export function buildPaySummary(
   services: ServiceForAfterGig[] | null | undefined,
@@ -144,7 +147,7 @@ export function buildPaySummary(
     const offerPay = acceptedOfferPay(p.contract_offers)
     let basePay = 0
     let leaderFee = 0
-    for (const pay of computeGigPay(services, !!m.is_leader, offerPay)) {
+    for (const pay of computeGigPay(servicesFor(p, services), !!m.is_leader, offerPay)) {
       basePay += pay.basePay
       leaderFee += pay.leaderFee
     }

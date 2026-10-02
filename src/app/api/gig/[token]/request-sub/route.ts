@@ -6,6 +6,7 @@ import { canUseSubstitutions } from '@/lib/plan'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { logEvent, musicianActor } from '@/lib/staffing/events'
 import { notify } from '@/lib/notify'
+import { servicesFor, withScope } from '@/lib/staffing/scope'
 
 export async function POST(
   request: Request,
@@ -40,8 +41,8 @@ export async function POST(
     )
   }
 
-  // Find the offer by token with all related data
-  const { data: offer, error: fetchError } = await supabase
+  // Find the offer by token with all related data, and the services its chair works (scope.ts)
+  const { data: offer, error: fetchError } = await withScope((scope) => supabase
     .from('contract_offers')
     .select(`
       id,
@@ -51,19 +52,19 @@ export async function POST(
       musician:musicians(id, first_name, last_name, email),
       project_position:project_positions(
         id,
-        chair_number,
+        chair_number${scope},
         instrument:instruments(id, name),
         project:projects(
           id,
           name,
           organization_id,
           organization:organizations(id, name, timezone),
-          services(start_time)
+          services(id, start_time)
         )
       )
     `)
     .eq('token', token)
-    .single()
+    .single())
 
   if (fetchError || !offer) {
     return NextResponse.json({ error: 'Invalid offer token' }, { status: 404 })
@@ -99,7 +100,7 @@ export async function POST(
     )
   }
 
-  const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+  const projectServices = servicesFor(position, project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
   const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, organization?.timezone || DEFAULT_TIMEZONE) : ''
 
   // Check if there's already a pending sub request

@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
 import { gigEndedAt, isAfterGigDue } from '@/lib/after-gig/rules'
-import { AFTER_GIG_PROJECT_SELECT, requestGigReports, sendPaySummaryOnce } from '@/lib/after-gig/run'
+import { afterGigProjectSelect, requestGigReports, sendPaySummaryOnce } from '@/lib/after-gig/run'
+import { withScope } from '@/lib/staffing/scope'
 import { shiftDate } from '@/lib/projects/archive'
 
 /**
@@ -30,12 +31,13 @@ export async function GET(request: NextRequest) {
     const utcToday = now.toISOString().slice(0, 10)
     const { data: projects, error } = await withCronRetry(
       'after-gig: read recently ended projects',
-      () => supabase
+      // The pay summary pays each chair for the services it works (scope.ts).
+      () => withScope((scope) => supabase
         .from('projects')
-        .select(AFTER_GIG_PROJECT_SELECT)
+        .select(afterGigProjectSelect(scope))
         .in('status', ['active', 'completed'])
         .gte('end_date', shiftDate(utcToday, -3))
-        .lte('end_date', shiftDate(utcToday, 1)),
+        .lte('end_date', shiftDate(utcToday, 1))),
     )
     if (error) throw error
 

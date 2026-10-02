@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { isActiveOffer } from './live'
+import { servicesFor, withScope } from './scope'
 
 /**
  * Is this musician busy when we need them?
@@ -83,6 +84,12 @@ export function anyOverlap(a: TimeWindow[], b: TimeWindow[]): boolean {
  * of queries regardless of how many musicians are passed rather than one per
  * musician.
  *
+ * `services` are the services the chair being staffed works (servicesFor), and
+ * an offer elsewhere clashes only through the services ITS chair works: a
+ * stagehand on another gig's load-in is free for that gig's evening show.
+ * Chairs on the whole gig (every chair, unless limited) compare every service,
+ * as before.
+ *
  * `excludeProjectId` is the project being staffed — its own offers are not a
  * conflict with itself.
  *
@@ -130,19 +137,19 @@ export async function findConflicts(
   }
 
   // ---- 2. Active offers on other Podium projects ---------------------------
-  const { data: otherOffers, error: offersError } = await supabase
+  const { data: otherOffers, error: offersError } = await withScope((scope) => supabase
     .from('contract_offers')
     .select(`
       musician_id,
       status,
       expires_at,
       project_position:project_positions!inner(
-        project_id,
+        project_id${scope},
         project:projects!inner(id, name)
       )
     `)
     .in('musician_id', opts.musicianIds)
-    .in('status', ['pending', 'viewed', 'accepted'])
+    .in('status', ['pending', 'viewed', 'accepted']))
 
   if (offersError && opts.strict) throw offersError
   if (!otherOffers || otherOffers.length === 0) return result
@@ -161,26 +168,25 @@ export async function findConflicts(
 
   const { data: otherServices, error: servicesError } = await supabase
     .from('services')
-    .select('project_id, start_time, end_time')
+    .select('id, project_id, start_time, end_time')
     .in('project_id', otherProjectIds)
 
   if (servicesError && opts.strict) throw servicesError
   if (!otherServices || otherServices.length === 0) return result
 
-  // Which of those projects actually clash with ours, by time.
-  const clashingProjects = new Set<string>()
-  for (const projectId of otherProjectIds) {
-    const windows = toWindows(
-      (otherServices as any[]).filter((s) => s.project_id === projectId)
-    )
-    if (anyOverlap(windows, ourWindows)) clashingProjects.add(projectId)
+  const servicesByProject = new Map<string, any[]>()
+  for (const s of otherServices as any[]) {
+    const list = servicesByProject.get(s.project_id)
+    if (list) list.push(s)
+    else servicesByProject.set(s.project_id, [s])
   }
 
-  if (clashingProjects.size === 0) return result
-
+  // Which of those offers actually clash with ours, by time, through the
+  // services the offer's chair works.
   for (const offer of relevant) {
     const projectId = offer.project_position.project_id
-    if (!clashingProjects.has(projectId)) continue
+    const theirs = servicesFor(offer.project_position, servicesByProject.get(projectId) || [])
+    if (!anyOverlap(toWindows(theirs), ourWindows)) continue
 
     add(offer.musician_id, {
       source: 'project',

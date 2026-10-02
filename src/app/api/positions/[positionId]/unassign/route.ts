@@ -7,6 +7,7 @@ import { serverError } from '@/lib/api-helpers'
 import { LIVE_OFFER_STATUSES } from '@/lib/staffing/live'
 import { releaseSeat } from '@/lib/staffing/seats'
 import { adminActor, logEvent, type StaffingEvent } from '@/lib/staffing/events'
+import { servicesFor, withScope } from '@/lib/staffing/scope'
 
 export async function POST(
   request: NextRequest,
@@ -25,14 +26,15 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Fetch the position with all related data
-    const { data: position, error: positionError } = await supabase
+    // Fetch the position with all related data, and which of the gig's services
+    // it works (scope.ts)
+    const { data: position, error: positionError } = await withScope((scope) => supabase
       .from('project_positions')
       .select(`
         id,
         chair_number,
         musician_id,
-        status,
+        status${scope},
         instrument:instruments(id, name),
         musician:musicians(id, first_name, last_name, email),
         project:projects(
@@ -40,11 +42,11 @@ export async function POST(
           name,
           organization_id,
           organization:organizations(id, name, timezone),
-          services(start_time)
+          services(id, start_time)
         )
       `)
       .eq('id', positionId)
-      .single()
+      .single())
 
     if (positionError || !position) {
       return NextResponse.json({ error: 'Position not found' }, { status: 404 })
@@ -55,7 +57,7 @@ export async function POST(
     const project = positionData.project
     const organization = project?.organization
     const instrument = positionData.instrument
-    const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+    const projectServices = servicesFor(positionData, project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
     const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, organization?.timezone) : ''
 
     // Verify user has permission (is admin/owner of this organization)

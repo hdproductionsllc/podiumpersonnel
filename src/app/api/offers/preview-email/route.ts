@@ -5,6 +5,7 @@ import { render } from '@react-email/render'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
 import { attachVenueDetails } from '@/lib/venue-attach'
+import { servicesFor, withScope } from '@/lib/staffing/scope'
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,12 +26,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Position ID and Musician ID are required' }, { status: 400 })
     }
 
-    // Fetch position with project, services, and instrument
-    const { data: position, error: positionError } = await supabase
+    // Fetch position with project, services, and instrument, and which of the
+    // services the chair works (scope.ts)
+    const { data: position, error: positionError } = await withScope((scope) => supabase
       .from('project_positions')
       .select(`
         id,
-        chair_number,
+        chair_number${scope},
         instrument:instruments(id, name),
         project:projects(
           id,
@@ -41,7 +43,7 @@ export async function POST(request: NextRequest) {
         )
       `)
       .eq('id', positionId)
-      .single()
+      .single())
 
     if (positionError || !position) {
       return NextResponse.json({ error: 'Position not found' }, { status: 404 })
@@ -62,7 +64,7 @@ export async function POST(request: NextRequest) {
     const project = posData.project as any
     const organization = project?.organization as any
     const instrument = posData.instrument as any
-    const services = project?.services as any[] || []
+    const services = servicesFor(posData, project?.services as any[] || [])
     const timezone = organization?.timezone || DEFAULT_TIMEZONE
 
     await attachVenueDetails(services)

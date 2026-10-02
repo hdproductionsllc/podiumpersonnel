@@ -5,6 +5,7 @@ import { sendOfferExpiredEmail, formatPerformanceDateForSubject } from '@/lib/em
 import { notify } from '@/lib/notify'
 import { getAppUrl } from '@/lib/utils'
 import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
+import { servicesFor, withScope } from '@/lib/staffing/scope'
 import { notifySubDeclined } from '@/lib/staffing/respond'
 import { LIVE_OFFER_STATUSES } from '@/lib/staffing/live'
 import { releaseSeat } from '@/lib/staffing/seats'
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
   // Find all offers that have expired but haven't been marked as such
   const { data: expiredOffers, error: fetchError } = await withCronRetry(
     'expire-offers: fetch expired offers',
-    () => supabase
+    () => withScope((scope) => supabase
       .from('contract_offers')
       .select(`
         id,
@@ -40,20 +41,20 @@ export async function GET(request: NextRequest) {
         project_position:project_positions(
           id,
           chair_number,
-          instrument_id,
+          instrument_id${scope},
           instrument:instruments(id, name),
           project:projects(
             id,
             name,
             organization_id,
             organization:organizations(id, name, timezone),
-            services(start_time)
+            services(id, start_time)
           )
         )
       `)
       .in('status', [...LIVE_OFFER_STATUSES])
       .not('expires_at', 'is', null)
-      .lt('expires_at', new Date().toISOString()),
+      .lt('expires_at', new Date().toISOString())),
   )
 
   if (fetchError) {
@@ -89,7 +90,7 @@ export async function GET(request: NextRequest) {
         continue
       }
 
-      const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+      const projectServices = servicesFor(position, project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
       const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, organization?.timezone) : ''
 
       // 1. Mark offer as expired — optimistic lock, same pattern as accept/decline:

@@ -5,6 +5,7 @@ import { LIVE_OFFER_STATUSES, isLiveOffer } from './live'
 import { DEFAULT_OFFER_EXPIRY, capNoExpiryAtGigStart, resolveExpiresAt, type OfferExpiry } from './expiry'
 import { adminActor, logEvent, type Actor, type StaffingEvent } from './events'
 import { MIGRATION_094_MISSING, isMissingColumn, isMissingFunction } from './rpc'
+import { servicesFor, withScope } from './scope'
 import {
   OFFER_EMAIL_ORG_FIELDS,
   OFFER_EMAIL_SERVICE_FIELDS,
@@ -130,11 +131,11 @@ export async function createOffer(
   // -- 1. what the email needs ------------------------------------------------------
 
   // The admin's own session: a chair outside their organization reads as not found.
-  const { data: position, error: positionError } = await supabase
+  const { data: position, error: positionError } = await withScope((scope) => supabase
     .from('project_positions')
     .select(`
       id,
-      chair_number,
+      chair_number${scope},
       musician_id,
       status,
       instrument_id,
@@ -151,7 +152,7 @@ export async function createOffer(
       )
     `)
     .eq('id', positionId)
-    .single()
+    .single())
 
   if (positionError || !position) return refuse(404, 'not_found', 'Position not found')
 
@@ -175,7 +176,9 @@ export async function createOffer(
   // -- 2. the offer, in one transaction ---------------------------------------------
 
   const service = createServiceClient()
-  const services: any[] = project?.services || []
+  // The services this chair works (scope.ts): what the offer is for, so what
+  // caps "no expiration", what the snapshot records and what the email lists.
+  const services: any[] = servicesFor(pos, project?.services || [])
   const nowIso = new Date().toISOString()
   // "No expiration" still ends when the gig starts.
   const expiresAt = capNoExpiryAtGigStart(
@@ -580,9 +583,10 @@ export async function insertOffer(
 }
 
 /**
- * What the musician is being offered, frozen at send time: the gig's services
- * (all of them; per-chair service scoping is a later step) and the pay inputs
- * exactly as the admin set them. Pay is recorded, never recomputed here.
+ * What the musician is being offered, frozen at send time: the services their
+ * chair works (servicesFor: the whole gig unless the chair is limited to some)
+ * and the pay inputs exactly as the admin set them. Pay is recorded, never
+ * recomputed here.
  */
 export function termsSnapshot(
   position: any,

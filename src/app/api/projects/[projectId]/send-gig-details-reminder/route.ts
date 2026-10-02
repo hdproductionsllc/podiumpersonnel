@@ -6,6 +6,7 @@ import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
 import { getOrgPlan } from '@/lib/api-helpers'
 import { canUseEmailFeatures } from '@/lib/plan'
+import { servicesForMusician, withScope } from '@/lib/staffing/scope'
 
 export async function POST(
   request: NextRequest,
@@ -76,8 +77,8 @@ export async function POST(
       return NextResponse.json({ error: 'No unconfirmed musicians to remind' }, { status: 400 })
     }
 
-    // Fetch project data for email content
-    const { data: project } = await supabase
+    // Fetch project data for email content, and which services each chair works (scope.ts)
+    const { data: project } = await withScope((scope) => supabase
       .from('projects')
       .select(`
         id,
@@ -100,10 +101,11 @@ export async function POST(
           venue_2,
           venue_id_2,
           venue_2_details:venues!services_venue_id_2_fkey(name, address, city, state, zip, google_maps_url)
-        )
+        ),
+        project_positions(musician_id${scope})
       `)
       .eq('id', projectId)
-      .single()
+      .single())
 
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
@@ -114,8 +116,11 @@ export async function POST(
     const timezone = organization?.timezone || DEFAULT_TIMEZONE
     const baseUrl = getAppUrl()
 
-    const formattedServices = services
+    // Each person is reminded of the services their chair works (every one,
+    // unless the chair is limited to some).
+    const sortedServices = services
       .sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+    const formattedServices = sortedServices
       .map((service: any) => ({
         name: service.name,
         date: new Date(service.start_time).toLocaleDateString('en-US', {
@@ -131,6 +136,10 @@ export async function POST(
         venue2Url: service.venue_2_details || service.venue_2 ? getVenueMapsUrl({ venue: service.venue_2, venue_details: service.venue_2_details }) : null,
         venue2Address: service.venue_2_details ? getVenueAddress({ venue_details: service.venue_2_details }) : null,
       }))
+    const formattedServicesFor = (musicianId: string) =>
+      servicesForMusician(project.project_positions, musicianId, sortedServices).map(
+        (service) => formattedServices[sortedServices.indexOf(service)]
+      )
 
     const originalSentDate = new Date(sendRecord.sent_at).toLocaleDateString('en-US', {
       weekday: 'long',
@@ -181,7 +190,7 @@ export async function POST(
                 organizationName: organization?.name || 'Orchestra',
                 organizationId: organization?.id,
                 projectName: project.name,
-                services: formattedServices,
+                services: formattedServicesFor(musician.id),
                 confirmUrl,
                 originalSentDate,
                 branding,

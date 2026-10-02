@@ -1,6 +1,7 @@
 import { requireOrgAdmin, apiSuccess, apiError } from '@/lib/api-helpers'
 import { acceptedOfferIncludesLeaderFee, acceptedOfferPay, computeGigPay, type OfferForPay } from '@/lib/payments/compute'
 import { gigLead, type PositionForAfterGig } from '@/lib/after-gig/rules'
+import { servicesFor, withScope, type PositionScope } from '@/lib/staffing/scope'
 
 export async function POST(request: Request) {
   const { supabase, membership, error } = await requireOrgAdmin()
@@ -10,52 +11,51 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { projectId } = body
 
-    // Build query for confirmed positions with their accepted contract offers
-    let positionsQuery = supabase
-      .from('project_positions')
-      .select(`
-        id,
-        musician_id,
-        project_id,
-        status,
-        chair_number,
-        instrument:instruments(name),
-        projects!inner(
+    // Confirmed positions with their accepted contract offers, and which of the
+    // gig's services each chair works (src/lib/staffing/scope.ts).
+    const { data: positions, error: positionsError } = await withScope((scope) => {
+      const positionsQuery = supabase
+        .from('project_positions')
+        .select(`
           id,
-          name,
-          organization_id,
-          gig_lead_musician_id,
-          services(
+          musician_id,
+          project_id,
+          status,
+          chair_number${scope},
+          instrument:instruments(name),
+          projects!inner(
             id,
             name,
-            start_time,
-            base_pay,
-            leader_fee
+            organization_id,
+            gig_lead_musician_id,
+            services(
+              id,
+              name,
+              start_time,
+              base_pay,
+              leader_fee
+            )
+          ),
+          musician:musicians(
+            id,
+            first_name,
+            last_name,
+            email,
+            is_leader
+          ),
+          contract_offers(
+            custom_pay,
+            status,
+            terms_snapshot
           )
-        ),
-        musician:musicians(
-          id,
-          first_name,
-          last_name,
-          email,
-          is_leader
-        ),
-        contract_offers(
-          custom_pay,
-          status,
-          terms_snapshot
-        )
-      `)
-      .eq('status', 'confirmed')
-      .not('musician_id', 'is', null)
+        `)
+        .eq('status', 'confirmed')
+        .not('musician_id', 'is', null)
 
-    if (projectId) {
-      positionsQuery = positionsQuery.eq('project_id', projectId)
-    } else {
-      positionsQuery = positionsQuery.eq('projects.organization_id', membership!.organization_id)
-    }
-
-    const { data: positions, error: positionsError } = await positionsQuery
+      return projectId
+        ? positionsQuery.eq('project_id', projectId)
+        : positionsQuery.eq('projects.organization_id', membership!.organization_id)
+    })
 
     if (positionsError) {
       console.error('Error fetching positions:', positionsError)
@@ -119,7 +119,11 @@ export async function POST(request: Request) {
 
       const includesLeaderFee = acceptedOfferIncludesLeaderFee(offers, leadByProject.get(project.id) === musician.id)
 
-      for (const line of computeGigPay(project.services, musician.is_leader, offerPay, includesLeaderFee)) {
+      // Only the services this chair works: all of them unless the chair is
+      // limited to some (scope.ts). A whole-gig amount is still owed once,
+      // against the first of them.
+      const chairServices = servicesFor(position as unknown as PositionScope, project.services)
+      for (const line of computeGigPay(chairServices, musician.is_leader, offerPay, includesLeaderFee)) {
         if (line.total <= 0) continue
 
         const row = {

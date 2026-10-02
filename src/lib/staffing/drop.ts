@@ -8,6 +8,7 @@ import { advance, autoOfferNote, type AdvanceResult } from './cascade'
 import { countChairs, isOfferClosed } from './respond'
 import { isMissingFunction } from './rpc'
 import { getOrgStaffingSettings } from './settings'
+import { servicesFor, withScope, type ScopeSelect } from './scope'
 
 /**
  * Worker drop (the plan, Release 1 B1.3): someone who accepted presses "I
@@ -75,7 +76,8 @@ export interface DropResult {
   cascade?: AdvanceResult
 }
 
-const OFFER_SELECT = `
+/** `scope` from withScope (scope.ts): which of the gig's services the chair works. */
+const offerSelect = (scope: ScopeSelect) => `
   id,
   status,
   project_position_id,
@@ -83,7 +85,7 @@ const OFFER_SELECT = `
   musician:musicians(id, first_name, last_name, email, is_active),
   project_position:project_positions(
     id,
-    chair_number,
+    chair_number${scope},
     instrument:instruments(id, name),
     project:projects(
       id,
@@ -91,10 +93,10 @@ const OFFER_SELECT = `
       status,
       organization_id,
       organization:organizations(id, name, timezone),
-      services(start_time)
+      services(id, start_time)
     )
   )
-`
+` as const
 
 /** worker_drop's answers that are not 'released'. */
 const REFUSALS: readonly DropOutcome[] = [
@@ -110,7 +112,9 @@ const REFUSALS: readonly DropOutcome[] = [
 export async function dropFromGig(service: SupabaseClient, token: string, rawReason: unknown): Promise<DropResult> {
   const reason = cleanDropReason(rawReason)
 
-  const { data: offer, error: fetchError } = await service.from('contract_offers').select(OFFER_SELECT).eq('token', token).maybeSingle()
+  const { data: offer, error: fetchError } = await withScope((scope) =>
+    service.from('contract_offers').select(offerSelect(scope)).eq('token', token).maybeSingle()
+  )
   if (fetchError) throw fetchError
   if (!offer) return { outcome: 'not_found' }
 
@@ -118,7 +122,9 @@ export async function dropFromGig(service: SupabaseClient, token: string, rawRea
   const musician = row.musician
   const position = row.project_position
   const project = position?.project
-  const services: { start_time: string | null }[] = project?.services || []
+  // The services this chair works (the whole gig unless it is limited to some):
+  // "has it started" is about the chair's first one, as worker_drop (098) asks.
+  const services: { id: string; start_time: string | null }[] = servicesFor(position, project?.services || [])
 
   // The same checks worker_drop makes under the chair's lock; made here first
   // so a refused press costs no write.

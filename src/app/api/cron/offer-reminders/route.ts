@@ -5,6 +5,7 @@ import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
 import { isDueForReminder, reminderHorizon } from '@/lib/staffing/reminders'
+import { servicesFor, withScope } from '@/lib/staffing/scope'
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request)
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
   // point of the offer's own response window). This runs hourly.
   const { data: candidates, error: fetchError } = await withCronRetry(
     'offer-reminders: fetch expiring offers',
-    () => supabase
+    () => withScope((scope) => supabase
       .from('contract_offers')
       .select(`
         id,
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
         project_position:project_positions(
           id,
           chair_number,
-          instrument_id,
+          instrument_id${scope},
           instrument:instruments(id, name),
           project:projects(
             id,
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
               email_brand_color,
               email_footer_text
             ),
-            services(start_time)
+            services(id, start_time)
           )
         )
       `)
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
       .not('expires_at', 'is', null)
       .gt('expires_at', now.toISOString())
       .lte('expires_at', reminderHorizon(now).toISOString())
-      .is('reminder_sent_at', null),
+      .is('reminder_sent_at', null)),
   )
 
   if (fetchError) {
@@ -121,7 +122,7 @@ export async function GET(request: NextRequest) {
       continue // another run already claimed and is sending this reminder
     }
 
-    const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+    const projectServices = servicesFor(position, project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
     const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, organization?.timezone) : ''
 
     const hoursRemaining = Math.round(

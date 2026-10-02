@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { logEmailConfig } from '@/lib/email/client'
 import { serverError } from '@/lib/api-helpers'
-import { OFFER_EMAIL_SELECT, sendOfferEmail } from '@/lib/staffing/offer-email'
+import { offerEmailSelect, sendOfferEmail } from '@/lib/staffing/offer-email'
+import { withScope } from '@/lib/staffing/scope'
 import { NO_EMAIL_MESSAGE, supersedeLiveOffers, supersededEvents } from '@/lib/staffing/offers'
 import { adminActor, logEvent } from '@/lib/staffing/events'
 
@@ -38,12 +39,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Offer ID is required' }, { status: 400 })
     }
 
-    // Fetch the offer with all related data
-    const { data: offer, error: offerError } = await supabase
+    // Fetch the offer with all related data, and the services its chair works
+    const { data: offer, error: offerError } = await withScope((scope) => supabase
       .from('contract_offers')
-      .select(OFFER_EMAIL_SELECT)
+      .select(offerEmailSelect(scope))
       .eq('id', offerId)
-      .single()
+      .single())
 
     if (offerError || !offer) {
       console.error('Failed to fetch offer:', offerError)

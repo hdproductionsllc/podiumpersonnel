@@ -4,6 +4,7 @@ import { sendOfferReminderEmail, formatPerformanceDateForSubject } from '@/lib/e
 import { notify } from '@/lib/notify'
 import { getAppUrl } from '@/lib/utils'
 import { hasLiveStatus } from '@/lib/staffing/live'
+import { servicesFor, withScope } from '@/lib/staffing/scope'
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,8 +26,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Offer ID is required' }, { status: 400 })
     }
 
-    // Fetch the offer with all related data
-    const { data: offer, error: offerError } = await supabase
+    // Fetch the offer with all related data, and the services its chair works (scope.ts)
+    const { data: offer, error: offerError } = await withScope((scope) => supabase
       .from('contract_offers')
       .select(`
         id,
@@ -41,18 +42,18 @@ export async function POST(request: NextRequest) {
         ),
         project_position:project_positions(
           id,
-          chair_number,
+          chair_number${scope},
           instrument:instruments(id, name),
           project:projects(
             id,
             name,
             organization:organizations(id, name, timezone),
-            services(start_time)
+            services(id, start_time)
           )
         )
       `)
       .eq('id', offerId)
-      .single()
+      .single())
 
     if (offerError || !offer) {
       console.error('Failed to fetch offer:', offerError)
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
     const project = position?.project as any
     const organization = project?.organization as any
     const instrument = position?.instrument as any
-    const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+    const projectServices = servicesFor(position, project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
     const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, organization?.timezone) : ''
 
     // Count total chairs for this instrument in this project

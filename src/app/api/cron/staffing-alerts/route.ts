@@ -6,6 +6,7 @@ import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { cronDisabledResponse, requireCronAuth, runCronJob, withCronRetry } from '@/lib/cron'
 import { staffingAlertThreshold } from '@/lib/projects/staffing-alerts'
+import { servicesFor, withScope } from '@/lib/staffing/scope'
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireCronAuth(request)
@@ -19,10 +20,11 @@ export async function GET(request: NextRequest) {
   const baseUrl = getAppUrl()
   const now = new Date()
 
-  // Fetch active projects with upcoming services and their positions
+  // Fetch active projects with upcoming services and their positions (with
+  // which services each chair works: scope.ts)
   const { data: projects, error: fetchError } = await withCronRetry(
     'staffing-alerts: fetch active projects',
-    () => supabase
+    () => withScope((scope) => supabase
       .from('projects')
       .select(`
         id,
@@ -47,11 +49,11 @@ export async function GET(request: NextRequest) {
         project_positions(
           id,
           status,
-          chair_number,
+          chair_number${scope},
           instrument:instruments(name)
         )
       `)
-      .eq('status', 'active'),
+      .eq('status', 'active')),
   )
 
   if (fetchError) {
@@ -64,9 +66,9 @@ export async function GET(request: NextRequest) {
 
   for (const project of projects || []) {
     const services = (project.services as any[]) || []
-    const positions = (project.project_positions as any[]) || []
+    const projectPositions = (project.project_positions as any[]) || []
 
-    if (services.length === 0 || positions.length === 0) continue
+    if (services.length === 0 || projectPositions.length === 0) continue
 
     // Find earliest upcoming service
     const upcomingServices = services.filter(
@@ -74,9 +76,24 @@ export async function GET(request: NextRequest) {
     )
     if (upcomingServices.length === 0) continue
 
-    const earliestService = upcomingServices.reduce((earliest: any, s: any) => {
+    // The chairs this alert is about: those with a service still ahead. Every
+    // chair works every service unless it is limited to some (scope.ts), so
+    // that is every chair; a chair limited to calls already over (or to none)
+    // has nothing left to staff.
+    const positions = projectPositions.filter((p: any) => servicesFor(p, upcomingServices).length > 0)
+
+    // Unfilled chairs, and the earliest call one of them still has to work:
+    // with every chair on every service, the gig's next service, as before.
+    const unfilled = positions.filter(
+      (p: any) => p.status !== 'confirmed'
+    )
+    const urgentServices = unfilled.length > 0
+      ? unfilled.flatMap((p: any) => servicesFor(p, upcomingServices))
+      : upcomingServices
+
+    const earliestService = urgentServices.reduce((earliest: any, s: any) => {
       return new Date(s.start_time).getTime() < new Date(earliest.start_time).getTime() ? s : earliest
-    }, upcomingServices[0])
+    }, urgentServices[0])
 
     const gigTime = new Date(earliestService.start_time).getTime()
     const daysAway = Math.floor((gigTime - now.getTime()) / (1000 * 60 * 60 * 24))
@@ -93,9 +110,6 @@ export async function GET(request: NextRequest) {
     }
 
     // Check for unfilled positions
-    const unfilled = positions.filter(
-      (p: any) => p.status !== 'confirmed'
-    )
     if (unfilled.length === 0) continue // Fully staffed, no alert needed
 
     const confirmedCount = positions.length - unfilled.length

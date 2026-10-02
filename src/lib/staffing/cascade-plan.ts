@@ -4,6 +4,7 @@ import { getNextCandidates, type Candidate } from './candidates'
 import { cascadeExpiresAt } from './expiry'
 import { LIVE_OFFER_STATUSES } from './live'
 import { isMissingColumn } from './rpc'
+import { servicesFor, withScope, type ScopeSelect } from './scope'
 import { getOrgStaffingSettings } from './settings'
 import { OFFER_EMAIL_ORG_FIELDS, OFFER_EMAIL_SERVICE_FIELDS } from './offer-email-fields'
 
@@ -107,9 +108,10 @@ export interface PlanInput {
   excludeMusicianIds?: readonly string[]
 }
 
-const POSITION_SELECT = `
+/** The chair as the cascade reads it; `scope` from withScope (scope.ts). */
+const positionSelect = (scope: ScopeSelect) => `
   id,
-  chair_number,
+  chair_number${scope},
   musician_id,
   status,
   instrument_id,
@@ -125,7 +127,7 @@ const POSITION_SELECT = `
     organization:organizations(${OFFER_EMAIL_ORG_FIELDS}),
     services(${OFFER_EMAIL_SERVICE_FIELDS})
   )
-`
+` as const
 
 const TRIGGER_SELECT = `
   id,
@@ -159,11 +161,11 @@ export async function planCascade(service: SupabaseClient, input: PlanInput): Pr
 
   // -- the chair, its gig and the organization's switch ----------------------------
 
-  const { data: position, error: positionError } = await service
+  const { data: position, error: positionError } = await withScope((scope) => service
     .from('project_positions')
-    .select(POSITION_SELECT)
+    .select(positionSelect(scope))
     .eq('id', input.positionId)
-    .maybeSingle()
+    .maybeSingle())
 
   if (positionError) {
     if (isMissingColumn(positionError)) return { kind: 'skip', reason: 'not_ready' }
@@ -173,7 +175,9 @@ export async function planCascade(service: SupabaseClient, input: PlanInput): Pr
 
   const pos = position as any
   const project = pos.project
-  const services: any[] = project?.services || []
+  // The services this chair works (the whole gig unless limited): the
+  // cascaded offer's deadline, snapshot and email are about those.
+  const services: any[] = servicesFor(pos, project?.services || [])
 
   const settings = project?.organization_id ? await getOrgStaffingSettings(service, project.organization_id) : null
   if (!settings?.autoCascade && !input.assume?.autoCascadeOn) return { kind: 'skip', reason: 'auto_off' }

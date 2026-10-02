@@ -5,6 +5,7 @@ import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
 import { attachVenueDetails } from '@/lib/venue-attach'
+import { servicesFor, type ScopeSelect } from './scope'
 
 /**
  * The offer email: the musician's "Call" email plus the admins' "Offer Sent"
@@ -16,8 +17,12 @@ import { attachVenueDetails } from '@/lib/venue-attach'
  * did; do not change them without David (see payments/compute.ts).
  */
 
-/** The embeds the email needs, as the old send-email route selected them. */
-export const OFFER_EMAIL_SELECT = `
+/**
+ * The embeds the email needs, as the old send-email route selected them, plus
+ * the chair's scope (`scope` from withScope, src/lib/staffing/scope.ts; ''
+ * leaves it out and the chair reads as working every service).
+ */
+export const offerEmailSelect = (scope: ScopeSelect | '' = '') => `
         id,
         token,
         expires_at,
@@ -31,7 +36,7 @@ export const OFFER_EMAIL_SELECT = `
         ),
         project_position:project_positions(
           id,
-          chair_number,
+          chair_number${scope},
           instrument:instruments(id, name),
           project:projects(
             id,
@@ -41,7 +46,7 @@ export const OFFER_EMAIL_SELECT = `
             services(id, name, service_type, call_time, start_time, end_time, venue, venue_id, base_pay, leader_fee, venue_2, venue_id_2)
           )
         )
-      `
+      ` as const
 
 export { OFFER_EMAIL_ORG_FIELDS, OFFER_EMAIL_SERVICE_FIELDS } from './offer-email-fields'
 
@@ -49,10 +54,12 @@ export { OFFER_EMAIL_ORG_FIELDS, OFFER_EMAIL_SERVICE_FIELDS } from './offer-emai
 export interface OfferEmailInput {
   offer: { id: string; token: string; expires_at: string | null; custom_pay: number | null; personal_message?: string | null }
   musician: any
+  /** The chair, with its scope fields when read (POSITION_SCOPE_FIELDS). */
   position: any
   project: any
   organization: any
   instrument: any
+  /** The gig's services, or already the chair's: the email lists servicesFor(position, services). */
   services: any[]
 }
 
@@ -77,7 +84,10 @@ export async function sendOfferEmail(
   input: OfferEmailInput,
   { includeLeaderFee: explicitLeaderFee, leaderFeeAmount: explicitLeaderFeeAmount }: LeaderFeeChoice = {}
 ): Promise<OfferEmailResult> {
-  const { offer, musician, position, project, organization, instrument, services } = input
+  const { offer, musician, position, project, organization, instrument } = input
+  // Only the services this chair works (the whole gig unless the chair is
+  // limited to some); the same array when it is the whole gig.
+  const services = servicesFor(position, input.services)
   const offerId = offer.id
   const timezone = organization?.timezone || DEFAULT_TIMEZONE
 

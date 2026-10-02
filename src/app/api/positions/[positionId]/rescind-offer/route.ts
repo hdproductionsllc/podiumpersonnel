@@ -6,6 +6,7 @@ import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { LIVE_OFFER_STATUSES } from '@/lib/staffing/live'
 import { releaseSeat } from '@/lib/staffing/seats'
 import { adminActor, logEvent, type StaffingEvent } from '@/lib/staffing/events'
+import { servicesFor, withScope } from '@/lib/staffing/scope'
 
 // Admin rescinds an outstanding offer for a position.
 // Distinct from a musician declining: the offer is withdrawn before they responded.
@@ -33,24 +34,25 @@ export async function POST(
       // No body provided, that's fine
     }
 
-    const { data: position, error: positionError } = await supabase
+    // The chair, and which of the gig's services it works (scope.ts)
+    const { data: position, error: positionError } = await withScope((scope) => supabase
       .from('project_positions')
       .select(`
         id,
         chair_number,
         musician_id,
-        status,
+        status${scope},
         instrument:instruments(id, name),
         project:projects(
           id,
           name,
           organization_id,
           organization:organizations(id, name, timezone),
-          services(start_time)
+          services(id, start_time)
         )
       `)
       .eq('id', positionId)
-      .single()
+      .single())
 
     if (positionError || !position) {
       return NextResponse.json({ error: 'Position not found' }, { status: 404 })
@@ -60,7 +62,7 @@ export async function POST(
     const project = positionData.project
     const organization = project?.organization
     const instrument = positionData.instrument
-    const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+    const projectServices = servicesFor(positionData, project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
     const timezone = organization?.timezone || DEFAULT_TIMEZONE
     const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, timezone) : ''
 

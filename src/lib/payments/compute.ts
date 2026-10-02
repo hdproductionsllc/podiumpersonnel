@@ -76,8 +76,14 @@ function firstService<S extends ServiceForPay>(services: S[]): S {
 }
 
 /**
- * The lines one musician is owed for a gig. Empty when the gig has no services.
+ * The lines one musician is owed for a gig. Empty when there are no services.
  * Lines can total zero (no rate set anywhere); callers decide whether to skip them.
+ *
+ * `services` are the services the musician's chair works: servicesFor(position,
+ * gig services) (src/lib/staffing/scope.ts). For a chair on the whole gig that
+ * is every service, as before. For a chair limited to some, the per-service
+ * rates are owed for those only, and a whole-gig amount is owed once, against
+ * the first service the chair works.
  */
 export function computeGigPay(
   services: ServiceForPay[] | null | undefined,

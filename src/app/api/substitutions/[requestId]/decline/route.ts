@@ -4,6 +4,7 @@ import { sendSubRequestDeclinedEmail, formatPerformanceDateForSubject } from '@/
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { adminActor, logEvent } from '@/lib/staffing/events'
 import { notify } from '@/lib/notify'
+import { servicesFor, withScope } from '@/lib/staffing/scope'
 
 export async function POST(
   request: Request,
@@ -27,8 +28,9 @@ export async function POST(
     // Body is optional
   }
 
-  // Fetch the substitution request with all related data
-  const { data: subRequest, error: fetchError } = await supabase
+  // Fetch the substitution request with all related data, and the services the
+  // chair works (scope.ts)
+  const { data: subRequest, error: fetchError } = await withScope((scope) => supabase
     .from('substitution_requests')
     .select(`
       *,
@@ -36,19 +38,19 @@ export async function POST(
       service:services(id, name),
       project_position:project_positions(
         id,
-        chair_number,
+        chair_number${scope},
         instrument:instruments(id, name),
         project:projects(
           id,
           name,
           organization_id,
           organization:organizations(id, name, timezone),
-          services(start_time)
+          services(id, start_time)
         )
       )
     `)
     .eq('id', requestId)
-    .single()
+    .single())
 
   if (fetchError || !subRequest) {
     return NextResponse.json({ error: 'Substitution request not found' }, { status: 404 })
@@ -71,7 +73,7 @@ export async function POST(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const requestingMusician = subRequest.requesting_musician as any
 
-  const projectServices = (project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+  const projectServices = servicesFor(position, project?.services as any[] || []).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
   const performanceDate = projectServices[0] ? formatPerformanceDateForSubject(projectServices[0].start_time, organization?.timezone || DEFAULT_TIMEZONE) : ''
 
   const { data: membership } = await supabase

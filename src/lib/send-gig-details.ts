@@ -4,6 +4,7 @@ import { sendGigDetailsEmail } from '@/lib/email/send'
 import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { formatVenueFields } from '@/lib/venue-helpers'
+import { servicesForMusician, withScope } from '@/lib/staffing/scope'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 interface SendGigDetailsParams {
@@ -30,8 +31,8 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
   const { projectId, organizationId, sentBy, additionalNotes } = params
   const serviceClient = params.serviceClient || createServiceClient()
 
-  // Fetch project with all related data
-  const { data: project, error: projectError } = await serviceClient
+  // Fetch project with all related data, and which services each chair works (scope.ts)
+  const { data: project, error: projectError } = await withScope((scope) => serviceClient
     .from('projects')
     .select(`
       id,
@@ -65,13 +66,13 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
         id,
         chair_number,
         status,
-        musician_id,
+        musician_id${scope},
         instrument:instruments(id, name),
         musician:musicians(id, first_name, last_name, email, phone)
       )
     `)
     .eq('id', projectId)
-    .single()
+    .single())
 
   if (projectError || !project) {
     throw new Error('Project not found')
@@ -103,9 +104,11 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
     throw new Error('No confirmed musicians with email addresses to send to')
   }
 
-  // Format services for the email
-  const formattedServices = services
+  // Format services for the email: each person is sent the ones their chair
+  // works (every one, unless the chair is limited to some).
+  const sortedServices = services
     .sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+  const formattedServices = sortedServices
     .map((service: any) => ({
       name: service.name,
       date: new Date(service.start_time).toLocaleDateString('en-US', {
@@ -136,6 +139,10 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
         : null,
       ...formatVenueFields(service),
     }))
+  const formattedServicesFor = (musicianId: string) =>
+    servicesForMusician(filledPositions, musicianId, sortedServices).map(
+      (service: any) => formattedServices[sortedServices.indexOf(service)]
+    )
 
   // Build roster from filled positions
   const roster = filledPositions
@@ -245,7 +252,7 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
               organizationId: organization?.id,
               projectName: project.name,
               ensembleType: project.ensemble_type,
-              services: formattedServices,
+              services: formattedServicesFor(member.musicianId),
               roster: emailRoster,
               confirmUrl,
               notes: additionalNotes,
