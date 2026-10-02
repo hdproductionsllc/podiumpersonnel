@@ -232,8 +232,7 @@ describe('RLS policy safety (migrations)', () => {
     // returns nothing and an admin sees ZERO venues (verified in prod
     // 2026-09-17). is_org_member/is_org_admin are SECURITY DEFINER and are what
     // every table since 001 uses.
-    const live = policies.filter((p) => p.table === 'venues')
-    const orgPolicies = live.filter((p) => p.name !== 'Musicians can view venues')
+    const orgPolicies = policies.filter((p) => p.table === 'venues')
 
     expect(orgPolicies.map((p) => p.command).sort()).toEqual([
       'DELETE',
@@ -256,9 +255,58 @@ describe('RLS policy safety (migrations)', () => {
         `${policy.file}: venues "${policy.name}" still carries the raw sub-select`
       ).toBe(false)
     }
+  })
 
-    // The musician-portal read from 034 is deliberately untouched.
-    expect(live.map((p) => p.name)).toContain('Musicians can view venues')
+  it('keys no policy on a musician login (regression: 016/033-035/041 → 091)', () => {
+    // The retired musician portal scoped reads, and one unrestricted UPDATE, by
+    // musicians.user_id = auth.uid(). "Musicians can update own contact info"
+    // let a linked account move its own roster row into another organization,
+    // after which get_musician_org_ids() handed it that org's row, instruments
+    // and venues (audit B, T-1). Musician pages are token-based on the service
+    // role now, so no policy may be reached through a musician's login.
+    const portal = policies.filter((p) => {
+      const predicate = `${p.usingExpr ?? ''} ${p.withCheckExpr ?? ''}`
+      return (
+        /get_musician_/i.test(predicate) ||
+        /FROM\s+musicians\s+WHERE\s+user_id/i.test(predicate) ||
+        (p.table === 'musicians' && /user_id/i.test(predicate))
+      )
+    })
+
+    expect(
+      portal.map((p) => `${p.file}: "${p.name}" on ${p.table} FOR ${p.command}`)
+    ).toEqual([])
+
+    // Staff access to the roster is what must survive.
+    const musicians = policies.filter((p) => p.table === 'musicians')
+    expect(musicians.map((p) => `${p.name} FOR ${p.command}`).sort()).toEqual([
+      'Admins can manage musicians FOR ALL',
+      'Members can view musicians FOR SELECT',
+    ])
+  })
+
+  it('has no client INSERT path into organizations (regression: 018 → 091)', () => {
+    // 018 let any signed-in user insert org rows with is_comped, plan_tier or
+    // library_org_id of their choosing (081's guard is BEFORE UPDATE only).
+    // Signup goes through create_organization_with_owner, a DEFINER RPC.
+    const writes = policies.filter(
+      (p) => p.table === 'organizations' && ['INSERT', 'ALL'].includes(p.command)
+    )
+    expect(writes.map((p) => `${p.file}: "${p.name}" FOR ${p.command}`)).toEqual([])
+  })
+
+  it('files impersonation_log rows only for an org the writer administers (regression: 028 → 091)', () => {
+    const inserts = policies.filter(
+      (p) => p.table === 'impersonation_log' && ['INSERT', 'ALL'].includes(p.command)
+    )
+
+    expect(inserts.length, 'expected an INSERT policy on impersonation_log').toBeGreaterThan(0)
+    for (const policy of inserts) {
+      expect(
+        /is_org_admin\s*\(\s*organization_id\s*\)/i.test(policy.withCheckExpr ?? ''),
+        `${policy.file}: "${policy.name}" only checks who is writing, not for which org`
+      ).toBe(true)
+    }
   })
 
   it('keeps the gig-detail tables free of public policies (regression: 039 → 076)', () => {
@@ -279,6 +327,131 @@ describe('RLS policy safety (migrations)', () => {
         `${policy.file}: policy "${policy.name}" on ${policy.table} is not scoped to an org or role`
       ).toBe(true)
     }
+  })
+})
+
+/**
+ * Replays CREATE / ALTER / DROP FUNCTION and REVOKE across the migrations.
+ * Function bodies contain semicolons, so this works on whole files with
+ * $$-aware patterns instead of the statement split used for policies. Keyed by
+ * bare name: the one overload this repo ever had (create_organization_with_owner)
+ * was collapsed to a single signature in 067.
+ */
+function liveFunctions() {
+  const files = readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()
+
+  const fns = new Map<string, { file: string; definer: boolean; pinned: boolean }>()
+  const revokedFromClients = new Set<string>()
+
+  for (const file of files) {
+    const sql = stripSqlComments(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'))
+
+    const events: { at: number; apply: () => void }[] = []
+
+    for (const m of sql.matchAll(
+      /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\.)?(\w+)\s*\(([\s\S]*?)\$\$[\s\S]*?\$\$([^;]*);/gi
+    )) {
+      const [, name, header, trailer] = m
+      const attrs = `${header} ${trailer}`
+      // CREATE OR REPLACE resets proconfig, so a redefinition without SET
+      // unpins a function that was pinned before.
+      events.push({
+        at: m.index!,
+        apply: () =>
+          fns.set(name.toLowerCase(), {
+            file,
+            definer: /SECURITY\s+DEFINER/i.test(attrs),
+            pinned: /SET\s+search_path/i.test(attrs),
+          }),
+      })
+    }
+    for (const m of sql.matchAll(
+      /ALTER\s+FUNCTION\s+(?:public\.)?(\w+)\s*\([^)]*\)\s+SET\s+search_path/gi
+    )) {
+      events.push({
+        at: m.index!,
+        apply: () => {
+          const fn = fns.get(m[1].toLowerCase())
+          if (fn) fn.pinned = true
+        },
+      })
+    }
+    for (const m of sql.matchAll(/DROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?(?:public\.)?(\w+)\s*\(/gi)) {
+      events.push({ at: m.index!, apply: () => fns.delete(m[1].toLowerCase()) })
+    }
+    for (const m of sql.matchAll(
+      /REVOKE\s+ALL\s+ON\s+FUNCTION\s+(?:public\.)?(\w+)\s*\([^)]*\)\s+FROM\s+([^;]+);/gi
+    )) {
+      const roles = m[2]
+      if (/\banon\b/i.test(roles) && /\bauthenticated\b/i.test(roles) && /\bPUBLIC\b/i.test(roles)) {
+        events.push({ at: m.index!, apply: () => revokedFromClients.add(m[1].toLowerCase()) })
+      }
+    }
+
+    for (const e of events.sort((a, b) => a.at - b.at)) e.apply()
+  }
+
+  return { fns, revokedFromClients }
+}
+
+describe('SECURITY DEFINER function hygiene (migrations)', () => {
+  const { fns, revokedFromClients } = liveFunctions()
+
+  it('parses the DEFINER functions out of the migrations', () => {
+    const definers = [...fns].filter(([, f]) => f.definer).map(([name]) => name)
+    expect(definers).toEqual(
+      expect.arrayContaining(['is_org_member', 'is_org_admin', 'create_organization_with_owner'])
+    )
+  })
+
+  it('pins search_path on every SECURITY DEFINER function (audit B T-3)', () => {
+    // A DEFINER function resolves unqualified names through the caller's
+    // search_path while running with its owner's rights. 080/081 pinned theirs;
+    // 091 pinned the rest. A new DEFINER function must carry
+    // SET search_path = public, pg_temp.
+    const unpinned = [...fns]
+      .filter(([, f]) => f.definer && !f.pinned)
+      .map(([name, f]) => `${f.file}: ${name}`)
+
+    expect(unpinned).toEqual([])
+  })
+
+  it('closes the portal-era functions to browser roles (audit B T-3)', () => {
+    for (const name of [
+      'activate_musician_by_token',
+      'get_musician_by_invite_token',
+      'link_musician_records_to_user',
+    ]) {
+      expect(revokedFromClients.has(name), `${name} is still executable by anon/authenticated`).toBe(true)
+    }
+  })
+
+  it('has no app code calling a function 091 revoked', () => {
+    // A revoked RPC fails with "permission denied" at runtime; the auth
+    // callback was the last caller of link_musician_records_to_user.
+    const offenders: string[] = []
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name)
+        if (entry.isDirectory()) {
+          if (entry.name !== '__tests__') walk(path)
+        } else if (/\.(ts|tsx)$/.test(entry.name)) {
+          const source = readFileSync(path, 'utf8')
+          if (
+            /rpc\(\s*['"](activate_musician_by_token|get_musician_by_invite_token|link_musician_records_to_user)['"]/.test(
+              source
+            )
+          ) {
+            offenders.push(path)
+          }
+        }
+      }
+    }
+    walk(join(process.cwd(), 'src'))
+
+    expect(offenders).toEqual([])
   })
 })
 
@@ -314,5 +487,39 @@ describe('launch-hardening migrations are present (084-086)', () => {
     // Every check prints PASS or FAIL under a check_name column.
     expect(script).toContain('AS check_name')
     expect(script.match(/'PASS'/g)?.length ?? 0).toBeGreaterThan(10)
+  })
+})
+
+describe('tenant hardening ships as migration + paste script (091)', () => {
+  const migrationFiles = readdirSync(MIGRATIONS_DIR).filter((f) => f.startsWith('091_'))
+
+  it('ships exactly one migration 091', () => {
+    expect(migrationFiles).toHaveLength(1)
+  })
+
+  it('pastes the migration verbatim, inside one transaction, with a PASS/FAIL table', () => {
+    // scripts/sql/091-tenant-hardening.paste.sql is what David runs in the SQL
+    // editor. If its body drifts from the migration, a rebuilt environment and
+    // production end up with different permissions.
+    const normalize = (s: string) => s.replace(/\r\n/g, '\n')
+    const migration = normalize(readFileSync(join(MIGRATIONS_DIR, migrationFiles[0]), 'utf8'))
+    const script = normalize(
+      readFileSync(join(process.cwd(), 'scripts', 'sql', '091-tenant-hardening.paste.sql'), 'utf8')
+    )
+
+    const begin = script.search(/^BEGIN;$/m)
+    const body = script.indexOf(migration)
+    const commit = script.search(/^COMMIT;$/m)
+    expect(body, 'the migration body is not in the paste script verbatim').toBeGreaterThan(-1)
+    expect(begin).toBeGreaterThan(-1)
+    expect(body).toBeGreaterThan(begin)
+    expect(commit).toBeGreaterThan(body)
+
+    // The verification table runs after COMMIT and re-checks 084/085.
+    const results = script.slice(commit)
+    expect(results).toContain('AS check_name')
+    expect(results.match(/'PASS'/g)?.length ?? 0).toBeGreaterThanOrEqual(12)
+    expect(results).toContain('(084)')
+    expect(results).toContain('(085)')
   })
 })
