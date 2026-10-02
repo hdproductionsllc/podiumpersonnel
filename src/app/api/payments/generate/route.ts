@@ -1,5 +1,6 @@
 import { requireOrgAdmin, apiSuccess, apiError } from '@/lib/api-helpers'
-import { acceptedOfferPay, computeGigPay } from '@/lib/payments/compute'
+import { acceptedOfferIncludesLeaderFee, acceptedOfferPay, computeGigPay, type OfferForPay } from '@/lib/payments/compute'
+import { gigLead, type PositionForAfterGig } from '@/lib/after-gig/rules'
 
 export async function POST(request: Request) {
   const { supabase, membership, error } = await requireOrgAdmin()
@@ -16,10 +17,14 @@ export async function POST(request: Request) {
         id,
         musician_id,
         project_id,
+        status,
+        chair_number,
+        instrument:instruments(name),
         projects!inner(
           id,
           name,
           organization_id,
+          gig_lead_musician_id,
           services(
             id,
             name,
@@ -30,11 +35,15 @@ export async function POST(request: Request) {
         ),
         musician:musicians(
           id,
+          first_name,
+          last_name,
+          email,
           is_leader
         ),
         contract_offers(
           custom_pay,
-          status
+          status,
+          terms_snapshot
         )
       `)
       .eq('status', 'confirmed')
@@ -75,11 +84,22 @@ export async function POST(request: Request) {
     // Rows that carry an offer's whole-gig amount: these dedupe per chair, not per service.
     const wholeGigRows = new Set<(typeof paymentsToInsert)[number]>()
 
+    // Each gig's lead (the admin's pick, else Violin 1 chair 1), for labelling
+    // older offers that did not record the leader-fee choice.
+    const leadByProject = new Map<string, string | null>()
+    for (const projectId of new Set(positions.map((p) => p.project_id as string))) {
+      const seated = positions.filter((p) => p.project_id === projectId) as unknown as PositionForAfterGig[]
+      const chosen = (positions.find((p) => p.project_id === projectId)!.projects as unknown as { gig_lead_musician_id: string | null })
+        .gig_lead_musician_id
+      leadByProject.set(projectId, gigLead(seated, chosen).lead?.musicianId ?? null)
+    }
+
     for (const position of positions) {
       const project = position.projects as unknown as {
         id: string
         name: string
         organization_id: string
+        gig_lead_musician_id: string | null
         services: Array<{
           id: string
           name: string
@@ -90,14 +110,16 @@ export async function POST(request: Request) {
       }
 
       const musician = position.musician as unknown as { id: string; is_leader: boolean } | null
-      const offers = position.contract_offers as unknown as Array<{ custom_pay: number | null; status: string }> | null
+      const offers = position.contract_offers as unknown as OfferForPay[] | null
 
       if (!musician || !project.services) continue
 
       // The accepted offer's custom_pay is the actual agreed amount.
       const offerPay = acceptedOfferPay(offers)
 
-      for (const line of computeGigPay(project.services, musician.is_leader, offerPay)) {
+      const includesLeaderFee = acceptedOfferIncludesLeaderFee(offers, leadByProject.get(project.id) === musician.id)
+
+      for (const line of computeGigPay(project.services, musician.is_leader, offerPay, includesLeaderFee)) {
         if (line.total <= 0) continue
 
         const row = {

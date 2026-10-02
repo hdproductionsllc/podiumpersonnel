@@ -20,6 +20,8 @@
 export interface OfferForPay {
   custom_pay: number | null
   status: string
+  /** What the admin chose when sending (migration 093; null on older offers). */
+  terms_snapshot?: { pay?: { include_leader_fee?: boolean | null } | null } | null
 }
 
 export interface ServiceForPay {
@@ -47,6 +49,25 @@ export function acceptedOfferPay(offers: OfferForPay[] | null | undefined): numb
   return accepted?.custom_pay ?? null
 }
 
+/**
+ * Whether the musician's accepted whole-gig amount includes a leader fee, which
+ * is what labels their payment "Leader Fee" rather than "Service Pay".
+ *
+ * Offers sent since migration 093 record the admin's leader-fee checkbox, and
+ * that is the answer. Older offers did not record it, so the gig's lead stands
+ * in (the admin's pick, else Violin 1 chair 1: see gigLead in after-gig/rules).
+ * musicians.is_leader is NOT used: it says someone CAN lead, not that they led
+ * this gig or were paid for it (it labelled a violist's pay "Leader Fee").
+ */
+export function acceptedOfferIncludesLeaderFee(
+  offers: OfferForPay[] | null | undefined,
+  isGigLead: boolean,
+): boolean {
+  const accepted = offers?.find((o) => o.status === 'accepted')
+  const recorded = accepted?.terms_snapshot?.pay?.include_leader_fee
+  return typeof recorded === 'boolean' ? recorded : isGigLead
+}
+
 /** The gig's first service by start time (input order breaks ties and missing times). */
 function firstService<S extends ServiceForPay>(services: S[]): S {
   return services.reduce((first, s) =>
@@ -62,6 +83,8 @@ export function computeGigPay(
   services: ServiceForPay[] | null | undefined,
   musicianIsLeader: boolean,
   offerPay: number | null,
+  /** Only for a whole-gig amount: see acceptedOfferIncludesLeaderFee. */
+  offerIncludesLeaderFee = false,
 ): PayLine[] {
   if (!services || services.length === 0) return []
 
@@ -72,7 +95,7 @@ export function computeGigPay(
       basePay: offerPay,
       leaderFee: 0,
       total: offerPay,
-      isLeader: musicianIsLeader && !!first.leader_fee,
+      isLeader: offerIncludesLeaderFee,
       wholeGig: true,
     }]
   }

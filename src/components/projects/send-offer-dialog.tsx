@@ -8,6 +8,7 @@ import { useTerms } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
 import { findPossibleDuplicates, type PossibleDuplicate } from '@/lib/musicians/duplicates'
 import { expiryFromDialogChoice, resolveExpiresAt } from '@/lib/staffing/expiry'
+import { isViolinOne } from '@/lib/after-gig/rules'
 
 export type MusicianScheduleEntry = {
   id: string
@@ -149,6 +150,9 @@ export function SendOfferDialog({
     }
   }, [open, suggestedCustomPay, basePay, leaderFee, chairNumber])
 
+  // The chair that leads the gig by default (the after-gig gig-lead rule).
+  const isLeadChair = chairNumber === 1 && isViolinOne(instrumentName)
+
   // Auto-suggest the top call-order musician when the dialog opens (or use pre-selected)
   useEffect(() => {
     if (open && !selectedMusicianId) {
@@ -156,7 +160,7 @@ export function SendOfferDialog({
       if (preSelectedMusicianId) {
         setSelectedMusicianId(preSelectedMusicianId)
         const preSelected = allMusicians.find(m => m.id === preSelectedMusicianId)
-        if (chairNumber === 1 && !!leaderFee && preSelected?.is_leader) {
+        if (isLeadChair && !!leaderFee && preSelected) {
           setIncludeLeaderFee(true)
           setLeaderFeeAmount((leaderFee ?? 50).toString())
           setPersonalMessage(DEFAULT_LEADER_MESSAGE)
@@ -178,8 +182,10 @@ export function SendOfferDialog({
         })
       if (available.length > 0) {
         setSelectedMusicianId(available[0].id)
-        // Auto-check leader fee only when chair 1, project has a leader fee, AND musician is designated leader
-        if (chairNumber === 1 && !!leaderFee && available[0].is_leader) {
+        // Auto-check the leader fee only on the gig's lead chair (Violin 1, chair 1)
+        // when the service has a fee. Whoever sits there leads, so it does not
+        // matter whether they are flagged able to lead (David, 2026-10-02).
+        if (isLeadChair && !!leaderFee) {
           setIncludeLeaderFee(true)
           setLeaderFeeAmount((leaderFee ?? 50).toString())
           setPersonalMessage(DEFAULT_LEADER_MESSAGE)

@@ -144,3 +144,91 @@ describe('Generate Payments', () => {
     expect(res.status).toBe(500)
   })
 })
+
+/**
+ * The "Leader Fee" label on a payment (David, 2026-10-02). It used to follow
+ * musicians.is_leader, which only says someone CAN lead, so a violist's and a
+ * second violinist's pay were exported as "Leader Fee".
+ */
+describe('Generate Payments: the Leader Fee label', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  const JONES = (gigLead: string | null = null) => ({
+    id: 'proj-1', name: 'Jones Wedding', organization_id: 'org-1', gig_lead_musician_id: gigLead, services: [SHOW, REHEARSAL],
+  })
+
+  function seat(id: string, instrument: string, chair: number, musicianId: string, over: Partial<Row> = {}): Row {
+    return confirmedChair({
+      id,
+      musician_id: musicianId,
+      chair_number: chair,
+      instrument: { name: instrument },
+      projects: JONES(),
+      musician: { id: musicianId, first_name: musicianId, last_name: 'X', email: null, is_leader: false },
+      ...over,
+    })
+  }
+
+  const labelOf = (musicianId: string) =>
+    state.db.tables.payments.find((p: Row) => p.musician_id === musicianId)?.is_leader_fee
+
+  it('an older offer: only the gig lead (Violin 1, chair 1) is labelled, not whoever is flagged able to lead', async () => {
+    state.db = new MockSupabaseDb({
+      project_positions: [
+        seat('pos-v1', 'Violin 1', 1, 'mus-v1'),
+        seat('pos-va', 'Viola', 1, 'mus-va', { musician: { id: 'mus-va', first_name: 'V', last_name: 'A', email: null, is_leader: true } }),
+      ],
+      payments: [],
+    })
+
+    await generate()
+
+    expect(labelOf('mus-v1')).toBe(true)
+    expect(labelOf('mus-va')).toBe(false)
+  })
+
+  it('an older offer: the lead the admin picked for the gig is the one labelled', async () => {
+    state.db = new MockSupabaseDb({
+      project_positions: [
+        seat('pos-v1', 'Violin 1', 1, 'mus-v1', { projects: JONES('mus-vc') }),
+        seat('pos-vc', 'Cello', 1, 'mus-vc', { projects: JONES('mus-vc') }),
+      ],
+      payments: [],
+    })
+
+    await generate()
+
+    expect(labelOf('mus-vc')).toBe(true)
+    expect(labelOf('mus-v1')).toBe(false)
+  })
+
+  it('a new offer: the leader-fee checkbox the admin used is the answer', async () => {
+    const withChoice = (include: boolean) => [{ custom_pay: 300, status: 'accepted', terms_snapshot: { pay: { include_leader_fee: include } } }]
+    state.db = new MockSupabaseDb({
+      project_positions: [
+        seat('pos-v1', 'Violin 1', 1, 'mus-v1', { contract_offers: withChoice(false) }),
+        seat('pos-v2', 'Violin 2', 1, 'mus-v2', { contract_offers: withChoice(true) }),
+      ],
+      payments: [],
+    })
+
+    await generate()
+
+    expect(labelOf('mus-v1')).toBe(false)
+    expect(labelOf('mus-v2')).toBe(true)
+  })
+
+  it('the amounts do not change, only the label', async () => {
+    state.db = new MockSupabaseDb({
+      project_positions: [seat('pos-va', 'Viola', 1, 'mus-va', { musician: { id: 'mus-va', first_name: 'V', last_name: 'A', email: null, is_leader: true } })],
+      payments: [],
+    })
+
+    await generate()
+
+    expect(state.db.tables.payments).toHaveLength(1)
+    expect(state.db.tables.payments[0]).toMatchObject({ amount: 300, is_leader_fee: false })
+  })
+})
