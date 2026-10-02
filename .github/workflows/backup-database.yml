@@ -65,7 +65,9 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned: resolving "latest" calls GitHub's API, which rate-limits
+          # (a run failed that way on 2026-10-02). Bump deliberately.
+          version: 2.119.0
 
       - name: Dump roles, schema and data
         run: |
