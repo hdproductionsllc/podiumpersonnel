@@ -202,7 +202,7 @@ describe('next-in-line never suggests someone already on the gig', () => {
 
   // The expiry email used to recommend, as "next in line", the very musician
   // whose offer had just run out. Re-offering on purpose is the follow-up action.
-  it.each(['expired', 'rescinded', 'released'])(
+  it.each(['expired', 'superseded', 'rescinded', 'released'])(
     'excludes whoever had a %s offer on this chair',
     async (status) => {
       const { candidates } = await getNextCandidates(

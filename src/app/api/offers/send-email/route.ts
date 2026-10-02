@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient, getOrgAdminEmails } from '@/lib/supabase/server'
-import { sendContractOfferEmail, sendAdminOfferSentEmail } from '@/lib/email/send'
-import { logEmail } from '@/lib/email/log'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { logEmailConfig } from '@/lib/email/client'
-import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
-import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
-import { attachVenueDetails } from '@/lib/venue-attach'
 import { serverError } from '@/lib/api-helpers'
-import { LIVE_OFFER_STATUSES } from '@/lib/staffing/live'
-import { adminActor, logEvent, type StaffingEvent } from '@/lib/staffing/events'
+import { OFFER_EMAIL_SELECT, sendOfferEmail } from '@/lib/staffing/offer-email'
+import { NO_EMAIL_MESSAGE, supersedeLiveOffers, supersededEvents } from '@/lib/staffing/offers'
+import { adminActor, logEvent } from '@/lib/staffing/events'
 
+// LEGACY: emails an offer the browser already inserted. The Send Offer dialog
+// and the offers list now call POST /api/positions/[positionId]/offers, which
+// creates, emails and supersedes in one place (createOffer). This route stays
+// only for a browser tab still running the previous build during a deploy;
+// it can be deleted once that window has passed.
+//
+// It retires the chair's other open offers BEFORE sending, as it always did
+// (so a stale tab cannot leave two live offers), using the shared writer, so
+// they are now marked 'superseded' rather than 'expired'.
 export async function POST(request: NextRequest) {
   console.log('📧 Send email API called')
   logEmailConfig()
@@ -27,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { offerId, includeLeaderFee: explicitLeaderFee, leaderFeeAmount: explicitLeaderFeeAmount } = body
+    const { offerId, includeLeaderFee, leaderFeeAmount } = body
 
     if (!offerId) {
       return NextResponse.json({ error: 'Offer ID is required' }, { status: 400 })
@@ -36,31 +41,7 @@ export async function POST(request: NextRequest) {
     // Fetch the offer with all related data
     const { data: offer, error: offerError } = await supabase
       .from('contract_offers')
-      .select(`
-        id,
-        token,
-        expires_at,
-        custom_pay,
-        personal_message,
-        musician:musicians(
-          id,
-          first_name,
-          last_name,
-          email
-        ),
-        project_position:project_positions(
-          id,
-          chair_number,
-          instrument:instruments(id, name),
-          project:projects(
-            id,
-            name,
-            ensemble_type,
-            organization:organizations(id, name, timezone, email_logo_url, email_brand_color, email_footer_text),
-            services(id, name, service_type, call_time, start_time, end_time, venue, venue_id, base_pay, leader_fee, venue_2, venue_id_2)
-          )
-        )
-      `)
+      .select(OFFER_EMAIL_SELECT)
       .eq('id', offerId)
       .single()
 
@@ -69,196 +50,62 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
     }
 
-    const musician = offer.musician as any
-    const position = offer.project_position as any
-    const project = position?.project as any
-    const organization = project?.organization as any
-    const instrument = position?.instrument as any
-    const services = project?.services as any[] || []
-    const timezone = organization?.timezone || DEFAULT_TIMEZONE
+    /* eslint-disable @typescript-eslint/no-explicit-any -- PostgREST embeds */
+    const musician = (offer as any).musician
+    const position = (offer as any).project_position
+    const project = position?.project
+    const organization = project?.organization
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+
+    // Only the organization's owners and admins send offers (audit R-15: this
+    // route used the service role for the supersede with no role check).
+    const { data: membership } = await supabase
+      .from('organization_members')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('organization_id', organization?.id)
+      .single()
+
+    if (!membership || !['owner', 'admin'].includes(membership.role)) {
+      return NextResponse.json({ error: 'Permission denied' }, { status: 403 })
+    }
 
     // Enforce one active offer per chair: retire any OTHER outstanding offers on
     // this position so sending a new call cleanly supersedes the previous one.
-    // Without this, a prior pending offer lingers and could still be accepted for
-    // a chair that's already moved on to (or been given to) someone else.
     const actor = adminActor(user.id)
     if (position?.id) {
-      const serviceClient = createServiceClient()
-      const { data: supersededOffers, error: expireError } = await serviceClient
-        .from('contract_offers')
-        .update({ status: 'expired', responded_at: new Date().toISOString() })
-        .eq('project_position_id', position.id)
-        .neq('id', offerId)
-        .in('status', [...LIVE_OFFER_STATUSES])
-        .select('id, musician_id')
+      const superseded = await supersedeLiveOffers(createServiceClient(), position.id, { exceptOfferId: offerId })
 
-      if (expireError) {
+      if (superseded.error) {
         // Sending anyway would leave two live offers on one chair — stop here.
-        return serverError(`Failed to expire prior offers on position ${position.id} before sending offer ${offerId}`, expireError)
+        return serverError(`Failed to expire prior offers on position ${position.id} before sending offer ${offerId}`, superseded.error)
       }
 
-      if (supersededOffers && supersededOffers.length > 0) {
-        await logEvent(supersededOffers.map((other): StaffingEvent => ({
-          organizationId: organization?.id,
-          actor,
-          entityType: 'offer',
-          entityId: other.id,
-          action: 'offer.superseded',
-          after: { status: 'expired', position_id: position.id, musician_id: other.musician_id, replaced_by: offerId },
-        })))
+      if (superseded.offers.length > 0) {
+        await logEvent(supersededEvents(superseded, { organizationId: organization?.id, actor, positionId: position.id, replacedBy: offerId }))
       }
     }
 
-    await attachVenueDetails(services)
-
-    // Calculate pay
-    const chairNumber = position?.chair_number || 1
-    const firstService = services.length > 0 ? services[0] : null
-    const basePay = firstService?.base_pay ?? null
-    const hasCustomPay = (offer as any).custom_pay != null
-
-    // Leader fee logic: only include if explicitly requested from the dialog.
-    // When custom_pay is set, the pay was already finalized at offer creation time —
-    // don't guess based on chair number, or the email will incorrectly show a leader fee breakdown.
-    const isLeader = explicitLeaderFee != null ? !!explicitLeaderFee : (!hasCustomPay && chairNumber === 1)
-    const leaderFee = explicitLeaderFeeAmount != null ? Number(explicitLeaderFeeAmount) : (firstService?.leader_fee ?? 0)
-    const payAmount = hasCustomPay
-      ? Number((offer as any).custom_pay)
-      : basePay != null
-        ? basePay + (isLeader ? leaderFee : 0)
-        : null
-
-    // Count total chairs for this instrument in this project
-    let totalChairs = 1
-    if (project?.id && instrument?.id) {
-      const { count } = await supabase
-        .from('project_positions')
-        .select('*', { count: 'exact', head: true })
-        .eq('project_id', project.id)
-        .eq('instrument_id', instrument.id)
-      totalChairs = count || 1
-    }
-
-    // Check if musician has an email
-    if (!musician?.email) {
-      return NextResponse.json(
-        { error: 'Musician does not have an email address' },
-        { status: 400 }
-      )
-    }
-
-    // Build the response URL
-    const baseUrl = getAppUrl()
-    const responseUrl = `${baseUrl}/gig/${offer.token}`
-
-    // Format services for the email
-    const formattedServices = services
-      .sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
-      .map((service: any) => ({
-        name: service.name,
-        date: new Date(service.start_time).toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-          timeZone: timezone,
-        }),
-        callTime: service.call_time
-          ? new Date(service.call_time).toLocaleTimeString('en-US', {
-              hour: 'numeric',
-              minute: '2-digit',
-              timeZone: timezone,
-            })
-          : null,
-        time: new Date(service.start_time).toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          timeZone: timezone,
-        }),
-        endTime: service.end_time
-          ? new Date(service.end_time).toLocaleTimeString('en-US', {
-              hour: 'numeric',
-              minute: '2-digit',
-              timeZone: timezone,
-            })
-          : null,
-        venue: getVenueName(service),
-        venueUrl: getVenueMapsUrl(service),
-        venueAddress: getVenueAddress(service),
-        venue2: service.venue_2_details || service.venue_2 ? getVenueName({ venue: service.venue_2, venue_details: service.venue_2_details }) : null,
-        venue2Url: service.venue_2_details || service.venue_2 ? getVenueMapsUrl({ venue: service.venue_2, venue_details: service.venue_2_details }) : null,
-        venue2Address: service.venue_2_details ? getVenueAddress({ venue_details: service.venue_2_details }) : null,
-      }))
-
-    // Send the email
-    console.log('📧 Attempting to send email to:', musician.email)
-    console.log('📧 Email params:', {
-      to: musician.email,
-      musicianName: `${musician.first_name} ${musician.last_name}`,
-      organizationName: organization?.name,
-      projectName: project?.name,
-      instrument: instrument?.name,
-    })
-
-    const result = await sendContractOfferEmail({
-      to: musician.email,
-      musicianName: `${musician.first_name} ${musician.last_name}`,
-      organizationName: organization?.name || 'Orchestra',
-      organizationId: organization?.id,
-      projectName: project?.name || 'Project',
-      instrument: instrument?.name || 'Instrument',
-      chairNumber: position?.chair_number || 1,
-      totalChairs,
-      services: formattedServices,
-      responseUrl,
-      expiresAt: offer.expires_at,
-      timezone,
-      payAmount,
-      leaderFee: isLeader ? leaderFee : null,
-      isLeader,
-      personalMessage: (offer as any).personal_message || undefined,
-      ensembleType: project?.ensemble_type || null,
-      branding: {
-        logoUrl: organization?.email_logo_url,
-        brandColor: organization?.email_brand_color,
-        footerText: organization?.email_footer_text,
+    const sent = await sendOfferEmail(
+      supabase,
+      {
+        offer,
+        musician,
+        position,
+        project,
+        organization,
+        instrument: position?.instrument,
+        services: project?.services || [],
       },
-    })
-
-    // A suppressed send is NOT a success shape: safe mode blocked every
-    // recipient (id: null, no Resend call made). Logging it as 'sent' and
-    // telling the dialog to say "Call sent!" is exactly the bug this guards
-    // against — the offer row sits pending with no email ever delivered.
-    const suppressed = result?.suppressed === true
-
-    console.log(
-      suppressed
-        ? '📧 Email suppressed by safe mode (not sent):'
-        : '📧 Email sent successfully:',
-      result
+      { includeLeaderFee, leaderFeeAmount }
     )
 
-    // Log to email audit trail
-    await logEmail({
-      organizationId: organization?.id,
-      recipientEmail: musician.email,
-      recipientName: `${musician.first_name} ${musician.last_name}`,
-      subject: result?.subject || `Call: ${project?.name} - ${instrument?.name}`,
-      emailType: 'contract_offer',
-      musicianId: musician.id,
-      projectId: project?.id,
-      offerId: offerId,
-      resendEmailId: result?.id || null,
-      status: suppressed ? 'suppressed' : 'sent',
-      metadata: {
-        instrument: instrument?.name,
-        chairNumber: position?.chair_number,
-        payAmount,
-        ensembleType: project?.ensemble_type,
-        ...(suppressed ? { suppressedRecipients: result?.suppressedRecipients || [musician.email] } : {}),
-      },
-      body: result?.emailHtml,
-    })
+    // Check if musician has an email
+    if (sent.delivery === 'no_email') {
+      return NextResponse.json({ error: NO_EMAIL_MESSAGE }, { status: 400 })
+    }
+
+    const suppressed = sent.delivery === 'suppressed'
 
     await logEvent({
       organizationId: organization?.id,
@@ -271,46 +118,9 @@ export async function POST(request: NextRequest) {
         position_id: position?.id ?? null,
         musician_id: musician.id,
         expires_at: offer.expires_at,
-        delivery: suppressed ? 'suppressed' : 'sent',
+        delivery: sent.delivery,
       },
     })
-
-    // A suppressed send never reached the musician, so an admin "Offer Sent"
-    // notification would be the same false-positive one layer up. Skip it.
-    if (!suppressed) {
-      try {
-        const adminEmails = await getOrgAdminEmails(organization?.id)
-
-        if (adminEmails.length > 0) {
-          const baseUrl = getAppUrl()
-          await sendAdminOfferSentEmail({
-            to: adminEmails,
-            organizationName: organization?.name || 'Orchestra',
-            projectName: project?.name || 'Project',
-            musicianName: `${musician.first_name} ${musician.last_name}`,
-            musicianEmail: musician.email,
-            instrument: instrument?.name || 'Instrument',
-            chairNumber: position?.chair_number || 1,
-            totalChairs,
-            services: formattedServices,
-            dashboardUrl: `${baseUrl}/dashboard/projects`,
-            payAmount,
-            leaderFee: isLeader ? leaderFee : null,
-            isLeader,
-            personalMessage: (offer as any).personal_message || null,
-            expiresAt: offer.expires_at,
-            ensembleType: project?.ensemble_type || null,
-            timezone,
-          }).catch((err) => console.warn('Failed to send admin notification:', err))
-          console.log('📧 Admin notification sent to:', adminEmails)
-        } else {
-          console.log('📧 No admin emails found for organization')
-        }
-      } catch (adminEmailError) {
-        console.warn('Failed to send admin notification:', adminEmailError)
-        // Don't fail the request if admin notification fails
-      }
-    }
 
     if (suppressed) {
       return NextResponse.json({

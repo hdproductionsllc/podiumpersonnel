@@ -8,6 +8,8 @@ import { attachVenueDetails } from '@/lib/venue-attach'
 import { randomBytes } from 'crypto'
 import { LIVE_OFFER_STATUSES } from '@/lib/staffing/live'
 import { adminActor, logEvent, type StaffingEvent } from '@/lib/staffing/events'
+import { SUBSTITUTE_OFFER_EXPIRY, resolveExpiresAt } from '@/lib/staffing/expiry'
+import { insertOffer, supersedeLiveOffers, supersededEvents } from '@/lib/staffing/offers'
 
 export async function POST(
   request: Request,
@@ -192,42 +194,42 @@ export async function POST(
   // Generate a unique token for the contract offer
   const offerToken = randomBytes(32).toString('hex')
 
-  // Set expiration to 7 days from now
-  const expiresAt = new Date()
-  expiresAt.setDate(expiresAt.getDate() + 7)
+  // A substitute gets a week to answer (the one expiry policy, expiry.ts)
+  const expiresAt = new Date(resolveExpiresAt(SUBSTITUTE_OFFER_EXPIRY)!)
 
   // Retire any outstanding offer this substitute already holds on this chair
   // before writing a new one — the same "one active offer per chair" step the
   // send-email route runs. Without it, a retried approval (first attempt failed
   // after the insert, or the admin re-approved a request that was reverted)
   // leaves two live offers on one chair, either of which could be accepted.
-  const { data: supersededOffers, error: supersedeError } = await supabase
-    .from('contract_offers')
-    .update({ status: 'expired', responded_at: new Date().toISOString() })
-    .eq('project_position_id', subRequest.project_position_id)
-    .eq('musician_id', substituteMusician.id)
-    .in('status', [...LIVE_OFFER_STATUSES])
-    .select('id')
+  const superseded = await supersedeLiveOffers(supabase, subRequest.project_position_id, {
+    onlyMusicianId: substituteMusician.id,
+  })
 
-  if (supersedeError) {
-    console.error('Failed to supersede prior offers for substitute:', supersedeError)
+  if (superseded.error) {
+    console.error('Failed to supersede prior offers for substitute:', superseded.error)
     await releaseClaim(`prior offers for substitute ${substituteMusician.id} could not be superseded`)
     return NextResponse.json({ error: 'Failed to create contract offer' }, { status: 500 })
   }
 
-  // Create contract offer for the substitute
-  const { data: contractOffer, error: offerError } = await supabase
-    .from('contract_offers')
-    .insert({
+  // Create contract offer for the substitute. It is flagged as a substitute's
+  // offer (093), so the one-live-offer-per-chair rule can leave it out.
+  const { data: contractOffer, error: offerError } = await insertOffer(
+    supabase,
+    {
       project_position_id: subRequest.project_position_id,
       musician_id: substituteMusician.id,
       token: offerToken,
       status: 'pending',
       sent_at: new Date().toISOString(),
       expires_at: expiresAt.toISOString(),
-    })
-    .select()
-    .single()
+    },
+    {
+      is_substitution: true,
+      created_by: user.id,
+      delivery_status: subRequest.suggested_sub_email ? 'queued' : null,
+    }
+  )
 
   if (offerError) {
     console.error('Failed to create contract offer:', offerError)
@@ -274,14 +276,11 @@ export async function POST(
   }
 
   const actor = adminActor(user.id)
-  const events: StaffingEvent[] = (supersededOffers || []).map((prior): StaffingEvent => ({
+  const events: StaffingEvent[] = supersededEvents(superseded, {
     organizationId: project.organization_id,
     actor,
-    entityType: 'offer',
-    entityId: prior.id,
-    action: 'offer.superseded',
-    after: { status: 'expired', musician_id: substituteMusician.id, replaced_by: contractOffer.id },
-  }))
+    replacedBy: contractOffer.id,
+  })
   events.push({
     organizationId: project.organization_id,
     actor,
@@ -440,6 +439,18 @@ export async function POST(
     }
   } catch (emailError) {
     console.warn('Email sending failed:', emailError)
+  }
+
+  // How the email went, on the offer itself (093). Bookkeeping: a failure here
+  // changes nothing for the substitute.
+  if (subOfferDelivery !== 'no_email') {
+    const { error: deliveryError } = await supabase
+      .from('contract_offers')
+      .update({ delivery_status: subOfferDelivery })
+      .eq('id', contractOffer.id)
+    if (deliveryError) {
+      console.error(`Failed to record delivery for substitute offer ${contractOffer.id}:`, deliveryError)
+    }
   }
 
   // Logged after the send, like send-email, so the history never says an

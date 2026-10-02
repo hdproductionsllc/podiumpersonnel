@@ -198,7 +198,7 @@ describe('offers', () => {
       expect.objectContaining({
         action: 'offer.superseded',
         actor_type: 'admin',
-        after: expect.objectContaining({ status: 'expired', replaced_by: second.id, musician_id: R.v1[0] }),
+        after: expect.objectContaining({ status: 'superseded', replaced_by: second.id, musician_id: R.v1[0] }),
       }),
     ])
     expect(actions()).toEqual(['offer.superseded', 'offer.sent'])

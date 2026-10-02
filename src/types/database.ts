@@ -523,13 +523,17 @@ export type Database = {
           project_position_id: string
           musician_id: string
           token: string
-          status: 'pending' | 'viewed' | 'accepted' | 'declined' | 'rescinded' | 'expired' | 'released'
+          status: 'pending' | 'viewed' | 'accepted' | 'declined' | 'rescinded' | 'expired' | 'released' | 'superseded'
           custom_pay: number | null
           sent_at: string | null
           viewed_at: string | null
           responded_at: string | null
           response_notes: string | null
           expires_at: string | null
+          created_by: string | null
+          terms_snapshot: Json | null
+          delivery_status: 'queued' | 'sent' | 'failed' | 'suppressed' | null
+          is_substitution: boolean
           created_at: string
           updated_at: string
         }
@@ -538,13 +542,17 @@ export type Database = {
           project_position_id: string
           musician_id: string
           token?: string
-          status?: 'pending' | 'viewed' | 'accepted' | 'declined' | 'rescinded' | 'expired' | 'released'
+          status?: 'pending' | 'viewed' | 'accepted' | 'declined' | 'rescinded' | 'expired' | 'released' | 'superseded'
           custom_pay?: number | null
           sent_at?: string | null
           viewed_at?: string | null
           responded_at?: string | null
           response_notes?: string | null
           expires_at?: string | null
+          created_by?: string | null
+          terms_snapshot?: Json | null
+          delivery_status?: 'queued' | 'sent' | 'failed' | 'suppressed' | null
+          is_substitution?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -553,13 +561,17 @@ export type Database = {
           project_position_id?: string
           musician_id?: string
           token?: string
-          status?: 'pending' | 'viewed' | 'accepted' | 'declined' | 'rescinded' | 'expired' | 'released'
+          status?: 'pending' | 'viewed' | 'accepted' | 'declined' | 'rescinded' | 'expired' | 'released' | 'superseded'
           custom_pay?: number | null
           sent_at?: string | null
           viewed_at?: string | null
           responded_at?: string | null
           response_notes?: string | null
           expires_at?: string | null
+          created_by?: string | null
+          terms_snapshot?: Json | null
+          delivery_status?: 'queued' | 'sent' | 'failed' | 'suppressed' | null
+          is_substitution?: boolean
           created_at?: string
           updated_at?: string
         }

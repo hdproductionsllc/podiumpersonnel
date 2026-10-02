@@ -16,9 +16,20 @@ const state = vi.hoisted(() => ({
 vi.mock('@/lib/supabase/server', () => ({
   createServiceClient: () => (state.serviceClient ? state.serviceClient() : state.db),
 }))
+vi.mock('@/lib/email/send', () => ({}))
+vi.mock('@/lib/email/log', () => ({}))
 
 import { logEvent, LOG_TIMEOUT_MS, SYSTEM, adminActor, musicianActor, type StaffingEvent } from '@/lib/staffing/events'
 import { releaseSeat } from '@/lib/staffing/seats'
+// Static, not import() inside the test: respond.ts pulls in the email stack,
+// and a cold dynamic import of it overran the 5s test timeout when the whole
+// suite ran at once. The email modules are stubbed (only identity is checked).
+import * as oldRespond from '@/lib/offers/respond'
+import * as newRespond from '@/lib/staffing/respond'
+import * as oldCandidates from '@/lib/next-candidate'
+import * as newCandidates from '@/lib/staffing/candidates'
+import * as oldConflicts from '@/lib/schedule-conflict'
+import * as newConflicts from '@/lib/staffing/conflicts'
 
 let errorSpy: MockInstance
 
@@ -209,21 +220,21 @@ describe('migration 092 and its paste script', () => {
 })
 
 describe('old import paths still work (re-export shims)', () => {
-  it('@/lib/offers/respond is @/lib/staffing/respond', async () => {
-    const [oldPath, newPath] = await Promise.all([import('@/lib/offers/respond'), import('@/lib/staffing/respond')])
+  it('@/lib/offers/respond is @/lib/staffing/respond', () => {
+    const [oldPath, newPath] = [oldRespond, newRespond]
     expect(oldPath.claimChairForAccept).toBe(newPath.claimChairForAccept)
     expect(oldPath.markOfferDeclined).toBe(newPath.markOfferDeclined)
     expect(oldPath.isOfferClosed).toBe(newPath.isOfferClosed)
     expect(oldPath.RESPONDABLE_STATUSES).toEqual(['pending', 'viewed'])
   })
 
-  it('@/lib/next-candidate is @/lib/staffing/candidates', async () => {
-    const [oldPath, newPath] = await Promise.all([import('@/lib/next-candidate'), import('@/lib/staffing/candidates')])
+  it('@/lib/next-candidate is @/lib/staffing/candidates', () => {
+    const [oldPath, newPath] = [oldCandidates, newCandidates]
     expect(oldPath.getNextCandidates).toBe(newPath.getNextCandidates)
   })
 
-  it('@/lib/schedule-conflict is @/lib/staffing/conflicts', async () => {
-    const [oldPath, newPath] = await Promise.all([import('@/lib/schedule-conflict'), import('@/lib/staffing/conflicts')])
+  it('@/lib/schedule-conflict is @/lib/staffing/conflicts', () => {
+    const [oldPath, newPath] = [oldConflicts, newConflicts]
     expect(oldPath.findConflicts).toBe(newPath.findConflicts)
     expect(oldPath.describeConflicts).toBe(newPath.describeConflicts)
   })

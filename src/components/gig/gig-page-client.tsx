@@ -438,6 +438,18 @@ export function GigPageClient({
                 </div>
               )}
 
+              {offerStatus === 'superseded' && (
+                <div className="rounded-md bg-amber-50 dark:bg-amber-950 p-4 text-amber-800 dark:text-amber-200">
+                  This offer has been replaced and is no longer open. No response is needed. If you received a newer offer, please answer that one.
+                </div>
+              )}
+
+              {offerStatus === 'released' && (
+                <div className="rounded-md bg-muted p-4 text-muted-foreground">
+                  You have been released from this engagement. No action is needed.
+                </div>
+              )}
+
               {isExpired && canRespond && (
                 <div className="rounded-md bg-yellow-50 dark:bg-yellow-950 p-4 text-yellow-800 dark:text-yellow-200">
                   This offer has expired.

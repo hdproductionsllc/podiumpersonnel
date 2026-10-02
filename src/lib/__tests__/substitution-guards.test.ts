@@ -16,7 +16,7 @@ import { MockSupabaseDb, type Row } from './helpers/supabase-mock'
  * gets a 409 and does nothing.
  */
 
-const state = vi.hoisted(() => ({ db: undefined as any, user: undefined as any, failAttachUpdate: false }))
+const state = vi.hoisted(() => ({ db: undefined as any, user: undefined as any, failAttachUpdate: false, without093: false }))
 
 let insertSeq = 0
 
@@ -33,6 +33,9 @@ let insertSeq = 0
  * the substitute and offer to the request" write) resolves with a PostgREST-shaped
  * error instead of touching the table, so tests can exercise the route's
  * failure-recovery path without a way to force an error out of the shared mock.
+ *
+ * `state.without093` makes contract_offers refuse the 093 columns the way
+ * PostgREST does when a column is not in its schema cache (PGRST204).
  */
 function client(db: MockSupabaseDb, user: unknown) {
   return {
@@ -45,6 +48,12 @@ function client(db: MockSupabaseDb, user: unknown) {
       const insert = builder.insert.bind(builder)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       builder.insert = (rows: any) => {
+        if (state.without093 && table === 'contract_offers' && !Array.isArray(rows) && 'is_substitution' in rows) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          builder.then = (onfulfilled: any, onrejected: any) =>
+            Promise.resolve({ data: null, error: { code: 'PGRST204', message: "Could not find the 'is_substitution' column" } }).then(onfulfilled, onrejected)
+          return builder
+        }
         const stamp = (row: Row) => ({ id: row.id ?? `${table}-${++insertSeq}`, ...row })
         const stamped = Array.isArray(rows) ? rows.map(stamp) : stamp(rows)
         insert(stamped)
@@ -187,6 +196,7 @@ beforeEach(() => {
   state.db = makeDb()
   state.user = { id: 'user-1', email: 'admin@example.com' }
   state.failAttachUpdate = false
+  state.without093 = false
   insertSeq = 0
   vi.clearAllMocks()
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -210,6 +220,27 @@ describe('approve — happy path', () => {
     expect(liveOffers(state.db)).toHaveLength(1)
     expect(sendContractOfferEmail).toHaveBeenCalledTimes(1)
     expect(errorSpy).not.toHaveBeenCalled()
+  })
+
+  it('marks the offer as a substitute\'s, records who approved it and how the email went (093)', async () => {
+    await approvePOST(approveRequest(), routeParams)
+
+    const offer = state.db.row('contract_offers', state.db.row('substitution_requests', 'sub-1')!.offer_id)!
+    expect(offer).toMatchObject({ is_substitution: true, created_by: 'user-1', delivery_status: 'sent' })
+    // A week to answer, as before.
+    const hours = (new Date(offer.expires_at).getTime() - new Date(offer.sent_at).getTime()) / 3_600_000
+    expect(Math.round(hours)).toBe(7 * 24)
+  })
+
+  it('still makes the offer when migration 093 is not applied yet', async () => {
+    state.without093 = true
+
+    const res = await approvePOST(approveRequest(), routeParams)
+
+    expect(res.status).toBe(200)
+    expect(liveOffers(state.db)).toHaveLength(1)
+    expect(liveOffers(state.db)[0].is_substitution).toBeUndefined()
+    expect(sendContractOfferEmail).toHaveBeenCalledTimes(1)
   })
 
   it('claims the request before any side effect runs', async () => {
@@ -316,7 +347,7 @@ describe('approve — retry safety (A5)', () => {
     const res = await approvePOST(approveRequest(), routeParams)
 
     expect(res.status).toBe(200)
-    expect(state.db.row('contract_offers', 'offer-stale')!.status).toBe('expired')
+    expect(state.db.row('contract_offers', 'offer-stale')!.status).toBe('superseded')
     // Exactly one offer the substitute can act on, and the row is kept.
     const live = liveOffers(state.db)
     expect(live).toHaveLength(1)

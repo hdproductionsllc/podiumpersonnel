@@ -20,7 +20,7 @@ import {
 const NOW = new Date('2026-11-01T12:00:00.000Z')
 const at = (ms: number) => new Date(NOW.getTime() + ms).toISOString()
 
-const STATUSES = ['pending', 'viewed', 'accepted', 'declined', 'expired', 'rescinded', 'released', null, undefined]
+const STATUSES = ['pending', 'viewed', 'accepted', 'declined', 'expired', 'superseded', 'rescinded', 'released', null, undefined]
 const DEADLINES = [null, undefined, at(-7 * 86400000), at(-1), at(1), at(48 * 3600000)]
 
 type O = { status: string | null | undefined; expires_at: string | null | undefined }

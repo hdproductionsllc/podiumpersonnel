@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import { useTerms } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
 import { hasLapsed, hasLiveStatus, isLapsedOffer, isLiveOffer } from '@/lib/staffing/live'
+import { NEXT_IN_LINE_OFFER_EXPIRY } from '@/lib/staffing/expiry'
 
 type PositionPayment = {
   id: string
@@ -61,23 +62,25 @@ interface ProjectOffersProps {
   openPositionIds?: string[]
 }
 
-const OFFER_STATUS_COLORS: Record<string, string> = {
+export const OFFER_STATUS_COLORS: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-900 ring-1 ring-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:ring-amber-800',
   viewed: 'bg-blue-100 text-blue-800 ring-1 ring-blue-300 dark:bg-blue-950 dark:text-blue-200 dark:ring-blue-800',
   accepted: 'bg-green-100 text-green-800 ring-1 ring-green-300 dark:bg-green-950 dark:text-green-200 dark:ring-green-800',
   declined: 'bg-red-100 text-red-800 ring-1 ring-red-300 dark:bg-red-950 dark:text-red-200 dark:ring-red-800',
   rescinded: 'bg-orange-100 text-orange-800 ring-1 ring-orange-300 dark:bg-orange-950 dark:text-orange-200 dark:ring-orange-800',
   released: 'bg-purple-100 text-purple-800 ring-1 ring-purple-300 dark:bg-purple-950 dark:text-purple-200 dark:ring-purple-800',
+  superseded: 'bg-slate-100 text-slate-700 ring-1 ring-slate-300 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700',
   expired: 'bg-gray-200 text-gray-800 ring-1 ring-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700',
 }
 
-const OFFER_STATUS_LABELS: Record<string, string> = {
+export const OFFER_STATUS_LABELS: Record<string, string> = {
   pending: 'Pending',
   viewed: 'Viewed',
   accepted: 'Accepted',
   declined: 'Declined',
   rescinded: 'Rescinded',
   released: 'Released',
+  superseded: 'Replaced',
   expired: 'Expired',
 }
 
@@ -233,100 +236,48 @@ export function ProjectOffers({
     setConfirmWaterfall(null)
     setSendingWaterfall(musicianId)
     try {
-      const supabase = createClient()
+      // The server checks for an active offer elsewhere on the gig, creates the
+      // offer (carrying forward the declined offer's pay, one-week deadline),
+      // emails it and retires anything it replaces (createOffer).
+      const response = await fetch(`/api/positions/${positionId}/offers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          musicianId,
+          expiry: NEXT_IN_LINE_OFFER_EXPIRY,
+          customPay: confirmWaterfall.offer.custom_pay ?? null,
+          sendEmail: true,
+          includeLeaderFee: false,
+          leaderFeeAmount: 0,
+        }),
+      })
+      const detail = await response.json().catch(() => null)
 
-      // Check if musician already has an active offer for another position in this project
-      const { data: position } = await supabase
-        .from('project_positions')
-        .select('project_id')
-        .eq('id', positionId)
-        .single()
-
-      if (position) {
-        const { data: projectPositions } = await supabase
-          .from('project_positions')
-          .select('id')
-          .eq('project_id', position.project_id)
-
-        const allPosIds = (projectPositions || []).map(p => p.id)
-        const { data: existingOffers } = await supabase
-          .from('contract_offers')
-          .select('id')
-          .eq('musician_id', musicianId)
-          .in('project_position_id', allPosIds)
-          .in('status', ['pending', 'viewed', 'accepted'])
-          .limit(1)
-
-        if (existingOffers && existingOffers.length > 0) {
+      if (!response.ok) {
+        if (detail?.code === 'musician_has_active_offer') {
           toast.error(`${candidate.first_name} ${candidate.last_name} already has an active offer for another position in this ${term(terms, 'work', { case: 'lower' })}.`)
-          setSendingWaterfall(null)
-          return
+        } else if (detail?.code === 'send_failed') {
+          toast.error(detail.error)
+        } else {
+          toast.error('Failed to send offer')
         }
-      }
-
-      // Create new offer, carrying forward payment from the declined offer
-      const { data: offerData, error } = await supabase
-        .from('contract_offers')
-        .insert({
-          project_position_id: positionId,
-          musician_id: musicianId,
-          status: 'pending',
-          sent_at: new Date().toISOString(),
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          custom_pay: confirmWaterfall.offer.custom_pay ?? null,
-        })
-        .select('id')
-        .single()
-
-      if (error) throw error
-
-      // Update position status
-      const { error: positionError } = await supabase
-        .from('project_positions')
-        .update({ status: 'offered' })
-        .eq('id', positionId)
-
-      if (positionError) {
-        // The offer row exists; only the position flag is stale. Refresh so the
-        // admin sees the real state, but don't email or claim success.
-        toast.error('Offer created, but the position could not be marked as offered. Refresh and check the position before re-sending.')
-        onOfferChange()
         return
       }
 
-      // Send email if offer created
-      let emailSent = false
-      if (offerData?.id) {
-        try {
-          const emailRes = await fetch('/api/offers/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              offerId: offerData.id,
-              includeLeaderFee: false,
-              leaderFeeAmount: 0,
-            }),
-          })
-          if (!emailRes.ok) throw new Error(`send-email responded ${emailRes.status}`)
-          // A 200 can also mean "suppressed by safe mode": the route reports
-          // that honestly, so read the flag rather than calling it sent.
-          const detail = await emailRes.json().catch(() => null)
-          if (detail?.suppressed) {
-            toast.warning(
-              'Offer created for the next candidate, but no email went out: safe mode is on, so this recipient was suppressed.',
-              { duration: 10000 }
-            )
-          } else {
-            emailSent = true
-          }
-        } catch (err) {
-          // The offer and position are already updated — only the email is missing.
-          console.warn('project-offers: waterfall offer email failed:', err)
-          toast.error('Offer created, but the email to the next candidate could not be sent. Use Send Reminder to try again.')
-        }
+      // A 200 can also mean "suppressed by safe mode" or "the email failed":
+      // the route reports that honestly, so read it rather than calling it sent.
+      if (detail?.delivery === 'suppressed') {
+        toast.warning(
+          'Offer created for the next candidate, but no email went out: safe mode is on, so this recipient was suppressed.',
+          { duration: 10000 }
+        )
+      } else if (detail?.delivery === 'sent') {
+        toast.success('Offer sent to next candidate')
+      } else {
+        // The offer and position are already updated — only the email is missing.
+        console.warn('project-offers: waterfall offer email failed:', detail?.emailError)
+        toast.error('Offer created, but the email to the next candidate could not be sent. Use Send Reminder to try again.')
       }
-
-      if (emailSent) toast.success('Offer sent to next candidate')
       onOfferChange()
     } catch (err) {
       toast.error('Failed to send offer')

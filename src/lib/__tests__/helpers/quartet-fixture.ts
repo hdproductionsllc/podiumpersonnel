@@ -9,14 +9,15 @@ import { MockSupabaseDb, type Row } from './supabase-mock'
  * of three musicians per chair. It is the business Podium runs today, so a
  * refactor that changes what this scenario produces has broken something.
  *
- * The fixture is a seeded MockSupabaseDb plus the handful of admin actions that
- * live in the BROWSER in production (offer creation, supersede, the status
- * flip) and so have no route to call:
+ * The fixture is a seeded MockSupabaseDb plus two admin shortcuts that write
+ * the rows directly, for tests about what happens AFTER an offer exists:
  *
- *   quartet.sendOffer('v1', 'mus-v1-a')   the dialog's inserts + send-email's supersede
+ *   quartet.sendOffer('v1', 'mus-v1-a')   what createOffer leaves behind
  *   quartet.sendNext('v2')                "send to next in line": the admin's click
  *
- * Everything a musician or a cron does is left to the real route handlers.
+ * Offer creation itself is a route now (POST /api/positions/[id]/offers,
+ * createOffer); offers-route.test.ts drives it for real. Everything a musician
+ * or a cron does is left to the real route handlers.
  *
  * The in-memory fake does not interpret PostgREST embeds (see supabase-mock.ts),
  * so `hydrate()` rebuilds the nested shapes the routes select (offer.musician,
@@ -93,9 +94,9 @@ export interface SendOfferOptions {
   /** ISO timestamp; null is "No expiration". Defaults to 48 hours from now. */
   expiresAt?: string | null
   /**
-   * Retire the chair's other live offers, as /api/offers/send-email does.
-   * Pass false for "the email toggle was off" or "the send failed first": the
-   * two-live-offers state the audit calls R-1.
+   * Retire the chair's other live offers as 'superseded', as createOffer does.
+   * Pass false to build the two-live-offers state the audit calls R-1 (before
+   * createOffer, an offer sent with the email toggle off left it behind).
    */
   supersede?: boolean
 }
@@ -160,7 +161,7 @@ export class QuartetFixture {
 
   // -- admin actions that live in the browser -------------------------------
 
-  /** What the Send Offer dialog writes, plus send-email's supersede. */
+  /** The rows createOffer leaves: the new offer, the chair offered, earlier offers superseded. */
   sendOffer(key: ChairKey, musicianId: string, opts: SendOfferOptions = {}): Row {
     const positionId = QUARTET_CHAIRS[key].id
     const offerId = `offer-${++this.offerSeq}`
@@ -169,7 +170,7 @@ export class QuartetFixture {
 
     if (opts.supersede !== false) {
       for (const other of this.liveOffers(key)) {
-        other.status = 'expired'
+        other.status = 'superseded'
         other.responded_at = new Date().toISOString()
       }
     }

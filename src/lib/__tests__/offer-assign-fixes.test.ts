@@ -29,10 +29,14 @@ describe('Bug 1 — manual assign allows the chair\'s offered musician', () => {
 })
 
 describe('Bug 2 — sending a new offer supersedes the previous one', () => {
-  const route = read('src/app/api/offers/send-email/route.ts')
+  // Behaviour is covered in offers-route.test.ts; this pins the wiring.
+  const writer = read('src/lib/staffing/offers.ts')
+  const legacyRoute = read('src/app/api/offers/send-email/route.ts')
   it('retires other outstanding offers on the same chair', () => {
-    expect(route).toContain("eq('project_position_id', position.id)")
-    expect(route).toContain("neq('id', offerId)")
-    expect(route).toContain("in('status', [...LIVE_OFFER_STATUSES])")
+    expect(writer).toContain("eq('project_position_id', positionId)")
+    expect(writer).toContain("neq('id', scope.exceptOfferId)")
+    expect(writer).toContain("in('status', [...LIVE_OFFER_STATUSES])")
+    expect(writer).toContain('supersedeLiveOffers(service, positionId, { exceptOfferId: offer.id })')
+    expect(legacyRoute).toContain('supersedeLiveOffers(createServiceClient(), position.id, { exceptOfferId: offerId })')
   })
 })

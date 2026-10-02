@@ -28,7 +28,8 @@ import type { Row } from './helpers/supabase-mock'
  *   double approval of one sub request ....... substitution-guards
  *
  * New here: S13 viewed overwrite, S9 position delete, S11 two sub requests,
- * S12/R-14 send failure after supersede, S14/R-1/R-13 two live offers, double
+ * S12/R-14 send failure after supersede (fixed in createOffer; the legacy
+ * send-email route keeps the old order), S14/R-1/R-13 two live offers, double
  * cron run, and the cron's blindness to a cancelled gig.
  */
 
@@ -98,6 +99,7 @@ import { POST as acceptPOST } from '@/app/api/gig/[token]/accept/route'
 import { POST as declinePOST } from '@/app/api/gig/[token]/decline/route'
 import { POST as requestSubPOST } from '@/app/api/gig/[token]/request-sub/route'
 import { POST as sendEmailPOST } from '@/app/api/offers/send-email/route'
+import { POST as createOfferPOST } from '@/app/api/positions/[positionId]/offers/route'
 import { POST as rescindPOST } from '@/app/api/positions/[positionId]/rescind-offer/route'
 import { POST as approvePOST } from '@/app/api/substitutions/[requestId]/approve/route'
 import { GET as expireGET } from '@/app/api/cron/expire-offers/route'
@@ -373,11 +375,81 @@ describe('two substitution requests on one chair (S11, audit R-22, R-11)', () =>
 // S12 / R-14: the offer email fails after the previous offer was superseded
 // ---------------------------------------------------------------------------
 
-describe('send-email fails after superseding the previous offer (S12, audit R-14)', () => {
-  /** Anna has a live offer; the admin offers Bea instead and the email send then fails. */
+/** The admin offers the chair through POST /api/positions/[id]/offers (createOffer). */
+async function offerChair(positionId: string, musicianId: string, extra: Record<string, unknown> = {}) {
+  const res = await createOfferPOST(post(`/api/positions/${positionId}/offers`, { musicianId, ...extra }) as NextRequest, {
+    params: Promise.resolve({ positionId }),
+  })
+  q().hydrate()
+  return { res, body: await res.json() }
+}
+
+describe('a new offer whose email fails (S12, audit R-14), through createOffer', () => {
+  it('a successful send leaves exactly one live offer on the chair', async () => {
+    const anna = q().sendOffer('v1', R.v1[0])
+
+    const { res, body } = await offerChair('pos-v1', R.v1[1])
+
+    expect(res.status).toBe(200)
+    expect(body.delivery).toBe('sent')
+    expect(offerStatus(anna.id)).toBe('superseded')
+    expect(offerStatus(body.offerId)).toBe('pending')
+    expect(q().liveOffers('v1')).toHaveLength(1)
+  })
+
+  it('R-14: a failed send does not kill the previous live offer', async () => {
+    const anna = q().sendOffer('v1', R.v1[0])
+    state.sendOfferFails = true
+
+    const { res, body } = await offerChair('pos-v1', R.v1[1])
+
+    // Anna was told nothing and still has a working link; she is still live.
+    expect(offerStatus(anna.id)).toBe('pending')
+    // ...and the call that never went out is taken back, so nothing changed.
+    expect(res.status).toBe(502)
+    expect(body.code).toBe('send_failed')
+    expect(q().liveOffers('v1').map((o) => o.id)).toEqual([anna.id])
+    expect(q().chair('v1').status).toBe('offered')
+    expect(logEmail).not.toHaveBeenCalled()
+    expect(mailCount(email.sendAdminOfferSentEmail)).toBe(0)
+  })
+
+  it('a failed send with nobody else waiting keeps the offer open and says the email failed (as before)', async () => {
+    state.sendOfferFails = true
+
+    const { res, body } = await offerChair('pos-v2', R.v2[0])
+
+    expect(res.status).toBe(200)
+    expect(body).toMatchObject({ delivery: 'failed', emailError: 'Resend is down' })
+    expect(q().db.row('contract_offers', body.offerId)).toMatchObject({ status: 'pending', delivery_status: 'failed' })
+    expect(q().chair('v2').status).toBe('offered')
+  })
+
+  // R-14's second case asked for a musician with no address to be refused
+  // before anything was superseded. The dialog deliberately supports that case
+  // ("No email will be sent ... You must contact them manually"), so the offer
+  // is made and the admin is told; the previous offer is replaced because the
+  // admin chose to replace it. Nothing is lost silently.
+  it('a musician with no email address: the offer is made, nothing is sent, the admin is told', async () => {
+    const anna = q().sendOffer('v1', R.v1[0])
+    q().db.row('musicians', R.v1[1])!.email = null
+    q().hydrate()
+
+    const { res, body } = await offerChair('pos-v1', R.v1[1])
+
+    expect(res.status).toBe(200)
+    expect(body).toMatchObject({ delivery: 'no_email', emailError: 'Musician does not have an email address' })
+    expect(mailCount(email.sendContractOfferEmail)).toBe(0)
+    expect(offerStatus(anna.id)).toBe('superseded')
+    expect(q().liveOffers('v1').map((o) => o.musician_id)).toEqual([R.v1[1]])
+  })
+})
+
+describe('legacy send-email route (stale browser tabs during a deploy)', () => {
+  /** Anna has a live offer; an old tab inserts Bea's offer itself and calls send-email. */
   async function replaceAnnaWithBea() {
     const anna = q().sendOffer('v1', R.v1[0])
-    const bea = q().sendOffer('v1', R.v1[1], { supersede: false }) // the dialog inserts without superseding
+    const bea = q().sendOffer('v1', R.v1[1], { supersede: false }) // the old dialog inserted without superseding
     return { anna, bea }
   }
 
@@ -388,7 +460,7 @@ describe('send-email fails after superseding the previous offer (S12, audit R-14
     const res = await sendEmail(bea.id as string)
 
     expect(res.status).toBe(200)
-    expect(offerStatus(anna.id)).toBe('expired')
+    expect(offerStatus(anna.id)).toBe('superseded')
     expect(offerStatus(bea.id)).toBe('pending')
     expect(q().liveOffers('v1')).toHaveLength(1)
   })
@@ -407,23 +479,13 @@ describe('send-email fails after superseding the previous offer (S12, audit R-14
     expect(mailCount(email.sendAdminOfferSentEmail)).toBe(0)
   })
 
-  it('the previous offer has already been retired by the time the send fails (the window R-14 describes)', async () => {
+  it('still retires the previous offer before sending, so a stale tab cannot leave two live offers', async () => {
     const { anna, bea } = await replaceAnnaWithBea()
     state.sendOfferFails = true
 
     await sendEmail(bea.id as string)
 
-    expect(offerStatus(anna.id)).toBe('expired')
-  })
-
-  it.fails('R-14: a failed send does not kill the previous live offer', async () => {
-    const { anna, bea } = await replaceAnnaWithBea()
-    state.sendOfferFails = true
-
-    await sendEmail(bea.id as string)
-
-    // Anna was told nothing and still has a working link; she should still be live.
-    expect(offerStatus(anna.id)).toBe('pending')
+    expect(offerStatus(anna.id)).toBe('superseded')
   })
 
   it('a musician with no email address is refused after the previous offer was already retired', async () => {
@@ -434,17 +496,18 @@ describe('send-email fails after superseding the previous offer (S12, audit R-14
     const res = await sendEmail(bea.id as string)
 
     expect(res.status).toBe(400)
-    expect(offerStatus(anna.id)).toBe('expired')
+    expect(offerStatus(anna.id)).toBe('superseded')
   })
 
-  it.fails('R-14: a musician with no email address is refused BEFORE anything is superseded', async () => {
+  it('refuses anyone who is not an owner or admin of the organization (audit R-15)', async () => {
     const { anna, bea } = await replaceAnnaWithBea()
-    q().db.row('musicians', R.v1[1])!.email = null
-    q().hydrate()
+    q().db.tables.organization_members[0].role = 'member'
 
-    await sendEmail(bea.id as string)
+    const res = await sendEmail(bea.id as string)
 
+    expect(res.status).toBe(403)
     expect(offerStatus(anna.id)).toBe('pending')
+    expect(mailCount(email.sendContractOfferEmail)).toBe(0)
   })
 })
 
@@ -453,7 +516,7 @@ describe('send-email fails after superseding the previous offer (S12, audit R-14
 // ---------------------------------------------------------------------------
 
 describe('two live offers on one chair (S14, audit R-1, R-13)', () => {
-  /** The email toggle was off for the second offer, so nothing superseded the first. */
+  /** Two live offers, built directly: before createOffer, an offer sent with the email toggle off left this behind, and old rows may still. */
   function twoLive() {
     const anna = q().sendOffer('v1', R.v1[0])
     const bea = q().sendOffer('v1', R.v1[1], { supersede: false })
@@ -462,7 +525,7 @@ describe('two live offers on one chair (S14, audit R-1, R-13)', () => {
   }
 
   it('nothing in the database stops the second live offer being created', () => {
-    twoLive() // R-1: no partial unique index; sendOffer mirrors the browser insert
+    twoLive() // R-1: no partial unique index yet (094); a direct insert is not stopped
     expect(q().liveOffers('v1').map((o) => o.musician_id)).toEqual([R.v1[0], R.v1[1]])
   })
 

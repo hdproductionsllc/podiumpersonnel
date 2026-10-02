@@ -35,12 +35,14 @@ describe('the send dialog asks the server rather than its stale copy', () => {
   })
 
   it('does not gate the send on the locally-computed hasEmail', () => {
-    expect(src).toContain('if (sendEmail && offerData?.id)')
-    expect(src).not.toContain('if (sendEmail && hasEmail && offerData?.id)')
+    // The offer route is told what the admin chose; it reads the address itself.
+    expect(src).toMatch(/body: JSON\.stringify\(\{[\s\S]{0,400}\n\s*sendEmail,\r?\n/)
+    expect(src).not.toContain('sendEmail && hasEmail,')
   })
 
   it('treats a non-OK response as a failure rather than a send', () => {
-    expect(src).toContain('if (response.ok)')
+    expect(src).toContain('if (!responseOk) {')
+    expect(src).toContain("if (detail?.delivery === 'sent') {")
     expect(src).toContain('emailSent = true')
     expect(src).toContain('emailFailure =')
   })
@@ -73,15 +75,19 @@ describe('the dialog never claims a call it did not send', () => {
 })
 
 describe('A6: a suppressed send is never reported as sent', () => {
+  // The send itself lives in offer-email.ts, shared by the offer route and the
+  // legacy send-email route; the legacy route keeps its response shape.
+  const emailSrc = read('src/lib/staffing/offer-email.ts')
   const routeSrc = read('src/app/api/offers/send-email/route.ts')
   const dialogSrc = read('src/components/projects/send-offer-dialog.tsx')
 
   it('route reads suppression off the send result, not off an error', () => {
-    expect(routeSrc).toContain('result?.suppressed === true')
+    expect(emailSrc).toContain('result?.suppressed === true')
+    expect(routeSrc).toContain("sent.delivery === 'suppressed'")
   })
 
   it('route logs the email_logs row as suppressed, not sent', () => {
-    expect(routeSrc).toContain("status: suppressed ? 'suppressed' : 'sent'")
+    expect(emailSrc).toContain("status: suppressed ? 'suppressed' : 'sent'")
   })
 
   it('route tells the caller nothing was actually delivered', () => {
@@ -91,14 +97,14 @@ describe('A6: a suppressed send is never reported as sent', () => {
   })
 
   it('route skips the admin "offer sent" notification when the send was suppressed', () => {
-    const guard = routeSrc.indexOf('if (!suppressed) {')
-    const adminSend = routeSrc.indexOf('sendAdminOfferSentEmail({')
+    const guard = emailSrc.indexOf('if (!suppressed) {')
+    const adminSend = emailSrc.indexOf('sendAdminOfferSentEmail({')
     expect(guard, 'suppressed guard not found').toBeGreaterThan(-1)
     expect(adminSend, 'admin notification call not found').toBeGreaterThan(guard)
   })
 
   it('dialog reads the suppressed flag instead of trusting response.ok alone', () => {
-    expect(dialogSrc).toContain('detail?.suppressed')
+    expect(dialogSrc).toContain("detail?.delivery === 'suppressed'")
     expect(dialogSrc).toContain('emailSuppressed = true')
   })
 

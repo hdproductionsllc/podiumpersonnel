@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { LIVE_OFFER_STATUSES } from '@/lib/staffing/live'
 import { adminActor, logEvent, type StaffingEvent } from '@/lib/staffing/events'
+import { supersedeLiveOffers, supersededEvents } from '@/lib/staffing/offers'
 
 export async function POST(
   request: NextRequest,
@@ -157,7 +158,7 @@ export async function POST(
 
     // Resolve outstanding offers on this now-filled chair:
     // - the assigned musician's own pending offer → accepted (they said yes off-app)
-    // - any other musician's pending offer → expired (the chair is taken)
+    // - any other musician's pending offer → superseded (the chair is taken)
     // The chair itself is already assigned above, so these are logged rather
     // than failing the request.
     const nowIso = new Date().toISOString()
@@ -173,16 +174,10 @@ export async function POST(
       console.error(`Failed to mark musician ${musicianId}'s own offer accepted on position ${positionId}:`, acceptOwnOfferError)
     }
 
-    const { data: supersededOffers, error: expireOthersError } = await supabase
-      .from('contract_offers')
-      .update({ status: 'expired', responded_at: nowIso })
-      .eq('project_position_id', positionId)
-      .neq('musician_id', musicianId)
-      .in('status', [...LIVE_OFFER_STATUSES])
-      .select('id, musician_id')
+    const superseded = await supersedeLiveOffers(supabase, positionId, { exceptMusicianId: musicianId })
 
-    if (expireOthersError) {
-      console.error(`Failed to expire other musicians' offers on position ${positionId}:`, expireOthersError)
+    if (superseded.error) {
+      console.error(`Failed to expire other musicians' offers on position ${positionId}:`, superseded.error)
     }
 
     const actor = adminActor(user.id)
@@ -206,16 +201,7 @@ export async function POST(
         after: { status: 'accepted', position_id: positionId, musician_id: musicianId, source: 'direct_assign' },
       })
     }
-    for (const other of supersededOffers || []) {
-      events.push({
-        organizationId,
-        actor,
-        entityType: 'offer',
-        entityId: other.id,
-        action: 'offer.superseded',
-        after: { status: 'expired', position_id: positionId, musician_id: other.musician_id, reason: 'chair_assigned' },
-      })
-    }
+    events.push(...supersededEvents(superseded, { organizationId, actor, positionId, reason: 'chair_assigned' }))
     await logEvent(events)
 
     return NextResponse.json({ success: true })

@@ -91,7 +91,8 @@ export async function getNextCandidates(
     .map(o => o.musician_id)
 
   // Also exclude musicians who already had their turn at THIS chair: declined,
-  // let it expire, had it withdrawn, or were released from it. Suggesting the
+  // let it expire, had it withdrawn or replaced ('superseded', which was written
+  // as 'expired' before migration 093), or were released from it. Suggesting the
   // person who just timed out as "next" sends the admin straight back to them.
   // Re-offering on purpose is the separate follow-up action, which names the
   // musician directly and does not go through this list.
@@ -99,7 +100,7 @@ export async function getNextCandidates(
     .from('contract_offers')
     .select('musician_id')
     .eq('project_position_id', positionId)
-    .in('status', ['declined', 'expired', 'rescinded', 'released'])
+    .in('status', ['declined', 'expired', 'superseded', 'rescinded', 'released'])
 
   const hadTheirTurnIds = (pastOffersOnChair || []).map(o => o.musician_id)
   const excludedMusicianIds = [

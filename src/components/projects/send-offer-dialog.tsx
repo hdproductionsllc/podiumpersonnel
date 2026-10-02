@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { useTerms } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
 import { findPossibleDuplicates, type PossibleDuplicate } from '@/lib/musicians/duplicates'
+import { expiryFromDialogChoice, resolveExpiresAt } from '@/lib/staffing/expiry'
 
 export type MusicianScheduleEntry = {
   id: string
@@ -438,16 +439,10 @@ export function SendOfferDialog({
   function getDeadlineContext(): { text: string; color: string } | null {
     if (!projectEndDate) return null
 
-    let deadlineDate: Date | null = null
-    if (expiresIn === 'custom' && customDeadline) {
-      deadlineDate = new Date(customDeadline + 'T23:59:59')
-    } else if (expiresIn === '0.17') {
-      deadlineDate = new Date(Date.now() + 4 * 60 * 60 * 1000)
-    } else if (expiresIn && expiresIn !== '') {
-      deadlineDate = new Date(Date.now() + parseInt(expiresIn) * 24 * 60 * 60 * 1000)
-    }
-
-    if (!deadlineDate) return null
+    const expiry = expiryFromDialogChoice(expiresIn, customDeadline)
+    const deadlineIso = expiry ? resolveExpiresAt(expiry) : null
+    if (!deadlineIso) return null
+    const deadlineDate = new Date(deadlineIso)
 
     const concertDate = new Date(projectEndDate + 'T23:59:59')
     const diffMs = concertDate.getTime() - deadlineDate.getTime()
@@ -470,120 +465,61 @@ export function SendOfferDialog({
     setLoading(true)
     setError(null)
 
-    const supabase = createClient()
-
-    let expiresAt: string | null = null
-    if (expiresIn === '0.17') {
-      // ASAP = 4 hours
-      expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString()
-    } else if (expiresIn === 'custom') {
-      expiresAt = customDeadline ? new Date(customDeadline + 'T23:59:59').toISOString() : null
-    } else if (expiresIn) {
-      expiresAt = new Date(Date.now() + parseInt(expiresIn) * 24 * 60 * 60 * 1000).toISOString()
-    }
-
-    // Server-side guard: check if musician already has an active offer in this project
-    const { data: thisPosition } = await supabase
-      .from('project_positions')
-      .select('project_id')
-      .eq('id', positionId)
-      .single()
-
-    if (thisPosition) {
-      const { data: projectPositions } = await supabase
-        .from('project_positions')
-        .select('id')
-        .eq('project_id', thisPosition.project_id)
-
-      const allPosIds = (projectPositions || []).map((p: { id: string }) => p.id)
-      const { data: existingActive } = await supabase
-        .from('contract_offers')
-        .select('id')
-        .eq('musician_id', selectedMusicianId)
-        .in('project_position_id', allPosIds)
-        .in('status', ['pending', 'viewed', 'accepted'])
-        .limit(1)
-
-      if (existingActive && existingActive.length > 0) {
-        setLoading(false)
-        setError(`This ${term(terms, 'person', { case: 'lower' })} already has an active offer for another position in this ${term(terms, 'work', { case: 'lower' })}.`)
-        return
-      }
-    }
-
-    const insertData: Record<string, unknown> = {
-      project_position_id: positionId,
-      musician_id: selectedMusicianId,
-      status: 'pending',
-      sent_at: new Date().toISOString(),
-      expires_at: expiresAt,
-      custom_pay: finalPay ?? null,
-    }
-    if (personalMessage.trim()) {
-      insertData.personal_message = personalMessage.trim()
-    }
-
-    const { data: offerData, error: insertError } = await supabase
-      .from('contract_offers')
-      .insert(insertData)
-      .select('id')
-      .single()
-
-    if (insertError) {
-      setLoading(false)
-      setError(insertError.message)
-      return
-    }
-
-    // Update position status to offered (only if not already confirmed)
-    const { error: posUpdateError } = await supabase
-      .from('project_positions')
-      .update({ status: 'offered' })
-      .eq('id', positionId)
-      .neq('status', 'confirmed')
-
-    if (posUpdateError) {
-      console.error('Failed to update position status:', posUpdateError)
-    }
-
-    // Ask the server to send whenever email is switched on — including when our
-    // copy of the musician looks address-less. The route reads the musician's
-    // current address and is the only honest authority on whether a send is
-    // possible; gating on this page's stale copy skipped the call entirely.
+    // The server creates the offer, emails it and retires the chair's previous
+    // open offer (createOffer). It also reads the musician's current address,
+    // so it is asked to send whenever email is switched on — including when our
+    // copy of the musician looks address-less; gating on this page's stale copy
+    // skipped the send entirely. "Custom date" is resolved here, because "end of
+    // that day" means the admin's own timezone.
     let emailSent = false
     let emailSuppressed = false
     let emailFailure: string | null = null
 
-    if (sendEmail && offerData?.id) {
-      try {
-        const response = await fetch('/api/offers/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            offerId: offerData.id,
-            includeLeaderFee,
-            leaderFeeAmount: includeLeaderFee ? parseFloat(leaderFeeAmount) || 0 : 0,
-          }),
-        })
-
-        if (response.ok) {
-          const detail = await response.json().catch(() => null)
-          // Safe mode can return 200 with nothing actually sent — that is NOT
-          // the same as a successful send. Read the flag rather than trusting
-          // response.ok alone, or the dialog repeats the exact "looks sent but
-          // wasn't" bug this route now reports honestly.
-          if (detail?.suppressed) {
-            emailSuppressed = true
-          } else {
-            emailSent = true
-          }
-        } else {
-          const detail = await response.json().catch(() => null)
-          emailFailure = detail?.error || `the server responded ${response.status}`
-        }
-      } catch {
-        emailFailure = 'the request never reached the server'
+    let detail: { offerId?: string; delivery?: string; emailError?: string; error?: string; code?: string } | null = null
+    let responseOk = false
+    try {
+      const response = await fetch(`/api/positions/${positionId}/offers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          musicianId: selectedMusicianId,
+          expiry: expiryFromDialogChoice(expiresIn, customDeadline) ?? { kind: 'none' },
+          customPay: finalPay ?? null,
+          personalMessage: personalMessage.trim() || null,
+          sendEmail,
+          includeLeaderFee,
+          leaderFeeAmount: includeLeaderFee ? parseFloat(leaderFeeAmount) || 0 : 0,
+        }),
+      })
+      responseOk = response.ok
+      detail = await response.json().catch(() => null)
+      if (!response.ok && !detail?.error) {
+        detail = { error: `the server responded ${response.status}` }
       }
+    } catch {
+      detail = { error: 'the request never reached the server' }
+    }
+
+    if (!responseOk) {
+      setLoading(false)
+      setError(
+        detail?.code === 'musician_has_active_offer'
+          ? `This ${term(terms, 'person', { case: 'lower' })} already has an active offer for another position in this ${term(terms, 'work', { case: 'lower' })}.`
+          : detail?.error || 'Failed to create offer'
+      )
+      return
+    }
+
+    // Safe mode can create the offer with nothing actually sent — that is NOT
+    // the same as a successful send. Read the delivery rather than trusting
+    // response.ok alone, or the dialog repeats the exact "looks sent but
+    // wasn't" bug the server now reports honestly.
+    if (detail?.delivery === 'sent') {
+      emailSent = true
+    } else if (detail?.delivery === 'suppressed') {
+      emailSuppressed = true
+    } else if (detail?.delivery === 'failed' || detail?.delivery === 'no_email') {
+      emailFailure = detail.emailError || 'the email could not be sent'
     }
 
     setLoading(false)
