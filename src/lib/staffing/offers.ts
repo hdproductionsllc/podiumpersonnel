@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- PostgREST embeds */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceClient } from '@/lib/supabase/server'
-import { LIVE_OFFER_STATUSES } from './live'
+import { LIVE_OFFER_STATUSES, isLiveOffer } from './live'
 import { isOfferClosed } from './respond'
 import { DEFAULT_OFFER_EXPIRY, resolveExpiresAt, type OfferExpiry } from './expiry'
 import { adminActor, logEvent, type Actor, type StaffingEvent } from './events'
@@ -25,15 +25,19 @@ import {
  *   1. check: admin of the gig's organization, musician in the same
  *      organization and active, gig not cancelled/completed, chair not already
  *      filled, musician not already holding an offer on this gig;
- *   2. insert the offer (who sent it, what it offered, expiry from the one
- *      policy in expiry.ts) and mark the chair offered;
+ *   2. retire the chair's open offers ('superseded'), then insert the new one
+ *      (who sent it, what it offered, expiry from the one policy in
+ *      expiry.ts) and mark the chair offered;
  *   3. send the email, if asked;
- *   4. only then retire the chair's other open offers ('superseded').
+ *   4. if that email failed while someone else was still waiting on the chair,
+ *      undo step 2: delete the new offer and put back exactly the offers this
+ *      call retired.
  *
- * Step 4 coming after step 3 is the R-14 fix: if the email to the new musician
- * fails while someone else still holds an open offer on the chair, the new
- * offer is taken back and nothing changes, instead of the old offer being
- * killed for a call that never went out.
+ * Retire-then-insert means a chair never holds two live offers, not even for
+ * the seconds the email takes: the previous musician cannot accept a chair
+ * that is already being offered to someone else, and the planned one-live-
+ * offer-per-chair index (094) never sees a second one. Step 4 is the R-14 fix:
+ * an old offer is not killed for a call that never went out.
  */
 
 export type OfferDelivery = 'sent' | 'suppressed' | 'failed' | 'no_email' | 'not_requested'
@@ -46,6 +50,7 @@ export type CreateOfferRefusal =
   | 'gig_closed'
   | 'musician_inactive'
   | 'musician_has_active_offer'
+  | 'chair_has_live_offer'
   | 'send_failed'
   | 'failed'
 
@@ -173,14 +178,27 @@ export async function createOffer(
     }
   }
 
-  // Whoever else is waiting on this chair. Decides what a failed send means.
-  const { data: openSiblings } = await supabase
+  // Whoever else is waiting on this chair, and in what state, so a failed send
+  // can put them back exactly as they were.
+  const { data: siblingRows } = await supabase
     .from('contract_offers')
-    .select('id')
+    .select('id, status, expires_at')
     .eq('project_position_id', positionId)
     .in('status', [...LIVE_OFFER_STATUSES])
+  const siblings: { id: string; status: string; expires_at: string | null }[] = siblingRows || []
 
   // -- 2. the offer ---------------------------------------------------------------
+
+  const service = createServiceClient()
+
+  // Retire first, so the chair never holds two live offers (see the header).
+  const retired = await supersedeLiveOffers(service, positionId)
+  if (retired.error) {
+    console.error(`createOffer: could not retire earlier offers on position ${positionId}; offer not created:`, retired.error)
+    return refuse(500, 'failed', 'Could not replace the chair\'s current offer, so no new offer was made. Please try again.')
+  }
+  const previousStatus = new Map(siblings.map((o) => [o.id, o.status]))
+  const putBack = () => restoreSuperseded(service, positionId, retired, previousStatus)
 
   const services: any[] = project?.services || []
   const nowIso = new Date().toISOString()
@@ -205,6 +223,11 @@ export async function createOffer(
   })
   if (insertError || !offer) {
     console.error(`createOffer: insert failed for musician ${musicianId} on position ${positionId}:`, insertError)
+    await putBack()
+    if ((insertError as { code?: string } | null)?.code === '23505') {
+      // Another admin's offer for this chair landed between our two writes (094's index).
+      return refuse(409, 'chair_has_live_offer', 'Another offer for this chair was sent a moment ago. Refresh to see it.')
+    }
     return refuse(500, 'failed', (insertError as any)?.message || 'Failed to create offer')
   }
 
@@ -245,20 +268,31 @@ export async function createOffer(
     }
   }
 
-  const service = createServiceClient()
+  // -- 4. a failed send while someone else was waiting: undo ------------------------
 
-  if (delivery === 'failed' && openSiblings && openSiblings.length > 0) {
-    // R-14: someone else still has a working offer on this chair and this call
-    // never reached anyone. Take the new offer back (nobody has its link) and
-    // leave the chair as it was.
+  // "Waiting" means still answerable: an offer past its deadline that the cron
+  // has not collected yet loses nothing by being replaced.
+  const now = new Date()
+  const retiredIds = new Set(retired.offers.map((o) => o.id))
+  const someoneWaiting = siblings.some((o) => retiredIds.has(o.id) && isLiveOffer(o, now))
+
+  if (delivery === 'failed' && someoneWaiting) {
+    // R-14: this call never reached anyone. Take the new offer back (nobody has
+    // its link) and give the previous musician their offer back.
     const { error: withdrawError } = await service.from('contract_offers').delete().eq('id', offer.id)
     if (!withdrawError) {
+      const restored = await putBack()
+      console.warn(
+        `createOffer: email to musician ${musicianId} failed; withdrew offer ${offer.id} and restored ${restored} earlier offer(s) on position ${positionId}`
+      )
       return refuse(
         502,
         'send_failed',
         `The email to ${musician.first_name} ${musician.last_name} could not be sent (${emailError}), so the offer was not created. The chair's current offer is still open.`
       )
     }
+    // Putting the old offer back now would leave two live offers; keep the new
+    // one (the admin is told its email failed, and can Send Reminder).
     console.error(`createOffer: could not withdraw unsent offer ${offer.id}; leaving it pending:`, withdrawError)
   }
 
@@ -270,32 +304,13 @@ export async function createOffer(
     if (deliveryError) console.error(`createOffer: could not record delivery for offer ${offer.id}:`, deliveryError)
   }
 
-  // -- 4. the previous offer --------------------------------------------------------
-
   const actor = adminActor(userId)
-  const events: StaffingEvent[] = []
-  let superseded = 0
-
-  // A failed send with nobody else waiting keeps today's behaviour: the offer
-  // stays open (the admin was told to contact them, or to Send Reminder). If
-  // the withdrawal above failed, retiring the older offer now would be R-14
-  // all over again, so it is left alone.
-  if (!(delivery === 'failed' && openSiblings && openSiblings.length > 0)) {
-    const result = await supersedeLiveOffers(service, positionId, { exceptOfferId: offer.id })
-    if (result.error) {
-      console.error(`createOffer: could not retire earlier offers on position ${positionId}:`, result.error)
-    }
-    superseded = result.offers.length
-    events.push(
-      ...supersededEvents(result, {
-        organizationId,
-        actor,
-        positionId,
-        replacedBy: offer.id,
-      })
-    )
-  }
-
+  const events: StaffingEvent[] = supersededEvents(retired, {
+    organizationId,
+    actor,
+    positionId,
+    replacedBy: offer.id,
+  })
   events.push({
     organizationId,
     actor,
@@ -312,7 +327,36 @@ export async function createOffer(
   })
   await logEvent(events)
 
-  return { ok: true, offerId: offer.id, delivery, ...(emailError ? { emailError } : {}), superseded }
+  return { ok: true, offerId: offer.id, delivery, ...(emailError ? { emailError } : {}), superseded: retired.offers.length }
+}
+
+/**
+ * Undo createOffer's retire step: put each offer it retired back to the
+ * status it had (pending or viewed), only while it still carries the status
+ * this call gave it. Returns how many came back. Under 094's index a restore
+ * that would make a second live offer is refused; that is logged and left.
+ */
+async function restoreSuperseded(
+  service: SupabaseClient,
+  positionId: string,
+  retired: SupersedeResult,
+  previousStatus: Map<string, string>
+): Promise<number> {
+  let restored = 0
+  for (const status of LIVE_OFFER_STATUSES) {
+    const ids = retired.offers.map((o) => o.id).filter((id) => (previousStatus.get(id) ?? 'pending') === status)
+    if (ids.length === 0) continue
+    const { data, error } = await service
+      .from('contract_offers')
+      .update({ status, responded_at: null })
+      .eq('project_position_id', positionId)
+      .in('id', ids)
+      .eq('status', retired.status)
+      .select('id')
+    if (error) console.error(`createOffer: could not restore offers ${ids.join(', ')} on position ${positionId}:`, error)
+    restored += data?.length ?? 0
+  }
+  return restored
 }
 
 // ---------------------------------------------------------------------------

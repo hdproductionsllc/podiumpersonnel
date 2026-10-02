@@ -250,6 +250,21 @@ export class QuartetFixture {
   }
 }
 
+/**
+ * The planned 094 index, contract_offers_one_live_per_position: at most one
+ * pending/viewed non-substitute offer per chair. Install with
+ * `q.db.constraint = oneLiveOfferPerChair` to run a flow as if 094 were live.
+ */
+export function oneLiveOfferPerChair(table: string, candidate: Row, others: Row[]) {
+  if (table !== 'contract_offers') return null
+  const live = (o: Row) => ['pending', 'viewed'].includes(o.status) && o.is_substitution !== true
+  if (!live(candidate)) return null
+  const clash = others.some((o) => o.project_position_id === candidate.project_position_id && live(o))
+  return clash
+    ? { code: '23505', message: 'duplicate key value violates unique constraint "contract_offers_one_live_per_position"' }
+    : null
+}
+
 /** A fresh quartet gig: four vacant chairs, nobody offered anything yet. */
 export function buildQuartet(): QuartetFixture {
   return new QuartetFixture()

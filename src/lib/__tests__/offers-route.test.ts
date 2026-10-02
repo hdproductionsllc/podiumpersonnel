@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { NextRequest, NextResponse } from 'next/server'
-import { buildQuartet, QUARTET_RANKING, type QuartetFixture } from './helpers/quartet-fixture'
+import { buildQuartet, oneLiveOfferPerChair, QUARTET_RANKING, type QuartetFixture } from './helpers/quartet-fixture'
 import type { Row } from './helpers/supabase-mock'
 
 /**
@@ -10,7 +10,7 @@ import type { Row } from './helpers/supabase-mock'
  * Driven against the quartet fixture with the real route, real createOffer and
  * the real offer-email module; only the email provider, the email log and the
  * venue lookup are stubbed. Covers: who may send, the refusals, what the offer
- * row records (093 columns), the expiry policy, supersede-after-send, the
+ * row records (093 columns), the expiry policy, retire-then-insert and the undo on a failed send, the
  * history rows, running before migration 093 is pasted, and that the offer
  * email is the same email the old send-email route sent.
  */
@@ -268,7 +268,7 @@ describe('the one expiry policy', () => {
 // ---------------------------------------------------------------------------
 
 describe('replacing the previous offer', () => {
-  it('marks the earlier open offer "superseded" after the send, and records it', async () => {
+  it('marks the earlier open offer "superseded" before the new one is written, and records it', async () => {
     const anna = q().sendOffer('v1', R.v1[0])
     const res = await offer('pos-v1', { musicianId: R.v1[1] })
 
@@ -280,11 +280,14 @@ describe('replacing the previous offer', () => {
       entity_id: anna.id,
       after: expect.objectContaining({ status: 'superseded', replaced_by: res.body.offerId, musician_id: R.v1[0] }),
     })
-    // Retired only once the send had happened: the delivery result is written
-    // before the supersede.
-    const ops = q().db.log.filter((e) => e.table === 'contract_offers' && e.operation === 'update')
-    expect(ops.map((e) => Object.keys(e.payload as Row))).toEqual([['delivery_status'], ['status', 'responded_at']])
-    expect((ops[1].payload as Row).status).toBe('superseded')
+    // Retire, then insert, then send: the chair never holds two live offers.
+    const writes = q().db.log.filter((e) => e.table === 'contract_offers' && e.operation !== 'select')
+    expect(writes.map((e) => [e.operation, Object.keys((e.payload ?? {}) as Row).slice(0, 2)])).toEqual([
+      ['update', ['status', 'responded_at']],
+      ['insert', ['project_position_id', 'musician_id']],
+      ['update', ['delivery_status']],
+    ])
+    expect((writes[0].payload as Row).status).toBe('superseded')
     expect(mailCalls(email.sendContractOfferEmail)).toHaveLength(1)
   })
 
@@ -304,9 +307,76 @@ describe('replacing the previous offer', () => {
 
     expect(res).toMatchObject({ status: 502, body: { code: 'send_failed' } })
     expect(res.body.error).toMatch(/could not be sent \(Resend is down\), so the offer was not created/)
-    expect(row(anna.id as string).status).toBe('pending')
+    expect(row(anna.id as string)).toMatchObject({ status: 'pending', responded_at: null })
     expect(q().offers('v1')).toHaveLength(1)
     expect(events()).toEqual([])
+  })
+
+  it('puts a viewed offer back as viewed', async () => {
+    const anna = q().sendOffer('v1', R.v1[0])
+    anna.status = 'viewed'
+    state.sendOfferFails = true
+
+    const res = await offer('pos-v1', { musicianId: R.v1[1] })
+
+    expect(res.status).toBe(502)
+    expect(row(anna.id as string)).toMatchObject({ status: 'viewed', responded_at: null })
+  })
+
+  it('an earlier offer already past its deadline is not "waiting": a failed send keeps the new offer', async () => {
+    const anna = q().sendOffer('v1', R.v1[0], { expiresAt: new Date(Date.now() - HOUR).toISOString() })
+    state.sendOfferFails = true
+
+    const res = await offer('pos-v1', { musicianId: R.v1[1] })
+
+    expect(res).toMatchObject({ status: 200, body: { delivery: 'failed', emailError: 'Resend is down', superseded: 1 } })
+    expect(row(anna.id as string).status).toBe('superseded')
+    expect(row(res.body.offerId)).toMatchObject({ status: 'pending', delivery_status: 'failed' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+
+describe("under 094's one-live-offer-per-chair index", () => {
+  beforeEach(() => {
+    q().db.constraint = oneLiveOfferPerChair
+  })
+
+  it('replacing an open offer succeeds', async () => {
+    const anna = q().sendOffer('v1', R.v1[0])
+
+    const res = await offer('pos-v1', { musicianId: R.v1[1] })
+
+    expect(res).toMatchObject({ status: 200, body: { delivery: 'sent', superseded: 1 } })
+    expect(row(anna.id as string).status).toBe('superseded')
+    expect(q().liveOffers('v1').map((o) => o.id)).toEqual([res.body.offerId])
+  })
+
+  it('a failed send still puts the previous offer back', async () => {
+    const anna = q().sendOffer('v1', R.v1[0])
+    state.sendOfferFails = true
+
+    const res = await offer('pos-v1', { musicianId: R.v1[1] })
+
+    expect(res.status).toBe(502)
+    expect(q().liveOffers('v1').map((o) => o.id)).toEqual([anna.id])
+  })
+
+  it("another admin's offer landing between retire and insert: 409, and theirs stands", async () => {
+    const anna = q().sendOffer('v1', R.v1[0])
+    q().db.beforeOp = (entry, db) => {
+      if (entry.table === 'contract_offers' && entry.operation === 'insert') {
+        db.beforeOp = undefined
+        db.tables.contract_offers.push({ id: 'offer-rival', project_position_id: 'pos-v1', musician_id: R.v1[2], status: 'pending' })
+      }
+    }
+
+    const res = await offer('pos-v1', { musicianId: R.v1[1] })
+
+    expect(res).toMatchObject({ status: 409, body: { code: 'chair_has_live_offer' } })
+    expect(row(anna.id as string).status).toBe('superseded') // the restore is refused: one live offer only
+    expect(q().liveOffers('v1').map((o) => o.id)).toEqual(['offer-rival'])
+    expect(mailCalls(email.sendContractOfferEmail)).toHaveLength(0)
   })
 })
 
@@ -358,6 +428,18 @@ describe('before migration 093 is pasted', () => {
     expect(created.created_by).toBeUndefined()
     expect(row(anna.id as string).status).toBe('expired')
     expect(events()[0]).toMatchObject({ action: 'offer.superseded', after: expect.objectContaining({ status: 'expired' }) })
+  })
+
+  it('a failed send puts the offer it retired as "expired" back to pending', async () => {
+    without093()
+    const anna = q().sendOffer('v1', R.v1[0])
+    state.sendOfferFails = true
+
+    const res = await offer('pos-v1', { musicianId: R.v1[1] })
+
+    expect(res.status).toBe(502)
+    expect(row(anna.id as string)).toMatchObject({ status: 'pending', responded_at: null })
+    expect(q().offers('v1')).toHaveLength(1)
   })
 })
 

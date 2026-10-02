@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest'
 import { NextRequest, NextResponse } from 'next/server'
-import { buildQuartet, QUARTET_RANKING, type QuartetFixture } from './helpers/quartet-fixture'
+import { buildQuartet, oneLiveOfferPerChair, QUARTET_RANKING, type QuartetFixture } from './helpers/quartet-fixture'
 import type { Row } from './helpers/supabase-mock'
 
 /**
@@ -28,8 +28,9 @@ import type { Row } from './helpers/supabase-mock'
  *   double approval of one sub request ....... substitution-guards
  *
  * New here: S13 viewed overwrite, S9 position delete, S11 two sub requests,
- * S12/R-14 send failure after supersede (fixed in createOffer; the legacy
- * send-email route keeps the old order), S14/R-1/R-13 two live offers, double
+ * S12/R-14 send failure after supersede (fixed in createOffer, which puts the
+ * retired offer back; the legacy send-email route keeps the old order),
+ * S14/R-1/R-13 two live offers, double
  * cron run, and the cron's blindness to a cancelled gig.
  */
 
@@ -385,7 +386,8 @@ async function offerChair(positionId: string, musicianId: string, extra: Record<
 }
 
 describe('a new offer whose email fails (S12, audit R-14), through createOffer', () => {
-  it('a successful send leaves exactly one live offer on the chair', async () => {
+  it('a successful send leaves exactly one live offer on the chair, even under the 094 index', async () => {
+    q().db.constraint = oneLiveOfferPerChair // a second live offer, even for a moment, is refused
     const anna = q().sendOffer('v1', R.v1[0])
 
     const { res, body } = await offerChair('pos-v1', R.v1[1])
@@ -398,6 +400,7 @@ describe('a new offer whose email fails (S12, audit R-14), through createOffer',
   })
 
   it('R-14: a failed send does not kill the previous live offer', async () => {
+    q().db.constraint = oneLiveOfferPerChair
     const anna = q().sendOffer('v1', R.v1[0])
     state.sendOfferFails = true
 

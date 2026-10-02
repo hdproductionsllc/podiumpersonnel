@@ -36,7 +36,7 @@ describe('Bug 2 — sending a new offer supersedes the previous one', () => {
     expect(writer).toContain("eq('project_position_id', positionId)")
     expect(writer).toContain("neq('id', scope.exceptOfferId)")
     expect(writer).toContain("in('status', [...LIVE_OFFER_STATUSES])")
-    expect(writer).toContain('supersedeLiveOffers(service, positionId, { exceptOfferId: offer.id })')
+    expect(writer).toContain('const retired = await supersedeLiveOffers(service, positionId)')
     expect(legacyRoute).toContain('supersedeLiveOffers(createServiceClient(), position.id, { exceptOfferId: offerId })')
   })
 })

@@ -61,6 +61,12 @@ export class MockSupabaseDb {
   log: QueryLogEntry[] = []
   /** Called with each operation's log entry before it executes (race hook). */
   beforeOp?: (entry: QueryLogEntry, db: MockSupabaseDb) => void
+  /**
+   * A unique index: return an error to refuse a row an insert or update would
+   * write (`others` is the rest of the table). The whole operation is refused,
+   * as Postgres would.
+   */
+  constraint?: (table: string, candidate: Row, others: Row[]) => { message: string; code: string } | null
 
   constructor(tables: Record<string, Row[]> = {}) {
     this.tables = tables
@@ -225,6 +231,18 @@ class MockQueryBuilder implements PromiseLike<MockResult> {
     })
   }
 
+  /** The first constraint violation the would-be rows cause, checked one at a time. */
+  private violation(candidates: Row[], rest: Row[]): { message: string; code: string } | null {
+    if (!this.db.constraint) return null
+    const seen = [...rest]
+    for (const row of candidates) {
+      const error = this.db.constraint(this.table, row, seen)
+      if (error) return error
+      seen.push(row)
+    }
+    return null
+  }
+
   private execute(): MockResult {
     const entry: QueryLogEntry = {
       table: this.table,
@@ -241,6 +259,8 @@ class MockQueryBuilder implements PromiseLike<MockResult> {
     if (this.operation === 'insert') {
       const toInsert = Array.isArray(this.payload) ? (this.payload as Row[]) : [this.payload as Row]
       const inserted = toInsert.map((r, i) => ({ id: `${this.table}-${rows.length + i + 1}`, ...r }))
+      const violation = this.violation(inserted, rows)
+      if (violation) return { data: null, error: violation }
       rows.push(...inserted)
       if (!this.returning) return { data: null, error: null }
       const copies = inserted.map((r) => ({ ...r }))
@@ -256,6 +276,11 @@ class MockQueryBuilder implements PromiseLike<MockResult> {
 
     let matched = rows.filter((r) => this.rowMatches(r))
     if (this.operation === 'update') {
+      const violation = this.violation(
+        matched.map((row) => ({ ...row, ...(this.payload as Row) })),
+        rows.filter((row) => !matched.includes(row))
+      )
+      if (violation) return { data: null, error: violation }
       for (const row of matched) Object.assign(row, this.payload as Row)
     }
     if (this.orderBy.length > 0) {
