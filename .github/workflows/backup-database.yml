@@ -1,0 +1,178 @@
+# Nightly database backup, with a restore test every time.
+#
+# Supabase's Free plan keeps NO backups, so this is the only copy of the
+# database outside Supabase. Each run:
+#   1. dumps roles, schema and data with the Supabase CLI (its documented
+#      backup method),
+#   2. uploads the three files to the private R2 bucket below, kept 30 days,
+#   3. restores them into a throwaway Supabase Postgres on the runner and checks
+#      the row counts against production. A backup that has never been restored
+#      is a hope, not a backup; this restores one every night.
+#
+# THIS REPO IS PUBLIC, and so are its Actions logs. Nothing here may print
+# database contents: no row data, no table counts, no raw psql error text
+# (COPY errors quote the failing row). Logs say only pass/fail and where.
+#
+# A failed run emails the repo owner (GitHub's default for scheduled workflows).
+# Restore runbook: docs/backups.md.
+name: Database backup
+
+on:
+  schedule:
+    # 07:13 UTC (about 2am Central). Off minute 0: Supabase's gateway times out
+    # in the first minute of the hour (see the cron retry notes in src/lib/cron.ts).
+    - cron: '13 7 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Dump, upload, restore-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Session pooler connection string (IPv4; GitHub runners cannot reach the
+      # IPv6-only direct host). Supabase dashboard > Connect > Session pooler.
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      BUCKET: podium-db-backups
+      # The image's superuser (its "postgres" role is not one, and cannot replace
+      # the auth schema). A throwaway database on the runner, never exposed.
+      SCRATCH_URL: postgresql://supabase_admin:postgres@localhost:54329/postgres
+      # The tables the restore test compares. Everything else is still backed up.
+      CHECK_TABLES: >-
+        public.organizations public.musicians public.projects public.services
+        public.project_positions public.contract_offers public.payments
+        public.email_logs auth.users
+
+    steps:
+      - name: Check the secrets are set
+        run: |
+          missing=0
+          for v in SUPABASE_DB_URL AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+            if [ -z "${!v}" ]; then echo "::error::secret for $v is not set"; missing=1; fi
+          done
+          if [ "${R2_ENDPOINT}" = "https://.r2.cloudflarestorage.com" ]; then
+            echo "::error::secret R2_ACCOUNT_ID is not set"; missing=1
+          fi
+          exit $missing
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Dump roles, schema and data
+        run: |
+          mkdir -p backup
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/roles.sql --role-only
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/schema.sql
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/data.sql --use-copy --data-only \
+            -x "storage.buckets_vectors" -x "storage.vector_indexes"
+          ls -la backup
+          # An empty data file means the dump silently failed.
+          test "$(wc -c < backup/data.sql)" -gt 10000
+
+      - name: Record production row counts
+        run: |
+          : > counts-prod.txt
+          for t in $CHECK_TABLES; do
+            echo "$t $(psql "$SUPABASE_DB_URL" -Atc "select count(*) from $t")" >> counts-prod.txt
+          done
+          psql "$SUPABASE_DB_URL" -Atc "show server_version_num" > server-version.txt
+
+      - name: Upload to R2
+        run: |
+          STAMP=$(date -u +%Y-%m-%dT%H%MZ)
+          tar -czf "podium-db-$STAMP.tar.gz" -C backup roles.sql schema.sql data.sql
+          aws s3api head-bucket --bucket "$BUCKET" --endpoint-url "$R2_ENDPOINT" 2>/dev/null \
+            || aws s3api create-bucket --bucket "$BUCKET" --endpoint-url "$R2_ENDPOINT"
+          # Keep 30 days of nightly copies; R2 deletes older ones itself.
+          aws s3api put-bucket-lifecycle-configuration --bucket "$BUCKET" --endpoint-url "$R2_ENDPOINT" \
+            --lifecycle-configuration '{"Rules":[{"ID":"expire-after-30-days","Status":"Enabled","Filter":{"Prefix":"db/"},"Expiration":{"Days":30}}]}'
+          aws s3 cp "podium-db-$STAMP.tar.gz" "s3://$BUCKET/db/podium-db-$STAMP.tar.gz" --endpoint-url "$R2_ENDPOINT"
+          echo "Uploaded db/podium-db-$STAMP.tar.gz" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Start a scratch Supabase Postgres of the same major version
+        run: |
+          MAJOR=$(( $(cat server-version.txt) / 10000 ))
+          case "$MAJOR" in
+            15) TAG=15.19.0.002 ;;
+            17) TAG=17.11.0.002 ;;
+            *) echo "::error::No scratch image mapped for Postgres $MAJOR; add one here"; exit 1 ;;
+          esac
+          docker run -d --name scratch -p 54329:5432 -e POSTGRES_PASSWORD=postgres "supabase/postgres:$TAG"
+          for i in $(seq 1 60); do
+            pg_isready -h localhost -p 54329 -U supabase_admin && break
+            sleep 2
+          done
+          # The image runs its own init scripts after first accepting connections.
+          sleep 10
+          psql "$SCRATCH_URL" -Atc "select version()"
+
+      - name: Give it production's auth and storage structure
+        # The image ships Supabase's auth/storage tables at the version baked
+        # into it; production's are newer (auth migrations add columns), so the
+        # data would not load. A real restore goes into a new Supabase project,
+        # which already has current ones; copying production's structure here
+        # makes the scratch database match that. Structure only, no rows.
+        # Split in two: everything now (tables, keys, functions) EXCEPT policies
+        # and triggers, which call the app's own public functions and so go in
+        # after the app schema exists. The app's tables reference auth.users'
+        # key, so the keys must come first.
+        run: |
+          # $URL is expanded inside the container (single quotes), where it is set.
+          docker exec -e URL="$SUPABASE_DB_URL" scratch sh -c '
+            set -e
+            pg_dump "$URL" -Fc --schema-only --no-owner --no-privileges -n auth -n storage -f /tmp/managed.dump
+            pg_restore -l /tmp/managed.dump > /tmp/all.list
+            grep -v -E " (POLICY|TRIGGER) " /tmp/all.list > /tmp/early.list
+            grep -E " (POLICY|TRIGGER) " /tmp/all.list > /tmp/late.list || true
+            pg_restore -L /tmp/early.list -f /tmp/early.sql /tmp/managed.dump
+            pg_restore -L /tmp/late.list -f /tmp/late.sql /tmp/managed.dump
+          '
+          docker cp scratch:/tmp/early.sql managed-pre-data.sql
+          docker cp scratch:/tmp/late.sql managed-post-data.sql
+          psql --variable ON_ERROR_STOP=1 --quiet --dbname "$SCRATCH_URL" \
+            --command 'DROP SCHEMA IF EXISTS auth CASCADE' \
+            --command 'DROP SCHEMA IF EXISTS storage CASCADE' \
+            --file managed-pre-data.sql > managed.log 2>&1 \
+            || { echo "::error::could not recreate auth/storage: $(grep -m1 -o 'ERROR:[^"(]*' managed.log)"; exit 1; }
+
+      - name: Restore the backup into it
+        run: |
+          psql --single-transaction --variable ON_ERROR_STOP=1 \
+            --file backup/roles.sql \
+            --file backup/schema.sql \
+            --file managed-post-data.sql \
+            --command 'SET session_replication_role = replica' \
+            --file backup/data.sql \
+            --dbname "$SCRATCH_URL" > restore.log 2>&1 \
+            || {
+              # Location and the error's first words only: the full text can quote data.
+              echo "::error::restore failed at $(grep -m1 -o '^psql:[^:]*:[0-9]*' restore.log): $(grep -m1 -o 'ERROR:[^"(]*' restore.log)"
+              exit 1
+            }
+
+      - name: Compare row counts
+        run: |
+          fail=0
+          checked=0
+          while read -r t prod; do
+            got=$(psql "$SCRATCH_URL" -Atc "select count(*) from $t")
+            checked=$((checked + 1))
+            # Production can gain a row or two between the dump and the count.
+            # Counts stay out of the (public) log; only the table is named.
+            if [ "$got" -gt "$prod" ] || [ $(( prod - got )) -gt 5 ]; then
+              echo "::error::$t restored a different number of rows than production has"; fail=1
+            fi
+          done < counts-prod.txt
+          if [ $fail -eq 0 ]; then
+            echo "Restore test passed: $checked tables match production." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $fail
