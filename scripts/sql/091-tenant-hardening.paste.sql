@@ -163,6 +163,8 @@ CREATE POLICY "Admins can insert impersonation logs"
 REVOKE ALL ON FUNCTION activate_musician_by_token(UUID, TEXT)     FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION get_musician_by_invite_token(TEXT)         FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION link_musician_records_to_user(UUID, TEXT)  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION activate_musician_by_token(UUID, TEXT)    TO service_role;
+GRANT EXECUTE ON FUNCTION get_musician_by_invite_token(TEXT)        TO service_role;
 GRANT EXECUTE ON FUNCTION link_musician_records_to_user(UUID, TEXT) TO service_role;
 
 -- 9. Pin search_path on every SECURITY DEFINER function that lacks one. A
