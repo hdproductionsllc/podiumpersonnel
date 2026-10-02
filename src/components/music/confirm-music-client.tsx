@@ -14,6 +14,7 @@ interface ConfirmMusicClientProps {
     downloadUrl: string
   }[]
   alreadyConfirmed: boolean
+  saveFailed: boolean
 }
 
 export function ConfirmMusicClient({
@@ -23,32 +24,12 @@ export function ConfirmMusicClient({
   projectName,
   files,
   alreadyConfirmed,
+  saveFailed,
 }: ConfirmMusicClientProps) {
-  const [confirmed, setConfirmed] = useState(alreadyConfirmed)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function handleConfirm() {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const res = await fetch(`/api/confirm-music/${token}`, {
-        method: 'POST',
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to confirm')
-      }
-
-      setConfirmed(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong')
-    } finally {
-      setLoading(false)
-    }
-  }
+  // A plain form post, not fetch: the button must work on phones where this
+  // page's JavaScript never loads. The server redirects back here, and the
+  // page re-renders confirmed (or with saveFailed) from the database.
+  const [submitting, setSubmitting] = useState(false)
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center p-4">
@@ -60,7 +41,7 @@ export function ConfirmMusicClient({
           </div>
 
           <div className="p-6 space-y-6">
-            {confirmed ? (
+            {alreadyConfirmed ? (
               <div className="text-center space-y-4">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
                   <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -103,23 +84,24 @@ export function ConfirmMusicClient({
                   ))}
                 </div>
 
-                {error && (
+                {saveFailed && (
                   <div className="text-center text-sm">
-                    <p className="text-red-600">{error}</p>
+                    <p className="text-red-600">We couldn&apos;t save your confirmation. Please try again.</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       Having trouble? Email <SupportLink subject="Help confirming music" />
                     </p>
                   </div>
                 )}
 
-                <Button
-                  className="w-full"
-                  size="lg"
-                  onClick={handleConfirm}
-                  disabled={loading}
+                <form
+                  action={`/api/confirm-music/${token}`}
+                  method="POST"
+                  onSubmit={() => setSubmitting(true)}
                 >
-                  {loading ? 'Confirming...' : "I've Received All Music — Confirm"}
-                </Button>
+                  <Button type="submit" className="w-full" size="lg" disabled={submitting}>
+                    {submitting ? 'Confirming...' : "I've Received All Music — Confirm"}
+                  </Button>
+                </form>
 
                 <p className="text-xs text-slate-400 text-center">
                   Need to download files first? Click the file names above.

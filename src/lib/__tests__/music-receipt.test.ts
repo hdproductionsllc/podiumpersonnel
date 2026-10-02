@@ -182,16 +182,28 @@ describe('music receipt — a download counts as received', () => {
 
     const res = await clickButton()
 
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ success: true, alreadyConfirmed: true })
+    // A plain form post: 303 back to the page, which renders the confirmed state.
+    expect(res.status).toBe(303)
+    expect(res.headers.get('location')).toBe('http://localhost/confirm-music/tok')
     expect(fake.emails).toHaveLength(0)
   })
 
   it('the button on its own still marks received and emails with its own wording', async () => {
     const res = await clickButton()
 
-    expect(await res.json()).toEqual({ success: true })
+    expect(res.status).toBe(303)
+    expect(res.headers.get('location')).toBe('http://localhost/confirm-music/tok')
     expect(fake.emails).toHaveLength(1)
     expect(fake.emails[0].subject).toBe('Sam <b>Lee</b> confirmed music receipt — Smith Wedding')
+  })
+
+  it('a failed save sends the musician back to the page with an error, not a blank 500', async () => {
+    fake.claimError = { message: 'connection reset' }
+
+    const res = await clickButton()
+
+    expect(res.status).toBe(303)
+    expect(res.headers.get('location')).toBe('http://localhost/confirm-music/tok?error=1')
+    expect(fake.emails).toHaveLength(0)
   })
 })
