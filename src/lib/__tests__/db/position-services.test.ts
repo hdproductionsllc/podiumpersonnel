@@ -130,7 +130,11 @@ async function refused(fn: () => Promise<unknown>, match: RegExp) {
 describe('the defaults: nothing changes for anyone', () => {
   it('a new organization has the switch off; a new chair works every service', async () => {
     const id = randomUUID()
-    const { rows } = await db.query('insert into organizations (id, name, slug) values ($1, $1, $1) returning call_scoped_requirements', [id])
+    const { rows } = await db.query('insert into organizations (id, name, slug) values ($1, $2, $3) returning call_scoped_requirements', [
+      id,
+      `Org ${id}`,
+      `org-${id}`,
+    ])
     expect(rows[0].call_scoped_requirements).toBe(false)
     const g = await gig()
     const chair = await db.query('select scope_mode from project_positions where id = $1', [g.chairId])
