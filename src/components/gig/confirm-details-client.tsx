@@ -16,6 +16,7 @@ interface ConfirmDetailsClientProps {
     venue: string | null
   }[]
   alreadyConfirmed: boolean
+  saveFailed: boolean
   confirmedAt: string | null
   timezone: string
 }
@@ -28,34 +29,14 @@ export function ConfirmDetailsClient({
   ensembleType,
   services,
   alreadyConfirmed,
+  saveFailed,
   confirmedAt,
   timezone,
 }: ConfirmDetailsClientProps) {
-  const [confirmed, setConfirmed] = useState(alreadyConfirmed)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function handleConfirm() {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const res = await fetch(`/api/confirm-details/${token}`, {
-        method: 'POST',
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to confirm')
-      }
-
-      setConfirmed(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong')
-    } finally {
-      setLoading(false)
-    }
-  }
+  // A plain form post, not fetch: the button must work on phones where this
+  // page's JavaScript never loads. The server redirects back here, and the
+  // page re-renders confirmed (or with saveFailed) from the database.
+  const [submitting, setSubmitting] = useState(false)
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center p-4">
@@ -67,7 +48,7 @@ export function ConfirmDetailsClient({
           </div>
 
           <div className="p-6 space-y-6">
-            {confirmed ? (
+            {alreadyConfirmed ? (
               /* Success State */
               <div className="text-center space-y-4">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
@@ -116,23 +97,24 @@ export function ConfirmDetailsClient({
                   <p>✓ Ensemble roster and contact info</p>
                 </div>
 
-                {error && (
+                {saveFailed && (
                   <div className="text-center text-sm">
-                    <p className="text-red-600">{error}</p>
+                    <p className="text-red-600">We couldn&apos;t save your confirmation. Please try again.</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       Having trouble? Email <SupportLink subject="Help confirming gig details" />
                     </p>
                   </div>
                 )}
 
-                <Button
-                  className="w-full"
-                  size="lg"
-                  onClick={handleConfirm}
-                  disabled={loading}
+                <form
+                  action={`/api/confirm-details/${token}`}
+                  method="POST"
+                  onSubmit={() => setSubmitting(true)}
                 >
-                  {loading ? 'Confirming...' : "I've Read All Details — Confirm"}
-                </Button>
+                  <Button type="submit" className="w-full" size="lg" disabled={submitting}>
+                    {submitting ? 'Confirming...' : "I've Read All Details — Confirm"}
+                  </Button>
+                </form>
               </>
             )}
           </div>

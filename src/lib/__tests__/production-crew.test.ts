@@ -145,7 +145,7 @@ describe('the three-call show preset', () => {
 
 describe('brand resolution', () => {
   it('is Overhire for production_crew only', () => {
-    expect(brandFor(crew)).toEqual({ name: 'Overhire', url: 'https://overhire.app' })
+    expect(brandFor(crew)).toEqual({ name: 'Overhire', url: 'https://www.podiumpersonnel.com' })
     expect(productTitleFor(crew)).toBe('Overhire')
   })
 
@@ -184,7 +184,7 @@ describe('email footer brand (ContractOfferEmail)', () => {
   it('with the production_crew brand: Overhire and its link', async () => {
     const html = await render(ContractOfferEmail({ ...baseProps, brand: crew.brand }))
     expect(html).toContain('Overhire')
-    expect(html).toContain('https://overhire.app')
-    expect(html).not.toContain('podiumpersonnel.com')
+    expect(html).toContain('https://www.podiumpersonnel.com')
+    expect(html).not.toContain('overhire.app')
   })
 })

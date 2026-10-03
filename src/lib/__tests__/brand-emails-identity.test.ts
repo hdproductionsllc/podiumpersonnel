@@ -147,9 +147,10 @@ describe('a production company: the same sends say "via Overhire", and only that
     state.vertical = 'production_crew'
     await sends[kind]()
     const crew = state.sent[0] as { html: string; text: string; subject: string; to: string[] }
-    expect(crew.html).toContain('https://overhire.app')
+    expect(crew.html).toContain('https://www.podiumpersonnel.com')
     expect(crew.html).toMatch(/via\s*(<!-- -->)?\s*<a[^>]*>Overhire<\/a>/)
-    expect(crew.html).not.toContain('podiumpersonnel.com')
+    // The link stays on our own site until an Overhire domain is ours (2026-10-02).
+    expect(crew.html).not.toContain('overhire.app')
     expect(crew.text).toContain('Overhire')
     expect(crew.text).not.toMatch(/via\s+Podium/)
 

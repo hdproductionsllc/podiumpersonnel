@@ -6,10 +6,13 @@ import { servicesForMusician, withScope } from '@/lib/staffing/scope'
 
 interface ConfirmDetailsPageProps {
   params: Promise<{ token: string }>
+  searchParams: Promise<{ error?: string }>
 }
 
-export default async function ConfirmDetailsPage({ params }: ConfirmDetailsPageProps) {
+export default async function ConfirmDetailsPage({ params, searchParams }: ConfirmDetailsPageProps) {
   const { token } = await params
+  // Set by the confirm endpoint when saving failed (see its route handler).
+  const { error } = await searchParams
   const supabase = createServiceClient()
 
   // Fetch confirmation record by token, with which services each chair of the
@@ -87,6 +90,7 @@ export default async function ConfirmDetailsPage({ params }: ConfirmDetailsPageP
       ensembleType={project?.ensemble_type || null}
       services={formattedServices}
       alreadyConfirmed={!!confirmation.confirmed_at}
+      saveFailed={error === '1'}
       confirmedAt={confirmation.confirmed_at}
       timezone={timezone}
     />

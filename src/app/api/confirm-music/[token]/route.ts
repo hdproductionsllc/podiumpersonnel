@@ -2,40 +2,37 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { confirmMusicReceipt } from '@/lib/music/confirm-receipt'
 
+// The confirm page posts a plain HTML form here, so it works even on phones
+// where the page's JavaScript never loads. Every outcome is a 303 back to the
+// page, which renders the confirmed state (or the error) from the database.
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {
+  const { token } = await params
+  const page = new URL(`/confirm-music/${token}`, request.url)
+
   try {
-    const { token } = await params
     const supabase = createServiceClient()
 
-    const { data: confirmation, error: fetchError } = await supabase
+    const { data: confirmation, error: lookupError } = await supabase
       .from('music_confirmations')
       .select('id')
       .eq('token', token)
-      .single()
+      .maybeSingle()
 
-    if (fetchError || !confirmation) {
-      return NextResponse.json({ error: 'Confirmation not found' }, { status: 404 })
-    }
+    if (lookupError) throw lookupError
 
     // Marks received and emails the admins — unless a download (or an earlier
-    // click) already did, in which case nothing is sent twice.
-    let marked: boolean
-    try {
-      marked = await confirmMusicReceipt(supabase, confirmation.id, 'button')
-    } catch (updateError) {
-      console.error('Failed to confirm music receipt:', updateError)
-      return NextResponse.json({ error: 'Failed to confirm' }, { status: 500 })
+    // click) already did, in which case nothing is sent twice. Unknown token:
+    // the page itself shows "not found".
+    if (confirmation) {
+      await confirmMusicReceipt(supabase, confirmation.id, 'button')
     }
-
-    return NextResponse.json(marked ? { success: true } : { success: true, alreadyConfirmed: true })
   } catch (error) {
-    console.error('Music confirmation error:', error)
-    return NextResponse.json(
-      { error: 'Something went wrong' },
-      { status: 500 }
-    )
+    console.error(`Music confirmation failed for token ${token}:`, error)
+    page.searchParams.set('error', '1')
   }
+
+  return NextResponse.redirect(page, 303)
 }

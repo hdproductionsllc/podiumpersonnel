@@ -269,7 +269,7 @@ const scenarios: Record<string, Scenario> = {
       services: services(v),
     },
     run: async () => {
-      const el = (await ConfirmDetailsPage({ params: Promise.resolve({ token: 'tok-conf-0' }) })) as ReactElement<Record<string, unknown>>
+      const el = (await ConfirmDetailsPage({ params: Promise.resolve({ token: 'tok-conf-0' }), searchParams: Promise.resolve({}) })) as ReactElement<Record<string, unknown>>
       return el.props
     },
   }),

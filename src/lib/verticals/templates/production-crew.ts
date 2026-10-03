@@ -25,7 +25,10 @@ export const productionCrew: VerticalTemplate = {
   description: 'Book freelance crew onto shows: A1, L1, hands, and everyone in between',
   brand: {
     name: 'Overhire',
-    url: 'https://overhire.app',
+    // overhire.app is not registered to us (2026-10-02: it does not resolve),
+    // and a footer link must never point at a domain someone else could buy.
+    // Switch to the Overhire site once David owns one.
+    url: 'https://www.podiumpersonnel.com',
   },
   terms: {
     person: { singular: 'Tech', plural: 'Crew' },

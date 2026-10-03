@@ -5,10 +5,13 @@ import { getAppUrl } from '@/lib/utils'
 
 interface ConfirmMusicPageProps {
   params: Promise<{ token: string }>
+  searchParams: Promise<{ error?: string }>
 }
 
-export default async function ConfirmMusicPage({ params }: ConfirmMusicPageProps) {
+export default async function ConfirmMusicPage({ params, searchParams }: ConfirmMusicPageProps) {
   const { token } = await params
+  // Set by the confirm endpoint when saving failed (see its route handler).
+  const { error } = await searchParams
   const supabase = createServiceClient()
 
   // Fetch confirmation record by token
@@ -83,6 +86,7 @@ export default async function ConfirmMusicPage({ params }: ConfirmMusicPageProps
       projectName={project?.name || 'Project'}
       files={musicianFiles}
       alreadyConfirmed={!!confirmation.confirmed_at}
+      saveFailed={error === '1'}
     />
   )
 }

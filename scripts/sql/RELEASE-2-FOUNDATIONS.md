@@ -287,7 +287,7 @@ what happens if the code lands before its paste.
     Docs. The gig page's policy link reads "Tech Policy".
   - **Brand**: the sidebar wordmark and the browser tab say Overhire; the
     offer, reminder, accepted and gig-details emails end "sent by <company>
-    via Overhire" with a link to overhire.app. The sender address is still
+    via Overhire" with a link to podiumpersonnel.com (overhire.app is not ours yet). The sender address is still
     hello@podiumpersonnel.com (there is no Overhire sending domain).
   - **Roles** seeded in departments (Audio, Lighting, Video, Rigging, Labor,
     Management): A1, A2, Breakout Tech, L1, L2, V1, V2, Camera, Graphics,
