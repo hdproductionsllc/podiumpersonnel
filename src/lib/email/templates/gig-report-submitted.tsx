@@ -8,8 +8,36 @@ export interface GigReportAnswers {
   lateNotes: string | null
   hiccups: string | null
   clientFollowUp: string | null
+  /** Did the lead deal with the client? Null on reports from before 2026-10-04. */
+  clientInteracted?: boolean | null
+  clientExperience?: 'positive' | 'neutral' | 'negative' | null
   arrangementNotes: string | null
   otherNotes: string | null
+}
+
+export const CLIENT_EXPERIENCE_LABELS: Record<NonNullable<GigReportAnswers['clientExperience']>, string> = {
+  positive: 'Positive',
+  neutral: 'Neutral',
+  negative: 'Negative',
+}
+
+/** "Talked with them: Positive", "Did not interact", or null when not answered. */
+export function clientSummary(answers: Pick<GigReportAnswers, 'clientInteracted' | 'clientExperience'>): string | null {
+  if (answers.clientInteracted === false) return 'Did not interact with the client'
+  if (answers.clientInteracted !== true) return null
+  return answers.clientExperience
+    ? `Interacted with the client: ${CLIENT_EXPERIENCE_LABELS[answers.clientExperience]}`
+    : 'Interacted with the client'
+}
+
+/** The report gets a "Needs attention" flag (subject and badge) when any of these hold. */
+export function reportNeedsAttention(answers: GigReportAnswers): boolean {
+  return (
+    answers.overall === 'issues' ||
+    answers.allOnTime === false ||
+    !!answers.clientFollowUp ||
+    answers.clientExperience === 'negative'
+  )
 }
 
 interface GigReportSubmittedEmailProps {
@@ -38,8 +66,7 @@ export function GigReportSubmittedEmail({
   branding,
 }: GigReportSubmittedEmailProps) {
   const brandColor = branding?.brandColor || '#1E293B'
-  const needsAttention =
-    answers.overall === 'issues' || answers.allOnTime === false || !!answers.clientFollowUp
+  const needsAttention = reportNeedsAttention(answers)
 
   const item = (label: string, value: string | null) =>
     value ? (
@@ -64,6 +91,7 @@ export function GigReportSubmittedEmail({
             'Everyone on time?',
             answers.allOnTime === null ? null : answers.allOnTime ? 'Yes' : `No${answers.lateNotes ? ` — ${answers.lateNotes}` : ''}`,
           )}
+          {item('The client', clientSummary(answers))}
           {item('Hiccups', answers.hiccups)}
           {item('Follow up with the client', answers.clientFollowUp)}
           {item('Arrangements that need work', answers.arrangementNotes)}

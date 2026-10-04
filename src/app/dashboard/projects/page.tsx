@@ -132,7 +132,7 @@ export default async function ProjectsPage() {
     .from('gig_reports')
     .select(`
         id, project_id, musician_id, requested_at, opened_at, submitted_at,
-        overall, all_on_time, late_notes, hiccups, client_follow_up, arrangement_notes, other_notes,
+        overall, all_on_time, late_notes, hiccups, client_follow_up, client_interacted, client_experience, arrangement_notes, other_notes,
         musician:musicians(first_name, last_name)
       `)
     .eq('organization_id', organization!.id)

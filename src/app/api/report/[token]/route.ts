@@ -17,6 +17,11 @@ const reportSchema = z.object({
   clientFollowUp: text,
   arrangementNotes: text,
   otherNotes: text,
+  // Added 2026-10-04 (migration 101). Optional on the server so a report form
+  // left open from before the questions existed still submits; the form
+  // itself requires them.
+  clientInteracted: z.boolean().nullable().optional().transform((v) => v ?? null),
+  clientExperience: z.enum(['positive', 'neutral', 'negative']).nullable().optional().transform((v) => v ?? null),
 })
 
 const NOT_FOUND = () => NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -39,6 +44,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     return NextResponse.json({ error: 'Please answer the first two questions.' }, { status: 400 })
   }
   const a = parsed.data
+  // How it went with the client is only meaningful after "yes, I dealt with them".
+  const clientExperience = a.clientInteracted ? a.clientExperience : null
 
   // Submitted once, then locked: the conditional update makes a double click or
   // a second tab a no-op instead of a second email.
@@ -52,6 +59,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
       late_notes: a.allOnTime ? null : a.lateNotes,
       hiccups: a.hiccups,
       client_follow_up: a.clientFollowUp,
+      client_interacted: a.clientInteracted,
+      client_experience: clientExperience,
       arrangement_notes: a.arrangementNotes,
       other_notes: a.otherNotes,
       submitted_at: now,
@@ -113,6 +122,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
                 lateNotes: a.allOnTime ? null : a.lateNotes,
                 hiccups: a.hiccups,
                 clientFollowUp: a.clientFollowUp,
+                clientInteracted: a.clientInteracted,
+                clientExperience,
                 arrangementNotes: a.arrangementNotes,
                 otherNotes: a.otherNotes,
               },

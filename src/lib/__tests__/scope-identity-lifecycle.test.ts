@@ -331,7 +331,6 @@ describe("a chair limited to Cocktail Hour ('selected') is told, paid and checke
     const [offerEmail] = argsOf(out, 'sendContractOfferEmail')
     expect(serviceNames(offerEmail)).toEqual(['Cocktail Hour'])
     expect(offerEmail.payAmount).toBe(100) // Cocktail Hour's rate; no leader fee is set on it
-    expect(serviceNames(argsOf(out, 'sendAdminOfferSentEmail')[0])).toEqual(['Cocktail Hour'])
   })
 
   it('making an offer: the terms snapshot records only its services, and "no expiration" ends at ITS first service', async () => {

@@ -24,6 +24,14 @@ const OVERALL_CHOICES: { value: Overall; label: string }[] = [
   { value: 'issues', label: 'There were problems' },
 ]
 
+type ClientExperience = 'positive' | 'neutral' | 'negative'
+
+const CLIENT_CHOICES: { value: ClientExperience; label: string }[] = [
+  { value: 'positive', label: 'Positive' },
+  { value: 'neutral', label: 'Neutral' },
+  { value: 'negative', label: 'Negative' },
+]
+
 export const REPORT_TEXT_LIMIT = 4000
 
 export function GigReportClient({
@@ -41,6 +49,8 @@ export function GigReportClient({
   const [lateNotes, setLateNotes] = useState('')
   const [hiccups, setHiccups] = useState('')
   const [clientFollowUp, setClientFollowUp] = useState('')
+  const [clientInteracted, setClientInteracted] = useState<boolean | null>(null)
+  const [clientExperience, setClientExperience] = useState<ClientExperience | null>(null)
   const [arrangementNotes, setArrangementNotes] = useState('')
   const [otherNotes, setOtherNotes] = useState('')
   const [loading, setLoading] = useState(false)
@@ -50,8 +60,12 @@ export function GigReportClient({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!overall || allOnTime === null) {
-      setError('Please answer the first two questions.')
+    if (!overall || allOnTime === null || clientInteracted === null) {
+      setError('Please answer the first three questions.')
+      return
+    }
+    if (clientInteracted && !clientExperience) {
+      setError('Please say how it went with the client.')
       return
     }
     setLoading(true)
@@ -60,7 +74,17 @@ export function GigReportClient({
       const res = await fetch(`/api/report/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ overall, allOnTime, lateNotes, hiccups, clientFollowUp, arrangementNotes, otherNotes }),
+        body: JSON.stringify({
+          overall,
+          allOnTime,
+          lateNotes,
+          hiccups,
+          clientFollowUp,
+          clientInteracted,
+          clientExperience: clientInteracted ? clientExperience : null,
+          arrangementNotes,
+          otherNotes,
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok && !data.alreadySubmitted) throw new Error(data.error || 'Could not send your report')
@@ -152,6 +176,26 @@ export function GigReportClient({
                       rows={2}
                       className="bg-white"
                     />
+                  )}
+                </fieldset>
+
+                <fieldset className="space-y-2">
+                  <legend className="text-sm font-medium text-slate-900">Did you interact with the client (couple, host or planner)?</legend>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" className={choice(clientInteracted === true)} onClick={() => setClientInteracted(true)} aria-pressed={clientInteracted === true}>Yes</button>
+                    <button type="button" className={choice(clientInteracted === false)} onClick={() => setClientInteracted(false)} aria-pressed={clientInteracted === false}>No</button>
+                  </div>
+                  {clientInteracted === true && (
+                    <div className="space-y-2 pt-1">
+                      <p className="text-sm text-slate-700">How did it go?</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {CLIENT_CHOICES.map((c) => (
+                          <button type="button" key={c.value} className={choice(clientExperience === c.value)} onClick={() => setClientExperience(c.value)} aria-pressed={clientExperience === c.value}>
+                            {c.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </fieldset>
 

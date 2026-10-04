@@ -29,7 +29,7 @@ import { PreGigNotificationEmail } from './templates/pre-gig-notification'
 import { StaffingAlertEmail } from './templates/staffing-alert'
 import { PaySummaryEmail } from './templates/pay-summary'
 import { GigReportRequestEmail } from './templates/gig-report-request'
-import { GigReportSubmittedEmail, type GigReportAnswers } from './templates/gig-report-submitted'
+import { GigReportSubmittedEmail, reportNeedsAttention, type GigReportAnswers } from './templates/gig-report-submitted'
 import type { PaySummaryLine } from '@/lib/after-gig/rules'
 import { render } from '@react-email/render'
 import { type EmailBranding } from './templates/email-layout'
@@ -1408,8 +1408,7 @@ interface SendGigReportSubmittedParams {
 }
 
 export async function sendGigReportSubmittedEmail(params: SendGigReportSubmittedParams) {
-  const attention =
-    params.answers.overall === 'issues' || params.answers.allOnTime === false || !!params.answers.clientFollowUp
+  const attention = reportNeedsAttention(params.answers)
   return sendTransactional({
     to: params.adminEmails,
     subject: withDate(`${attention ? 'Needs attention: ' : ''}Gig report for ${params.projectName}`, params.gigDate),

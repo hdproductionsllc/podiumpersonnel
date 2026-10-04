@@ -30,6 +30,9 @@ export interface GigReportRow {
   late_notes: string | null
   hiccups: string | null
   client_follow_up: string | null
+  /** Migration 101; null on reports from before the client questions. */
+  client_interacted?: boolean | null
+  client_experience?: 'positive' | 'neutral' | 'negative' | null
   arrangement_notes: string | null
   other_notes: string | null
   musician: { first_name: string | null; last_name: string | null } | null
@@ -56,6 +59,12 @@ const OVERALL: Record<NonNullable<GigReportRow['overall']>, { label: string; cla
   great: { label: 'Went great', className: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300' },
   good: { label: 'Fine, small things', className: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200' },
   issues: { label: 'There were problems', className: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300' },
+}
+
+const CLIENT: Record<'positive' | 'neutral' | 'negative', { label: string; className: string }> = {
+  positive: { label: 'Positive', className: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300' },
+  neutral: { label: 'Neutral', className: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
+  negative: { label: 'Negative', className: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300' },
 }
 
 function name(m: { first_name: string | null; last_name: string | null } | null | undefined) {
@@ -89,6 +98,16 @@ function ReportItem({ label, report, when }: { label: string; report: GigReportR
             {report.all_on_time !== null && (
               <span className={`rounded px-2 py-0.5 text-xs font-medium ${report.all_on_time ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300' : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300'}`}>
                 {report.all_on_time ? 'Everyone on time' : 'Someone was late'}
+              </span>
+            )}
+            {report.client_interacted === true && (
+              <span className={`rounded px-2 py-0.5 text-xs font-medium ${CLIENT[report.client_experience ?? 'neutral'].className}`}>
+                {report.client_experience ? `Client: ${CLIENT[report.client_experience].label}` : 'Talked with the client'}
+              </span>
+            )}
+            {report.client_interacted === false && (
+              <span className="rounded px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                No client contact
               </span>
             )}
           </div>

@@ -51,7 +51,6 @@ vi.mock('@/lib/email/send', () => {
   return {
     formatPerformanceDateForSubject: vi.fn(() => 'Sat, Nov 7'),
     sendContractOfferEmail: sent('contract-offer'),
-    sendAdminOfferSentEmail: sent('admin-offer-sent'),
     sendOfferAcceptedEmail: sent('offer-accepted'),
     sendOfferDeclinedEmail: sent('offer-declined'),
     sendAdminOfferResponseEmail: sent('admin-offer-response'),
@@ -256,7 +255,8 @@ describe('quartet wedding, start to finish', () => {
     const count = (fn: unknown) => vi.mocked(fn as () => unknown).mock.calls.length
     expect({
       offer: count(email.sendContractOfferEmail),
-      offerSentToAdmin: count(email.sendAdminOfferSentEmail),
+      // Every musician email is copied to the admins (notify/copies.ts).
+      copiesToAdmin: vi.mocked(email.sendEmail).mock.calls.filter((c) => String((c[0] as { subject?: string }).subject).startsWith('Copy: ')).length,
       accepted: count(email.sendOfferAcceptedEmail),
       declined: count(email.sendOfferDeclinedEmail),
       adminResponse: count(email.sendAdminOfferResponseEmail),
@@ -266,7 +266,7 @@ describe('quartet wedding, start to finish', () => {
       subApproved: count(email.sendSubRequestApprovedEmail),
     }).toEqual({
       offer: 4 + 2 + 1, // opening four, two next-in-line, the sub's offer from approve
-      offerSentToAdmin: 4 + 2 + 1,
+      copiesToAdmin: 7 + 5 + 1 + 1 + 1, // offers, accepts, the decline, the release, the sub's approval
       accepted: 5,
       declined: 1,
       adminResponse: 6, // five accepts and one decline

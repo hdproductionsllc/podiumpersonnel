@@ -57,7 +57,8 @@ vi.mock('@/lib/email/send', () => ({
       ? { id: null, subject: 'Offer', emailHtml: '<p>offer</p>', suppressed: true, suppressedRecipients: ['x'] }
       : { id: 'contract-offer', subject: 'Offer', emailHtml: '<p>offer</p>' }
   }),
-  sendAdminOfferSentEmail: vi.fn(async () => ({ id: 'admin-offer-sent' })),
+  // The admins' copy of the musician's email (notify/copies.ts).
+  sendEmail: vi.fn(async () => ({ id: 'admin-copy' })),
 }))
 
 vi.mock('@/lib/email/log', () => ({ hasRecentFailure: async () => false, logEmail: vi.fn(async () => {}) }))
@@ -216,7 +217,10 @@ describe('a successful offer', () => {
     expect(hours).toBeLessThan(48.01)
     expect(q().chair('v1').status).toBe('offered')
     expect(mailCalls(email.sendContractOfferEmail)).toHaveLength(1)
-    expect(mailCalls(email.sendAdminOfferSentEmail)).toHaveLength(1)
+    // The admins get a marked copy of exactly that email, with its links off.
+    const copies = mailCalls(email.sendEmail)
+    expect(copies).toHaveLength(1)
+    expect(copies[0][0]).toMatchObject({ to: ['admin@example.com'], subject: expect.stringMatching(/^Copy: Offer \(sent to /) })
     expect(logEmail).toHaveBeenCalledTimes(1)
   })
 
@@ -247,7 +251,8 @@ describe('a successful offer', () => {
     const res = await offer('pos-v1', { musicianId: R.v1[0] })
     expect(res.body.delivery).toBe('suppressed')
     expect(row(res.body.offerId).delivery_status).toBe('suppressed')
-    expect(mailCalls(email.sendAdminOfferSentEmail)).toHaveLength(0)
+    // No copy of an email that never went out.
+    expect(mailCalls(email.sendEmail)).toHaveLength(0)
   })
 
   it('with "Send email" off: no email, no delivery status, and the previous offer is still replaced', async () => {
@@ -592,16 +597,16 @@ describe('the offer email is the one the old send-email route sent', () => {
     const res = await offer(`pos-${key}`, { musicianId, customPay, ...leader })
     expect(res.status).toBe(200)
     const viaRoute = mailCalls(email.sendContractOfferEmail)[0][0]
-    const adminViaRoute = mailCalls(email.sendAdminOfferSentEmail)[0][0]
+    const copyViaRoute = mailCalls(email.sendEmail)[0][0]
 
     // Fresh gig, same musician and pay, the old way.
     state.q = buildQuartet()
     vi.clearAllMocks()
     await legacySend(key, musicianId, customPay, leader)
     const viaLegacy = mailCalls(email.sendContractOfferEmail)[0][0]
-    const adminViaLegacy = mailCalls(email.sendAdminOfferSentEmail)[0][0]
+    const copyViaLegacy = mailCalls(email.sendEmail)[0][0]
 
     expect(normalise(viaRoute)).toEqual(normalise(viaLegacy))
-    expect(normalise(adminViaRoute)).toEqual(normalise(adminViaLegacy))
+    expect(normalise(copyViaRoute)).toEqual(normalise(copyViaLegacy))
   })
 })

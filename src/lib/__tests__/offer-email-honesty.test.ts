@@ -96,11 +96,12 @@ describe('A6: a suppressed send is never reported as sent', () => {
     expect(routeSrc).toContain('Email suppressed by safe mode')
   })
 
-  it('route skips the admin "offer sent" notification when the send was suppressed', () => {
-    const guard = emailSrc.indexOf('if (!suppressed) {')
-    const adminSend = emailSrc.indexOf('sendAdminOfferSentEmail({')
-    expect(guard, 'suppressed guard not found').toBeGreaterThan(-1)
-    expect(adminSend, 'admin notification call not found').toBeGreaterThan(guard)
+  it('admins get no copy of an offer the send never delivered (safe mode)', () => {
+    // The admins' "offer sent" summary was replaced by a copy of the musician's
+    // email, sent by notify() (David, 2026-10-04); the same honesty rule holds.
+    const notifySrc = read('src/lib/notify/index.ts')
+    expect(notifySrc).toContain('MUSICIAN_EMAIL_TYPES.has(event.type) && !delivered?.suppressed')
+    expect(emailSrc).not.toContain('sendAdminOfferSentEmail(')
   })
 
   it('dialog reads the suppressed flag instead of trusting response.ok alone', () => {

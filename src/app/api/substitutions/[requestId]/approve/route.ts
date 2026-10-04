@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient, getOrgAdminEmails } from '@/lib/supabase/server'
-import { sendSubRequestApprovedEmail, sendContractOfferEmail, sendAdminOfferSentEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
+import { createClient } from '@/lib/supabase/server'
+import { sendSubRequestApprovedEmail, sendContractOfferEmail, formatPerformanceDateForSubject } from '@/lib/email/send'
 import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
@@ -442,41 +442,8 @@ export async function POST(
       }
     }
 
-    // Send notification to admins
-    const adminEmails = await getOrgAdminEmails(project.organization_id)
-    if (adminEmails.length > 0) {
-      await notify(
-        {
-          type: 'admin_offer_sent',
-          recordSent: false,
-          record: () => ({
-            organizationId: project.organization_id,
-            recipientEmail: adminEmails[0],
-            subject: `Offer Sent: ${subRequest.suggested_sub_name} - ${project?.name || 'Project'}`,
-            emailType: 'admin_offer_sent',
-            musicianId: substituteMusician.id,
-            projectId: project.id,
-            offerId: contractOffer.id,
-            metadata: { allRecipients: adminEmails },
-          }),
-        },
-        {
-          email: () =>
-            sendAdminOfferSentEmail({
-              to: adminEmails,
-              organizationName: organization?.name || 'Orchestra',
-              projectName: project?.name || 'Project',
-              musicianName: subRequest.suggested_sub_name,
-              musicianEmail: subRequest.suggested_sub_email,
-              instrument: subInstrument?.name || instrument?.name || 'Instrument',
-              chairNumber: position?.chair_number || 1,
-              totalChairs,
-              services: formattedServices,
-              dashboardUrl: `${baseUrl}/dashboard/projects/${project.id}`,
-            }),
-        }
-      ).catch((err) => console.warn('Failed to send admin notification:', err))
-    }
+    // The admins get a marked copy of the substitute's offer email from
+    // notify() (src/lib/notify/copies.ts); it replaced the "Offer Sent" summary.
   } catch (emailError) {
     console.warn('Email sending failed:', emailError)
   }

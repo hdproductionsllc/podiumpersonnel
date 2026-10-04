@@ -15,6 +15,8 @@ twice.
 2. `scripts/sql/098-position-services.paste.sql` (step 2)
 3. `scripts/sql/099-requirements.paste.sql` (step 3)
 4. `scripts/sql/100-production-crew-vertical.paste.sql` (step 4)
+4b. `scripts/sql/101-gig-report-client.paste.sql` (the gig report's client
+   questions, added 2026-10-04)
 5. Claude runs the read-only lookups listed under steps 2 to 4 (every one
    must answer `200 []`).
 6. One push of the branch to `master` (one Vercel build).
@@ -348,3 +350,17 @@ what happens if the code lands before its paste.
   walks through carry the brand.
 - The `photo_video` and `staging` templates in the plan's row 20 are not
   added; the database refuses them.
+
+## Added 2026-10-04 (David's requests)
+
+- **Copies of musician emails.** Every email Podium sends a musician also goes
+  to that company's owners and admins, marked "Copy: ... (sent to <name>)",
+  with a banner and the musician's personal links (accept, decline, report,
+  confirm, W-9) switched off. The separate "Offer Sent" summary is replaced by
+  the copy of the offer itself. Copies are not listed on the Emails page; a
+  copy that fails is. No copy when safe mode held the original back.
+  Code: src/lib/notify/copies.ts, called from notify().
+- **Gig report: the client.** "Did you interact with the client (couple, host
+  or planner)?" Yes / No, and if yes "How did it go?" Positive / Neutral /
+  Negative. Shown on the report panel and in the report email; a negative
+  experience marks the report "Needs attention". Migration 101 (paste 4b).

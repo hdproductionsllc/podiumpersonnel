@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { getOrgAdminEmails } from '@/lib/supabase/server'
-import { sendContractOfferEmail, sendAdminOfferSentEmail } from '@/lib/email/send'
+import { sendContractOfferEmail } from '@/lib/email/send'
 import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-helpers'
@@ -250,61 +249,9 @@ export async function sendOfferEmail(
     result
   )
 
-  // A suppressed send never reached the musician, so an admin "Offer Sent"
-  // notification would be the same false-positive one layer up. Skip it.
-  if (!suppressed) {
-    try {
-      const adminEmails = await getOrgAdminEmails(organization?.id)
-
-      if (adminEmails.length > 0) {
-        const baseUrl = getAppUrl()
-        await notify(
-          {
-            type: 'admin_offer_sent',
-            recordSent: false,
-            record: () => ({
-              organizationId: organization?.id,
-              recipientEmail: adminEmails[0],
-              subject: `Offer Sent: ${musician.first_name} ${musician.last_name} - ${project?.name || 'Project'}`,
-              emailType: 'admin_offer_sent',
-              musicianId: musician.id,
-              projectId: project?.id,
-              offerId,
-              metadata: { allRecipients: adminEmails },
-            }),
-          },
-          {
-            email: () =>
-              sendAdminOfferSentEmail({
-                to: adminEmails,
-                organizationName: organization?.name || 'Orchestra',
-                projectName: project?.name || 'Project',
-                musicianName: `${musician.first_name} ${musician.last_name}`,
-                musicianEmail: musician.email,
-                instrument: instrument?.name || 'Instrument',
-                chairNumber: position?.chair_number || 1,
-                totalChairs,
-                services: formattedServices,
-                dashboardUrl: `${baseUrl}/dashboard/projects`,
-                payAmount,
-                leaderFee: isLeader ? leaderFee : null,
-                isLeader,
-                personalMessage: (offer as any).personal_message || null,
-                expiresAt: offer.expires_at,
-                ensembleType: project?.ensemble_type || null,
-                timezone,
-              }),
-          }
-        ).catch((err) => console.warn('Failed to send admin notification:', err))
-        console.log('📧 Admin notification sent to:', adminEmails)
-      } else {
-        console.log('📧 No admin emails found for organization')
-      }
-    } catch (adminEmailError) {
-      console.warn('Failed to send admin notification:', adminEmailError)
-      // Don't fail the request if admin notification fails
-    }
-  }
+  // The admins see this offer as a marked copy of the musician's email, sent
+  // by notify() (src/lib/notify/copies.ts). It replaced the separate "Offer
+  // Sent" summary (David, 2026-10-04), so admins get one email per offer.
 
   return { delivery: suppressed ? 'suppressed' : 'sent', payAmount }
 }

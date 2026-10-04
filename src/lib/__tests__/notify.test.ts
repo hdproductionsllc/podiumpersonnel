@@ -178,6 +178,8 @@ describe('every send goes through notify()', () => {
   it('every module that calls an email send function also routes it through notify()', () => {
     const offenders = files
       .filter((f) => !f.path.startsWith('src/lib/email/send.ts'))
+      // notify itself sends the admins' copy of a musician email (copies.ts).
+      .filter((f) => !f.path.startsWith('src/lib/notify/'))
       .filter((f) => /from '@\/lib\/email\/send'|from '\.\/send'|from '@\/lib\/email'/.test(f.src))
       .filter((f) => f.src.split('\n').some((line) => SEND_FN.test(line) && !/^\s*(import|export|\*|\/\/)/.test(line)))
       .filter((f) => !/from '@\/lib\/notify'/.test(f.src))

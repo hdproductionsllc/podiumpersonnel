@@ -1,5 +1,8 @@
 import { hasRecentFailure, logEmail, type LogEmailParams } from '@/lib/email/log'
+import { sendEmail } from '@/lib/email/send'
+import { getOrgAdminEmails } from '@/lib/supabase/server'
 import { emailProvider } from './providers/email'
+import { MUSICIAN_EMAIL_TYPES, copyHtml, copySubject } from './copies'
 import type { Channel, NotifyContent } from './types'
 
 export type { Channel, ChannelProvider, EmailPayload, NotifyContent } from './types'
@@ -27,6 +30,11 @@ export type { Channel, ChannelProvider, EmailPayload, NotifyContent } from './ty
  * behaves exactly as before.
  *
  * Bounced addresses are NOT skipped here: who receives a message is unchanged.
+ *
+ * Copies (David, 2026-10-04): an email that went out to a musician is also
+ * sent, as a marked copy, to that organization's owners and admins
+ * (copies.ts). Only after the musician's email really went out (not held back
+ * by safe mode), and a copy that fails never affects the original.
  */
 export interface NotifyEvent<R> {
   /** What happened, as email_logs.email_type names it: 'contract_offer', 'offer_expired', ... */
@@ -70,10 +78,52 @@ export async function notify<R>(event: NotifyEvent<R>, content: NotifyContent<R>
     await recordFailure(event, channel, error)
     throw error
   }
+  const delivered = result as { suppressed?: boolean; emailHtml?: string } | null
+  const copy = MUSICIAN_EMAIL_TYPES.has(event.type) && !delivered?.suppressed
+  if (event.recordSent === false && !copy) return result
+  const sent = rows(event.record(result))
   if (event.recordSent !== false) {
-    for (const row of rows(event.record(result))) await logEmail(row)
+    for (const row of sent) await logEmail(row)
+  }
+  if (copy) {
+    for (const row of sent) await sendCopy(event.type, row, row.body || delivered?.emailHtml || null)
   }
   return result
+}
+
+/** Send the organization's owners and admins a marked copy of one musician email. */
+async function sendCopy(type: string, row: LogEmailParams, html: string | null): Promise<void> {
+  try {
+    if (!row.organizationId || !html) {
+      console.warn(`notify: no copy of the ${type} email to ${row.recipientEmail}: no organization or no body recorded`)
+      return
+    }
+    const admins = await getOrgAdminEmails(row.organizationId)
+    if (admins.length === 0) return
+    const details = { recipientName: row.recipientName, recipientEmail: row.recipientEmail, subject: row.subject }
+    const subject = copySubject(details)
+    await notify(
+      {
+        type: 'admin_copy',
+        // Copies stay off the Emails page (it would double every line); a copy
+        // that fails is still recorded there.
+        recordSent: false,
+        record: () => ({
+          organizationId: row.organizationId,
+          recipientEmail: admins[0],
+          subject,
+          emailType: 'admin_copy',
+          musicianId: row.musicianId,
+          projectId: row.projectId,
+          offerId: row.offerId,
+          metadata: { allRecipients: admins, copyOf: type, originalRecipient: row.recipientEmail },
+        }),
+      },
+      { email: () => sendEmail({ to: admins, subject, html: copyHtml(html, details) }) }
+    )
+  } catch (error) {
+    console.warn(`notify: the copy of the ${type} email to ${row.recipientEmail} could not be sent:`, error)
+  }
 }
 
 function rows(value: LogEmailParams | LogEmailParams[] | null | undefined): LogEmailParams[] {
