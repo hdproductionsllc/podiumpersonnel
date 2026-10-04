@@ -147,7 +147,11 @@ export function SendGigDetailsDialog({
         throw new Error(data.error || 'Failed to send reminders')
       }
 
-      if (data.failedNames?.length > 0) {
+      if (data.reminded === 0 && data.alreadyReminded > 0 && !data.failed) {
+        // A second press (or a retried request) within a few minutes: the
+        // first one already reached everyone (api/.../send-gig-details-reminder).
+        toast.info('Already reminded in the last few minutes. Nobody was emailed twice.')
+      } else if (data.failedNames?.length > 0) {
         toast.warning(`Reminder sent to ${data.reminded} of ${data.total}. Failed: ${data.failedNames.join(', ')}`)
       } else if (data.failed > 0) {
         toast.warning(`Reminder sent to ${data.reminded} of ${data.total} (${data.failed} failed — may be missing email)`)

@@ -51,7 +51,7 @@ function looseDb() {
         return { data: single ? (rows[0] ?? null) : rows, error: null }
       }
       const c: Record<string, unknown> = {}
-      for (const m of ['eq', 'neq', 'in', 'is', 'not', 'gt', 'gte', 'lt', 'lte', 'filter', 'order', 'limit', 'ilike']) {
+      for (const m of ['eq', 'neq', 'in', 'is', 'not', 'gt', 'gte', 'lt', 'lte', 'or', 'filter', 'order', 'limit', 'ilike']) {
         c[m] = (...args: unknown[]) => {
           filters.push([m, ...args])
           return c

@@ -7,6 +7,7 @@ import { getVenueName, getVenueMapsUrl, getVenueAddress } from '@/lib/venue-help
 import { getOrgPlan } from '@/lib/api-helpers'
 import { canUseEmailFeatures } from '@/lib/plan'
 import { servicesForMusician, withScope } from '@/lib/staffing/scope'
+import { claimReminder } from '@/lib/reminders/claim'
 
 export async function POST(
   request: NextRequest,
@@ -155,12 +156,19 @@ export async function POST(
     }
 
     let sentCount = 0
+    let alreadyReminded = 0
     const failedNames: string[] = []
     for (let i = 0; i < unconfirmed.length; i++) {
       const conf = unconfirmed[i]
       const musician = conf.musician as any
       if (!musician?.email) {
         failedNames.push(`${musician?.first_name || 'Unknown'} ${musician?.last_name || ''}`)
+        continue
+      }
+
+      // One reminder per person, even if this request arrives twice (claim.ts).
+      if ((await claimReminder(serviceClient, 'gig_detail_confirmations', conf.id)) === 'recently_reminded') {
+        alreadyReminded++
         continue
       }
 
@@ -209,6 +217,7 @@ export async function POST(
       success: true,
       reminded: sentCount,
       total: unconfirmed.length,
+      alreadyReminded,
       failed: failedNames.length,
       failedNames: failedNames.length > 0 ? failedNames : undefined,
     })

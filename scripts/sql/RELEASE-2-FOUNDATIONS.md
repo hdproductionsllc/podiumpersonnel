@@ -17,6 +17,8 @@ twice.
 4. `scripts/sql/100-production-crew-vertical.paste.sql` (step 4)
 4b. `scripts/sql/101-gig-report-client.paste.sql` (the gig report's client
    questions, added 2026-10-04)
+4c. `scripts/sql/102-reminder-claims.paste.sql` (no more double reminders,
+   added 2026-10-04)
 5. Claude runs the read-only lookups listed under steps 2 to 4 (every one
    must answer `200 []`).
 6. One push of the branch to `master` (one Vercel build).
@@ -364,3 +366,14 @@ what happens if the code lands before its paste.
   or planner)?" Yes / No, and if yes "How did it go?" Positive / Neutral /
   Negative. Shown on the report panel and in the report email; a negative
   experience marks the report "Needs attention". Migration 101 (paste 4b).
+- **No more double reminders.** On Oct 1 a gig-details reminder request
+  arrived twice and a trio got it twice. Both reminder buttons (gig details,
+  music) now claim each person first (src/lib/reminders/claim.ts): at most one
+  reminder per person per 10 minutes, enforced by one conditional database
+  write, proven with two simultaneous connections in CI. Migration 102
+  (paste 4c). Before 102 is applied reminders behave as before.
+- **Roster clean-up (done in production 2026-10-04, not part of the deploy).**
+  Four same-email duplicates merged with scripts/merge-duplicate-musicians-2026-10.js
+  (Rebecca Chung / Becca Hamilton at PSQ; Jaewon Ahn, Sophie Verhaeghe, Ian
+  Parvin at Subito Strings). Every reference moved, conflicting values kept in
+  notes, backups in scripts/backups/ (git-ignored: personal data).

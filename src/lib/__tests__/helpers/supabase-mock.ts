@@ -236,6 +236,16 @@ class MockQueryBuilder implements PromiseLike<MockResult> {
     return this
   }
 
+  /**
+   * PostgREST's or(): comma-separated `column.operator.value` conditions, any of
+   * which may match. Supports is (null), eq, lt and gt: what the app uses
+   * (e.g. the reminder claim's "never reminded, or not recently").
+   */
+  or(expression: string): this {
+    this.filters.push({ method: 'or', args: [expression] })
+    return this
+  }
+
   /** Case-insensitive match. Only wildcard-free patterns are supported (an email lookup, not a search). */
   ilike(column: string, value: string): this {
     if (value.includes('%') || value.includes('_')) {
@@ -291,6 +301,17 @@ class MockQueryBuilder implements PromiseLike<MockResult> {
           return !isNullish(row[col]) && String(row[col]) >= String(args[1])
         case 'lte':
           return !isNullish(row[col]) && String(row[col]) <= String(args[1])
+        case 'or':
+          return String(args[0]).split(',').some((condition) => {
+            const [column, op, ...rest] = condition.split('.')
+            const value = rest.join('.')
+            const v = row[column]
+            if (op === 'is' && value === 'null') return isNullish(v)
+            if (op === 'eq') return String(v) === value
+            if (op === 'lt') return !isNullish(v) && String(v) < value
+            if (op === 'gt') return !isNullish(v) && String(v) > value
+            throw new Error(`MockSupabaseDb: unsupported or() condition "${condition}"`)
+          })
         default:
           throw new Error(`MockSupabaseDb: unsupported filter "${method}"`)
       }

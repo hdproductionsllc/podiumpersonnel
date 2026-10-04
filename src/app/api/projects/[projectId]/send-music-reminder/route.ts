@@ -6,6 +6,7 @@ import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getOrgPlan } from '@/lib/api-helpers'
 import { canUseEmailFeatures } from '@/lib/plan'
 import { servicesForMusician, withScope } from '@/lib/staffing/scope'
+import { claimReminder } from '@/lib/reminders/claim'
 
 export async function POST(
   request: NextRequest,
@@ -164,6 +165,12 @@ export async function POST(
       const musicianFiles = getFilesForMusician(conf.musician_id)
       if (musicianFiles.length === 0) {
         skippedReasons.push(`${musician.first_name} ${musician.last_name}: no matching files`)
+        continue
+      }
+
+      // One reminder per person, even if this request arrives twice (claim.ts).
+      if ((await claimReminder(serviceClient, 'music_confirmations', conf.id)) === 'recently_reminded') {
+        skippedReasons.push(`${musician.first_name} ${musician.last_name}: already reminded in the last few minutes`)
         continue
       }
 
