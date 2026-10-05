@@ -25,7 +25,9 @@ describe('the live-migrations audit', () => {
   const script = readFileSync(join(process.cwd(), 'scripts', 'sql', 'audit-live-migrations.sql'), 'utf8')
 
   it('changes nothing (only SELECTs)', () => {
-    const statements = script.replace(/--[^\n]*/g, '').split(';').map((s) => s.trim()).filter(Boolean)
+    // Comments and quoted text removed first: a ';' inside a label is not a statement end.
+    const code = script.replace(/--[^\n]*/g, '').replace(/'(?:[^']|'')*'/g, "''")
+    const statements = code.split(';').map((s) => s.trim()).filter(Boolean)
     expect(statements).toHaveLength(1)
     expect(statements[0]).toMatch(/^WITH expected/)
   })
