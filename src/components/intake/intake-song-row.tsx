@@ -106,7 +106,16 @@ function partGapNote(parts: PartAvailability | null, gig: EnsembleCanon | undefi
   if (isScoreOnly(parts)) return 'reading from score (no individual parts)'
   const gaps = partGap(parts, gig)
   if (gaps.length === 0) return null
-  const phrases = gaps.map((g) => (g.subBy ? `${g.part} (${g.subBy} sub available)` : g.part))
+  // The book builder hands the violist the vln2 part when there is no viola
+  // part (pickFileForPart), so say that rather than implying a hole in the book.
+  const vln2Covers = parts.available.includes('vln2')
+  const phrases = gaps.map((g) =>
+    g.subBy
+      ? `${g.part} (${g.subBy} sub available)`
+      : g.part === 'vla' && vln2Covers
+        ? 'vla (vln2 will be used)'
+        : g.part
+  )
   return `missing ${phrases.join(', ')}`
 }
 
@@ -269,7 +278,7 @@ export function IntakeSongRow({
       matchStatus: 'manual',
       matchedRepertoireId: r.id,
       matchedLabel: workLabel(r.title, r.artist),
-      matchedParts: null,
+      matchedParts: r.parts ?? null,
       rememberAlias: aliasWouldHelp(song.titleRaw, r.title),
       specialRequest: false,
       // Any deliberate re-match clears the archived flag — it describes the old
@@ -356,6 +365,13 @@ export function IntakeSongRow({
           )}
           {song.matchedArchived && (
             <Badge variant="destructive" className="text-xs ml-1">Archived work</Badge>
+          )}
+          {/* Confirmed lists are what get read right before building books —
+              a part gap must be visible here, not only while editing. */}
+          {!song.noMusic && gapNote && (
+            <Badge variant="outline" className="text-xs ml-1 border-amber-400 text-amber-700 dark:border-amber-700 dark:text-amber-400">
+              {gapNote}
+            </Badge>
           )}
         </span>
       </div>

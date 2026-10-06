@@ -23,6 +23,7 @@
 
 import { requireIntakeEnabled, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
 import { createServiceClient } from '@/lib/supabase/server'
+import { loadPartsFor } from '@/lib/intake/match-index'
 
 type SupabaseError = { code?: string; message?: string } | null
 
@@ -174,10 +175,18 @@ export async function GET(
     )
   }
 
-  const songsWithMatch = songRows.map((s) => ({
-    ...s,
-    matched_repertoire: s.matched_repertoire_id ? repById.get(s.matched_repertoire_id) ?? null : null,
-  }))
+  // Parts ride along so a reloaded review shows the same "missing vln1, vln2"
+  // note the first match did; without them a saved song always reads as clean.
+  const parts = await loadPartsFor(service, libraryOrgId, [...repById.keys()])
+  if (!parts.ok) return serverError('intake: load matched parts', parts.error)
+
+  const songsWithMatch = songRows.map((s) => {
+    const rep = s.matched_repertoire_id ? repById.get(s.matched_repertoire_id) : undefined
+    return {
+      ...s,
+      matched_repertoire: rep ? { ...rep, parts: parts.data.get(rep.id) ?? null } : null,
+    }
+  })
 
   return apiSuccess({ intake, songs: songsWithMatch })
 }

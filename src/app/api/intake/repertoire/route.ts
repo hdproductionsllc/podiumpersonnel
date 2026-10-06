@@ -19,6 +19,8 @@
 import { requireIntakeEnabled, apiError, apiSuccess, serverError } from '@/lib/api-helpers'
 import { createServiceClient } from '@/lib/supabase/server'
 import { normTitle } from '@/lib/intake/normalize'
+import { loadPartsFor } from '@/lib/intake/match-index'
+import type { PartAvailability } from '@/lib/intake/matcher'
 
 const MAX_RESULTS = 20
 
@@ -27,6 +29,7 @@ export interface RepertoireSearchResult {
   title: string
   artist: string | null
   ensemble: string
+  parts: PartAvailability | null
 }
 
 /** Escape PostgREST ilike wildcards/commas so a query can't break the filter. */
@@ -66,5 +69,14 @@ export async function GET(request: Request) {
 
   if (repErr) return serverError('intake/repertoire: search', repErr)
 
-  return apiSuccess({ results: (data ?? []) as RepertoireSearchResult[] })
+  // A hand-picked work shows the same part-gap note as an automatic match.
+  const rows = data ?? []
+  const parts = await loadPartsFor(service, libraryOrgId, rows.map((r) => r.id))
+  if (!parts.ok) return serverError('intake/repertoire: load parts', parts.error)
+
+  const results: RepertoireSearchResult[] = rows.map((r) => ({
+    ...r,
+    parts: parts.data.get(r.id) ?? null,
+  }))
+  return apiSuccess({ results })
 }

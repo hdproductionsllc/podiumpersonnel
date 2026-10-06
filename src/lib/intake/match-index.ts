@@ -87,32 +87,77 @@ export async function loadMatchIndex(
   const partsByRep = new Map<string, PartAvailability>()
 
   if (options.withParts) {
-    const parts = await selectAll<{
-      repertoire_id: string
-      part: string
-      substitute: boolean
-      played_on: string | null
-    }>(service, 'repertoire_parts', 'repertoire_id,part,substitute,played_on', libraryOrgId)
+    const parts = await selectAll<PartRow>(
+      service,
+      'repertoire_parts',
+      'repertoire_id,part,substitute,played_on',
+      libraryOrgId
+    )
     if (parts.error) {
       return { ok: false, context: 'match-index: load repertoire parts', error: parts.error }
     }
-
-    for (const p of parts.rows) {
-      let pa = partsByRep.get(p.repertoire_id)
-      if (!pa) {
-        pa = { available: [], substitutes: [] }
-        partsByRep.set(p.repertoire_id, pa)
-      }
-      if (p.substitute) {
-        if (p.played_on) pa.substitutes.push({ part: p.part, playedOn: p.played_on })
-      } else if (!pa.available.includes(p.part)) {
-        pa.available.push(p.part)
-      }
-    }
+    for (const [id, pa] of aggregateParts(parts.rows)) partsByRep.set(id, pa)
   }
 
   return {
     ok: true,
     data: { index: { repertoire: rep.rows, aliases: alias.rows }, partsByRep },
   }
+}
+
+interface PartRow {
+  repertoire_id: string
+  part: string
+  substitute: boolean
+  played_on: string | null
+}
+
+/** Fold repertoire_parts rows into per-work part availability. */
+export function aggregateParts(rows: PartRow[]): Map<string, PartAvailability> {
+  const out = new Map<string, PartAvailability>()
+  for (const p of rows) {
+    let pa = out.get(p.repertoire_id)
+    if (!pa) {
+      pa = { available: [], substitutes: [] }
+      out.set(p.repertoire_id, pa)
+    }
+    if (p.substitute) {
+      if (p.played_on) pa.substitutes.push({ part: p.part, playedOn: p.played_on })
+    } else if (!pa.available.includes(p.part)) {
+      pa.available.push(p.part)
+    }
+  }
+  return out
+}
+
+/**
+ * Part availability for specific works (a project's saved matches, a page of
+ * search results). Every work linked to a song must carry its parts, or the
+ * review screen shows a clean "Matched" for an arrangement nobody can play
+ * from — "Ordinary World" reached book-building with only its Cello II and
+ * Double Bass. A work with no part rows maps to an empty availability, which
+ * the gap badge reports as every part missing.
+ */
+export async function loadPartsFor(
+  service: Service,
+  libraryOrgId: string,
+  repertoireIds: string[]
+): Promise<{ ok: true; data: Map<string, PartAvailability> } | { ok: false; error: unknown }> {
+  const ids = [...new Set(repertoireIds)]
+  const out = new Map<string, PartAvailability>(
+    ids.map((id) => [id, { available: [], substitutes: [] }])
+  )
+  // Chunked so a long set list never builds an oversized `in.(...)` URL; each
+  // chunk stays far below PostgREST's 1,000-row cap (a work has ~4-12 parts).
+  const CHUNK = 50
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const { data, error } = await service
+      .from('repertoire_parts')
+      .select('repertoire_id,part,substitute,played_on')
+      .eq('organization_id', libraryOrgId)
+      .in('repertoire_id', ids.slice(i, i + CHUNK))
+    if (error) return { ok: false, error }
+    for (const [id, pa] of aggregateParts((data ?? []) as PartRow[])) out.set(id, pa)
+  }
+  return { ok: true, data: out }
 }

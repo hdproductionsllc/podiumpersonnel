@@ -49,7 +49,12 @@ import { BookDownload } from './book-download'
 import { SpotifyPlaylistBuilder } from './spotify-playlist-builder'
 import type { ProposedSong } from '@/app/api/intake/parse/route'
 import type { IntakeRecord, IntakeSong } from '@/lib/intake/types'
-import { canonicalEnsemble, ensembleFromInstruments, type MatchCandidate } from '@/lib/intake/matcher'
+import {
+  canonicalEnsemble,
+  ensembleFromInstruments,
+  type MatchCandidate,
+  type PartAvailability,
+} from '@/lib/intake/matcher'
 
 // --- section vocabulary (matches migration 069's CHECK set) ------------------
 
@@ -166,6 +171,7 @@ type SavedSong = IntakeSong & {
     artist: string | null
     ensemble: string
     is_active?: boolean
+    parts?: PartAvailability | null
   } | null
 }
 
@@ -185,7 +191,7 @@ function rowFromSaved(s: SavedSong): SongRow {
     // Matched before the work was archived. The link still resolves and the book
     // builder still finds files, so nothing else here would look wrong.
     matchedArchived: rep ? rep.is_active === false : false,
-    matchedParts: null,
+    matchedParts: rep?.parts ?? null,
     candidates: [],
     warning: null,
     rememberAlias: false,
