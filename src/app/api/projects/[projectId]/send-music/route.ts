@@ -6,6 +6,7 @@ import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { getOrgPlan } from '@/lib/api-helpers'
 import { canUseEmailFeatures } from '@/lib/plan'
 import { servicesForMusician, withScope } from '@/lib/staffing/scope'
+import { confirmedMembers } from '@/lib/projects/send-roster'
 
 export async function POST(
   request: Request,
@@ -34,11 +35,14 @@ export async function POST(
       return NextResponse.json({ error: 'This feature requires a Pro subscription' }, { status: 403 })
     }
 
-    // Parse optional notes
+    // Parse optional notes. followUp: send the latest send to the people on
+    // the gig who are not on it yet, with its notes, instead of starting over.
     let notes: string | undefined
+    let followUp = false
     try {
       const body = await request.json()
       notes = body.notes
+      followUp = body.followUp === true
     } catch {
       // No body
     }
@@ -104,34 +108,85 @@ export async function POST(
       )
     }
 
-    // Get confirmed musicians with emails
+    // Everyone on a confirmed chair counts toward the send; only those with an
+    // email can be sent it, and the rest are named back to the admin.
     const positions = (project.project_positions as any[]) || []
+    const members = confirmedMembers(positions)
+
+    // A follow-up only reaches people not already on the latest send.
+    let followUpSend: { id: string } | null = null
+    let alreadyOnSend = new Set<string>()
+    if (followUp) {
+      const { data: latestSend } = await serviceClient
+        .from('music_sends')
+        .select('id, notes, music_confirmations(musician_id)')
+        .eq('project_id', projectId)
+        .eq('organization_id', organization.id)
+        .order('sent_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (!latestSend) {
+        return NextResponse.json({ error: 'Music has not been sent yet' }, { status: 400 })
+      }
+      followUpSend = { id: latestSend.id }
+      alreadyOnSend = new Set((latestSend.music_confirmations || []).map((c) => c.musician_id))
+      notes = latestSend.notes || undefined
+    }
+
+    const notYetSent = members.filter((m) => !alreadyOnSend.has(m.musicianId))
+    const skippedNames = notYetSent.filter((m) => !m.hasEmail).map((m) => m.name)
+    const recipientIds = new Set(notYetSent.filter((m) => m.hasEmail).map((m) => m.musicianId))
+    // One email per person, even if they hold two chairs.
     const filledPositions = positions.filter(
-      (p: any) => p.status === 'confirmed' && p.musician_id && p.musician?.email
+      (p, i) =>
+        p.status === 'confirmed' && recipientIds.has(p.musician_id) &&
+        positions.findIndex((o) => o.status === 'confirmed' && o.musician_id === p.musician_id) === i
     )
 
     if (filledPositions.length === 0) {
       return NextResponse.json(
-        { error: 'No confirmed musicians with email addresses' },
+        {
+          error: skippedNames.length > 0
+            ? `No email on file for ${skippedNames.join(', ')}. Add one on their profile, then send again.`
+            : followUp
+              ? 'Everyone on this gig has already been sent the music'
+              : 'No confirmed musicians to send to',
+        },
         { status: 400 }
       )
     }
 
-    // Create send record
-    const { data: sendRecord, error: sendError } = await serviceClient
-      .from('music_sends')
-      .insert({
-        project_id: projectId,
-        organization_id: organization.id,
-        sent_by: user.id,
-        musician_count: filledPositions.length,
-        notes: notes || null,
-      })
-      .select('id')
-      .single()
+    // "All confirmed" is measured against musician_count: everyone on the gig.
+    let sendRecord: { id: string } | null = followUpSend
+    if (followUpSend) {
+      const { error: countError } = await serviceClient
+        .from('music_sends')
+        .update({ musician_count: members.length })
+        .eq('id', followUpSend.id)
+      if (countError) {
+        console.error('Failed to update music send record:', countError)
+        return NextResponse.json({ error: 'Failed to update send record' }, { status: 500 })
+      }
+    } else {
+      const { data: created, error: sendError } = await serviceClient
+        .from('music_sends')
+        .insert({
+          project_id: projectId,
+          organization_id: organization.id,
+          sent_by: user.id,
+          musician_count: members.length,
+          notes: notes || null,
+        })
+        .select('id')
+        .single()
 
-    if (sendError || !sendRecord) {
-      console.error('Failed to create music send record:', sendError)
+      if (sendError || !created) {
+        console.error('Failed to create music send record:', sendError)
+        return NextResponse.json({ error: 'Failed to create send record' }, { status: 500 })
+      }
+      sendRecord = created
+    }
+    if (!sendRecord) {
       return NextResponse.json({ error: 'Failed to create send record' }, { status: 500 })
     }
 
@@ -246,6 +301,7 @@ export async function POST(
       sent: sentCount,
       failed: failedNames.length,
       failedNames: failedNames.length > 0 ? failedNames : undefined,
+      skippedNames: skippedNames.length > 0 ? skippedNames : undefined,
       total: filledPositions.length,
       sendId: sendRecord.id,
     })

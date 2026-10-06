@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { membersNotSent } from '@/lib/projects/send-roster'
 
 export async function GET(
   _request: Request,
@@ -28,7 +29,11 @@ export async function GET(
       .maybeSingle()
 
     if (!latestSend) {
-      return NextResponse.json({ sendId: null, confirmations: [] })
+      return NextResponse.json({
+        sendId: null,
+        confirmations: [],
+        notSent: await membersNotSent(supabase, projectId, []),
+      })
     }
 
     // Get confirmations for this send
@@ -47,6 +52,12 @@ export async function GET(
       sentAt: latestSend.sent_at,
       musicianCount: latestSend.musician_count,
       confirmations: confirmations || [],
+      // On the gig but not on this send: no email yet, or joined afterwards.
+      notSent: await membersNotSent(
+        supabase,
+        projectId,
+        (confirmations || []).map((c) => c.musician_id)
+      ),
     })
   } catch (error) {
     console.error('Failed to fetch gig details status:', error)

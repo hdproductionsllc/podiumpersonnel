@@ -39,6 +39,13 @@ interface SendGigDetailsDialogProps {
   timezone: string
 }
 
+/** On the gig but not on the latest send (api/.../gig-details-status). */
+interface NotSentMember {
+  musicianId: string
+  name: string
+  hasEmail: boolean
+}
+
 export function SendGigDetailsDialog({
   open,
   onOpenChange,
@@ -55,14 +62,23 @@ export function SendGigDetailsDialog({
   const [sent, setSent] = useState(false)
   const [sendId, setSendId] = useState<string | null>(null)
   const [confirmations, setConfirmations] = useState<GigDetailConfirmationStatus[]>([])
+  const [notSent, setNotSent] = useState<NotSentMember[]>([])
+  const [sendingFollowUp, setSendingFollowUp] = useState(false)
   const [loadingStatus, setLoadingStatus] = useState(false)
   const [notes, setNotes] = useState('')
   const [showConfirmSend, setShowConfirmSend] = useState(false)
 
-  // Get filled positions with musicians who have emails
+  // Everyone on a confirmed chair is on the roster; only those with an email
+  // on file can be sent it, and the rest are named rather than dropped.
   const filledPositions = positions.filter(
     (p) => p.status === 'confirmed' && p.musician_id && p.musician
   )
+  const noEmail = notSent.filter((m) => !m.hasEmail)
+  const noEmailIds = new Set(noEmail.map((m) => m.musicianId))
+  const recipientCount = new Set(
+    filledPositions.map((p) => p.musician_id).filter((id) => id && !noEmailIds.has(id))
+  ).size
+  const followUpCount = notSent.length - noEmail.length
 
   // Check for existing sends when dialog opens
   useEffect(() => {
@@ -78,6 +94,7 @@ export function SendGigDetailsDialog({
       const res = await fetch(`/api/projects/${projectId}/gig-details-status`)
       if (res.ok) {
         const data = await res.json()
+        setNotSent(data.notSent || [])
         if (data.sendId) {
           setSendId(data.sendId)
           setSent(true)
@@ -116,11 +133,7 @@ export function SendGigDetailsDialog({
 
       setSent(true)
       setSendId(data.sendId)
-      if (data.failedNames?.length > 0) {
-        toast.warning(`Sent to ${data.sent} of ${data.total}. Failed: ${data.failedNames.join(', ')}`)
-      } else {
-        toast.success(`Gig details sent to ${data.sent} ${term(terms, 'person', { plural: data.sent !== 1, case: 'lower' })}`)
-      }
+      announceSend(data)
 
       // Refresh status
       await checkExistingSends()
@@ -128,6 +141,42 @@ export function SendGigDetailsDialog({
       toast.error(err instanceof Error ? err.message : 'Failed to send gig details')
     } finally {
       setSending(false)
+    }
+  }
+
+  // Send the latest gig details to whoever on the gig is not on it yet.
+  async function handleFollowUp() {
+    setSendingFollowUp(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/send-gig-details`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ followUp: true }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send')
+      }
+      announceSend(data)
+      await checkExistingSends()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send gig details')
+    } finally {
+      setSendingFollowUp(false)
+    }
+  }
+
+  function announceSend(data: { sent: number; total: number; failedNames?: string[]; skippedNames?: string[] }) {
+    const people = term(terms, 'person', { plural: data.sent !== 1, case: 'lower' })
+    const skipped = data.skippedNames?.length
+      ? ` Not sent to ${data.skippedNames.join(', ')}: no email on file.`
+      : ''
+    if (data.failedNames?.length) {
+      toast.warning(`Sent to ${data.sent} of ${data.total}. Failed: ${data.failedNames.join(', ')}.${skipped}`)
+    } else if (skipped) {
+      toast.warning(`Gig details sent to ${data.sent} ${people}.${skipped}`)
+    } else {
+      toast.success(`Gig details sent to ${data.sent} ${people}`)
     }
   }
 
@@ -169,8 +218,9 @@ export function SendGigDetailsDialog({
   }
 
   const confirmedCount = confirmations.filter((c) => c.confirmed_at).length
-  const totalCount = confirmations.length
-  const unconfirmedCount = totalCount - confirmedCount
+  // Out of everyone on the gig, not only the people the send reached.
+  const totalCount = confirmations.length + notSent.length
+  const unconfirmedCount = confirmations.length - confirmedCount
   const allConfirmed = totalCount > 0 && confirmedCount === totalCount
 
   const formattedServices = services
@@ -237,7 +287,7 @@ export function SendGigDetailsDialog({
               {allConfirmed ? (
                 <Badge variant="success">All Confirmed</Badge>
               ) : (
-                <Badge variant="warning">{unconfirmedCount} pending</Badge>
+                <Badge variant="warning">{totalCount - confirmedCount} pending</Badge>
               )}
             </div>
 
@@ -267,21 +317,39 @@ export function SendGigDetailsDialog({
                   )}
                 </div>
               ))}
+              <NotSentRows members={notSent} />
             </div>
 
-            {unconfirmedCount > 0 && (
-              <DialogFooter>
+            {(unconfirmedCount > 0 || followUpCount > 0) && (
+              <DialogFooter className="flex-col sm:flex-row gap-2">
                 <Button variant="outline" onClick={() => onOpenChange(false)}>
                   Close
                 </Button>
-                <Button
-                  onClick={handleSendReminder}
-                  disabled={sendingReminder}
-                >
-                  {sendingReminder
-                    ? 'Sending...'
-                    : `Send Reminder to ${unconfirmedCount} ${term(terms, 'person', { plural: unconfirmedCount !== 1 })}`}
-                </Button>
+                {followUpCount > 0 && (
+                  <Button
+                    variant={unconfirmedCount > 0 ? 'secondary' : 'default'}
+                    onClick={handleFollowUp}
+                    disabled={sendingFollowUp}
+                  >
+                    {sendingFollowUp ? 'Sending...' : `Send to ${followUpCount} Not Yet Sent`}
+                  </Button>
+                )}
+                {unconfirmedCount > 0 && (
+                  <Button
+                    onClick={handleSendReminder}
+                    disabled={sendingReminder}
+                  >
+                    {sendingReminder
+                      ? 'Sending...'
+                      : `Send Reminder to ${unconfirmedCount} ${term(terms, 'person', { plural: unconfirmedCount !== 1 })}`}
+                  </Button>
+                )}
+              </DialogFooter>
+            )}
+
+            {!allConfirmed && unconfirmedCount === 0 && followUpCount === 0 && (
+              <DialogFooter>
+                <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
               </DialogFooter>
             )}
 
@@ -296,7 +364,7 @@ export function SendGigDetailsDialog({
           <div className="space-y-4">
             <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
               <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
-                You are about to send a gig details email to {filledPositions.length} {term(terms, 'person', { plural: filledPositions.length !== 1, case: 'lower' })}.
+                You are about to send a gig details email to {recipientCount} {term(terms, 'person', { plural: recipientCount !== 1, case: 'lower' })}.
               </p>
               <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
                 Each {term(terms, 'person', { case: 'lower' })} will receive the full schedule, venue details, roster with contact info, and a confirmation link.
@@ -304,9 +372,11 @@ export function SendGigDetailsDialog({
               </p>
             </div>
 
+            <NoEmailNotice names={noEmail.map((m) => m.name)} />
+
             <div className="space-y-1">
               <h4 className="text-sm font-semibold mb-2">Recipients:</h4>
-              {sortedRoster.map((pos) => (
+              {sortedRoster.filter((pos) => !noEmailIds.has(pos.musician_id ?? '')).map((pos) => (
                 <div key={pos.id} className="text-sm flex items-center gap-2 py-1">
                   <span className="font-medium">
                     {pos.musician?.first_name} {pos.musician?.last_name}
@@ -324,7 +394,7 @@ export function SendGigDetailsDialog({
                 onClick={handleSend}
                 disabled={sending}
               >
-                {sending ? 'Sending...' : `Send Now to ${filledPositions.length} ${term(terms, 'person', { plural: filledPositions.length !== 1 })}`}
+                {sending ? 'Sending...' : `Send Now to ${recipientCount} ${term(terms, 'person', { plural: recipientCount !== 1 })}`}
               </Button>
             </DialogFooter>
           </div>
@@ -395,7 +465,9 @@ export function SendGigDetailsDialog({
                           <span className="text-muted-foreground">— {pos.instrument?.name}</span>
                         </div>
                         <span className="text-xs text-muted-foreground">
-                          {pos.musician?.phone ? 'Email + Phone' : 'Email only'}
+                          {noEmailIds.has(pos.musician_id ?? '')
+                            ? (pos.musician?.phone ? 'Phone only, not emailed' : 'No email, not emailed')
+                            : pos.musician?.phone ? 'Email + Phone' : 'Email only'}
                         </span>
                       </div>
                     ))}
@@ -431,21 +503,57 @@ export function SendGigDetailsDialog({
               </div>
             </div>
 
+            <NoEmailNotice names={noEmail.map((m) => m.name)} />
+
             <DialogFooter>
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
               <Button
                 onClick={() => setShowConfirmSend(true)}
-                disabled={filledPositions.length === 0}
+                disabled={recipientCount === 0}
               >
-                Review & Send to {filledPositions.length} {term(terms, 'person', { plural: filledPositions.length !== 1 })}
+                Review & Send to {recipientCount} {term(terms, 'person', { plural: recipientCount !== 1 })}
               </Button>
             </DialogFooter>
           </div>
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** Who is on the gig but cannot be emailed, said before anything is sent. */
+export function NoEmailNotice({ names }: { names: string[] }) {
+  if (names.length === 0) return null
+  return (
+    <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3">
+      <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+        No email on file for {names.join(', ')}, so this won&apos;t reach {names.length === 1 ? 'them' : 'those people'}.
+      </p>
+      <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+        Add an email on their profile, then open this again and use &quot;Send to Not Yet Sent&quot;. Nobody else is emailed twice.
+      </p>
+    </div>
+  )
+}
+
+/** Status rows for people on the gig who are not on the send. */
+export function NotSentRows({ members }: { members: { musicianId: string; name: string; hasEmail: boolean }[] }) {
+  return (
+    <>
+      {members.map((m) => (
+        <div
+          key={m.musicianId}
+          className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/30"
+        >
+          <span className="text-sm font-medium">{m.name}</span>
+          <Badge variant="warning" className="text-xs">
+            {m.hasEmail ? 'Not sent yet' : 'Not sent: no email on file'}
+          </Badge>
+        </div>
+      ))}
+    </>
   )
 }
 

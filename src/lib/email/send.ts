@@ -1086,7 +1086,7 @@ interface SendGigDetailsEmailParams {
   roster: {
     name: string
     instrument: string
-    email: string
+    email: string | null
     phone: string | null
     isRecipient: boolean
   }[]

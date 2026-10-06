@@ -5,6 +5,7 @@ import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { formatVenueFields } from '@/lib/venue-helpers'
 import { servicesForMusician, withScope } from '@/lib/staffing/scope'
+import { confirmedMembers } from '@/lib/projects/send-roster'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 interface SendGigDetailsParams {
@@ -13,12 +14,20 @@ interface SendGigDetailsParams {
   sentBy: string
   additionalNotes?: string
   serviceClient?: SupabaseClient
+  /**
+   * Follow up an existing send instead of starting a new one: email only the
+   * confirmed musicians who are not on it yet (an email filled in afterwards,
+   * a sub swapped in), with that send's notes. Nobody already on it hears again.
+   */
+  followUpSendId?: string
 }
 
 interface SendGigDetailsResult {
   sent: number
   failed: number
   failedNames: string[]
+  /** On the gig but not emailed: no email address on file. */
+  skippedNames: string[]
   sendId: string
   total: number
 }
@@ -95,14 +104,12 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
     throw new Error('Add at least one service before sending gig details')
   }
 
-  // Only include filled positions (musician assigned and offer accepted)
+  // Filled positions (musician assigned and offer accepted). Everyone on them
+  // is on the roster and in the count; only those with an email can be sent it.
   const filledPositions = positions.filter(
-    (p: any) => p.status === 'confirmed' && p.musician_id && p.musician?.email
+    (p: any) => p.status === 'confirmed' && p.musician_id && p.musician
   )
-
-  if (filledPositions.length === 0) {
-    throw new Error('No confirmed musicians with email addresses to send to')
-  }
+  const members = confirmedMembers(filledPositions)
 
   // Format services for the email: each person is sent the ones their chair
   // works (every one, unless the chair is limited to some).
@@ -156,28 +163,78 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
       musicianId: pos.musician.id,
       name: `${pos.musician.first_name} ${pos.musician.last_name}`,
       instrument: pos.instrument?.name || 'Instrument',
-      email: pos.musician.email,
+      email: pos.musician.email || null,
       phone: pos.musician.phone || null,
     }))
 
-  // Create the send record
-  const { data: sendRecord, error: sendError } = await serviceClient
-    .from('gig_detail_sends')
-    .insert({
-      project_id: projectId,
-      organization_id: organizationId,
-      sent_by: sentBy,
-      musician_count: roster.length,
-    })
-    .select('id')
-    .single()
+  // A follow-up only reaches people not already on that send.
+  let alreadyOnSend = new Set<string>()
+  let notes = additionalNotes
+  if (params.followUpSendId) {
+    const { data: existing } = await serviceClient
+      .from('gig_detail_sends')
+      .select('id, notes, gig_detail_confirmations(musician_id)')
+      .eq('id', params.followUpSendId)
+      .eq('project_id', projectId)
+      .eq('organization_id', organizationId)
+      .single()
+    if (!existing) throw new Error('Send record not found')
+    alreadyOnSend = new Set(
+      ((existing.gig_detail_confirmations as any[]) || []).map((c: any) => c.musician_id)
+    )
+    notes = existing.notes || undefined
+  }
 
-  if (sendError || !sendRecord) {
-    throw new Error('Failed to create send record')
+  const notYetSent = members.filter((m) => !alreadyOnSend.has(m.musicianId))
+  const skippedNames = notYetSent.filter((m) => !m.hasEmail).map((m) => m.name)
+  const recipientIds = new Set(notYetSent.filter((m) => m.hasEmail).map((m) => m.musicianId))
+  // One email per person, even if they hold two chairs.
+  const recipients = roster.filter(
+    (r: any, i: number) =>
+      recipientIds.has(r.musicianId) && roster.findIndex((o: any) => o.musicianId === r.musicianId) === i
+  )
+
+  if (recipients.length === 0) {
+    throw new Error(
+      skippedNames.length > 0
+        ? `No email on file for ${skippedNames.join(', ')}. Add one on their profile, then send again.`
+        : params.followUpSendId
+          ? 'Everyone on this gig already has these gig details'
+          : 'No confirmed musicians to send to'
+    )
+  }
+
+  // "All N confirmed" is measured against musician_count, so it is everyone on
+  // the gig, including anyone who could not be emailed yet.
+  let sendRecord: { id: string }
+  if (params.followUpSendId) {
+    const { error: countError } = await serviceClient
+      .from('gig_detail_sends')
+      .update({ musician_count: members.length })
+      .eq('id', params.followUpSendId)
+    if (countError) throw new Error('Failed to update send record')
+    sendRecord = { id: params.followUpSendId }
+  } else {
+    const { data: created, error: sendError } = await serviceClient
+      .from('gig_detail_sends')
+      .insert({
+        project_id: projectId,
+        organization_id: organizationId,
+        sent_by: sentBy,
+        musician_count: members.length,
+        notes: additionalNotes || null,
+      })
+      .select('id')
+      .single()
+
+    if (sendError || !created) {
+      throw new Error('Failed to create send record')
+    }
+    sendRecord = created
   }
 
   // Create confirmation tokens for each musician
-  const confirmationInserts = roster.map((member: any) => ({
+  const confirmationInserts = recipients.map((member: any) => ({
     send_id: sendRecord.id,
     musician_id: member.musicianId,
   }))
@@ -207,8 +264,8 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
   // Send email to each musician
   let sentCount = 0
   const failedNames: string[] = []
-  for (let i = 0; i < roster.length; i++) {
-    const member = roster[i]
+  for (let i = 0; i < recipients.length; i++) {
+    const member = recipients[i]
     const token = tokenMap.get(member.musicianId)
     if (!token) continue
 
@@ -255,7 +312,7 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
               services: formattedServicesFor(member.musicianId),
               roster: emailRoster,
               confirmUrl,
-              notes: additionalNotes,
+              notes,
               branding,
             }),
         }
@@ -272,7 +329,8 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
     sent: sentCount,
     failed: failedNames.length,
     failedNames,
+    skippedNames,
     sendId: sendRecord.id,
-    total: roster.length,
+    total: recipients.length,
   }
 }

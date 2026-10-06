@@ -31,13 +31,32 @@ export async function POST(
       return NextResponse.json({ error: 'Sending gig details requires a Pro subscription' }, { status: 403 })
     }
 
-    // Parse optional notes from body
+    // Parse optional notes from body. followUp: send the latest send to the
+    // people on the gig who are not on it yet, instead of starting over.
     let notes: string | undefined
+    let followUp = false
     try {
       const body = await request.json()
       notes = body.notes
+      followUp = body.followUp === true
     } catch {
       // No body or invalid JSON — that's fine
+    }
+
+    let followUpSendId: string | undefined
+    if (followUp) {
+      const { data: latestSend } = await supabase
+        .from('gig_detail_sends')
+        .select('id')
+        .eq('project_id', projectId)
+        .eq('organization_id', mem.organization_id)
+        .order('sent_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (!latestSend) {
+        return NextResponse.json({ error: 'Gig details have not been sent yet' }, { status: 400 })
+      }
+      followUpSendId = latestSend.id
     }
 
     const result = await sendGigDetailsToMusicians({
@@ -45,6 +64,7 @@ export async function POST(
       organizationId: mem.organization_id,
       sentBy: user.id,
       additionalNotes: notes,
+      followUpSendId,
     })
 
     return NextResponse.json({
@@ -52,6 +72,7 @@ export async function POST(
       sent: result.sent,
       failed: result.failed,
       failedNames: result.failedNames.length > 0 ? result.failedNames : undefined,
+      skippedNames: result.skippedNames.length > 0 ? result.skippedNames : undefined,
       total: result.total,
       sendId: result.sendId,
     })

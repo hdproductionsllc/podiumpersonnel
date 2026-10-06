@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { membersNotSent } from '@/lib/projects/send-roster'
 
 export async function GET(
   _request: Request,
@@ -27,7 +28,11 @@ export async function GET(
       .maybeSingle()
 
     if (!latestSend) {
-      return NextResponse.json({ sendId: null, confirmations: [] })
+      return NextResponse.json({
+        sendId: null,
+        confirmations: [],
+        notSent: await membersNotSent(supabase, projectId, []),
+      })
     }
 
     // Get confirmations for this send with musician details
@@ -125,6 +130,12 @@ export async function GET(
       sentAt: latestSend.sent_at,
       musicianCount: latestSend.musician_count,
       notes: latestSend.notes || null,
+      // On the gig but not on this send: no email yet, or joined afterwards.
+      notSent: await membersNotSent(
+        supabase,
+        projectId,
+        (confirmations || []).map((c) => c.musician_id)
+      ),
       confirmations: (confirmations || []).map((c: any) => {
         const musicianFileIds = getFileIdsForMusician(c.musician_id)
         const downloadedSet = downloadsByMusician[c.musician_id] || new Set()

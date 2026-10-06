@@ -908,6 +908,7 @@ export interface GigDetailSend {
   sent_at: string
   sent_by: string
   musician_count: number
+  notes: string | null
 }
 
 export interface GigDetailConfirmation {

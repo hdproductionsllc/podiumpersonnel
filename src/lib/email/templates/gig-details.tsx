@@ -16,7 +16,7 @@ import { type TermDictionary, type VerticalBrand } from '@/lib/verticals'
 interface RosterMember {
   name: string
   instrument: string
-  email: string
+  email: string | null
   phone: string | null
   isRecipient: boolean
 }
@@ -184,7 +184,7 @@ export function GigDetailsEmail({
                     {member.name}{member.isRecipient ? ' (you)' : ''} — {member.instrument}
                   </Text>
                   <Text style={rosterContact}>
-                    {member.email}{member.phone ? ` | ${member.phone}` : ''}
+                    {member.email}{member.phone ? `${member.email ? ' | ' : ''}${member.phone}` : ''}
                   </Text>
                 </Section>
               ))}

@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import { useTerms } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
 import type { ProjectFile } from './project-files-section'
+import { NoEmailNotice, NotSentRows } from './send-gig-details-dialog'
 
 interface MusicConfirmationStatus {
   id: string
@@ -167,6 +168,8 @@ export function SendMusicDialog({
   const [loadingStatus, setLoadingStatus] = useState(false)
   const [notes, setNotes] = useState('')
   const [lastSendNotes, setLastSendNotes] = useState<string | null>(null)
+  // On the gig but not on the latest send (api/.../music-status).
+  const [notSent, setNotSent] = useState<{ musicianId: string; name: string; hasEmail: boolean }[]>([])
 
   // What was just sent — for the sent-result view
   const [sentResult, setSentResult] = useState<{
@@ -175,10 +178,14 @@ export function SendMusicDialog({
     notes?: string
   } | null>(null)
 
-  // Confirmed musicians (for new sends)
+  // Confirmed musicians (for new sends). Anyone without an email on file is
+  // named up front instead of silently left out.
+  const noEmail = notSent.filter((m) => !m.hasEmail)
+  const noEmailIds = new Set(noEmail.map((m) => m.musicianId))
   const filledPositions = positions.filter(
-    (p) => p.status === 'confirmed' && p.musician_id && p.musician
+    (p) => p.status === 'confirmed' && p.musician_id && p.musician && !noEmailIds.has(p.musician_id)
   )
+  const followUpCount = notSent.length - noEmail.length
 
   // When dialog opens, check for existing sends
   useEffect(() => {
@@ -193,6 +200,7 @@ export function SendMusicDialog({
       const res = await fetch(`/api/projects/${projectId}/music-status`)
       if (res.ok) {
         const data = await res.json()
+        setNotSent(data.notSent || [])
         if (data.sendId) {
           setSendId(data.sendId)
           setConfirmations(data.confirmations || [])
@@ -227,9 +235,7 @@ export function SendMusicDialog({
       setSendId(data.sendId)
       setSentResult({ type: 'music', count: data.sent, notes: notes.trim() || undefined })
       setView('sent-result')
-      if (data.failedNames?.length > 0) {
-        toast.warning(`Failed to send to: ${data.failedNames.join(', ')}`)
-      }
+      warnUnsent(data)
 
       // Refresh status in background
       const statusRes = await fetch(`/api/projects/${projectId}/music-status`)
@@ -237,11 +243,50 @@ export function SendMusicDialog({
         const statusData = await statusRes.json()
         setConfirmations(statusData.confirmations || [])
         setLastSendNotes(statusData.notes || null)
+        setNotSent(statusData.notSent || [])
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send music notifications')
     } finally {
       setSending(false)
+    }
+  }
+
+  // Send the latest music to whoever on the gig is not on it yet, with its notes.
+  async function handleFollowUp() {
+    setSending(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/send-music`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ followUp: true }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send')
+      }
+      setSentResult({ type: 'music', count: data.sent, notes: lastSendNotes || undefined })
+      setView('sent-result')
+      warnUnsent(data)
+      const statusRes = await fetch(`/api/projects/${projectId}/music-status`)
+      if (statusRes.ok) {
+        const statusData = await statusRes.json()
+        setConfirmations(statusData.confirmations || [])
+        setNotSent(statusData.notSent || [])
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send music notifications')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  function warnUnsent(data: { failedNames?: string[]; skippedNames?: string[] }) {
+    if (data.failedNames?.length) {
+      toast.warning(`Failed to send to: ${data.failedNames.join(', ')}`)
+    }
+    if (data.skippedNames?.length) {
+      toast.warning(`Not sent to ${data.skippedNames.join(', ')}: no email on file.`)
     }
   }
 
@@ -295,8 +340,9 @@ export function SendMusicDialog({
   }
 
   const confirmedCount = confirmations.filter((c) => c.confirmed_at).length
-  const totalCount = confirmations.length
-  const unconfirmedCount = totalCount - confirmedCount
+  // Out of everyone on the gig, not only the people the send reached.
+  const totalCount = confirmations.length + notSent.length
+  const unconfirmedCount = confirmations.length - confirmedCount
   const allConfirmed = totalCount > 0 && confirmedCount === totalCount
 
   // Pick a sample musician for the email preview
@@ -348,7 +394,7 @@ export function SendMusicDialog({
               {allConfirmed ? (
                 <Badge variant="success">All Confirmed</Badge>
               ) : (
-                <Badge variant="warning">{unconfirmedCount} pending</Badge>
+                <Badge variant="warning">{totalCount - confirmedCount} pending</Badge>
               )}
             </div>
 
@@ -383,6 +429,7 @@ export function SendMusicDialog({
                   )}
                 </div>
               ))}
+              <NotSentRows members={notSent} />
             </div>
 
             <DialogFooter className="flex-col sm:flex-row gap-2">
@@ -399,6 +446,11 @@ export function SendMusicDialog({
                 >
                   Send Music Again
                 </Button>
+                {followUpCount > 0 && (
+                  <Button variant="secondary" onClick={handleFollowUp} disabled={sending}>
+                    {sending ? 'Sending...' : `Send to ${followUpCount} Not Yet Sent`}
+                  </Button>
+                )}
                 {unconfirmedCount > 0 && (
                   <Button
                     onClick={() => setView('preview-action')}
@@ -502,6 +554,8 @@ export function SendMusicDialog({
                 {notes.trim() ? ' Your message will be included.' : ''}
               </p>
             </div>
+
+            <NoEmailNotice names={noEmail.map((m) => m.name)} />
 
             <div className="space-y-2">
               <h4 className="text-sm font-semibold mb-2">Recipients & Files:</h4>
@@ -615,6 +669,8 @@ export function SendMusicDialog({
                 onChange={(e) => setNotes(e.target.value)}
               />
             </div>
+
+            <NoEmailNotice names={noEmail.map((m) => m.name)} />
 
             {/* Confirmation note */}
             <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg px-4 py-3">
