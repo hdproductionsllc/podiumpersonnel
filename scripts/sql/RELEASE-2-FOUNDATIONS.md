@@ -377,3 +377,8 @@ what happens if the code lands before its paste.
   (Rebecca Chung / Becca Hamilton at PSQ; Jaewon Ahn, Sophie Verhaeghe, Ian
   Parvin at Subito Strings). Every reference moved, conflicting values kept in
   notes, backups in scripts/backups/ (git-ignored: personal data).
+- **081 was never applied (found 2026-10-06).** Pasting 098 stopped because
+  081's protect_privileged_org_columns was missing. The read-only
+  scripts/sql/audit-live-migrations.sql confirmed 081 was the ONLY missing
+  migration from 067 to 096. Paste scripts/sql/081-protect-org-columns.paste.sql
+  BEFORE 098 (098 and 100 extend that protection).
