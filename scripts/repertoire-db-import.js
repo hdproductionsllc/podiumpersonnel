@@ -326,7 +326,12 @@ function buildPlan(index, org, aliasEntries) {
  *      bytes are in R2 by sha256, relPath+sha recorded). Work flagged needs-review.
  */
 function assignParts(work, org, flagged) {
-  const sorted = work.files.slice().sort((a, b) => a.relPath.localeCompare(b.relPath))
+  // A quintet's second cello ("Cello II") sorts before "Cello.pdf" by name, so a
+  // plain name sort handed it the 'vc' slot. Place second-chair files last.
+  const isSecondChair = (f) => /\(vc2\)/.test(f.notes || '')
+  const sorted = work.files
+    .slice()
+    .sort((a, b) => isSecondChair(a) - isSecondChair(b) || a.relPath.localeCompare(b.relPath))
   const taken = new Map() // roleKey -> partRow
   const parts = []
 
@@ -575,6 +580,7 @@ async function runImport(plan, opts, rest) {
 
   // --- existing rows (idempotency probe) ---
   let existingWorks = new Map() // identity -> id
+  const retiredWorkIds = new Set() // is_active=false: retired on purpose, never refill
   const existingShas = new Set() // lowercased sha256 of every PDF already in the library
   let existingParts = new Set() // `${repertoire_id}\0role`
   let existingAliases = new Set() // alias_norm
@@ -584,9 +590,12 @@ async function runImport(plan, opts, rest) {
     const rows = await restSelectAll(
       rest,
       'repertoire',
-      `organization_id=eq.${opts.org}&select=id,norm_title,artist,ensemble`,
+      `organization_id=eq.${opts.org}&select=id,norm_title,artist,ensemble,is_active`,
     )
-    for (const r of rows) existingWorks.set(repertoireIdentity(r), r.id)
+    for (const r of rows) {
+      existingWorks.set(repertoireIdentity(r), r.id)
+      if (r.is_active === false) retiredWorkIds.add(r.id)
+    }
     const partRows = await restSelectAll(
       rest,
       'repertoire_parts',
@@ -684,6 +693,13 @@ async function runImport(plan, opts, rest) {
       )
       continue
     }
+    // A retired song (switched off in the Music Library, usually because a newer
+    // arrangement replaced it) keeps its old PDFs on disk. Re-adding them would
+    // quietly resurrect the arrangement it was retired in favour of.
+    if (w.repertoireId && retiredWorkIds.has(w.repertoireId)) {
+      report.skipped.parts += w.parts.length
+      continue
+    }
     for (const p of w.parts) {
       // Content dedup: if these exact bytes are already stored anywhere in the
       // library, never re-add them (keeps re-runs and artist-drift safe).
@@ -703,6 +719,19 @@ async function runImport(plan, opts, rest) {
     }
   }
   report.inserted.parts = partsToInsert.length
+  // Parts joining a song that is ALREADY in the library (e.g. the missing violin
+  // parts of an incomplete arrangement). newWorks alone never shows these, so the
+  // update-library review gate would wrongly report "already up to date".
+  report.newParts = partsToInsert
+    .filter(({ work }) => existingWorks.has(work.identityKey))
+    .map(({ work, part }) => ({
+      title: work.title,
+      artist: work.artist || null,
+      ensemble: work.ensemble,
+      part: part.part,
+      played_on: part.played_on || null,
+      filename: part.original_filename,
+    }))
 
   if (!opts.dryRun && partsToInsert.length) {
     const payload = partsToInsert.map(({ work, part }) => ({

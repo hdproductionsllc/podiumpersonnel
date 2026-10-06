@@ -148,9 +148,10 @@ async function main() {
   }
 
   const newWorks = report.newWorks || []
+  const newParts = report.newParts || []
   const existing = report.skipped.repertoire || 0
 
-  if (newWorks.length === 0) {
+  if (newWorks.length === 0 && newParts.length === 0) {
     console.log(
       C.green('\n✓ Your library is already up to date.') +
         C.dim(` No new songs found (${existing} already in the library).`),
@@ -165,13 +166,23 @@ async function main() {
   }
 
   // --- review table ---
-  console.log(
+  const pad = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s.padEnd(n))
+  if (newParts.length) {
+    console.log(
+      C.bold(`\nFound ${newParts.length} missing part${newParts.length === 1 ? '' : 's'} for songs already in the library`),
+    )
+    console.log(C.dim('  ' + pad('ENSEMBLE', 10) + pad('TITLE', 34) + pad('PART', 12) + 'FILE'))
+    for (const p of newParts) {
+      const part = p.part === 'other' && p.played_on ? `extra ${p.played_on}` : p.part
+      console.log('  ' + pad(p.ensemble, 10) + pad(p.title, 34) + pad(part, 12) + C.dim(p.filename))
+    }
+  }
+  if (newWorks.length) console.log(
     C.bold(`\nFound ${newWorks.length} new song${newWorks.length === 1 ? '' : 's'} to add`) +
       C.dim(`  (${existing} already in the library, left untouched)\n`),
   )
   const warnings = []
-  const pad = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s.padEnd(n))
-  console.log(C.dim('  ' + pad('ENSEMBLE', 10) + pad('TITLE', 34) + pad('ARTIST', 22) + 'PARTS'))
+  if (newWorks.length) console.log(C.dim('  ' + pad('ENSEMBLE', 10) + pad('TITLE', 34) + pad('ARTIST', 22) + 'PARTS'))
   for (const w of newWorks) {
     const artist = w.artist || C.yellow('(no artist)')
     const flags = []
@@ -214,7 +225,11 @@ async function main() {
 
   // --- 3. confirm + go live ---
   if (!opts.yes) {
-    const a = (await ask(C.bold(`\nAdd ${newWorks.length} song(s) to the shared library now? [y/N] `))).trim().toLowerCase()
+    const what = [
+      newWorks.length && `${newWorks.length} new song(s)`,
+      newParts.length && `${newParts.length} missing part(s)`,
+    ].filter(Boolean).join(' and ')
+    const a = (await ask(C.bold(`\nAdd ${what} to the shared library now? [y/N] `))).trim().toLowerCase()
     if (a !== 'y' && a !== 'yes') {
       console.log(C.dim('No changes made.'))
       return
@@ -242,11 +257,11 @@ async function main() {
     const r = JSON.parse(fs.readFileSync(liveReport, 'utf8'))
     added = r.inserted.repertoire
     console.log(
-      C.green(`\n✓ Done — added ${added} song${added === 1 ? '' : 's'} `) +
-        `(${r.inserted.parts} PDF part${r.inserted.parts === 1 ? '' : 's'}) to the shared library.`,
+      C.green(`\n✓ Done — added ${added} new song${added === 1 ? '' : 's'} `) +
+        `and ${r.inserted.parts} PDF part${r.inserted.parts === 1 ? '' : 's'} in all to the shared library.`,
     )
   } catch {
-    console.log(C.green(`\n✓ Done — new songs added to the shared library.`))
+    console.log(C.green(`\n✓ Done — new music added to the shared library.`))
   }
   console.log(C.dim('  They\'re live now: every brand that shares this library can use them immediately.'))
 }
