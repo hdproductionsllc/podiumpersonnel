@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, Fragment } from 'react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { hasLiveStatus } from '@/lib/staffing/live'
+import { chairHolderOffer } from '@/lib/payments/compute'
 import { toast } from 'sonner'
 import { ImportFromBookDialog } from './import-from-book-dialog'
 import { AddPositionDialog } from './add-position-dialog'
@@ -872,8 +873,11 @@ export function ProjectPositions({
                           {(() => {
                             // Show pay from the relevant offer based on position status
                             if (position.status === 'confirmed') {
-                              const acceptedOffer = position.contract_offers.find(o => o.status === 'accepted')
-                              if (acceptedOffer?.custom_pay != null) return `$${acceptedOffer.custom_pay}`
+                              // The holder's deal: their accepted offer, else the last one
+                              // they were sent (payments/compute.ts), so a chair filled by
+                              // hand after the offer lapsed still shows what was agreed.
+                              const holderOffer = chairHolderOffer(position.contract_offers, position.musician_id)
+                              if (holderOffer?.custom_pay != null) return `$${holderOffer.custom_pay}`
                               const basePay = (chairServices(position) ?? []).reduce((sum, s) => sum + (s.base_pay ?? 0), 0)
                               return basePay > 0
                                 ? <span title="The gig's base pay (no custom amount on the offer)">${basePay.toLocaleString()} <span className="text-xs">base</span></span>

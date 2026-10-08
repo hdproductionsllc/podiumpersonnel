@@ -9,8 +9,10 @@ import { randomBytes } from 'crypto'
 import { LIVE_OFFER_STATUSES } from '@/lib/staffing/live'
 import { adminActor, logEvent, type StaffingEvent } from '@/lib/staffing/events'
 import { SUBSTITUTE_OFFER_EXPIRY, resolveExpiresAt } from '@/lib/staffing/expiry'
-import { insertOffer, supersedeLiveOffers, supersededEvents } from '@/lib/staffing/offers'
+import { insertOffer, supersedeLiveOffers, supersededEvents, termsSnapshot } from '@/lib/staffing/offers'
+import { offerEmailPay } from '@/lib/staffing/offer-email'
 import { servicesFor, withScope } from '@/lib/staffing/scope'
+import { chairHolderOffer } from '@/lib/payments/compute'
 
 export async function POST(
   request: Request,
@@ -217,6 +219,31 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to create contract offer' }, { status: 500 })
   }
 
+  // The substitute steps into the requesting musician's deal: the amount and
+  // the leader-fee choice on that musician's offer for this chair, so the
+  // sub's offer page, email and eventual payment all say the number the chair
+  // was staffed at. Until 2026-10-08 the sub's offer carried no amount at all
+  // ("pay missing from replacement sub offer page", Sutton Ceremony).
+  const { data: priorOffers, error: priorOffersError } = await supabase
+    .from('contract_offers')
+    .select('*')
+    .eq('project_position_id', subRequest.project_position_id)
+    .eq('musician_id', subRequest.requesting_musician_id)
+
+  if (priorOffersError) {
+    // The sub can still be offered the chair; they just will not inherit a
+    // figure the admin can see and fix on the Pay column.
+    console.error(`Failed to read ${requestingMusician?.first_name ?? 'the requesting musician'}'s offer on position ${subRequest.project_position_id} for the substitute's pay:`, priorOffersError)
+  }
+
+  const inheritedFrom = chairHolderOffer(priorOffers, subRequest.requesting_musician_id)
+  const inheritedPay = {
+    customPay: inheritedFrom?.custom_pay ?? null,
+    includeLeaderFee: inheritedFrom?.terms_snapshot?.pay?.include_leader_fee ?? null,
+    leaderFeeAmount: inheritedFrom?.terms_snapshot?.pay?.leader_fee_amount ?? null,
+  }
+  const sentAt = new Date().toISOString()
+
   // Create contract offer for the substitute. It is flagged as a substitute's
   // offer (093), so the one-live-offer-per-chair rule can leave it out.
   const { data: contractOffer, error: offerError } = await insertOffer(
@@ -226,13 +253,15 @@ export async function POST(
       musician_id: substituteMusician.id,
       token: offerToken,
       status: 'pending',
-      sent_at: new Date().toISOString(),
+      sent_at: sentAt,
       expires_at: expiresAt.toISOString(),
+      custom_pay: inheritedPay.customPay,
     },
     {
       is_substitution: true,
       created_by: user.id,
       delivery_status: subRequest.suggested_sub_email ? 'queued' : null,
+      terms_snapshot: termsSnapshot(position, services, inheritedPay, sentAt),
     }
   )
 
@@ -340,6 +369,14 @@ export async function POST(
 
   const baseUrl = getAppUrl()
 
+  // What the sub's email says about pay: the one rule every offer email uses.
+  const emailPay = offerEmailPay(
+    { custom_pay: inheritedPay.customPay },
+    position?.chair_number || 1,
+    projectServices[0] ?? null,
+    inheritedPay
+  )
+
   // How the substitute's offer email went, for the offer.sent event below.
   // Stays 'failed' if the send threw or returned nothing.
   let subOfferDelivery: 'sent' | 'suppressed' | 'failed' | 'no_email' = subRequest.suggested_sub_email
@@ -407,6 +444,12 @@ export async function POST(
                   projectId: project.id,
                   offerId: contractOffer.id,
                   resendEmailId: r?.id || null,
+                  metadata: {
+                    instrument: subInstrument?.name || instrument?.name,
+                    chairNumber: position?.chair_number,
+                    payAmount: emailPay.payAmount,
+                    substitutionRequestId: requestId,
+                  },
                   body: r?.emailHtml,
                 }
               : null,
@@ -425,6 +468,10 @@ export async function POST(
               services: formattedServices,
               responseUrl: `${baseUrl}/gig/${offerToken}`,
               expiresAt: expiresAt.toISOString(),
+              timezone,
+              payAmount: emailPay.payAmount,
+              leaderFee: emailPay.isLeader ? emailPay.leaderFee : null,
+              isLeader: emailPay.isLeader,
               notes: `You have been requested as a substitute by ${requestingMusician.first_name} ${requestingMusician.last_name}.`,
               branding: {
                 logoUrl: organization?.email_logo_url,

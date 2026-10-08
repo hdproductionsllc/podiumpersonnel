@@ -232,6 +232,50 @@ describe('approve — happy path', () => {
     expect(Math.round(hours)).toBe(7 * 24)
   })
 
+  it("the substitute inherits the requesting musician's pay and leader-fee choice", async () => {
+    state.db = makeDb({
+      contract_offers: [
+        {
+          id: 'offer-orig', project_position_id: 'pos-1', musician_id: 'mus-orig', status: 'accepted', custom_pay: 250,
+          sent_at: '2026-05-01T12:00:00.000Z', responded_at: '2026-06-01T12:00:00.000Z',
+          terms_snapshot: { pay: { custom_pay: 250, include_leader_fee: true, leader_fee_amount: 50 } },
+        },
+      ],
+    })
+
+    const res = await approvePOST(approveRequest(), routeParams)
+
+    expect(res.status).toBe(200)
+    const offer = state.db.row('contract_offers', state.db.row('substitution_requests', 'sub-1')!.offer_id)!
+    expect(offer.custom_pay).toBe(250)
+    expect(offer.terms_snapshot).toMatchObject({ pay: { custom_pay: 250, include_leader_fee: true, leader_fee_amount: 50 } })
+    expect(sendContractOfferEmail).toHaveBeenCalledWith(expect.objectContaining({ payAmount: 250, isLeader: true, leaderFee: 50 }))
+  })
+
+  it("the substitute's pay follows the chair holder's LATEST offer when none was accepted", async () => {
+    state.db = makeDb({
+      contract_offers: [
+        { id: 'offer-old', project_position_id: 'pos-1', musician_id: 'mus-orig', status: 'declined', custom_pay: 200, sent_at: '2026-04-01T12:00:00.000Z' },
+        { id: 'offer-orig', project_position_id: 'pos-1', musician_id: 'mus-orig', status: 'expired', custom_pay: 300, sent_at: '2026-05-01T12:00:00.000Z' },
+        { id: 'offer-else', project_position_id: 'pos-1', musician_id: 'mus-else', status: 'accepted', custom_pay: 999, sent_at: '2026-05-02T12:00:00.000Z' },
+      ],
+    })
+
+    await approvePOST(approveRequest(), routeParams)
+
+    const offer = state.db.row('contract_offers', state.db.row('substitution_requests', 'sub-1')!.offer_id)!
+    expect(offer.custom_pay).toBe(300)
+    expect(sendContractOfferEmail).toHaveBeenCalledWith(expect.objectContaining({ payAmount: 300, isLeader: false }))
+  })
+
+  it("no amount on the original offer: the sub's offer has none either (service rates apply)", async () => {
+    await approvePOST(approveRequest(), routeParams)
+
+    const offer = state.db.row('contract_offers', state.db.row('substitution_requests', 'sub-1')!.offer_id)!
+    expect(offer.custom_pay).toBeNull()
+    expect(offer.terms_snapshot).toMatchObject({ pay: { custom_pay: null, include_leader_fee: null } })
+  })
+
   it('still makes the offer when migration 093 is not applied yet', async () => {
     state.without093 = true
 

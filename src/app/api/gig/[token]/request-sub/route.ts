@@ -233,7 +233,9 @@ export async function POST(
               suggestedSubPhone: subPhone || null,
               suggestedSubInstrument: subInstrument?.name || 'Instrument',
               performanceDate,
-              dashboardUrl: `${baseUrl}/dashboard/projects/${project.id}`,
+              // The projects page opened on this gig (there is no per-project
+              // page; /dashboard/projects/<id> was a 404 in the admin's inbox).
+              dashboardUrl: `${baseUrl}/dashboard/projects?expand=${project.id}`,
             }),
         }
       ).catch((err) => console.warn('Failed to send admin notification:', err))

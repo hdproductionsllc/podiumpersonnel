@@ -157,7 +157,7 @@ export function buildPaySummary(
   const lines: PaySummaryLine[] = []
   for (const p of confirmed(positions)) {
     const m = p.musician!
-    const offerPay = acceptedOfferPay(p.contract_offers)
+    const offerPay = acceptedOfferPay(p.contract_offers, m.id)
     let basePay = 0
     let leaderFee = 0
     for (const pay of computeGigPay(servicesFor(p, services), !!m.is_leader, offerPay)) {

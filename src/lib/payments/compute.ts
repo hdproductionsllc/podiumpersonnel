@@ -20,8 +20,11 @@
 export interface OfferForPay {
   custom_pay: number | null
   status: string
+  /** Who the offer went to; needed to tell the chair holder's offers from other musicians'. */
+  musician_id?: string | null
+  sent_at?: string | null
   /** What the admin chose when sending (migration 093; null on older offers). */
-  terms_snapshot?: { pay?: { include_leader_fee?: boolean | null } | null } | null
+  terms_snapshot?: { pay?: { include_leader_fee?: boolean | null; leader_fee_amount?: number | null } | null } | null
 }
 
 export interface ServiceForPay {
@@ -43,10 +46,42 @@ export interface PayLine {
   wholeGig: boolean
 }
 
-/** The agreed amount on the musician's accepted offer, or null when none. */
-export function acceptedOfferPay(offers: OfferForPay[] | null | undefined): number | null {
-  const accepted = offers?.find((o) => o.status === 'accepted')
-  return accepted?.custom_pay ?? null
+/**
+ * The offer that states a confirmed chair holder's deal.
+ *
+ * Their accepted offer on the chair when there is one. Otherwise the latest
+ * offer they were sent for it, whatever its status: a musician who says yes
+ * by text after the deadline is assigned by hand, and that lapsed offer is
+ * the only record of the amount they were told (Garik, Sutton Ceremony: a
+ * $250 offer marked expired, then "—" in the Pay column and no pay on the
+ * payments page). Assigning now marks such an offer accepted (assign route),
+ * so this fallback covers chairs filled before that.
+ *
+ * Without a holder id (older callers) it is any accepted offer on the chair,
+ * as before; a chair never holds two.
+ */
+export function chairHolderOffer<O extends OfferForPay>(
+  offers: O[] | null | undefined,
+  holderMusicianId?: string | null,
+): O | null {
+  const own = holderMusicianId
+    ? (offers || []).filter((o) => o.musician_id === holderMusicianId)
+    : offers || []
+  const accepted = own.find((o) => o.status === 'accepted')
+  if (accepted) return accepted
+  if (!holderMusicianId) return null
+  return own.reduce<O | null>(
+    (latest, o) => (!latest || (o.sent_at ?? '') > (latest.sent_at ?? '') ? o : latest),
+    null,
+  )
+}
+
+/** The agreed amount on the chair holder's offer (chairHolderOffer), or null when none. */
+export function acceptedOfferPay(
+  offers: OfferForPay[] | null | undefined,
+  holderMusicianId?: string | null,
+): number | null {
+  return chairHolderOffer(offers, holderMusicianId)?.custom_pay ?? null
 }
 
 /**
@@ -62,9 +97,9 @@ export function acceptedOfferPay(offers: OfferForPay[] | null | undefined): numb
 export function acceptedOfferIncludesLeaderFee(
   offers: OfferForPay[] | null | undefined,
   isGigLead: boolean,
+  holderMusicianId?: string | null,
 ): boolean {
-  const accepted = offers?.find((o) => o.status === 'accepted')
-  const recorded = accepted?.terms_snapshot?.pay?.include_leader_fee
+  const recorded = chairHolderOffer(offers, holderMusicianId)?.terms_snapshot?.pay?.include_leader_fee
   return typeof recorded === 'boolean' ? recorded : isGigLead
 }
 

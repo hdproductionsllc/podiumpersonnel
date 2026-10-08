@@ -50,7 +50,7 @@ export const afterGigProjectSelect = (scope: ScopeSelect | '' = '') => `
     chair_number${scope},
     instrument:instruments(name),
     musician:musicians(id, first_name, last_name, email, is_leader),
-    contract_offers(custom_pay, status)
+    contract_offers(custom_pay, status, musician_id, sent_at)
   )
 ` as const
 

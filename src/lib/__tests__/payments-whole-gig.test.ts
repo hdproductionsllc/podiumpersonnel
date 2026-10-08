@@ -68,7 +68,8 @@ function confirmedChair(over: Partial<Row> = {}): Row {
     status: 'confirmed',
     projects: { id: 'proj-1', name: 'Jones Wedding', organization_id: 'org-1', services: [SHOW, REHEARSAL] },
     musician: { id: 'mus-1', is_leader: false },
-    contract_offers: [{ custom_pay: 300, status: 'accepted' }],
+    // Offers always say who they went to; the pay rule reads the chair holder's.
+    contract_offers: [{ musician_id: 'mus-1', custom_pay: 300, status: 'accepted' }],
     ...over,
   }
 }
@@ -117,7 +118,7 @@ describe('Generate Payments', () => {
 
   it('still writes one payment per service when the offer has no amount', async () => {
     state.db = new MockSupabaseDb({
-      project_positions: [confirmedChair({ contract_offers: [{ custom_pay: null, status: 'accepted' }] })],
+      project_positions: [confirmedChair({ contract_offers: [{ musician_id: 'mus-1', custom_pay: null, status: 'accepted' }] })],
       payments: [],
     })
 
@@ -167,6 +168,7 @@ describe('Generate Payments: the Leader Fee label', () => {
       instrument: { name: instrument },
       projects: JONES(),
       musician: { id: musicianId, first_name: musicianId, last_name: 'X', email: null, is_leader: false },
+      contract_offers: [{ musician_id: musicianId, custom_pay: 300, status: 'accepted' }],
       ...over,
     })
   }
@@ -205,11 +207,11 @@ describe('Generate Payments: the Leader Fee label', () => {
   })
 
   it('a new offer: the leader-fee checkbox the admin used is the answer', async () => {
-    const withChoice = (include: boolean) => [{ custom_pay: 300, status: 'accepted', terms_snapshot: { pay: { include_leader_fee: include } } }]
+    const withChoice = (musicianId: string, include: boolean) => [{ musician_id: musicianId, custom_pay: 300, status: 'accepted', terms_snapshot: { pay: { include_leader_fee: include } } }]
     state.db = new MockSupabaseDb({
       project_positions: [
-        seat('pos-v1', 'Violin 1', 1, 'mus-v1', { contract_offers: withChoice(false) }),
-        seat('pos-v2', 'Violin 2', 1, 'mus-v2', { contract_offers: withChoice(true) }),
+        seat('pos-v1', 'Violin 1', 1, 'mus-v1', { contract_offers: withChoice('mus-v1', false) }),
+        seat('pos-v2', 'Violin 2', 1, 'mus-v2', { contract_offers: withChoice('mus-v2', true) }),
       ],
       payments: [],
     })

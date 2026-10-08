@@ -47,7 +47,7 @@ const CUSTOM = { id: 'm-custom', first_name: 'Cam', last_name: 'Custom', email: 
 const POSITIONS: PositionForAfterGig[] = [
   position('p1', { musician: LEAD, instrument: { name: 'Violin 1' }, chair_number: 1 }),
   position('p2', { musician: PLAYER, instrument: { name: 'Cello' }, chair_number: 1 }),
-  position('p3', { musician: CUSTOM, instrument: { name: 'Violin 2' }, chair_number: 1, contract_offers: [{ custom_pay: 500, status: 'accepted' }, { custom_pay: 999, status: 'declined' }] }),
+  position('p3', { musician: CUSTOM, instrument: { name: 'Violin 2' }, chair_number: 1, contract_offers: [{ musician_id: 'm-custom', custom_pay: 500, status: 'accepted' }, { musician_id: 'm-other', custom_pay: 999, status: 'declined' }] }),
   position('p4', { status: 'offered', musician: { ...PLAYER, id: 'm-offered', email: 'offered@musician.test' } }),
 ]
 
@@ -158,7 +158,7 @@ describe('pay summary amounts', () => {
 
     // Same numbers as the shared rule Generate Payments now calls.
     for (const p of POSITIONS.filter((x) => x.status === 'confirmed')) {
-      const expected = computeGigPay(SERVICES, !!p.musician!.is_leader, acceptedOfferPay(p.contract_offers))
+      const expected = computeGigPay(SERVICES, !!p.musician!.is_leader, acceptedOfferPay(p.contract_offers, p.musician!.id))
         .reduce((sum, line) => sum + line.total, 0)
       expect(byId[p.musician!.id].total).toBe(expected)
     }

@@ -75,6 +75,35 @@ export type OfferEmailResult =
   | { delivery: 'no_email' }
 
 /**
+ * The pay the offer email shows, the one rule for every offer email (the
+ * admin's send, the substitute's offer from an approved sub request).
+ *
+ * An amount on the offer (custom_pay) is the pay, finalized when the offer was
+ * made; the leader fee is shown only if the admin's choice says so, never
+ * guessed from the chair number. No amount: the first service's base pay,
+ * plus its leader fee for chair 1 unless the choice says otherwise.
+ */
+export function offerEmailPay(
+  offer: { custom_pay: number | null },
+  chairNumber: number,
+  firstService: { base_pay?: number | null; leader_fee?: number | null } | null,
+  { includeLeaderFee: explicitLeaderFee, leaderFeeAmount: explicitLeaderFeeAmount }: LeaderFeeChoice = {}
+): { payAmount: number | null; leaderFee: number; isLeader: boolean } {
+  const basePay = firstService?.base_pay ?? null
+  const hasCustomPay = offer.custom_pay != null
+
+  const isLeader = explicitLeaderFee != null ? !!explicitLeaderFee : (!hasCustomPay && chairNumber === 1)
+  const leaderFee = explicitLeaderFeeAmount != null ? Number(explicitLeaderFeeAmount) : (firstService?.leader_fee ?? 0)
+  const payAmount = hasCustomPay
+    ? Number(offer.custom_pay)
+    : basePay != null
+      ? basePay + (isLeader ? leaderFee : 0)
+      : null
+
+  return { payAmount, leaderFee, isLeader }
+}
+
+/**
  * Send the offer email for an offer that already exists. Throws when the
  * email provider fails (the caller decides what that means for the offer).
  */
@@ -93,21 +122,12 @@ export async function sendOfferEmail(
   await attachVenueDetails(services)
 
   // Calculate pay
-  const chairNumber = position?.chair_number || 1
-  const firstService = services.length > 0 ? services[0] : null
-  const basePay = firstService?.base_pay ?? null
-  const hasCustomPay = (offer as any).custom_pay != null
-
-  // Leader fee logic: only include if explicitly requested from the dialog.
-  // When custom_pay is set, the pay was already finalized at offer creation time —
-  // don't guess based on chair number, or the email will incorrectly show a leader fee breakdown.
-  const isLeader = explicitLeaderFee != null ? !!explicitLeaderFee : (!hasCustomPay && chairNumber === 1)
-  const leaderFee = explicitLeaderFeeAmount != null ? Number(explicitLeaderFeeAmount) : (firstService?.leader_fee ?? 0)
-  const payAmount = hasCustomPay
-    ? Number((offer as any).custom_pay)
-    : basePay != null
-      ? basePay + (isLeader ? leaderFee : 0)
-      : null
+  const { payAmount, leaderFee, isLeader } = offerEmailPay(
+    offer,
+    position?.chair_number || 1,
+    services.length > 0 ? services[0] : null,
+    { includeLeaderFee: explicitLeaderFee, leaderFeeAmount: explicitLeaderFeeAmount }
+  )
 
   // Count total chairs for this instrument in this project
   let totalChairs = 1

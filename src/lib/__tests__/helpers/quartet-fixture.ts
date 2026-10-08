@@ -247,7 +247,9 @@ export class QuartetFixture {
       pos.musician = pos.musician_id ? byId('musicians', pos.musician_id) : null
       pos.contract_offers = t.contract_offers
         .filter((o) => o.project_position_id === pos.id)
-        .map((o) => ({ custom_pay: o.custom_pay ?? null, status: o.status }))
+        // What Generate Payments selects (payments/generate): the holder's
+        // offer is told from other musicians' by musician_id.
+        .map((o) => ({ custom_pay: o.custom_pay ?? null, status: o.status, musician_id: o.musician_id, sent_at: o.sent_at ?? null }))
     }
 
     for (const request of t.substitution_requests) {

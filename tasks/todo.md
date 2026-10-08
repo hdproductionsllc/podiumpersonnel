@@ -1,3 +1,138 @@
+# Subito Strings 2026-10-08 report (Rebecca): 4 live bugs, one push, NO emails sent while fixing
+
+Evidence (live DB, read-only): Sutton Ceremony (Subito Strings, Nov 6).
+- Boryana (Violin 1 ch.2, $250) asked for a sub -> Rebecca clicked Approve ->
+  sub offer 47dc66be to Veronika has custom_pay NULL (email metadata {}): "pay missing".
+- Admin "sub request" email links /dashboard/projects/<id>: no such page -> 404.
+- Garik (Cello ch.1) is CONFIRMED but his only offer (28d29fe9, $250) is status
+  'expired' (assigned by hand 3 days after it lapsed) -> Pay column shows "—".
+  Only chair in the DB in this state.
+- No offer/email/event exists for anyone named Garik today; nothing was sent.
+
+- [x] 2. request-sub email: link to /dashboard/projects?expand=<id> (the route that exists)
+- [x] 1. approve route: the substitute inherits the requesting musician's deal
+      (custom_pay + leader-fee choice from terms_snapshot), on the row AND in the email
+- [x] 4a. compute.ts: chair holder's pay = their accepted offer, else their latest
+      offer on that chair (Garik's expired $250); payments + after-gig + Pay column share it
+      (verified: 1801 unit tests, next build, lint = only pre-existing `any` errors)
+- [x] 4b. assign route: assigning the musician who held an EXPIRED offer marks it
+      accepted (they said yes late, off-app), same as a live one
+- [ ] 3. "redrawing screen": not reproducible on PSQ account (projects page, expand,
+      history all fine, no console errors); need Rebecca's screenshot/which page
+- [x] tests (compute helper, approve inherits pay, assign promotes expired), lint, build
+- [ ] one push to master; verify on prod (Garik shows $250; sub email link resolves)
+
+# Release 2 foundations + David's requests: LIVE 2026-10-06 (73e86cc9)
+
+- [x] Migrations 081 (was never applied; found by audit), 097-102 pasted, all PASS
+- [x] notify layer; failed sends on Emails page; Text from my phone
+- [x] Call-scoped chairs, requirements ("8 stagehands"), production_crew vertical (flags off for quartets)
+- [x] Admin copies of every musician email (Offer Sent summary replaced)
+- [x] Gig report client questions (interacted? positive/neutral/negative)
+- [x] One reminder per person per 10 min (double-reminder fix)
+- [x] Roster: 4 same-email duplicates merged (backups in scripts/backups, git-ignored)
+- [ ] Laura Reycraft (PSQ viola, Lori Stone Oct 11) has NO email: David to add
+- [ ] Crew-facing email wording still musical (Ensemble:, tuning) before any crew customer
+- [ ] G1 trial: auto-offer on for one quartet org (run preview first)
+
+# Release 1 batch 2: LIVE 2026-10-02 (852ea88b)
+
+- [x] 096 pasted (all PASS); all 6 orgs auto_cascade=false, allow_worker_drop=false
+- [x] Deployed; CI green (174 real-Postgres tests); no-email smoke checks OK
+- [x] Quiet-hour reminders (9pm-8am org time), 5-min expiry, gig page sentences
+- [ ] David to confirm defaults: no auto-offer <2h before gig; skip no-email
+      musicians (listed in "nobody left" email); reminder 12h/halfway rule
+- [ ] G1: run `node scripts/preview-auto-cascade.js <orgId>` with David, then
+      switch auto-offer on for ONE quartet org for two weeks
+- Release 1 still open: A1.5 lifecycle routes (cancel project/position,
+  deactivate musician, book import server-side), A1.6 assignments history,
+  A1.7 terminology completion
+
+# Release 1 batch 1: LIVE 2026-10-02 (c8826453)
+
+- [x] 092 staffing_events, 093 offer columns, 094 repair + RPCs/CHECK pasted (all PASS)
+- [x] Code deployed; CI green incl. 111 real-Postgres tests; no-email smoke checks OK
+- [x] 095 repair (0 fixes) + one-offer-per-chair indexes pasted (all PASS)
+- Next: batch 2 = auto-cascade (opt-in), 5-min expiry, "can't make it", gig page
+  for every state (incl. status 'expired', which shows no sentence today)
+
+# Leader fee follows the gig lead (2026-10-02, commit c8826453, ships with R1 batch 1)
+
+- [x] Dialog pre-ticks leader fee only on Violin 1 chair 1 (not is_leader)
+- [x] Payment "Leader Fee" label = offer's recorded choice, else gig lead
+- [x] Unused service-rate fallback left alone (David's call)
+- Shuster Wedding (unpaid): Violin 1, Viola, Violin 2 all $350, cello $300;
+  viola/Violin 2 likely got the auto-ticked $50. David: "i dont remember, lets
+  ignore shuster". No data changed. Revisit only if it comes up when paying.
+
+# Release 0: A0.2 + A0.4 + A0.5 via ultracode workflow (2026-10-02)
+
+Shipped afd725e9 (one push). 3 build agents (Sonnet x2, Opus for security),
+skeptical reviewer each, 1 fix round. 1075 unit tests + 37 real-Postgres tests.
+- [x] A0.2 characterization tests + quartet regression fixture (8 open defects
+      pinned as it.fails: R-22, R-11, S11, R-14, R-13, R-5 cron email)
+- [x] A0.4 migration 091 tenant hardening (portal policies dropped; T-1 org-move
+      hole reproduced then closed); auth callback no longer links musicians
+- [x] A0.5 Postgres in CI: 91 migrations replayed, RLS tenant + constraint tests
+- [x] Proof: sabotage migration re-opening the self-insert hole made CI FAIL
+- [x] DAVID pasted 091 on 2026-10-02: all PASS, INFO 5; verified from outside (portal RPC -> 42501). Was: paste in Supabase SQL
+      Editor; every row PASS, INFO = 5. (Code is safe either order.)
+- [ ] Optional: backfill supabase_migrations.schema_migrations (docs/database-tests.md)
+
+# Offer pay = the whole gig (2026-10-01)
+
+David (G0 decision): "payments should be for the whole project". The offer's Pay
+amount (contract_offers.custom_pay) is the fee for the whole gig, owed once.
+
+- [x] `computeGigPay` in src/lib/payments/compute.ts: offer amount -> one line on
+      the first service; no amount -> each service's own rate (unchanged)
+- [x] Generate Payments: whole-gig rows dedupe per chair, so adding a service
+      later can't pay twice; fails closed if it can't read existing payments
+- [x] After-gig pay summary uses the same rule
+- [x] Send dialog pre-fills the SUM of service rates; box says "Pay for the whole gig"
+- [x] Tests (payments-whole-gig.test.ts, after-gig.test.ts), suite + build green
+- Data check: all 66 accepted offers have an amount and none is on a
+  multi-service gig, so no existing payment changes meaning.
+- Leader fee untouched: the dialog still adds it once, on top of the total.
+
+# Release 0, step A0.3: the one-line cascade guards (2026-10-01)
+
+David: "start with the one-line bug fixes" + "can you do the 12 checks?" Source:
+docs/architecture (branch architecture/phase-0-audit), target-architecture PR 3,
+audit C section 5 (R-2..R-9) and audit A R7.
+
+## The 12 integrity checks (A0.1), run read-only 2026-10-01
+All 12 = 0 rows (173 offers, 170 chairs, 50 projects, 0 sub requests).
+Caveat: right now there are no live offers and no cancelled projects, so D1, D6,
+D9, D10, D12 had nothing to examine. No repair script needed.
+
+## Plan
+- [x] R-2 `vacateChair` only frees a chair nobody holds (decline can't evict)
+- [x] R-3 gig page "viewed" write only moves an offer that is still `pending`
+- [x] R-4 expire cron only frees a chair nobody holds
+- [x] R-6 next-in-line skips whoever expired / was withdrawn / released on THIS chair
+- [x] R-7 a substitute's offer expiring -> request `sub_declined` + original musician told
+- [x] R-5/R-9 accept refused on a cancelled/completed project or an inactive musician;
+      gig page shows "no longer open" instead of live buttons
+- [x] A-R7 staffing alerts: 7-day and 3-day alerts actually fire
+- [x] A behaviour test per fix; full test suite + build green
+- [x] Committed locally
+- [x] Pushed 82b53617, live on production 2026-10-02 01:07 UTC (one build). David: Gumbiner duo is staffed off-Podium, its one alert is accepted noise
+
+## Verification
+- Full suite 1023/1023, `next build` green, lint unchanged from HEAD.
+- 15 of the new tests FAIL against the old code (stashed and re-run), so they
+  really pin each bug.
+- Write-path trace: every code path that puts a musician in a chair also sets
+  it `confirmed` (claimChairForAccept, assign route, book import); live check D5
+  = 0. So "only free an empty chair" can never block a legitimate vacate.
+
+## Before pushing: who the deploy emails
+Staffing alerts preview (2026-10-01): only Jann Gumbiner Violin & Cello Duo
+(Subito Strings, gig tomorrow, 2 of 2 chairs open, 14-day alert already sent)
+would get a new "3 days" alert on the next run. No substitution requests exist,
+so the new "your sub did not respond" email reaches nobody yet.
+
 # Contract import: attach the venue's address automatically (2026-09-29)
 
 David: "make the venue address attach automatically". Today a venue the org has
@@ -43,8 +178,14 @@ the admin re-picks it from the venue search.
 - [x] Fix: a town-only listing with the same name as a fuller one is the same
       place; the fuller one is kept. The live server's exact result is now a test.
       994/994 tests, tsc, build.
-- [ ] Push 3 for this change (4th of the day: past the limit of three, so this is
-      the batch and the last), then verify on the live site
+- [x] Push 3 for this change (869ece3f; 4th of the day, the batch and the last).
+      Verified live as PSQ admin: venue box shows "The Invisible House", "Found on
+      Google" box shows 8198 Uphill Rd, Joshua Tree, CA 92252, no venue warning.
+      Cancelled; database read back: nothing created.
+- [ ] NOT exercised live: the save on Create (it posts the place id to the existing
+      /api/venues route, which fills in the address). Creating would have put a
+      real gig in the wrong org. The first real contract David creates is the test:
+      afterwards check the venue has its street address.
 
 ## Lesson for next time
 Anything that calls Google from the server cannot be fully tested from a laptop:
@@ -99,9 +240,10 @@ visible, editable box and anything odd is listed as a warning before Create.
 - [x] Seen on the live site (app.podiumpersonnel.com, PSQ login): picker shows
       "Paste a Contract"; pasted the contract; form filled correctly; wrong-company,
       unsigned and unsaved-venue warnings all shown. Cancelled, nothing created.
-- [ ] Cost note: the push also built podium-marketing, which did not change.
-      Every app push pays for two builds. Fix = ignoreCommand on that project
-      that skips when podium-marketing/ is untouched.
+- [x] Cost note CORRECTED 2026-09-29: I wrote here that every push also builds
+      podium-marketing. WRONG. Its skip rule exists (podium-marketing/vercel.json)
+      and cancelled the marketing build on 3 of the day's 4 pushes. It built once
+      (869ece3f) because of the 10-commit leak described in tasks/lessons.md.
 
 ## For David to decide
 - RESOLVED 2026-09-29: contract said "50% Deposit: $2,990" but half of $5,890 is
@@ -441,3 +583,24 @@ No migration: `music_confirmations.confirmed_at` already exists; a download just
 - [x] Readers traced: music-status dashboard, projects list, project-files-section, send-music-reminder (now skips downloaders — intended), confirm-music page (shows received on revisit)
 - [x] Tests: first download emails once; second download/button emails nothing; race (claim returns 0 rows) emails nothing; failed access check never marks received; email failure never blocks the download. No real emails (all mocked)
 - [x] Gate: tsc, full suite, build → one push
+
+## Confirm buttons work without JavaScript (2026-10-02, Shelly Ren report)
+Shelly's "Confirm" click did nothing on her phone; others on the same gig confirmed fine.
+The confirm pages only worked once the page's JS loaded. Make them plain forms like Accept/Decline.
+- [x] Mark Shelly confirmed for Kevin McAndrew Trio (DB only, no admin email)
+- [x] Gig details: shared `confirmGigDetails` helper with one-shot claim (no double admin email), escape names in email
+- [x] /api/confirm-details + /api/confirm-music: answer form posts with a 303 back to the page (?error=1 on failure)
+- [x] Both confirm pages: button is a real <form method="POST">; page shows error from the URL
+- [x] Tests for the gig-details claim; full test suite + lint + build
+- [x] Local check (JS off via curl, already-confirmed tokens, bogus token, error banner) — ONE push, LIVE 6a353d25, verified on prod
+
+## Sends silently skip musicians with no email (2026-10-06, Lori Stone / Laura Reycraft)
+Cause: send-gig-details + send-music only include confirmed chairs WITH an email, and freeze
+musician_count to that number. Laura (no email at send time) was dropped, so Rebecca's confirm
+fired "All 3 musicians confirmed" on a 4-person gig. Nobody was told she was skipped.
+Done today: Laura added to the existing send via new `addTo` option (count now 4, she alone was emailed).
+- [x] Gig details + music sends count EVERY confirmed chair; result lists who was skipped (no email)
+- [x] Send dialogs/toasts say "Not sent to Laura Reycraft — no email on file"
+- [x] "Send to N Not Yet Sent" button on the gig details + music status cards (uses addTo; also covers subs swapped in after the send)
+- [x] Tests: skipped-musician count, addTo never re-emails, all-confirmed only when the whole gig confirmed
+- [ ] Prod SQL (migration 103) by David, then ONE push to master (commit ef7b5878 ready; build + 1806 tests pass)

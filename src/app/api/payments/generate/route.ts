@@ -48,6 +48,8 @@ export async function POST(request: Request) {
           contract_offers(
             custom_pay,
             status,
+            musician_id,
+            sent_at,
             terms_snapshot
           )
         `)
@@ -128,9 +130,9 @@ export async function POST(request: Request) {
       if (!musician || !project.services) continue
 
       // The accepted offer's custom_pay is the actual agreed amount.
-      const offerPay = acceptedOfferPay(offers)
+      const offerPay = acceptedOfferPay(offers, musician.id)
 
-      const includesLeaderFee = acceptedOfferIncludesLeaderFee(offers, leadByProject.get(project.id) === musician.id)
+      const includesLeaderFee = acceptedOfferIncludesLeaderFee(offers, leadByProject.get(project.id) === musician.id, musician.id)
 
       // Only the services this chair works: all of them unless the chair is
       // limited to some (scope.ts). A whole-gig amount is still owed once,

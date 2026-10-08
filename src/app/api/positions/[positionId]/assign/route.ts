@@ -157,7 +157,9 @@ export async function POST(
     }
 
     // Resolve outstanding offers on this now-filled chair:
-    // - the assigned musician's own pending offer → accepted (they said yes off-app)
+    // - the assigned musician's own pending OR expired offer → accepted (they
+    //   said yes off-app; after the deadline is the common case, and leaving
+    //   that offer 'expired' hid its pay from the Pay column and payments)
     // - any other musician's pending offer → superseded (the chair is taken)
     // The chair itself is already assigned above, so these are logged rather
     // than failing the request.
@@ -167,7 +169,7 @@ export async function POST(
       .update({ status: 'accepted', responded_at: nowIso })
       .eq('project_position_id', positionId)
       .eq('musician_id', musicianId)
-      .in('status', [...LIVE_OFFER_STATUSES])
+      .in('status', [...LIVE_OFFER_STATUSES, 'expired'])
       .select('id')
 
     if (acceptOwnOfferError) {
