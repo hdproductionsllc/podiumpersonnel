@@ -1,7 +1,7 @@
 'use client'
 
+import { reloadPage } from '@/lib/reload-page'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { updateEmailBrandingSchema, type UpdateEmailBrandingInput } from '@/lib/validations/settings'
@@ -45,7 +45,6 @@ interface EmailBrandingSectionProps {
 }
 
 export function EmailBrandingSection({ organization, role }: EmailBrandingSectionProps) {
-  const router = useRouter()
   const terms = useTerms()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -90,7 +89,7 @@ export function EmailBrandingSection({ organization, role }: EmailBrandingSectio
 
     setSuccess(true)
     setIsLoading(false)
-    router.refresh()
+    reloadPage()
   }
 
   return (

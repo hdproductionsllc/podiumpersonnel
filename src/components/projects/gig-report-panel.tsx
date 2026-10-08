@@ -1,7 +1,7 @@
 'use client'
 
+import { reloadPage } from '@/lib/reload-page'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useVertical } from '@/components/providers/vertical-provider'
@@ -134,7 +134,6 @@ function ReportItem({ label, report, when }: { label: string; report: GigReportR
 export function GigReportPanel({ projectId, positions, chosenLeadId, reports, timezone }: GigReportPanelProps) {
   // Who leads when nobody was picked (music: Violin 1; null: always pick). The same rule as gigLead.
   const { leadFallbackSkill } = useVertical()
-  const router = useRouter()
   const [sending, setSending] = useState(false)
   const [savingLead, setSavingLead] = useState(false)
 
@@ -167,7 +166,7 @@ export function GigReportPanel({ projectId, positions, chosenLeadId, reports, ti
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Could not save the gig lead')
       toast.success('Gig lead saved')
-      router.refresh()
+      reloadPage()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not save the gig lead')
     } finally {
@@ -198,7 +197,7 @@ export function GigReportPanel({ projectId, positions, chosenLeadId, reports, ti
       if (held.length) toast.warning(`Not sent (email safe mode): ${held.join(', ')}`)
       if (noEmail.length) toast.error(`No email on file for ${noEmail.join(', ')}`)
       if (!sent.length && !held.length && !noEmail.length) toast.info('Everyone has already sent their report.')
-      router.refresh()
+      reloadPage()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not send the request')
     } finally {

@@ -1,7 +1,7 @@
 'use client'
 
+import { reloadPage } from '@/lib/reload-page'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -57,7 +57,6 @@ export function BooksClient({
   organizationId,
   userRole,
 }: BooksClientProps) {
-  const router = useRouter()
   const terms = useTerms()
   const [selectedBookId, setSelectedBookId] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
@@ -108,11 +107,11 @@ export function BooksClient({
     if (newBookId) {
       setSelectedBookId(newBookId)
     }
-    router.refresh()
+    reloadPage()
   }
 
   function handleEntryChange() {
-    router.refresh()
+    reloadPage()
   }
 
   return (

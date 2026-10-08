@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, Fragment } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { reloadPage } from '@/lib/reload-page'
+import { useState, useEffect, useRef, Fragment } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -331,7 +332,6 @@ export function ProjectsClient({
   autoCascade = null,
   callScope = null,
 }: ProjectsClientProps) {
-  const router = useRouter()
   const plan = usePlan()
   const { intakeEnabled } = useOrgFlags()
   const vertical = useVertical()
@@ -366,6 +366,33 @@ export function ProjectsClient({
     // Default: all collapsed
     return new Set()
   })
+
+  // Remember which gigs are open, so a reload after a change (reloadPage)
+  // brings the admin back to the same open gigs. Restored after mount, not in
+  // the initial state, so the server and browser render the same first frame.
+  const EXPANDED_KEY = 'podium:projects-expanded'
+  const restoredExpanded = useRef(false)
+  useEffect(() => {
+    if (!restoredExpanded.current) {
+      restoredExpanded.current = true
+      if (!expandProjectId) {
+        try {
+          const saved = JSON.parse(sessionStorage.getItem(EXPANDED_KEY) || '[]')
+          if (Array.isArray(saved) && saved.length > 0) {
+            setExpandedRows(new Set(saved.filter((id): id is string => typeof id === 'string')))
+            return
+          }
+        } catch {
+          // Storage blocked or bad JSON: start collapsed.
+        }
+      }
+    }
+    try {
+      sessionStorage.setItem(EXPANDED_KEY, JSON.stringify([...expandedRows]))
+    } catch {
+      // Storage blocked: nothing to remember.
+    }
+  }, [expandedRows, expandProjectId])
 
   // Auto-expand and scroll to project from URL query param
   useEffect(() => {
@@ -496,7 +523,7 @@ export function ProjectsClient({
       return
     }
     toast.success(`"${project.name}" marked as completed`)
-    router.refresh()
+    reloadPage()
   }
 
   function handleSuccess() {
@@ -511,7 +538,7 @@ export function ProjectsClient({
     setDeletingService(null)
     setActiveProjectId(null)
     setActiveProjectDates({ start: null, end: null })
-    router.refresh()
+    reloadPage()
   }
 
   async function handleProjectSuccess(newProject?: { id: string; name: string; start_date: string | null; end_date: string | null; template?: string; callTime?: string; startTime?: string; endTime?: string; venueName?: string; venueId?: string | null }) {
@@ -757,7 +784,7 @@ export function ProjectsClient({
       }
     }
 
-    router.refresh()
+    reloadPage()
 
     // If a new project was created, auto-expand and prompt to add a service (unless template already created services)
     if (newProject) {
@@ -1299,7 +1326,7 @@ export function ProjectsClient({
               instrument: p.instrument?.name || term(terms, 'skill'),
               phone: p.musician!.phone || null,
             }))}
-          onPhonesSaved={() => router.refresh()}
+          onPhonesSaved={() => reloadPage()}
         />
       )}
 

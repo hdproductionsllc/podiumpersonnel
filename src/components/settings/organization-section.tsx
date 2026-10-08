@@ -1,7 +1,7 @@
 'use client'
 
+import { reloadPage } from '@/lib/reload-page'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { updateOrganizationSchema, type UpdateOrganizationInput } from '@/lib/validations/settings'
@@ -42,7 +42,6 @@ interface OrganizationSectionProps {
 }
 
 export function OrganizationSection({ organization, staffingSettings = null, role }: OrganizationSectionProps) {
-  const router = useRouter()
   const terms = useTerms()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -87,7 +86,7 @@ export function OrganizationSection({ organization, staffingSettings = null, rol
 
     setSuccess(true)
     setIsLoading(false)
-    router.refresh()
+    reloadPage()
   }
 
   return (

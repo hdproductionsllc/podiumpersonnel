@@ -1,7 +1,7 @@
 'use client'
 
+import { reloadPage } from '@/lib/reload-page'
 import { useState, useRef, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -107,7 +107,6 @@ export function MusiciansClient({
   organizationName,
   userRole,
 }: MusiciansClientProps) {
-  const router = useRouter()
   const plan = usePlan()
   const terms = useTerms()
   // The sections this vertical groups its skills under (music: strings..other)
@@ -753,7 +752,7 @@ export function MusiciansClient({
     setRemoveInstrumentOpen(false)
     setRemovingMusician(null)
     setRemovingInstrument(null)
-    router.refresh()
+    reloadPage()
   }
 
   function handleDeleteFromRemoveDialog() {
@@ -779,7 +778,7 @@ export function MusiciansClient({
     setDeleteOpen(false)
     setEditingMusician(null)
     setDeletingMusician(null)
-    router.refresh()
+    reloadPage()
   }
 
   // Selection handlers for bulk edit
@@ -807,7 +806,7 @@ export function MusiciansClient({
     setBulkEditOpen(false)
     setSelectedIds(new Set())
     setSelectMode(false)
-    router.refresh()
+    reloadPage()
   }
 
   function exitSelectMode() {
@@ -933,7 +932,9 @@ export function MusiciansClient({
       }
 
       if (result.success > 0) {
-        router.refresh()
+        // Leave a skipped-rows warning on screen long enough to read first.
+        if (result.errors > 0) setTimeout(reloadPage, 4000)
+        else reloadPage()
       }
     } catch {
       toast.error('Failed to import file')
@@ -1030,7 +1031,7 @@ export function MusiciansClient({
                                   const response = await fetch('/api/musicians/import', { method: 'POST', body: formData })
                                   const result = await response.json()
                                   if (!response.ok) { toast.error(result.error || 'Import failed'); return }
-                                  if (result.success > 0) { toast.success(`Imported ${result.success} contact${result.success !== 1 ? 's' : ''}`); router.refresh() }
+                                  if (result.success > 0) { toast.success(`Imported ${result.success} contact${result.success !== 1 ? 's' : ''}`); reloadPage() }
                                 } catch { toast.error('Failed to import contacts') }
                                 finally { setIsImporting(false); setImportTag('') }
                               }

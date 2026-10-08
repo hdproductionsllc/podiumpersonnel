@@ -38,7 +38,7 @@ const ENSEMBLE_PRESETS = [
   ]},
   { id: 'string-trio', name: 'String Trio', instruments: [
     { name: 'Violin 1', chairs: 1 },
-    { name: 'Viola', chairs: 1 },
+    { name: 'Violin 2', chairs: 1 },
     { name: 'Cello', chairs: 1 },
   ]},
   { id: 'piano-trio', name: 'Piano Trio', instruments: [

@@ -1,7 +1,7 @@
 'use client'
 
+import { reloadPage } from '@/lib/reload-page'
 import { useState, useEffect, Fragment } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { PaymentStatusDialog } from '@/components/payments/payment-status-dialog'
 import { createClient } from '@/lib/supabase/client'
@@ -108,7 +108,6 @@ export function ProjectOffers({
   startsAt,
   startsAtByChair,
 }: ProjectOffersProps) {
-  const router = useRouter()
   const [showHistory, setShowHistory] = useState(false)
   const terms = useTerms()
   const [sendingReminder, setSendingReminder] = useState<string | null>(null)
@@ -874,7 +873,7 @@ export function ProjectOffers({
             .select('id, project_position_id, musician_id, amount, status')
             .in('project_position_id', acceptedPositionIds)
             .then(({ data }) => setPayments(data || []))
-          router.refresh()
+          reloadPage()
         }}
       />
     </div>

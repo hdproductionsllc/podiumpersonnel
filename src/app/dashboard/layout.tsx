@@ -6,6 +6,7 @@ import { PlanProvider } from '@/components/providers/plan-provider'
 import { VerticalProvider } from '@/components/providers/vertical-provider'
 import { OrgFlagsProvider } from '@/components/providers/org-flags-provider'
 import { TrialBanner } from '@/components/billing/trial-banner'
+import { ReloadScrollRestore } from '@/components/layout/reload-scroll-restore'
 import { resolveOrgPlan } from '@/lib/plan'
 import type { OrgBilling } from '@/lib/plan'
 import { productTitleFor } from '@/lib/verticals'
@@ -115,7 +116,8 @@ export default async function DashboardLayout({
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <Header user={{ email: user.email }} />
           <TrialBanner />
-          <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+          <main id="dashboard-main" className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+            <ReloadScrollRestore />
             {children}
           </main>
         </div>

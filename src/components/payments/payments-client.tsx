@@ -1,7 +1,7 @@
 'use client'
 
+import { reloadPage } from '@/lib/reload-page'
 import { useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -80,7 +80,6 @@ export function PaymentsClient({
   initialProjectFilter = '',
   initialStatusFilter = '',
 }: PaymentsClientProps) {
-  const router = useRouter()
   const terms = useTerms()
   const canManage = userRole === 'owner' || userRole === 'admin'
 
@@ -192,7 +191,7 @@ export function PaymentsClient({
 
       if (result.created > 0) {
         toast.success(result.message)
-        router.refresh()
+        reloadPage()
       } else {
         toast.info(result.message)
       }
@@ -218,7 +217,7 @@ export function PaymentsClient({
     }
     toast.success(`Deleted ${ids.length} payment${ids.length > 1 ? 's' : ''}`)
     setSelectedIds(new Set())
-    router.refresh()
+    reloadPage()
   }
 
   // Quick status update
@@ -242,7 +241,7 @@ export function PaymentsClient({
 
       toast.success(result.message)
       setSelectedIds(new Set())
-      router.refresh()
+      reloadPage()
     } catch {
       toast.error('Failed to update payments')
     }
@@ -716,7 +715,7 @@ export function PaymentsClient({
         totalAmount={selectedPayments.reduce((sum, p) => sum + Number(p.amount), 0)}
         onSuccess={() => {
           setSelectedIds(new Set())
-          router.refresh()
+          reloadPage()
         }}
       />
 

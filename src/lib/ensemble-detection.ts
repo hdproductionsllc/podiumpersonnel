@@ -12,6 +12,8 @@ type PositionInput = {
 const ENSEMBLE_PATTERNS: { label: string; fingerprint: string }[] = [
   { label: 'Solo', fingerprint: '1' },
   { label: 'Duo', fingerprint: '2' },
+  { label: 'String Trio', fingerprint: 'Cello:1,Violin 1:1,Violin 2:1' },
+  // Older gigs seated the trio as two Violin 1 chairs; still a trio.
   { label: 'String Trio', fingerprint: 'Cello:1,Violin 1:2' },
   { label: 'String Trio', fingerprint: 'Cello:1,Viola:1,Violin 1:1' },
   { label: 'String Trio', fingerprint: 'Cello:1,Viola:1,Violin 2:1' },

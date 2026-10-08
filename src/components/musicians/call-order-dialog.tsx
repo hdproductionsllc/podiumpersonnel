@@ -1,7 +1,7 @@
 'use client'
 
+import { reloadPage } from '@/lib/reload-page'
 import { useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   Dialog,
@@ -100,7 +100,6 @@ export function CallOrderDialog({
   musicians,
   instruments,
 }: CallOrderDialogProps) {
-  const router = useRouter()
   const terms = useTerms()
   // The sections this vertical groups its skills under (music: strings..other)
   const sections = useVertical().sections
@@ -226,7 +225,7 @@ export function CallOrderDialog({
       const instrumentName = instruments.find((i) => i.id === selectedInstrument)?.name
       toast.success(`Call order saved for ${orderedMusicians.length} ${instrumentName} ${term(terms, 'person', { plural: true, case: 'lower' })}`)
       setHasReordered(false)
-      router.refresh()
+      reloadPage()
     }
   }
 

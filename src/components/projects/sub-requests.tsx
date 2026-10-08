@@ -1,9 +1,9 @@
 'use client'
 
+import { reloadPage } from '@/lib/reload-page'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useTerms } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
@@ -62,7 +62,6 @@ export function SubRequests({
   canManage,
   onRequestChange,
 }: SubRequestsProps) {
-  const router = useRouter()
   const terms = useTerms()
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [showDeclineReason, setShowDeclineReason] = useState<string | null>(null)
@@ -95,7 +94,7 @@ export function SubRequests({
       }
 
       onRequestChange()
-      router.refresh()
+      reloadPage()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to approve request')
     } finally {
@@ -119,7 +118,7 @@ export function SubRequests({
       if (deleteError) throw new Error(deleteError.message)
 
       onRequestChange()
-      router.refresh()
+      reloadPage()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete request')
     } finally {
@@ -147,7 +146,7 @@ export function SubRequests({
       setShowDeclineReason(null)
       setDeclineReason('')
       onRequestChange()
-      router.refresh()
+      reloadPage()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to decline request')
     } finally {

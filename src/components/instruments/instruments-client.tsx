@@ -1,7 +1,7 @@
 'use client'
 
+import { reloadPage } from '@/lib/reload-page'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -42,7 +42,6 @@ export function InstrumentsClient({
   organizationId,
   userRole,
 }: InstrumentsClientProps) {
-  const router = useRouter()
   const vertical = useVertical()
   const sections = vertical.sections
   const terms = vertical.terms
@@ -99,7 +98,7 @@ export function InstrumentsClient({
     setDeleteOpen(false)
     setEditingInstrument(null)
     setDeletingInstrument(null)
-    router.refresh()
+    reloadPage()
   }
 
   return (

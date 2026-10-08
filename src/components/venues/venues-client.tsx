@@ -1,7 +1,7 @@
 'use client'
 
+import { reloadPage } from '@/lib/reload-page'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -21,7 +21,6 @@ export function VenuesClient({
   organizationId,
   userRole,
 }: VenuesClientProps) {
-  const router = useRouter()
   const [formOpen, setFormOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [editingVenue, setEditingVenue] = useState<Venue | null>(null)
@@ -42,7 +41,7 @@ export function VenuesClient({
       const data = await res.json()
       if (res.ok) {
         toast.success(`Fixed ${data.fixed} of ${data.total} venues`)
-        router.refresh()
+        reloadPage()
       } else {
         toast.error(data.error || 'Failed to fix venues')
       }
@@ -86,7 +85,7 @@ export function VenuesClient({
     setDeleteOpen(false)
     setEditingVenue(null)
     setDeletingVenue(null)
-    router.refresh()
+    reloadPage()
   }
 
   return (

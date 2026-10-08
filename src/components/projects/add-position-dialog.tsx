@@ -46,11 +46,13 @@ const BUILTIN_PRESETS: { key: string; label: string; description: string; catego
   {
     key: 'string-trio',
     label: 'String Trio',
-    description: '2 Violins + Cello',
+    description: 'Violin 1 + Violin 2 + Cello',
     category: 'chamber',
+    // Two violin PARTS, not two chairs of the first part: the same seats the
+    // "String Trio Gig" template creates (David, 2026-10-08).
     instruments: [
       ['Violin 1', 1],
-      ['Violin 1', 2],
+      ['Violin 2', 1],
       ['Cello', 1],
     ],
   },

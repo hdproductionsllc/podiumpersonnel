@@ -1,7 +1,7 @@
 'use client'
 
+import { reloadPage } from '@/lib/reload-page'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -33,7 +33,6 @@ export function SchedulesClient({
   canManage,
 }: SchedulesClientProps) {
   const terms = useTerms()
-  const router = useRouter()
   const [formOpen, setFormOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [editingSchedule, setEditingSchedule] = useState<CompetingSchedule | null>(null)
@@ -74,7 +73,7 @@ export function SchedulesClient({
     setDeleteOpen(false)
     setEditingSchedule(null)
     setDeletingSchedule(null)
-    router.refresh()
+    reloadPage()
   }
 
   // Sort: upcoming first, then past
