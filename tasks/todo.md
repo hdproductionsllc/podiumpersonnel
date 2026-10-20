@@ -603,4 +603,4 @@ Done today: Laura added to the existing send via new `addTo` option (count now 4
 - [x] Send dialogs/toasts say "Not sent to Laura Reycraft — no email on file"
 - [x] "Send to N Not Yet Sent" button on the gig details + music status cards (uses addTo; also covers subs swapped in after the send)
 - [x] Tests: skipped-musician count, addTo never re-emails, all-confirmed only when the whole gig confirmed
-- [ ] Prod SQL (migration 103) by David, then ONE push to master (commit ef7b5878 ready; build + 1806 tests pass)
+- [x] Prod SQL (migration 103) by David (run 2026-10-20 after a PSQ send failed; send now also survives it missing), then ONE push to master (commit ef7b5878 ready; build + 1806 tests pass)

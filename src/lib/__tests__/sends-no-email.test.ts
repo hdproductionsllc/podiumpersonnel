@@ -14,7 +14,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
  */
 
 type Tables = Record<string, unknown[]>
-const state = vi.hoisted(() => ({ tables: {} as Record<string, unknown[]>, log: [] as { table: string; op: string; payload: unknown }[] }))
+const state = vi.hoisted(() => ({ noNotesColumn: false, tables: {} as Record<string, unknown[]>, log: [] as { table: string; op: string; payload: unknown }[] }))
 
 /** Every read answers with the table's rows; .single() the first. Writes are recorded and echoed back. */
 function looseDb() {
@@ -23,7 +23,13 @@ function looseDb() {
       let op = 'select'
       let payload: unknown
       let single = false
+      let columns = ''
       const result = () => {
+        // Production before migration 103: gig_detail_sends has no notes column.
+        const touchesNotes = op === 'insert' ? Object.keys((payload ?? {}) as object).includes('notes') : /\bnotes\b/.test(columns)
+        if (state.noNotesColumn && table === 'gig_detail_sends' && touchesNotes) {
+          return { data: null, error: { code: 'PGRST204', message: "Could not find the 'notes' column of 'gig_detail_sends' in the schema cache" } }
+        }
         state.log.push({ table, op, payload })
         if (op === 'insert') {
           const rows = (Array.isArray(payload) ? payload : [payload]).map((r, i) => ({ id: `${table}-new-${i + 1}`, token: `tok-${(r as { musician_id?: string }).musician_id ?? i}`, ...(r as object) }))
@@ -35,7 +41,7 @@ function looseDb() {
       }
       const c: Record<string, unknown> = {}
       for (const m of ['eq', 'neq', 'in', 'is', 'not', 'order', 'limit']) c[m] = () => c
-      c.select = () => c
+      c.select = (cols?: string) => ((columns = cols ?? ''), c)
       c.insert = (rows: unknown) => ((op = 'insert'), (payload = rows), c)
       c.update = (patch: unknown) => ((op = 'update'), (payload = patch), c)
       c.single = () => ((single = true), c)
@@ -99,6 +105,7 @@ const recipientsOf = (fn: unknown) => vi.mocked(fn as (p: { to: string }) => unk
 beforeEach(() => {
   state.tables = {} as Tables
   state.log = []
+  state.noNotesColumn = false
   vi.clearAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -131,6 +138,27 @@ describe('gig details', () => {
     // The others still see the whole ensemble, Laura included.
     const roster = vi.mocked(sendGigDetailsEmail).mock.calls[0][0].roster
     expect(roster.map((r) => r.name)).toContain('Laura Reycraft')
+  })
+
+  it('still sends when the notes column is missing (migration 103 not applied)', async () => {
+    state.noNotesColumn = true
+    state.tables = { projects: [project(LAURA)] }
+    const result = await sendGigDetailsToMusicians({ projectId: 'proj-1', organizationId: ORG.id, sentBy: 'user-admin', additionalNotes: 'Dressy black' })
+
+    expect(writes('gig_detail_sends', 'insert')).toEqual([expect.not.objectContaining({ notes: expect.anything() })])
+    expect(recipientsOf(sendGigDetailsEmail)).toHaveLength(4)
+    expect(vi.mocked(sendGigDetailsEmail).mock.calls[0][0]).toEqual(expect.objectContaining({ notes: 'Dressy black' }))
+    expect(result.skippedNames).toEqual([])
+  })
+
+  it('follow-up still works when the notes column is missing', async () => {
+    state.noNotesColumn = true
+    state.tables = {
+      projects: [project(LAURA)],
+      gig_detail_sends: [{ id: 'send-1', gig_detail_confirmations: [{ musician_id: 'm-tara' }, { musician_id: 'm-sooah' }, { musician_id: 'm-rebecca' }] }],
+    }
+    await sendGigDetailsToMusicians({ projectId: 'proj-1', organizationId: ORG.id, sentBy: 'user-admin', followUpSendId: 'send-1' })
+    expect(recipientsOf(sendGigDetailsEmail)).toEqual(['laura@example.com'])
   })
 
   it('follow-up emails only the person not on the send, with its notes, and nobody else again', async () => {

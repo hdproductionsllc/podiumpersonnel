@@ -6,6 +6,7 @@ import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import { formatVenueFields } from '@/lib/venue-helpers'
 import { servicesForMusician, withScope } from '@/lib/staffing/scope'
 import { confirmedMembers } from '@/lib/projects/send-roster'
+import { isMissingColumn } from '@/lib/staffing/rpc'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 interface SendGigDetailsParams {
@@ -171,13 +172,19 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
   let alreadyOnSend = new Set<string>()
   let notes = additionalNotes
   if (params.followUpSendId) {
-    const { data: existing } = await serviceClient
+    const readSend = (columns: string) => serviceClient
       .from('gig_detail_sends')
-      .select('id, notes, gig_detail_confirmations(musician_id)')
-      .eq('id', params.followUpSendId)
+      .select(columns)
+      .eq('id', params.followUpSendId!)
       .eq('project_id', projectId)
       .eq('organization_id', organizationId)
       .single()
+    const withNotes = await readSend('id, notes, gig_detail_confirmations(musician_id)')
+    let existing: any = withNotes.data
+    // Before migration 103 there is no notes column: read the send without it.
+    if (isMissingColumn(withNotes.error)) {
+      existing = (await readSend('id, gig_detail_confirmations(musician_id)')).data
+    }
     if (!existing) throw new Error('Send record not found')
     alreadyOnSend = new Set(
       ((existing.gig_detail_confirmations as any[]) || []).map((c: any) => c.musician_id)
@@ -215,19 +222,27 @@ export async function sendGigDetailsToMusicians(params: SendGigDetailsParams): P
     if (countError) throw new Error('Failed to update send record')
     sendRecord = { id: params.followUpSendId }
   } else {
-    const { data: created, error: sendError } = await serviceClient
+    const sendRow = {
+      project_id: projectId,
+      organization_id: organizationId,
+      sent_by: sentBy,
+      musician_count: members.length,
+    }
+    const insertSend = (row: Record<string, unknown>) => serviceClient
       .from('gig_detail_sends')
-      .insert({
-        project_id: projectId,
-        organization_id: organizationId,
-        sent_by: sentBy,
-        musician_count: members.length,
-        notes: additionalNotes || null,
-      })
+      .insert(row)
       .select('id')
       .single()
+    let { data: created, error: sendError } = await insertSend({ ...sendRow, notes: additionalNotes || null })
+    // Before migration 103 there is no notes column. The emails still carry the
+    // notes; only a later follow-up send would go out without them.
+    if (isMissingColumn(sendError)) {
+      console.error('gig_detail_sends.notes is missing (migration 103 not applied); saving the send without notes')
+      ;({ data: created, error: sendError } = await insertSend(sendRow))
+    }
 
     if (sendError || !created) {
+      console.error('Failed to create gig details send record:', sendError)
       throw new Error('Failed to create send record')
     }
     sendRecord = created
