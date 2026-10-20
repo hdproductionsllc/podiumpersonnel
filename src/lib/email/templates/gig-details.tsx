@@ -209,16 +209,18 @@ export function GigDetailsEmail({
               <Text style={checklistItem}>✓ Parking and access instructions</Text>
               <Text style={checklistItem}>✓ Ensemble roster and contact info</Text>
 
-              <Text style={paragraph}>
-                Confirm here:{' '}
-                <a href={confirmUrl} style={{ color: brandColor, textDecoration: 'underline', wordBreak: 'break-all' }}>
-                  {confirmUrl}
-                </a>
-              </Text>
+              <Section style={buttonContainer}>
+                <Button style={{ ...button, backgroundColor: brandColor }} href={confirmUrl}>
+                  I&apos;ve Read the Details: Confirm
+                </Button>
+              </Section>
             </Section>
 
             <Text style={smallText}>
-              Click the button above to confirm you have reviewed the gig details.
+              Button not working? Open this link:{' '}
+              <a href={confirmUrl} style={{ color: brandColor, textDecoration: 'underline', wordBreak: 'break-all' }}>
+                {confirmUrl}
+              </a>
             </Text>
           </Section>
 

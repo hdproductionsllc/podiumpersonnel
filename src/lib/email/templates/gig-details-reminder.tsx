@@ -74,8 +74,14 @@ export function GigDetailsReminderEmail({
               </Text>
             ))}
 
-            <Text style={paragraph}>
-              Confirm here:{' '}
+            <Section style={buttonContainer}>
+              <Button style={{ ...button, backgroundColor: brandColor }} href={confirmUrl}>
+                I&apos;ve Read the Details: Confirm
+              </Button>
+            </Section>
+
+            <Text style={smallText}>
+              Button not working? Open this link:{' '}
               <a href={confirmUrl} style={{ color: brandColor, textDecoration: 'underline', wordBreak: 'break-all' }}>
                 {confirmUrl}
               </a>
