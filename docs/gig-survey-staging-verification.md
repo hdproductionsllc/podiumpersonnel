@@ -1,4 +1,12 @@
-# Gig survey and photos: staging verification (approval required)
+# Gig survey and photos: verification record
+
+## Production deployment and live test (2026-10-25)
+
+After explicit deployment approval, commit `ed832592858ea93fadcfeb243af0b5b27a76240b` deployed READY as `dpl_pvHqQ49NigFhShWbCHthfvb75wTb`, with `app.podiumpersonnel.com` assigned to that exact production deployment. The live browser test passed: upload, optional blank notes/client feedback, submission despite a corrupt photo, reload persistence, duplicate-image deduplication, JPEG resize/EXIF removal, signed storage read and expiry, anonymous/public rejection, unauthenticated admin-route rejection, invalid-image rejection and duplicate-submission protection. Zero email logs were created. Real customer records were not used.
+
+The new live synthetic project `fae67e68-baa4-4035-8cbb-a45c921c29dd` and report `7c2a2314-a834-4fc1-a122-0dc668a71b0b` reuse the isolated no-member organization below. The gig was cancelled after testing, and further uploads return 404. One 16,018-byte, 2000x1333 synthetic JPEG remains private for review. Local evidence: `.verification/live-upload-result.json` and `.verification/live-upload-success.png`. No rows or objects were deleted.
+
+Limits: no physical iPhone test or authenticated admin UI test. The test organization deliberately has no memberships; no credentials or access grants were created. Signed storage reads used the existing server client, while unit tests cover authorized admin route behavior. The CI database migration/RLS/constraint job passed. Initial CI unit assertions all passed, but Node reported an asynchronous FormData encoder error when the oversized test body was cancelled. The test helper now materializes multipart bytes before invoking the handler, retaining the size-limit check without the encoder cancellation race; runtime code is unchanged.
 
 ## Hosted schema result (2026-10-25)
 

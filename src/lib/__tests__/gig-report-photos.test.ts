@@ -31,7 +31,11 @@ import { GET } from '@/app/api/projects/[projectId]/gig-report/photos/route'
 async function upload(bytes: Uint8Array, type = 'image/jpeg') {
   const form = new FormData()
   form.append('photo', new Blob([new Uint8Array(bytes)], { type }), '../../evil.jpg')
-  return POST(new Request('http://localhost/photos', { method: 'POST', body: form }), { params: Promise.resolve({ token: 'test' }) })
+  // Materialize multipart bytes before the handler can reject/cancel the body.
+  // This avoids Node's FormData encoder enqueueing after stream cancellation.
+  const encoded = new Response(form)
+  const body = await encoded.arrayBuffer()
+  return POST(new Request('http://localhost/photos', { method: 'POST', body, headers: { 'Content-Type': encoded.headers.get('content-type')! } }), { params: Promise.resolve({ token: 'test' }) })
 }
 const image = () => sharp({ create: { width: 24, height: 16, channels: 3, background: '#ff0000' } }).jpeg().toBuffer()
 
