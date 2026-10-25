@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
 import { SupportLink } from '@/components/ui/support-link'
+import { DETAILS_LABELS, FEEDBACK_LABELS, EMPTY_DRAFT, readDraft, type SurveyDraft } from '@/lib/after-gig/survey'
+import { GigReportPhotos } from './gig-report-photos'
 
 interface GigReportClientProps {
   token: string
@@ -16,209 +17,125 @@ interface GigReportClientProps {
   brandColor: string | null
 }
 
-type Overall = 'great' | 'good' | 'issues'
-
-const OVERALL_CHOICES: { value: Overall; label: string }[] = [
-  { value: 'great', label: 'Went great' },
-  { value: 'good', label: 'Fine, small things' },
-  { value: 'issues', label: 'There were problems' },
-]
-
-type ClientExperience = 'positive' | 'neutral' | 'negative'
-
-const CLIENT_CHOICES: { value: ClientExperience; label: string }[] = [
-  { value: 'positive', label: 'Positive' },
-  { value: 'neutral', label: 'Neutral' },
-  { value: 'negative', label: 'Negative' },
-]
-
 export const REPORT_TEXT_LIMIT = 4000
 
-export function GigReportClient({
-  token,
-  leadFirstName,
-  organizationName,
-  projectName,
-  gigDate,
-  alreadySubmitted,
-  brandColor,
-}: GigReportClientProps) {
+export function GigReportClient({ token, leadFirstName, organizationName, projectName, gigDate, alreadySubmitted, brandColor }: GigReportClientProps) {
   const [submitted, setSubmitted] = useState(alreadySubmitted)
-  const [overall, setOverall] = useState<Overall | null>(null)
-  const [allOnTime, setAllOnTime] = useState<boolean | null>(null)
-  const [lateNotes, setLateNotes] = useState('')
-  const [hiccups, setHiccups] = useState('')
-  const [clientFollowUp, setClientFollowUp] = useState('')
-  const [clientInteracted, setClientInteracted] = useState<boolean | null>(null)
-  const [clientExperience, setClientExperience] = useState<ClientExperience | null>(null)
-  const [arrangementNotes, setArrangementNotes] = useState('')
-  const [otherNotes, setOtherNotes] = useState('')
+  const [draft, setDraft] = useState<SurveyDraft>({ ...EMPTY_DRAFT })
+  const [ready, setReady] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const storageKey = `gig-report-draft:${token}`
 
-  const headerStyle = brandColor ? { backgroundColor: brandColor } : undefined
+  useEffect(() => {
+    try {
+      if (alreadySubmitted) sessionStorage.removeItem(storageKey)
+      else setDraft(readDraft(sessionStorage.getItem(storageKey)))
+    } catch { /* Private browsing can disable storage; the form still works. */ }
+    setReady(true)
+  }, [storageKey, alreadySubmitted])
+
+  useEffect(() => {
+    if (!ready) return
+    try {
+      if (submitted) sessionStorage.removeItem(storageKey)
+      else sessionStorage.setItem(storageKey, JSON.stringify(draft))
+    } catch { /* Keep the in-memory draft when browser storage is unavailable. */ }
+  }, [draft, ready, storageKey, submitted])
+
+  function update<K extends keyof SurveyDraft>(key: K, value: SurveyDraft[K]) {
+    setDraft((previous) => ({ ...previous, [key]: value }))
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!overall || allOnTime === null || clientInteracted === null) {
-      setError('Please answer the first three questions.')
-      return
-    }
-    if (clientInteracted && !clientExperience) {
-      setError('Please say how it went with the client.')
+    if (loading) return
+    if (!draft.overall || draft.allOnTime === null || !draft.detailsAccuracy) {
+      setError('Please answer overall, punctuality and gig details. All notes are optional.')
       return
     }
     setLoading(true)
     setError(null)
     try {
       const res = await fetch(`/api/report/${token}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          overall,
-          allOnTime,
-          lateNotes,
-          hiccups,
-          clientFollowUp,
-          clientInteracted,
-          clientExperience: clientInteracted ? clientExperience : null,
-          arrangementNotes,
-          otherNotes,
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...draft, lateNotes: draft.allOnTime ? '' : draft.lateNotes }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok && !data.alreadySubmitted) throw new Error(data.error || 'Could not send your report')
+      if (!(res.ok && data.success === true) && !(res.status === 409 && data.alreadySubmitted === true)) {
+        throw new Error(data.error || 'Could not confirm your report was saved. Please try again.')
+      }
       setSubmitted(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong')
-    } finally {
-      setLoading(false)
-    }
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
+    } finally { setLoading(false) }
   }
 
-  const choice = (active: boolean) =>
-    `rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
-      active ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-    }`
-
-  const textField = (id: string, label: string, hint: string, value: string, set: (v: string) => void) => (
+  const choice = (active: boolean) => `min-h-11 rounded-md border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${active ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`
+  const notes = (key: 'lateNotes' | 'clientFollowUp' | 'otherNotes', label: string) => (
     <div className="space-y-1.5">
-      <Label htmlFor={id} className="text-slate-900">{label}</Label>
-      <p className="text-xs text-slate-500">{hint}</p>
-      <Textarea
-        id={id}
-        value={value}
-        onChange={(e) => set(e.target.value.slice(0, REPORT_TEXT_LIMIT))}
-        rows={3}
-        className="bg-white"
-      />
+      <label htmlFor={key} className="text-sm font-medium text-slate-900">{label}</label>
+      <Textarea id={key} value={draft[key]} maxLength={REPORT_TEXT_LIMIT} onChange={(e) => update(key, e.target.value)} rows={2} className="bg-white" />
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-start sm:items-center justify-center p-4">
-      <div className="w-full max-w-lg">
-        <div className="bg-white rounded-xl shadow-lg border overflow-hidden">
-          <div className="bg-slate-900 px-6 py-5 text-center" style={headerStyle}>
-            <h1 className="text-white text-lg font-semibold">{organizationName}</h1>
-          </div>
-
-          <div className="p-6">
-            {submitted ? (
-              <div className="text-center space-y-4 py-4">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                  <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                  </svg>
-                </div>
-                <h2 className="text-xl font-bold text-green-800">Thank you!</h2>
-                <p className="text-slate-600">
-                  Your report on <strong>{projectName}</strong> is with the team.
-                </p>
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-start justify-center p-4">
+      <div className="w-full max-w-lg bg-white rounded-xl shadow-lg border overflow-hidden">
+        <div className="bg-slate-900 px-6 py-5 text-center" style={brandColor ? { backgroundColor: brandColor } : undefined}>
+          <h1 className="text-white text-lg font-semibold">{organizationName}</h1>
+        </div>
+        <div className="p-5 sm:p-6 space-y-6">
+          {submitted ? (
+            <div role="status" className="text-center space-y-3 py-4">
+              <h2 className="text-xl font-bold text-green-800">Thank you!</h2>
+              <p>Your report on <strong>{projectName}</strong> is with the team.</p>
+              <p className="text-sm text-slate-600">You can still add optional photos below.</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <h2 className="text-lg font-semibold">Hi {leadFirstName || 'there'}, how did it go?</h2>
+                <p className="text-sm text-slate-600 mt-1">{projectName}{gigDate ? ` · ${gigDate}` : ''}</p>
+                <p className="text-xs text-slate-500 mt-2">Three quick answers. All notes and client feedback are optional. Only {organizationName}&apos;s owners and admins see this.</p>
               </div>
-            ) : (
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">
-                    Hi {leadFirstName || 'there'}, how did it go?
-                  </h2>
-                  <p className="text-sm text-slate-600 mt-1">
-                    {projectName}{gigDate ? ` · ${gigDate}` : ''}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-2">
-                    Only {organizationName}&apos;s owners and admins see this.
-                  </p>
-                </div>
-
+              <fieldset disabled={loading || !ready} className="space-y-5">
                 <fieldset className="space-y-2">
-                  <legend className="text-sm font-medium text-slate-900">Overall</legend>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {OVERALL_CHOICES.map((c) => (
-                      <button type="button" key={c.value} className={choice(overall === c.value)} onClick={() => setOverall(c.value)} aria-pressed={overall === c.value}>
-                        {c.label}
-                      </button>
+                  <legend className="text-sm font-medium">How did the gig go overall?</legend>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([['great', 'Good'], ['good', 'Minor issues'], ['issues', 'Problem']] as const).map(([value, label]) => (
+                      <button type="button" key={value} className={choice(draft.overall === value)} aria-pressed={draft.overall === value} onClick={() => update('overall', value)}>{label}</button>
                     ))}
                   </div>
                 </fieldset>
-
                 <fieldset className="space-y-2">
-                  <legend className="text-sm font-medium text-slate-900">Was everyone on time?</legend>
+                  <legend className="text-sm font-medium">Was everyone on time?</legend>
                   <div className="grid grid-cols-2 gap-2">
-                    <button type="button" className={choice(allOnTime === true)} onClick={() => setAllOnTime(true)} aria-pressed={allOnTime === true}>Yes</button>
-                    <button type="button" className={choice(allOnTime === false)} onClick={() => setAllOnTime(false)} aria-pressed={allOnTime === false}>No</button>
+                    {[true, false].map((value) => <button type="button" key={String(value)} className={choice(draft.allOnTime === value)} aria-pressed={draft.allOnTime === value} onClick={() => update('allOnTime', value)}>{value ? 'Yes' : 'No'}</button>)}
                   </div>
-                  {allOnTime === false && (
-                    <Textarea
-                      aria-label="Who was late, and by how much?"
-                      placeholder="Who was late, and by how much?"
-                      value={lateNotes}
-                      onChange={(e) => setLateNotes(e.target.value.slice(0, REPORT_TEXT_LIMIT))}
-                      rows={2}
-                      className="bg-white"
-                    />
-                  )}
+                  {draft.allOnTime === false && notes('lateNotes', 'Who was late? (optional)')}
                 </fieldset>
-
                 <fieldset className="space-y-2">
-                  <legend className="text-sm font-medium text-slate-900">Did you interact with the client (couple, host or planner)?</legend>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button type="button" className={choice(clientInteracted === true)} onClick={() => setClientInteracted(true)} aria-pressed={clientInteracted === true}>Yes</button>
-                    <button type="button" className={choice(clientInteracted === false)} onClick={() => setClientInteracted(false)} aria-pressed={clientInteracted === false}>No</button>
+                  <legend className="text-sm font-medium">Did the gig match the details you were sent?</legend>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {(Object.keys(DETAILS_LABELS) as Array<NonNullable<SurveyDraft['detailsAccuracy']>>).map((value) => <button type="button" key={value} className={choice(draft.detailsAccuracy === value)} aria-pressed={draft.detailsAccuracy === value} onClick={() => update('detailsAccuracy', value)}>{DETAILS_LABELS[value]}</button>)}
                   </div>
-                  {clientInteracted === true && (
-                    <div className="space-y-2 pt-1">
-                      <p className="text-sm text-slate-700">How did it go?</p>
-                      <div className="grid grid-cols-3 gap-2">
-                        {CLIENT_CHOICES.map((c) => (
-                          <button type="button" key={c.value} className={choice(clientExperience === c.value)} onClick={() => setClientExperience(c.value)} aria-pressed={clientExperience === c.value}>
-                            {c.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <p className="text-xs text-slate-500">No explanation needed. Add a note below if useful.</p>
                 </fieldset>
-
-                {textField('hiccups', 'Any hiccups?', 'Sound, venue, timing, cues, anything that went sideways.', hiccups, setHiccups)}
-                {textField('client', 'Anything to follow up with the client?', 'Complaints, compliments, requests, things we promised.', clientFollowUp, setClientFollowUp)}
-                {textField('arrangements', 'Do any arrangements need work?', 'Songs or parts that did not land, wrong keys, missing pages.', arrangementNotes, setArrangementNotes)}
-                {textField('other', 'Anything else we should know?', 'Optional.', otherNotes, setOtherNotes)}
-
-                {error && (
-                  <div className="text-center text-sm">
-                    <p className="text-red-600">{error}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Having trouble? Email <SupportLink subject="Help sending a gig report" />
-                    </p>
+                <fieldset className="space-y-2">
+                  <legend className="text-sm font-medium">Any client feedback? (optional)</legend>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(Object.keys(FEEDBACK_LABELS) as Array<NonNullable<SurveyDraft['clientFeedback']>>).map((value) => <button type="button" key={value} className={choice(draft.clientFeedback === value)} aria-pressed={draft.clientFeedback === value} onClick={() => update('clientFeedback', draft.clientFeedback === value ? null : value)}>{FEEDBACK_LABELS[value]}</button>)}
                   </div>
-                )}
-
-                <Button type="submit" className="w-full" size="lg" disabled={loading}>
-                  {loading ? 'Sending…' : 'Send report'}
-                </Button>
-              </form>
-            )}
-          </div>
+                  {notes('clientFollowUp', 'Client note (optional)')}
+                </fieldset>
+                {notes('otherNotes', 'Anything else? (optional)')}
+              </fieldset>
+              {error && <div role="alert" className="text-sm text-red-600"><p>{error}</p><p className="mt-1">Having trouble? <SupportLink subject="Help sending a gig report" /></p></div>}
+              <Button type="submit" className="w-full" size="lg" disabled={loading || !ready}>{loading ? 'Sending…' : 'Send report'}</Button>
+            </form>
+          )}
+          <GigReportPhotos token={token} />
         </div>
       </div>
     </div>

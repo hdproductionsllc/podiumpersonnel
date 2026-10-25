@@ -1,8 +1,11 @@
+import { OVERALL_LABELS as SURVEY_OVERALL_LABELS, DETAILS_LABELS, FEEDBACK_LABELS, type DetailsAccuracy, type ClientFeedback } from '@/lib/after-gig/survey'
 import { Section, Text, Button, Preview } from '@react-email/components'
 import { EmailLayout, emailStyles, getButtonStyle, type EmailBranding } from './email-layout'
 
 // To the org's owners and admins when a lead submits their gig report.
 export interface GigReportAnswers {
+  detailsAccuracy?: DetailsAccuracy | null
+  clientFeedback?: ClientFeedback | null
   overall: 'great' | 'good' | 'issues' | null
   allOnTime: boolean | null
   lateNotes: string | null
@@ -33,9 +36,11 @@ export function clientSummary(answers: Pick<GigReportAnswers, 'clientInteracted'
 /** The report gets a "Needs attention" flag (subject and badge) when any of these hold. */
 export function reportNeedsAttention(answers: GigReportAnswers): boolean {
   return (
+    answers.detailsAccuracy === 'significant' ||
+    answers.clientFeedback === 'concern' ||
     answers.overall === 'issues' ||
     answers.allOnTime === false ||
-    !!answers.clientFollowUp ||
+    (!!answers.clientFollowUp && !answers.clientFeedback) ||
     answers.clientExperience === 'negative'
   )
 }
@@ -86,11 +91,13 @@ export function GigReportSubmittedEmail({
         </Text>
 
         <Section style={emailStyles.detailsBox}>
-          {item('Overall', answers.overall ? OVERALL_LABELS[answers.overall] : null)}
+          {item('Overall', answers.overall ? (answers.detailsAccuracy ? SURVEY_OVERALL_LABELS[answers.overall] : OVERALL_LABELS[answers.overall]) : null)}
           {item(
             'Everyone on time?',
             answers.allOnTime === null ? null : answers.allOnTime ? 'Yes' : `No${answers.lateNotes ? ` — ${answers.lateNotes}` : ''}`,
           )}
+          {item('Gig details', answers.detailsAccuracy ? DETAILS_LABELS[answers.detailsAccuracy] : null)}
+          {item('Client feedback', answers.clientFeedback ? FEEDBACK_LABELS[answers.clientFeedback] : null)}
           {item('The client', clientSummary(answers))}
           {item('Hiccups', answers.hiccups)}
           {item('Follow up with the client', answers.clientFollowUp)}

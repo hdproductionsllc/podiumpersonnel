@@ -1,5 +1,7 @@
 'use client'
 
+import { OVERALL_LABELS, DETAILS_LABELS, FEEDBACK_LABELS, type DetailsAccuracy, type ClientFeedback } from '@/lib/after-gig/survey'
+import { GigReportPhotoGallery } from './gig-report-photo-gallery'
 import { reloadPage } from '@/lib/reload-page'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -19,6 +21,8 @@ import { noLeadReason } from '@/lib/after-gig/rules'
  */
 
 export interface GigReportRow {
+  details_accuracy?: DetailsAccuracy | null
+  client_feedback?: ClientFeedback | null
   id: string
   project_id: string
   musician_id: string
@@ -92,7 +96,7 @@ function ReportItem({ label, report, when }: { label: string; report: GigReportR
           <div className="flex flex-wrap gap-2">
             {report.overall && (
               <span className={`rounded px-2 py-0.5 text-xs font-medium ${OVERALL[report.overall].className}`}>
-                {OVERALL[report.overall].label}
+                {report.details_accuracy ? OVERALL_LABELS[report.overall] : OVERALL[report.overall].label}
               </span>
             )}
             {report.all_on_time !== null && (
@@ -113,6 +117,8 @@ function ReportItem({ label, report, when }: { label: string; report: GigReportR
           </div>
           {[
             ['Who was late', report.all_on_time ? null : report.late_notes],
+            ['Gig details', report.details_accuracy ? DETAILS_LABELS[report.details_accuracy] : null],
+            ['Client feedback', report.client_feedback ? FEEDBACK_LABELS[report.client_feedback] : null],
             ['Hiccups', report.hiccups],
             ['Follow up with the client', report.client_follow_up],
             ['Arrangements that need work', report.arrangement_notes],
@@ -257,6 +263,8 @@ export function GigReportPanel({ projectId, positions, chosenLeadId, reports, ti
           ))}
         </ul>
       )}
+
+      <GigReportPhotoGallery projectId={projectId} />
 
       {otherReports.length > 0 && (
         <ul className="space-y-3">

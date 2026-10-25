@@ -12,6 +12,8 @@ const text = z.string().trim().max(4000).optional().transform((v) => (v ? v : nu
 const reportSchema = z.object({
   overall: z.enum(['great', 'good', 'issues']),
   allOnTime: z.boolean(),
+  detailsAccuracy: z.enum(['matched', 'minor', 'significant']).nullable().optional().transform(v => v ?? null),
+  clientFeedback: z.enum(['positive', 'concern', 'none']).nullable().optional().transform(v => v ?? null),
   lateNotes: text,
   hiccups: text,
   clientFollowUp: text,
@@ -19,7 +21,7 @@ const reportSchema = z.object({
   otherNotes: text,
   // Added 2026-10-04 (migration 101). Optional on the server so a report form
   // left open from before the questions existed still submits; the form
-  // itself requires them.
+  // newer forms use the optional clientFeedback question instead.
   clientInteracted: z.boolean().nullable().optional().transform((v) => v ?? null),
   clientExperience: z.enum(['positive', 'neutral', 'negative']).nullable().optional().transform((v) => v ?? null),
 })
@@ -54,6 +56,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   const { data: saved, error } = await supabase
     .from('gig_reports')
     .update({
+      details_accuracy: a.detailsAccuracy,
+      client_feedback: a.clientFeedback,
       overall: a.overall,
       all_on_time: a.allOnTime,
       late_notes: a.allOnTime ? null : a.lateNotes,
@@ -117,6 +121,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
               projectName: report.projectName,
               gigDate,
               answers: {
+                detailsAccuracy: a.detailsAccuracy,
+                clientFeedback: a.clientFeedback,
                 overall: a.overall,
                 allOnTime: a.allOnTime,
                 lateNotes: a.allOnTime ? null : a.lateNotes,

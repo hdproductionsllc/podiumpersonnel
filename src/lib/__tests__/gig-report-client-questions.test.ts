@@ -7,7 +7,7 @@ import { render } from '@react-email/render'
  * shown to the admins, and a negative experience flags "Needs attention".
  */
 
-const state = vi.hoisted(() => ({ update: null as Record<string, unknown> | null, answers: null as Record<string, unknown> | null }))
+const state = vi.hoisted(() => ({ update: null as Record<string, unknown> | null, answers: null as Record<string, unknown> | null, saved: true, saveError: false, conditions: [] as unknown[] }))
 
 vi.mock('@/lib/after-gig/report-token', () => ({
   resolveGigReportToken: vi.fn(async () => ({
@@ -33,9 +33,9 @@ vi.mock('@/lib/supabase/server', () => {
       state.update = payload
       return chain
     },
-    eq: () => chain,
-    is: () => chain,
-    select: async () => ({ data: [{ id: 'rep-1' }], error: null }),
+    eq: (...args: unknown[]) => { state.conditions.push(args); return chain },
+    is: (...args: unknown[]) => { state.conditions.push(args); return chain },
+    select: async () => ({ data: state.saved ? [{ id: 'rep-1' }] : [], error: state.saveError ? { message: 'offline' } : null }),
   }
   return {
     createServiceClient: () => ({ from: () => chain }),
@@ -138,4 +138,52 @@ describe('the admins see it', () => {
     expect(html).not.toContain('The client')
     expect(html).not.toContain('Needs attention')
   })
+})
+
+describe('concise survey compatibility', () => {
+  it.each(['matched', 'minor', 'significant'])('saves %s without an explanation', async (detailsAccuracy) => {
+    expect((await submit({ ...BASE, detailsAccuracy })).status).toBe(200)
+    expect(state.update).toMatchObject({ details_accuracy: detailsAccuracy, client_feedback: null, other_notes: null })
+    expect(state.answers).toMatchObject({ detailsAccuracy })
+  })
+  it.each(['positive', 'concern', 'none'])('saves optional client feedback: %s', async (clientFeedback) => {
+    expect((await submit({ ...BASE, detailsAccuracy: 'minor', clientFeedback })).status).toBe(200)
+    expect(state.update).toMatchObject({ client_feedback: clientFeedback })
+  })
+  it('rejects invalid new choices', async () => {
+    expect((await submit({ ...BASE, detailsAccuracy: 'no' })).status).toBe(400)
+    expect((await submit({ ...BASE, clientFeedback: 'neutral' })).status).toBe(400)
+  })
+  it('renders differences and feedback in admin email without losing old fields', async () => {
+    const html = await render(GigReportSubmittedEmail({
+      organizationName: 'Quartet', leadName: 'Lead', projectName: 'Wedding', gigDate: '', projectUrl: 'https://example.test',
+      answers: { overall: 'good', allOnTime: true, lateNotes: null, hiccups: 'Legacy hiccup', clientFollowUp: null, arrangementNotes: 'Legacy arrangement', otherNotes: null, detailsAccuracy: 'minor', clientFeedback: 'positive' },
+    }))
+    expect(html).toContain('Minor differences')
+    expect(html).toContain('Positive')
+    expect(html).toContain('Legacy hiccup')
+    expect(html).toContain('Legacy arrangement')
+    expect(html).not.toContain('Needs attention')
+  })
+})
+
+it('locks an already-submitted report and does not notify again', async () => {
+  state.saved = false; state.answers = null; state.conditions = []
+  try {
+    const result = await submit({ ...BASE, detailsAccuracy: 'significant' })
+    expect(result).toEqual({ status: 409, body: { error: 'Already sent', alreadySubmitted: true } })
+    expect(state.answers).toBeNull()
+    expect(state.conditions).toContainEqual(['submitted_at', null])
+    expect(state.conditions).toContainEqual(['id', 'rep-1'])
+  } finally { state.saved = true }
+})
+
+it('a failed save is retryable and cannot send the notification', async () => {
+  state.saveError = true; state.answers = null
+  try {
+    expect((await submit({ ...BASE, detailsAccuracy: 'minor' })).status).toBe(500)
+    expect(state.answers).toBeNull()
+    state.saveError = false
+    expect((await submit({ ...BASE, detailsAccuracy: 'minor' })).status).toBe(200)
+  } finally { state.saveError = false }
 })
