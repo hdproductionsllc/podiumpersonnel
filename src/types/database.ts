@@ -316,6 +316,7 @@ export type Database = {
           pay_summary_sent_at: string | null
           /** 090: the ONE lead of this gig (asked for the gig report). */
           gig_lead_musician_id: string | null
+          gig_report_musician_ids: string[] | null
           created_at: string
           updated_at: string
         }
@@ -344,6 +345,7 @@ export type Database = {
           coordinator_phone?: string | null
           pay_summary_sent_at?: string | null
           gig_lead_musician_id?: string | null
+          gig_report_musician_ids?: string[] | null
           created_at?: string
           updated_at?: string
         }
@@ -372,6 +374,7 @@ export type Database = {
           coordinator_phone?: string | null
           pay_summary_sent_at?: string | null
           gig_lead_musician_id?: string | null
+          gig_report_musician_ids?: string[] | null
           created_at?: string
           updated_at?: string
         }

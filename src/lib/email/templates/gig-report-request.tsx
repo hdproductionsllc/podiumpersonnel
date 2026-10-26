@@ -27,12 +27,11 @@ export function GigReportRequestEmail({
       <Section style={emailStyles.content}>
         <Text style={emailStyles.greeting}>Hi {leadFirstName || 'there'},</Text>
         <Text style={emailStyles.paragraph}>
-          Thanks for leading <strong>{projectName}</strong> ({gigDate}). While it is fresh, how did it go?
+          Thanks for playing <strong>{projectName}</strong> ({gigDate}). While it is fresh, how did it go?
         </Text>
         <Text style={emailStyles.paragraph}>
-          A few quick questions: was everyone on time, were there any hiccups, is there anything we
-          should follow up on with the client, and do any arrangements need work? It takes about two
-          minutes and needs no login.
+          Three quick choices: overall, punctuality and whether the gig matched the details.
+          Notes, client feedback and photos are optional. No login needed.
         </Text>
 
         <Section style={emailStyles.buttonContainer}>
@@ -41,6 +40,7 @@ export function GigReportRequestEmail({
           </Button>
         </Section>
 
+        <Text style={emailStyles.smallText}>Button not working? Open this link in your browser: <a href={reportUrl}>{reportUrl}</a></Text>
         <Text style={emailStyles.smallText}>
           Only {organizationName}&apos;s owners and admins see your answers.
         </Text>

@@ -83,7 +83,7 @@ export async function resolveGigReportToken(token: string): Promise<GigReportCon
     openedAt: data.opened_at,
     submittedAt: data.submitted_at,
     leadFirstName: musician?.first_name || '',
-    leadName: [musician?.first_name, musician?.last_name].filter(Boolean).join(' ') || 'Your lead',
+    leadName: [musician?.first_name, musician?.last_name].filter(Boolean).join(' ') || 'Musician',
     projectName: project.name,
     organizationName: project.organization?.name || '',
     timezone: project.organization?.timezone || null,

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
 import { useTerms } from '@/components/providers/vertical-provider'
+import { reportingThreshold, paymentTaxYear, necDueDate } from '@/lib/payments/tax-year'
 import { term } from '@/lib/verticals'
 
 type TaxPayment = {
@@ -35,17 +36,17 @@ interface TaxReportClientProps {
   organizationName: string
 }
 
-const DEFAULT_THRESHOLD = 600
+
 
 export function TaxReportClient({ payments, organizationName }: TaxReportClientProps) {
   const terms = useTerms()
 
   // Determine available years from payment data
   const availableYears = useMemo(() => {
-    const years = new Set<number>()
+    const years = new Set<number>([new Date().getFullYear()])
     payments.forEach((p) => {
-      const date = p.payment_date || p.created_at
-      if (date) years.add(new Date(date).getFullYear())
+      const year = paymentTaxYear(p.payment_date)
+      if (year !== null) years.add(year)
     })
     const sorted = Array.from(years).sort((a, b) => b - a)
     return sorted.length > 0 ? sorted : [new Date().getFullYear()]
@@ -58,13 +59,15 @@ export function TaxReportClient({ payments, organizationName }: TaxReportClientP
     : now.getFullYear()
 
   const [selectedYear, setSelectedYear] = useState(defaultYear)
-  const [threshold, setThreshold] = useState(DEFAULT_THRESHOLD)
+  const [overrides, setOverrides] = useState<Record<number, string>>({})
+  const thresholdInput = overrides[selectedYear] ?? String(reportingThreshold(selectedYear) ?? '')
+  const threshold = thresholdInput.trim() !== '' && Number.isFinite(Number(thresholdInput)) && Number(thresholdInput) >= 0 ? Number(thresholdInput) : null
+  const missingDates = payments.filter(p => paymentTaxYear(p.payment_date) === null).length
 
   // Filter payments by selected year and aggregate by musician
   const musicianSummaries = useMemo(() => {
     const yearPayments = payments.filter((p) => {
-      const date = p.payment_date || p.created_at
-      return date && new Date(date).getFullYear() === selectedYear
+      return p.status === 'paid' && paymentTaxYear(p.payment_date) === selectedYear
     })
 
     const byMusician: Record<string, {
@@ -95,7 +98,7 @@ export function TaxReportClient({ payments, organizationName }: TaxReportClientP
   // Summary stats
   const stats = useMemo(() => {
     const totalPaid = musicianSummaries.reduce((sum, m) => sum + m.totalPaid, 0)
-    const above = musicianSummaries.filter((m) => m.totalPaid >= threshold)
+    const above = musicianSummaries.filter((m) => threshold !== null && m.totalPaid >= threshold)
     const missingW9 = above.filter((m) => !m.musician.w9_on_file)
     const missingAddress = above.filter((m) =>
       !m.musician.street_address || !m.musician.city || !m.musician.state || !m.musician.zip_code
@@ -123,7 +126,7 @@ export function TaxReportClient({ payments, organizationName }: TaxReportClientP
       const XLSX = await import('xlsx')
 
       const rows = musicianSummaries
-        .filter((m) => m.totalPaid >= threshold)
+        .filter((m) => threshold !== null && m.totalPaid >= threshold)
         .map((m) => ({
           'Last Name': m.musician.last_name,
           'First Name': m.musician.first_name,
@@ -197,21 +200,28 @@ export function TaxReportClient({ payments, organizationName }: TaxReportClientP
               <input
                 type="number"
                 className="w-20 rounded-md border bg-background px-2 py-2 text-sm"
-                value={threshold}
-                onChange={(e) => setThreshold(Number(e.target.value) || 0)}
+                value={thresholdInput}
+                onChange={(e) => setOverrides(previous => ({ ...previous, [selectedYear]: e.target.value }))}
                 min={0}
               />
             </div>
           </div>
           <Button
             onClick={handleExport}
-            disabled={musicianSummaries.filter((m) => m.totalPaid >= threshold).length === 0}
+            disabled={musicianSummaries.filter((m) => threshold !== null && m.totalPaid >= threshold).length === 0}
           >
             Export to Excel
           </Button>
         </div>
       </div>
 
+      <div className="text-sm space-y-2" role="note">
+        <p>Selected payment year: {selectedYear}. Federal 1099-NEC due date (weekends adjusted): {necDueDate(selectedYear)}. Check applicable holidays and extensions.</p>
+        <p>This is a threshold review, not a filing determination. Backup withholding can require reporting at any amount; review those payments separately, including people below this filter.</p>
+        <p><a href="https://www.irs.gov/publications/p1099" className="underline">IRS Publication 1099</a>: $600 through 2025; $2,000 for 2026. Later years require verification of the inflation-adjusted amount. Overrides apply only to the selected year.</p>
+        {threshold === null && <p role="alert">No verified threshold for this year. Enter a verified amount before exporting.</p>}
+        {missingDates > 0 && <p role="alert">{missingDates} paid records have no valid payment date and are excluded. Correct their payment dates before relying on this report.</p>}
+      </div>
       <Separator />
 
       {/* Summary Cards */}
@@ -225,9 +235,9 @@ export function TaxReportClient({ payments, organizationName }: TaxReportClientP
           <p className="text-2xl font-bold">{stats.totalMusicians}</p>
         </div>
         <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm font-medium text-muted-foreground">1099 Required</p>
+          <p className="text-sm font-medium text-muted-foreground">At or above threshold</p>
           <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{stats.above1099}</p>
-          <p className="text-xs text-muted-foreground">{formatCurrency(threshold)}+ threshold</p>
+          <p className="text-xs text-muted-foreground">{threshold === null ? 'Verify threshold' : `${formatCurrency(threshold)}+ threshold`}</p>
         </div>
         <div className={`rounded-lg border p-4 ${stats.missingW9 > 0 ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800' : 'bg-card'}`}>
           <p className="text-sm font-medium text-muted-foreground">Missing W-9</p>
@@ -268,7 +278,7 @@ export function TaxReportClient({ payments, organizationName }: TaxReportClientP
             </thead>
             <tbody className="divide-y">
               {musicianSummaries.map((entry) => {
-                const needs1099 = entry.totalPaid >= threshold
+                const needs1099 = threshold !== null && entry.totalPaid >= threshold
                 const hasW9 = entry.musician.w9_on_file
                 const isVerified = !!entry.musician.w9_verified_at
                 const addressComplete = hasCompleteAddress(entry.musician)
@@ -331,7 +341,7 @@ export function TaxReportClient({ payments, organizationName }: TaxReportClientP
                           {hasW9 && addressComplete ? 'Ready' : 'Needs Info'}
                         </span>
                       ) : (
-                        <span className="text-xs text-muted-foreground">Below threshold</span>
+                        <span className="text-xs text-muted-foreground">{threshold === null ? 'Threshold unverified' : 'Below threshold'}</span>
                       )}
                     </td>
                   </tr>

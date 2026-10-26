@@ -1,4 +1,4 @@
-import { Section, Text, Button, Hr, Preview } from '@react-email/components'
+import { Section, Text, Button, Hr, Preview, Row, Column } from '@react-email/components'
 import { EmailLayout, emailStyles, getButtonStyle, type EmailBranding } from './email-layout'
 import type { PaySummaryLine } from '@/lib/after-gig/rules'
 
@@ -37,7 +37,6 @@ export function PaySummaryEmail({
   grandTotal,
   paymentsUrl,
   needsGigLead,
-  leadFallbackLabel = 'Violin 1',
   projectUrl,
   branding,
 }: PaySummaryEmailProps) {
@@ -55,24 +54,24 @@ export function PaySummaryEmail({
 
         <Section style={emailStyles.detailsBox}>
           {lines.map((line, i) => (
-            <Text key={`${line.musicianId}-${i}`} style={row}>
-              <span style={nameCell}>
+            <Row key={`${line.musicianId}-${i}`} style={row}>
+              <Column style={nameCell}>
                 {line.name}
                 {line.instrument ? <span style={instrumentText}> · {line.instrument}</span> : null}
-              </span>
-              <span style={amountCell}>
+              </Column>
+              <Column style={amountCell}>
                 {line.total > 0 ? formatMoney(line.total) : 'no amount set'}
                 {line.leaderFee > 0 ? (
                   <span style={breakdown}> ({formatMoney(line.basePay)} + {formatMoney(line.leaderFee)} leader fee)</span>
                 ) : null}
-              </span>
-            </Text>
+              </Column>
+            </Row>
           ))}
           <Hr style={emailStyles.hr} />
-          <Text style={totalRow}>
-            <span style={nameCell}>Total</span>
-            <span style={amountCell}>{formatMoney(grandTotal)}</span>
-          </Text>
+          <Row style={totalRow}>
+            <Column style={nameCell}>Total</Column>
+            <Column style={amountCell}>{formatMoney(grandTotal)}</Column>
+          </Row>
         </Section>
 
         {unpriced.length > 0 && (
@@ -84,12 +83,8 @@ export function PaySummaryEmail({
 
         {needsGigLead && (
           <Text style={emailStyles.paragraph}>
-            <strong>No gig report was requested:</strong>
-            {leadFallbackLabel
-              ? ` nobody is confirmed in ${leadFallbackLabel} and no gig lead was picked.`
-              : ' no gig lead was picked.'}{' '}
-            {projectUrl ? <a href={projectUrl}>Pick the gig lead</a> : 'Pick the gig lead on the gig'} and
-            send the request from its Gig report panel.
+            <strong>Confirm who played before requesting reports.</strong>{' '}
+            {projectUrl ? <a href={projectUrl}>Review the played roster</a> : 'Review the played roster on the gig'} in its Gig reports panel.
           </Text>
         )}
 
@@ -112,9 +107,7 @@ const row = {
   fontSize: '14px',
   color: '#334155',
   margin: '0 0 8px 0',
-  display: 'flex' as const,
-  justifyContent: 'space-between' as const,
-  gap: '12px',
+  width: '100%',
 }
 
 const totalRow = {
@@ -123,11 +116,12 @@ const totalRow = {
   color: '#1a1a1a',
 }
 
-const nameCell = {}
+const nameCell = { padding: '8px 12px 8px 0', verticalAlign: 'top' as const, width: '55%' }
 
 const amountCell = {
   textAlign: 'right' as const,
-  whiteSpace: 'nowrap' as const,
+  padding: '8px 0',
+  verticalAlign: 'top' as const,
 }
 
 const instrumentText = {
@@ -137,6 +131,7 @@ const instrumentText = {
 const breakdown = {
   color: '#64748b',
   fontSize: '12px',
+  display: 'block' as const,
 }
 
 export default PaySummaryEmail

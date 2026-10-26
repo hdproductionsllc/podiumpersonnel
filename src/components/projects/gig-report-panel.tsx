@@ -6,19 +6,8 @@ import { reloadPage } from '@/lib/reload-page'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { useVertical } from '@/components/providers/vertical-provider'
-import { noLeadReason } from '@/lib/after-gig/rules'
 
-/**
- * The lead musician's after-gig report, on the gig's row.
- *
- * Every gig has ONE lead: the admin's pick, or else whoever is confirmed in
- * Violin 1 (the chair that usually leads). With neither, nobody is asked until
- * an admin picks. Same rule as lib/after-gig/rules gigLead, which the cron
- * uses. "Leader" on the roster is NOT used: it only means someone CAN lead. The request
- * goes out automatically 30 minutes after the gig ends; this panel sets the
- * lead, shows where the report is, and can send it now or again.
- */
+/** Admin-reviewed attendance drives attributed survey requests; historical reports remain visible. */
 
 export interface GigReportRow {
   details_accuracy?: DetailsAccuracy | null
@@ -53,7 +42,8 @@ interface PositionLike {
 interface GigReportPanelProps {
   projectId: string
   positions: PositionLike[]
-  /** projects.gig_lead_musician_id (090): the admin's pick, if any. */
+  /** NULL means attendance has not been reviewed. */
+  playedIds: string[] | null
   chosenLeadId: string | null
   reports: GigReportRow[]
   timezone: string
@@ -72,7 +62,7 @@ const CLIENT: Record<'positive' | 'neutral' | 'negative', { label: string; class
 }
 
 function name(m: { first_name: string | null; last_name: string | null } | null | undefined) {
-  return [m?.first_name, m?.last_name].filter(Boolean).join(' ') || 'Lead'
+  return [m?.first_name, m?.last_name].filter(Boolean).join(' ') || 'Musician'
 }
 
 function ReportItem({ label, report, when }: { label: string; report: GigReportRow | undefined; when: (iso: string) => string }) {
@@ -87,7 +77,7 @@ function ReportItem({ label, report, when }: { label: string; report: GigReportR
               ? `Opened ${when(report.opened_at)}, not sent yet`
               : report
                 ? `Asked ${when(report.requested_at)}`
-                : 'Asked automatically 30 minutes after the gig ends'}
+                : 'Not requested yet'}
         </span>
       </div>
 
@@ -137,142 +127,52 @@ function ReportItem({ label, report, when }: { label: string; report: GigReportR
   )
 }
 
-export function GigReportPanel({ projectId, positions, chosenLeadId, reports, timezone }: GigReportPanelProps) {
-  // Who leads when nobody was picked (music: Violin 1; null: always pick). The same rule as gigLead.
-  const { leadFallbackSkill } = useVertical()
+export function GigReportPanel({ projectId, positions, playedIds, chosenLeadId, reports, timezone }: GigReportPanelProps) {
+  const confirmed = Array.from(new Map(positions.filter(p => p.status === 'confirmed' && p.musician_id && p.musician?.id === p.musician_id).map(p => [p.musician_id!, p.musician])).entries())
+  const [selected, setSelected] = useState<string[]>(playedIds || [])
   const [sending, setSending] = useState(false)
   const [savingLead, setSavingLead] = useState(false)
-
-  // Everyone confirmed on the gig, once each.
-  const confirmed = Array.from(
-    new Map(
-      positions
-        .filter((p) => p.status === 'confirmed' && p.musician_id)
-        .map((p) => [p.musician_id!, p.musician])
-    ).entries()
-  )
-  const violinOne = leadFallbackSkill
-    ? positions
-        .filter((p) => p.status === 'confirmed' && p.musician_id && leadFallbackSkill.matches(p.instrument?.name))
-        .sort((a, b) => (a.chair_number ?? 99) - (b.chair_number ?? 99))[0]
-    : undefined
-  const chosenIsConfirmed = !!chosenLeadId && confirmed.some(([id]) => id === chosenLeadId)
-  const leadId = chosenIsConfirmed ? chosenLeadId : violinOne?.musician_id ?? null
-  const source: 'chosen' | 'violin-1' | 'needs-pick' = chosenIsConfirmed ? 'chosen' : leadId ? 'violin-1' : 'needs-pick'
-  const leads = confirmed.filter(([id]) => id === leadId)
-
   async function setLead(musicianId: string | null) {
     setSavingLead(true)
     try {
-      const res = await fetch(`/api/projects/${projectId}/gig-lead`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ musicianId }),
-      })
+      const res = await fetch(`/api/projects/${projectId}/gig-lead`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ musicianId }) })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Could not save the gig lead')
-      toast.success('Gig lead saved')
       reloadPage()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not save the gig lead')
-    } finally {
-      setSavingLead(false)
-    }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Could not save the gig lead') }
+    finally { setSavingLead(false) }
   }
-
-  const when = (iso: string) =>
-    new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: timezone })
-
-  const allSubmitted = leads.length > 0 && leads.every(([id]) => reports.some((r) => r.musician_id === id && r.submitted_at))
-  const anyAsked = leads.some(([id]) => reports.some((r) => r.musician_id === id))
-  // Reports from anyone who is not the current lead (asked before a lead was
-  // picked): still shown, never lost.
-  const otherReports = reports.filter((r) => r.musician_id !== leadId)
-
+  const when = (iso: string) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: timezone })
   async function sendNow() {
     setSending(true)
     try {
-      const res = await fetch(`/api/projects/${projectId}/gig-report`, { method: 'POST' })
+      const res = await fetch(`/api/projects/${projectId}/gig-report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playedMusicianIds: selected }) })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Could not send the request')
-      const outcomes = (data.outcomes || []) as { name: string; outcome: string }[]
-      const sent = outcomes.filter((o) => o.outcome === 'sent').map((o) => o.name)
-      const held = outcomes.filter((o) => o.outcome === 'suppressed').map((o) => o.name)
-      const noEmail = outcomes.filter((o) => o.outcome === 'no-email').map((o) => o.name)
-      if (sent.length) toast.success(`Report request sent to ${sent.join(', ')}`)
-      if (held.length) toast.warning(`Not sent (email safe mode): ${held.join(', ')}`)
-      if (noEmail.length) toast.error(`No email on file for ${noEmail.join(', ')}`)
-      if (!sent.length && !held.length && !noEmail.length) toast.info('Everyone has already sent their report.')
+      if (!res.ok) throw new Error(data.error || 'Could not request reports')
+      const outcomes = (data.outcomes || []) as { outcome: string }[]
+      if (outcomes.some(o => o.outcome === 'failed' || o.outcome === 'no-email')) toast.error('Some requests could not be sent. Check email addresses and retry.')
+      else if (outcomes.some(o => o.outcome === 'suppressed')) toast.warning('Played roster saved. Requests held by email safe mode.')
+      else toast.success('Played roster saved. Eligible report requests processed.')
       reloadPage()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not send the request')
-    } finally {
-      setSending(false)
-    }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Could not request reports') }
+    finally { setSending(false) }
   }
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <h4 className="text-sm font-semibold flex items-center gap-2">
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z" />
-          </svg>
-          Gig report
-        </h4>
-        {leads.length > 0 && !allSubmitted && (
-          <Button size="sm" variant="outline" onClick={sendNow} disabled={sending}>
-            {sending ? 'Sending…' : anyAsked ? 'Send again' : 'Send request now'}
-          </Button>
-        )}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <label htmlFor={`gig-lead-${projectId}`} className="text-muted-foreground">Gig lead</label>
-        <select
-          id={`gig-lead-${projectId}`}
-          className="rounded-md border bg-background px-2 py-1 text-sm"
-          value={chosenIsConfirmed ? chosenLeadId! : ''}
-          disabled={savingLead}
-          onChange={(e) => void setLead(e.target.value || null)}
-        >
-          <option value="">
-            {source === 'violin-1' ? `${leadFallbackSkill?.label}: ${name(leads[0]?.[1])}` : 'Pick the gig lead…'}
-          </option>
-          {confirmed.map(([id, m]) => (
-            <option key={id} value={id}>
-              {name(m)}
-            </option>
-          ))}
-        </select>
-        {source === 'violin-1' && (
-          <span className="text-xs text-muted-foreground">{leadFallbackSkill?.label} leads by default. Pick someone else to override.</span>
-        )}
-      </div>
-
-      {source === 'needs-pick' && (
-        <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-          {`${noLeadReason(leadFallbackSkill)}, so pick who is leading this gig. Nobody is asked for a report until you do.`}
-        </p>
-      )}
-
-      {leads.length > 0 && (
-        <ul className="space-y-3">
-          {leads.map(([musicianId, musician]) => (
-            <ReportItem key={musicianId} label={name(musician)} report={reports.find((r) => r.musician_id === musicianId)} when={when} />
-          ))}
-        </ul>
-      )}
-
-      <GigReportPhotoGallery projectId={projectId} />
-
-      {otherReports.length > 0 && (
-        <ul className="space-y-3">
-          {otherReports.map((r) => (
-            <ReportItem key={r.id} label={`${name(r.musician)} (asked earlier)`} report={r} when={when} />
-          ))}
-        </ul>
-      )}
-    </div>
-  )
+  return <div className="space-y-3">
+    <h4 className="text-sm font-semibold">Gig reports</h4>
+    <label className="flex flex-wrap gap-2 text-sm">Gig lead (separate from survey recipients)
+      <select value={chosenLeadId || ''} disabled={savingLead} onChange={e => setLead(e.target.value || null)} className="rounded border bg-background p-1">
+        <option value="">Automatic lead selection</option>
+        {confirmed.map(([id, musician]) => <option key={id} value={id}>{name(musician)}</option>)}
+      </select>
+    </label>
+    <p className="text-sm">After the gig, select everyone who actually played, including substitutes. Booking confirmation alone does not confirm attendance. Reconcile substitutions on the roster first.</p>
+    <fieldset disabled={sending} className="space-y-2">
+      <legend className="text-sm font-medium">Played roster</legend>
+      {confirmed.map(([id, musician]) => <label key={id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selected.includes(id)} onChange={e => setSelected(previous => e.target.checked ? [...previous, id] : previous.filter(value => value !== id))} />{name(musician)}</label>)}
+      <Button size="sm" variant="outline" onClick={sendNow} disabled={sending}>{sending ? 'Processing…' : 'Confirm played roster and request reports'}</Button>
+    </fieldset>
+    <p className="text-xs text-muted-foreground">One attributed report per musician. Submitted reports are never requested again; repeat requests within one minute are ignored. No automatic requests until this roster is confirmed.</p>
+    <ul className="space-y-3">{reports.map(report => <ReportItem key={report.id} label={name(report.musician)} report={report} when={when} />)}</ul>
+    <GigReportPhotoGallery projectId={projectId} />
+  </div>
 }

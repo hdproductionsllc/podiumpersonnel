@@ -1229,6 +1229,7 @@ export function ProjectsClient({
                                 <GigReportPanel
                                   projectId={project.id}
                                   positions={project.project_positions}
+                                  playedIds={project.gig_report_musician_ids ?? null}
                                       chosenLeadId={project.gig_lead_musician_id ?? null}
                                   reports={gigReports.filter((r) => r.project_id === project.id)}
                                   timezone={timezone}
