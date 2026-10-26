@@ -45,7 +45,7 @@ CI (`.github/workflows/ci.yml`) runs typecheck, lint and tests on every PR and e
 src/app/(auth)/            login, signup, onboarding, password reset
 src/app/dashboard/         the org admin app (projects, musicians, library, books, payments, ...)
 src/app/gig/[token]/       the musician's one-tap offer page (no login)
-src/app/musician/          the musician portal
+src/app/gig/[token]/       musician gig links (no portal login)
 src/app/confirm-*/[token]  music + gig-details confirmations from email links
 src/app/api/               ~80 route handlers; crons under api/cron
 src/lib/offers/            offer lifecycle (respond.ts is the atomic seat claim)

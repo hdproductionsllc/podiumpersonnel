@@ -12,9 +12,10 @@ export const metadata: Metadata = {
 
 interface GigReportPageProps {
   params: Promise<{ token: string }>
+  searchParams: Promise<{ error?: string }>
 }
 
-export default async function GigReportPage({ params }: GigReportPageProps) {
+export default async function GigReportPage({ params, searchParams }: GigReportPageProps) {
   const { token } = await params
   const report = await resolveGigReportToken(token)
   if (!report) notFound()
@@ -42,6 +43,7 @@ export default async function GigReportPage({ params }: GigReportPageProps) {
 
   return (
     <GigReportClient
+      submitError={(await searchParams).error === '1'}
       token={token}
       leadFirstName={report.leadFirstName}
       organizationName={report.organizationName}

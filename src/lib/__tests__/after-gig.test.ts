@@ -220,9 +220,30 @@ describe('asking the lead for a gig report', () => {
     state.db = new MockSupabaseDb({ projects: [{ id: 'proj-1' }], gig_reports: [] })
   })
 
-  const withLead = (id: string | null) => project({ gig_lead_musician_id: id })
+  const withLead = (id: string | null) => project({ gig_lead_musician_id: id, gig_report_musician_ids: id ? [id] : null })
 
-  it('asks ONLY the one gig lead, with a 64-hex token link and no pay information', async () => {
+  it('sends each reviewed performer their own link once, including a seated substitute', async () => {
+    const reviewed = project({ gig_report_musician_ids: ['m-lead', 'm-play', 'm-custom', 'm-offered'], project_positions: [...POSITIONS, POSITIONS[1]] })
+    const outcomes = await requestGigReports(state.db, reviewed)
+    expect(outcomes.map(o => o.musicianId)).toEqual(['m-lead', 'm-play', 'm-custom'])
+    expect(new Set(vi.mocked(sendGigReportRequestEmail).mock.calls.map(c => c[0].reportUrl)).size).toBe(3)
+    await requestGigReports(state.db, reviewed)
+    expect(sendGigReportRequestEmail).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not double-dispatch overlapping resend requests', async () => {
+    state.db.tables.gig_reports.push({ id: 'report-old', project_id: 'proj-1', musician_id: 'm-lead', token: 'a'.repeat(64), requested_at: '2026-01-01T00:00:00Z', submitted_at: null })
+    await Promise.all([requestGigReports(state.db, withLead('m-lead'), { force: true }), requestGigReports(state.db, withLead('m-lead'), { force: true })])
+    expect(sendGigReportRequestEmail).toHaveBeenCalledTimes(1)
+  })
+
+  it('never requests before the gig ends or after cancellation', async () => {
+    expect(await requestGigReports(state.db, { ...withLead('m-lead'), status: 'cancelled' })).toEqual([])
+    expect(await requestGigReports(state.db, { ...withLead('m-lead'), services: [{ ...SERVICES[0], end_time: '2099-01-01T00:00:00Z' }] })).toEqual([])
+    expect(sendGigReportRequestEmail).not.toHaveBeenCalled()
+  })
+
+  it('asks the explicitly reviewed performer, with an attributed token and no pay information', async () => {
     const outcomes = await requestGigReports(state.db, withLead('m-lead'))
     expect(outcomes.map((o) => [o.musicianId, o.outcome])).toEqual([['m-lead', 'sent']])
     const calls = vi.mocked(sendGigReportRequestEmail).mock.calls.map((c) => c[0])
@@ -232,9 +253,9 @@ describe('asking the lead for a gig report', () => {
     expect(state.db.tables.gig_reports).toHaveLength(1)
   })
 
-  it('with nobody picked, asks the Violin 1 (and only them)', async () => {
+  it('without a reviewed played roster, asks nobody', async () => {
     const outcomes = await requestGigReports(state.db, withLead(null))
-    expect(outcomes.map((o) => [o.musicianId, o.outcome])).toEqual([['m-lead', 'sent']])
+    expect(outcomes).toEqual([])
   })
 
   it('asks NOBODY when there is no Violin 1 and none was picked, even if people are marked Leader', async () => {
@@ -257,6 +278,7 @@ describe('asking the lead for a gig report', () => {
   it('"Send again" re-sends the same link, but never after the lead has reported', async () => {
     await requestGigReports(state.db, withLead('m-lead'))
     const token = state.db.tables.gig_reports[0].token
+    state.db.tables.gig_reports[0].requested_at = '2026-01-01T00:00:00Z'
     vi.clearAllMocks()
     expect((await requestGigReports(state.db, withLead('m-lead'), { force: true }))[0].outcome).toBe('sent')
     expect(vi.mocked(sendGigReportRequestEmail).mock.calls[0][0].reportUrl).toContain(token)
@@ -272,7 +294,7 @@ describe('asking the lead for a gig report', () => {
   })
 
   it('reports a lead with no email instead of silently skipping them', async () => {
-    const noEmail = project({ project_positions: [position('p1', { musician: { ...LEAD, email: null }, instrument: { name: 'Violin 1' }, chair_number: 1 })] })
+    const noEmail = project({ gig_report_musician_ids: ['m-lead'], project_positions: [position('p1', { musician: { ...LEAD, email: null }, instrument: { name: 'Violin 1' }, chair_number: 1 })] })
     const outcomes = await requestGigReports(state.db, noEmail)
     expect(outcomes).toEqual([{ musicianId: 'm-lead', name: 'Lena Lead', outcome: 'no-email' }])
   })

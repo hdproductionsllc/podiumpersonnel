@@ -1,20 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * After the gig: the two sends, each safe to call any number of times.
- *
- *   sendPaySummaryOnce   claims projects.pay_summary_sent_at BEFORE sending, so
- *                        two overlapping runs can never both send; releases the
- *                        claim if the send throws, so the next run retries.
- *   requestGigReports    asks the gig's ONE lead (gigLead: the admin's pick,
- *                        else the confirmed Violin 1). One
- *                        gig_reports row per (project, lead); a lead who already
- *                        has a row is not asked again unless `force` (the admin's
- *                        "Send again" button). No lead = nobody is asked.
- *
- * Recipients: the pay summary and the submitted-report email go ONLY to
- * getOrgAdminEmails (organization_members owner/admin). Musicians' addresses
- * are read here for exactly one thing: the report REQUEST to the lead, which
- * carries no pay information.
+ * Pay summaries go only to admins. Survey requests go once per explicitly
+ * reviewed performer, never inferred from invitations or the selected lead.
+ * Unique project/musician report rows protect initial sends; conditional
+ * requested_at claims and a one-minute cooldown protect overlapping resends.
  */
 
 import { randomBytes } from 'crypto'
@@ -23,7 +12,7 @@ import { sendGigReportRequestEmail, sendPaySummaryEmail } from '@/lib/email/send
 import { notify } from '@/lib/notify'
 import { DEFAULT_TIMEZONE, getAppUrl } from '@/lib/utils'
 import type { ScopeSelect } from '@/lib/staffing/scope'
-import { buildPaySummary, gigEndedAt, gigLead } from './rules'
+import { buildPaySummary, gigEndedAt, gigLead, reportRecipients } from './rules'
 import { resolveVertical } from '@/lib/verticals/registry'
 
 type Supabase = any
@@ -41,6 +30,7 @@ export const afterGigProjectSelect = (scope: ScopeSelect | '' = '') => `
   organization_id,
   pay_summary_sent_at,
   gig_lead_musician_id,
+  gig_report_musician_ids,
   organization:organizations(id, name, timezone, vertical, email_logo_url, email_brand_color, email_footer_text),
   services(id, name, start_time, end_time, base_pay, leader_fee),
   project_positions(
@@ -54,7 +44,7 @@ export const afterGigProjectSelect = (scope: ScopeSelect | '' = '') => `
   )
 ` as const
 
-/** The select without the chairs' scope: for readers that only need the gig's lead. */
+/** The select without chair scope, for report recipients. */
 export const AFTER_GIG_PROJECT_SELECT = afterGigProjectSelect()
 
 /**
@@ -143,8 +133,8 @@ export async function sendPaySummaryOnce(supabase: Supabase, project: any): Prom
             lines,
             grandTotal,
             paymentsUrl: `${getAppUrl()}/dashboard/payments?project=${project.id}`,
-            // No lead worked out: say so, so a missing gig report is never a silent gap.
-            needsGigLead: leadOfGig(project).lead === null,
+            // Remind admins to review attendance before requesting reports.
+            needsGigLead: project.gig_report_musician_ids == null,
             leadFallbackLabel: resolveVertical(project.organization?.vertical).leadFallbackSkill?.label ?? null,
             projectUrl: `${getAppUrl()}/dashboard/projects?expand=${project.id}`,
             branding: branding(org),
@@ -175,8 +165,10 @@ export async function requestGigReports(
   project: any,
   { force = false }: { force?: boolean } = {},
 ): Promise<ReportRequestOutcome[]> {
-  const { lead } = leadOfGig(project)
-  const leads = lead ? [lead] : []
+  if (project.status === 'cancelled') return []
+  const ended = gigEndedAt(project.services)
+  if (!ended || ended.getTime() > Date.now()) return []
+  const leads = reportRecipients(project.project_positions, project.gig_report_musician_ids)
   const outcomes: ReportRequestOutcome[] = []
   const org = project.organization
 
@@ -188,7 +180,7 @@ export async function requestGigReports(
 
     const { data: existing } = await supabase
       .from('gig_reports')
-      .select('id, token, submitted_at')
+      .select('id, token, submitted_at, requested_at')
       .eq('project_id', project.id)
       .eq('musician_id', lead.musicianId)
       .maybeSingle()
@@ -204,7 +196,17 @@ export async function requestGigReports(
     if (existing) {
       reportId = existing.id
       token = existing.token
-      await supabase.from('gig_reports').update({ requested_at: new Date().toISOString() }).eq('id', reportId)
+      if (existing.requested_at && Date.now() - Date.parse(existing.requested_at) < 60_000) {
+        outcomes.push({ musicianId: lead.musicianId, name: lead.name, outcome: 'already-asked' })
+        continue
+      }
+      const { data: claimed, error: claimError } = await supabase.from('gig_reports')
+        .update({ requested_at: new Date().toISOString() }).eq('id', reportId)
+        .eq('requested_at', existing.requested_at).is('submitted_at', null).select('id')
+      if (claimError || !claimed?.length) {
+        outcomes.push({ musicianId: lead.musicianId, name: lead.name, outcome: claimError ? 'failed' : 'already-asked' })
+        continue
+      }
     } else {
       token = randomBytes(32).toString('hex')
       const { data: inserted, error: insertError } = await supabase

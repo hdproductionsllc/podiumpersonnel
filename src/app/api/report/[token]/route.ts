@@ -30,9 +30,17 @@ const NOT_FOUND = () => NextResponse.json({ error: 'Not found' }, { status: 404 
 
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
+  const isForm = ['application/x-www-form-urlencoded', 'multipart/form-data'].some(type => (request.headers.get('content-type') || '').toLowerCase().startsWith(type))
+  const reply = (data: Record<string, unknown>, status = 200) => {
+    if (!isForm) return NextResponse.json(data, { status })
+    const page = new URL('/report/' + encodeURIComponent(token), request.url)
+    if (status >= 400 && !data.alreadySubmitted) page.searchParams.set('error', '1')
+    return NextResponse.redirect(page, 303)
+  }
   // Bounds a stuck retry loop on one link; the token is the real access control.
   const limit = rateLimit(`gig-report:${token}`, 10, 10 * 60 * 1000)
   if (!limit.allowed) {
+    if (isForm) return reply({ error: 'Too many attempts.' }, 429)
     return NextResponse.json(
       { error: 'Too many attempts. Please wait a few minutes.' },
       { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } },
@@ -41,9 +49,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   const report = await resolveGigReportToken(token)
   if (!report) return NOT_FOUND()
 
-  const parsed = reportSchema.safeParse(await request.json().catch(() => null))
+  let body: unknown
+  if (isForm) {
+    const form = await request.formData().catch(() => null)
+    body = form ? Object.fromEntries(form.entries()) : null
+    if (body && typeof body === 'object') {
+      const values = body as Record<string, unknown>
+      values.allOnTime = values.allOnTime === 'true' ? true : values.allOnTime === 'false' ? false : undefined
+      if (!values.clientFeedback) delete values.clientFeedback
+    }
+  } else body = await request.json().catch(() => null)
+  const parsed = reportSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Please answer the first two questions.' }, { status: 400 })
+    return reply({ error: 'Please answer overall and punctuality, and choose valid gig details.' }, 400)
   }
   const a = parsed.data
   // How it went with the client is only meaningful after "yes, I dealt with them".
@@ -76,10 +94,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
   if (error) {
     console.error(`Gig report ${report.reportId}: save failed:`, error)
-    return NextResponse.json({ error: 'Could not save your report. Please try again.' }, { status: 500 })
+    return reply({ error: 'Could not save your report. Please try again.' }, 500)
   }
   if (!saved || saved.length === 0) {
-    return NextResponse.json({ error: 'Already sent', alreadySubmitted: true }, { status: 409 })
+    return reply({ error: 'Already sent', alreadySubmitted: true }, 409)
   }
 
   // Tell the owners and admins. Best-effort: the report is saved and shows on
@@ -143,5 +161,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     console.error(`Gig report ${report.reportId}: admin email failed:`, err)
   }
 
-  return NextResponse.json({ success: true })
+  return reply({ success: true })
 }

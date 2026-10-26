@@ -10,7 +10,7 @@ import { shiftDate } from '@/lib/projects/archive'
 /**
  * After the gig (every 15 minutes, see vercel.json): for each project whose
  * last service ended between 30 minutes and 48 hours ago, email the owners and
- * admins what to pay each person, and ask the lead musician(s) for a gig
+ * admins what to pay each person, and ask explicitly reviewed performers for a gig
  * report. Both sends are idempotent (see lib/after-gig/run.ts), so a project is
  * picked up on every run in its window but acted on once.
  */

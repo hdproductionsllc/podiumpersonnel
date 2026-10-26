@@ -14,17 +14,18 @@ interface GigReportClientProps {
   projectName: string
   gigDate: string
   alreadySubmitted: boolean
+  submitError?: boolean
   brandColor: string | null
 }
 
 export const REPORT_TEXT_LIMIT = 4000
 
-export function GigReportClient({ token, leadFirstName, organizationName, projectName, gigDate, alreadySubmitted, brandColor }: GigReportClientProps) {
+export function GigReportClient({ token, leadFirstName, organizationName, projectName, gigDate, alreadySubmitted, brandColor, submitError }: GigReportClientProps) {
   const [submitted, setSubmitted] = useState(alreadySubmitted)
   const [draft, setDraft] = useState<SurveyDraft>({ ...EMPTY_DRAFT })
   const [ready, setReady] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(submitError ? 'Could not save your report. Please check your answers and try again.' : null)
   const storageKey = `gig-report-draft:${token}`
 
   useEffect(() => {
@@ -75,7 +76,7 @@ export function GigReportClient({ token, leadFirstName, organizationName, projec
   const notes = (key: 'lateNotes' | 'clientFollowUp' | 'otherNotes', label: string) => (
     <div className="space-y-1.5">
       <label htmlFor={key} className="text-sm font-medium text-slate-900">{label}</label>
-      <Textarea id={key} value={draft[key]} maxLength={REPORT_TEXT_LIMIT} onChange={(e) => update(key, e.target.value)} rows={2} className="bg-white" />
+      <Textarea id={key} name={key} value={draft[key]} maxLength={REPORT_TEXT_LIMIT} onChange={(e) => update(key, e.target.value)} rows={2} className="bg-white" />
     </div>
   )
 
@@ -93,48 +94,50 @@ export function GigReportClient({ token, leadFirstName, organizationName, projec
               <p className="text-sm text-slate-600">You can still add optional photos below.</p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form method="post" action={`/api/report/${token}`} onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <h2 className="text-lg font-semibold">Hi {leadFirstName || 'there'}, how did it go?</h2>
                 <p className="text-sm text-slate-600 mt-1">{projectName}{gigDate ? ` · ${gigDate}` : ''}</p>
                 <p className="text-xs text-slate-500 mt-2">Three quick answers. All notes and client feedback are optional. Only {organizationName}&apos;s owners and admins see this.</p>
               </div>
-              <fieldset disabled={loading || !ready} className="space-y-5">
+              <fieldset disabled={loading} className="space-y-5">
                 <fieldset className="space-y-2">
                   <legend className="text-sm font-medium">How did the gig go overall?</legend>
                   <div className="grid grid-cols-3 gap-2">
                     {([['great', 'Good'], ['good', 'Minor issues'], ['issues', 'Problem']] as const).map(([value, label]) => (
-                      <button type="button" key={value} className={choice(draft.overall === value)} aria-pressed={draft.overall === value} onClick={() => update('overall', value)}>{label}</button>
+                      <label key={value} className={choice(draft.overall === value)}><input type="radio" name="overall" value={value} required checked={draft.overall === value} onChange={() => update('overall', value)} className="mr-2" />{label}</label>
                     ))}
                   </div>
                 </fieldset>
                 <fieldset className="space-y-2">
                   <legend className="text-sm font-medium">Was everyone on time?</legend>
                   <div className="grid grid-cols-2 gap-2">
-                    {[true, false].map((value) => <button type="button" key={String(value)} className={choice(draft.allOnTime === value)} aria-pressed={draft.allOnTime === value} onClick={() => update('allOnTime', value)}>{value ? 'Yes' : 'No'}</button>)}
+                    {[true, false].map((value) => <label key={String(value)} className={choice(draft.allOnTime === value)}><input type="radio" name="allOnTime" value={String(value)} required checked={draft.allOnTime === value} onChange={() => update('allOnTime', value)} className="mr-2" />{value ? 'Yes' : 'No'}</label>)}
                   </div>
-                  {draft.allOnTime === false && notes('lateNotes', 'Who was late? (optional)')}
+                  {notes('lateNotes', 'Punctuality note (optional)')}
                 </fieldset>
                 <fieldset className="space-y-2">
                   <legend className="text-sm font-medium">Did the gig match the details you were sent?</legend>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {(Object.keys(DETAILS_LABELS) as Array<NonNullable<SurveyDraft['detailsAccuracy']>>).map((value) => <button type="button" key={value} className={choice(draft.detailsAccuracy === value)} aria-pressed={draft.detailsAccuracy === value} onClick={() => update('detailsAccuracy', value)}>{DETAILS_LABELS[value]}</button>)}
+                    {(Object.keys(DETAILS_LABELS) as Array<NonNullable<SurveyDraft['detailsAccuracy']>>).map((value) => <label key={value} className={choice(draft.detailsAccuracy === value)}><input type="radio" name="detailsAccuracy" value={value} required checked={draft.detailsAccuracy === value} onChange={() => update('detailsAccuracy', value)} className="mr-2" />{DETAILS_LABELS[value]}</label>)}
                   </div>
                   <p className="text-xs text-slate-500">No explanation needed. Add a note below if useful.</p>
                 </fieldset>
                 <fieldset className="space-y-2">
                   <legend className="text-sm font-medium">Any client feedback? (optional)</legend>
                   <div className="grid grid-cols-3 gap-2">
-                    {(Object.keys(FEEDBACK_LABELS) as Array<NonNullable<SurveyDraft['clientFeedback']>>).map((value) => <button type="button" key={value} className={choice(draft.clientFeedback === value)} aria-pressed={draft.clientFeedback === value} onClick={() => update('clientFeedback', draft.clientFeedback === value ? null : value)}>{FEEDBACK_LABELS[value]}</button>)}
+                    {(Object.keys(FEEDBACK_LABELS) as Array<NonNullable<SurveyDraft['clientFeedback']>>).map((value) => <label key={value} className={choice(draft.clientFeedback === value)}><input type="radio" name="clientFeedback" value={value} checked={draft.clientFeedback === value} onChange={() => update('clientFeedback', value)} className="mr-2" />{FEEDBACK_LABELS[value]}</label>)}
                   </div>
+                  <label className="text-sm"><input type="radio" name="clientFeedback" value="" checked={draft.clientFeedback === null} onChange={() => update('clientFeedback', null)} /> Skip client feedback</label>
                   {notes('clientFollowUp', 'Client note (optional)')}
                 </fieldset>
                 {notes('otherNotes', 'Anything else? (optional)')}
               </fieldset>
               {error && <div role="alert" className="text-sm text-red-600"><p>{error}</p><p className="mt-1">Having trouble? <SupportLink subject="Help sending a gig report" /></p></div>}
-              <Button type="submit" className="w-full" size="lg" disabled={loading || !ready}>{loading ? 'Sending…' : 'Send report'}</Button>
+              <Button type="submit" className="w-full" size="lg" disabled={loading}>{loading ? 'Sending…' : 'Send report'}</Button>
             </form>
           )}
+          <noscript><p className="text-sm">You can send this form without JavaScript. Optional photo uploads need JavaScript enabled in your browser.</p></noscript>
           <GigReportPhotos token={token} />
         </div>
       </div>

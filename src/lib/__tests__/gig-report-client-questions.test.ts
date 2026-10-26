@@ -69,6 +69,35 @@ async function submit(body: Record<string, unknown>) {
 
 const BASE = { overall: 'great', allOnTime: true }
 
+describe('native form submission without JavaScript', () => {
+  beforeEach(() => { state.saved = true; state.saveError = false; state.update = null; vi.clearAllMocks() })
+  const native = (fields: Record<string, string>) => {
+    const token = (++tokenSeq).toString(16).padStart(64, 'a')
+    return POST(new Request(`http://localhost/api/report/${token}`, { method: 'POST', body: new URLSearchParams(fields) }), { params: Promise.resolve({ token }) })
+  }
+  it('persists native choices and optional blank comments, then redirects with 303', async () => {
+    const res = await native({ overall: 'good', allOnTime: 'false', detailsAccuracy: 'minor', clientFeedback: '', otherNotes: '' })
+    expect(res.status).toBe(303)
+    expect(res.headers.get('location')).toMatch(/\/report\/[a-f0-9]+$/)
+    expect(state.update).toMatchObject({ overall: 'good', all_on_time: false, details_accuracy: 'minor', client_feedback: null, other_notes: null })
+  })
+  it('redirects invalid choices and save errors back to a visible error', async () => {
+    expect((await native({ overall: 'bad' })).headers.get('location')).toContain('error=1')
+    state.saveError = true
+    expect((await native({ overall: 'great', allOnTime: 'true', detailsAccuracy: 'matched' })).headers.get('location')).toContain('error=1')
+    state.saveError = false
+  })
+  it('a repeated form redirects to the saved report without dispatching another email', async () => {
+    state.saved = false
+    const res = await native({ overall: 'great', allOnTime: 'true', detailsAccuracy: 'matched' })
+    expect(res.status).toBe(303)
+    expect(res.headers.get('location')).not.toContain('error=1')
+    const { sendGigReportSubmittedEmail } = await import('@/lib/email/send')
+    expect(sendGigReportSubmittedEmail).not.toHaveBeenCalled()
+    state.saved = true
+  })
+})
+
 describe('the report saves the client answers', () => {
   beforeEach(() => {
     state.update = null

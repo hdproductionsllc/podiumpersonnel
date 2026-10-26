@@ -3,8 +3,7 @@
  * tested directly.
  *
  * Thirty minutes after a project's LAST service ends, the org's owners and
- * admins get "here is what to pay each person", and the gig's ONE lead is
- * asked for a short gig report.
+ * admins get a pay summary. Survey recipients require an explicit played roster.
  */
 
 import { acceptedOfferPay, computeGigPay, type OfferForPay } from '@/lib/payments/compute'
@@ -84,6 +83,17 @@ export interface GigLead {
   email: string | null
 }
 
+/** Only explicitly reviewed performers who remain on the confirmed roster.
+ * Sub acceptance replaces the seated musician; stale/released IDs are excluded.
+ * Dedupe by musician ID, not email: each response keeps its own attribution.
+ */
+export function reportRecipients(positions: PositionForAfterGig[] | null | undefined, playedIds: string[] | null | undefined): GigLead[] {
+  const played = new Set(playedIds || [])
+  return Array.from(new Map(confirmed(positions)
+    .filter(p => p.musician!.id === p.musician_id && played.has(p.musician_id!))
+    .map(p => [p.musician_id!, { musicianId: p.musician_id!, name: fullName(p.musician!), firstName: p.musician!.first_name || '', email: p.musician!.email }])).values())
+}
+
 /**
  * Who leads THIS gig. There is exactly one (David, 2026-09-27).
  *
@@ -94,7 +104,7 @@ export interface GigLead {
  *               leader of the gig is usually violin 1")
  *   'needs-pick' nobody named and nobody confirmed in that skill, or the
  *               vertical has none (production_crew): an admin must pick,
- *               and nobody is asked for a report until they do
+ *               this does not determine survey recipients
  *
  * musicians.is_leader is deliberately NOT used: it means someone CAN lead,
  * never that they lead this gig.

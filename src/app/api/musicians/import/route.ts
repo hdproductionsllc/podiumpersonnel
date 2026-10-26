@@ -1,3 +1,4 @@
+import { boundedImportForm, MAX_IMPORT_BYTES } from '@/lib/import/bounded-body'
 import * as XLSX from 'xlsx'
 import {
   formatPhoneNumber,
@@ -70,13 +71,16 @@ export async function POST(request: Request) {
     return apiError('Bulk import requires a Pro subscription', 403)
   }
 
-  const formData = await request.formData()
+  let formData: FormData
+  try { formData = await boundedImportForm(request) } catch { return apiError('Could not read import. Use a file of 5 MB or smaller.', 413) }
   const file = formData.get('file') as File | null
   const tagInput = formData.get('tag') as string | null
   const tags = tagInput ? [tagInput.trim()] : []
-  if (!file) {
+  if (!(file instanceof File)) {
     return apiError('No file provided')
   }
+
+  if (file.size > MAX_IMPORT_BYTES) return apiError('Import must be 5 MB or smaller', 413)
 
   const validExtensions = ['.xlsx', '.xls', '.csv', '.vcf', '.vcard']
   const fileName = file.name.toLowerCase()
