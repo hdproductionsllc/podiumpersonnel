@@ -22,6 +22,8 @@ const EMAIL_TYPE_LABELS: Record<string, string> = {
   offer_expired: 'Expired',
   admin_offer_sent: 'Admin Notification',
   gig_details: 'Gig Details',
+  gig_followup: 'Gig Follow-up',
+  gig_details_update: 'Updated Details',
   gig_details_confirmed: 'Details Confirmed',
   music_confirmed: 'Music Confirmed',
   pre_gig_notification: 'Pre-Gig Reminder',

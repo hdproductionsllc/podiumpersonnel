@@ -37,6 +37,8 @@ export type { Channel, ChannelProvider, EmailPayload, NotifyContent } from './ty
  * by safe mode), and a copy that fails never affects the original.
  */
 export interface NotifyEvent<R> {
+  copyAttachments?: { filename: string; content: string; contentType: string }[]
+  copyIdempotencyKey?: string
   /** What happened, as email_logs.email_type names it: 'contract_offer', 'offer_expired', ... */
   type: string
   /**
@@ -86,13 +88,13 @@ export async function notify<R>(event: NotifyEvent<R>, content: NotifyContent<R>
     for (const row of sent) await logEmail(row)
   }
   if (copy) {
-    for (const row of sent) await sendCopy(event.type, row, row.body || delivered?.emailHtml || null)
+    for (const row of sent) await sendCopy(event.type, row, row.body || delivered?.emailHtml || null, event.copyAttachments, event.copyIdempotencyKey)
   }
   return result
 }
 
 /** Send the organization's owners and admins a marked copy of one musician email. */
-async function sendCopy(type: string, row: LogEmailParams, html: string | null): Promise<void> {
+async function sendCopy(type: string, row: LogEmailParams, html: string | null, attachments?: NotifyEvent<unknown>['copyAttachments'], idempotencyKey?: string): Promise<void> {
   try {
     if (!row.organizationId || !html) {
       console.warn(`notify: no copy of the ${type} email to ${row.recipientEmail}: no organization or no body recorded`)
@@ -119,7 +121,7 @@ async function sendCopy(type: string, row: LogEmailParams, html: string | null):
           metadata: { allRecipients: admins, copyOf: type, originalRecipient: row.recipientEmail },
         }),
       },
-      { email: () => sendEmail({ to: admins, subject, html: copyHtml(html, details) }) }
+      { email: () => sendEmail({ to: admins, subject, html: copyHtml(html, details), ...(attachments?.length ? { attachments } : {}), ...(idempotencyKey ? { idempotencyKey } : {}) }) }
     )
   } catch (error) {
     console.warn(`notify: the copy of the ${type} email to ${row.recipientEmail} could not be sent:`, error)

@@ -1000,6 +1000,10 @@ interface SendEmailParams {
   subject: string
   html: string
   text?: string
+  attachments?: { filename: string; content: string; contentType: string }[]
+  idempotencyKey?: string
+  fromName?: string
+  replyTo?: string
 }
 
 export async function sendEmail(params: SendEmailParams) {
@@ -1016,17 +1020,18 @@ export async function sendEmail(params: SendEmailParams) {
 
   await awaitResendSlot()
   const { data, error } = await resend.emails.send({
-    from: buildFromAddress(),
+    from: buildFromAddress(params.fromName),
     to: allowed,
     subject,
     html,
     text: text || html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
-    replyTo: EMAIL_REPLY_TO,
+    replyTo: params.replyTo || EMAIL_REPLY_TO,
+    ...(params.attachments?.length ? { attachments: params.attachments } : {}),
     headers: {
       'List-Unsubscribe': `<mailto:${EMAIL_FROM_ADDRESS}?subject=unsubscribe>`,
       'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
     },
-  })
+  }, ...(params.idempotencyKey ? [{ idempotencyKey: params.idempotencyKey }] : []))
 
   if (error) {
     console.error('Failed to send email:', error)

@@ -19,6 +19,7 @@ interface ConfirmDetailsClientProps {
   saveFailed: boolean
   confirmedAt: string | null
   timezone: string
+  detailsNotes?: string | null
 }
 
 export function ConfirmDetailsClient({
@@ -32,6 +33,7 @@ export function ConfirmDetailsClient({
   saveFailed,
   confirmedAt,
   timezone,
+  detailsNotes,
 }: ConfirmDetailsClientProps) {
   // A plain form post, not fetch: the button must work on phones where this
   // page's JavaScript never loads. The server redirects back here, and the
@@ -48,6 +50,7 @@ export function ConfirmDetailsClient({
           </div>
 
           <div className="p-6 space-y-6">
+            {detailsNotes && <div className="rounded-lg border p-4 text-sm whitespace-pre-wrap"><h2 className="font-semibold mb-2">Gig details and updates</h2>{detailsNotes}</div>}
             {alreadyConfirmed ? (
               /* Success State */
               <div className="text-center space-y-4">
