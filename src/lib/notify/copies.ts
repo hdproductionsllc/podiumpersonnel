@@ -30,6 +30,8 @@ export const MUSICIAN_EMAIL_TYPES: ReadonlySet<string> = new Set([
   'sub_request_approved',
   'sub_request_declined',
   'gig_details',
+  'gig_followup',
+  'gig_details_update',
   'gig_details_reminder',
   'gig_report_request',
   'music_available',

@@ -16,6 +16,7 @@ import { useTerms } from '@/components/providers/vertical-provider'
 import { term } from '@/lib/verticals'
 import type { PositionJoined } from './project-positions'
 import { formatVenueFields, type ServiceWithVenue } from '@/lib/venue-helpers'
+import { GigFollowupComposer } from './gig-followup-composer'
 
 interface GigDetailConfirmationStatus {
   id: string
@@ -67,6 +68,7 @@ export function SendGigDetailsDialog({
   const [loadingStatus, setLoadingStatus] = useState(false)
   const [notes, setNotes] = useState('')
   const [showConfirmSend, setShowConfirmSend] = useState(false)
+  const [showFollowup, setShowFollowup] = useState(false)
 
   // Everyone on a confirmed chair is on the roster; only those with an email
   // on file can be sent it, and the rest are named rather than dropped.
@@ -85,6 +87,7 @@ export function SendGigDetailsDialog({
     if (open) {
       checkExistingSends()
       setShowConfirmSend(false)
+      setShowFollowup(false)
     }
   }, [open])
 
@@ -273,11 +276,14 @@ export function SendGigDetailsDialog({
           </DialogTitle>
         </DialogHeader>
 
-        {loadingStatus ? (
+        {showFollowup ? (
+          <GigFollowupComposer key={projectId} projectId={projectId} onClose={() => setShowFollowup(false)} onSent={checkExistingSends} />
+        ) : loadingStatus ? (
           <div className="py-8 text-center text-sm text-muted-foreground">Loading...</div>
         ) : sent ? (
           /* Status View */
           <div className="space-y-4">
+            <Button variant="outline" onClick={() => setShowFollowup(true)}>Send follow-up or updated details</Button>
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">
                 {allConfirmed

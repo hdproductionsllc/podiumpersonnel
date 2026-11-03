@@ -26,6 +26,7 @@ export default async function ConfirmDetailsPage({ params, searchParams }: Confi
       musician:musicians(id, first_name, last_name),
       send:gig_detail_sends(
         id,
+        notes,
         sent_at,
         project:projects(
           id,
@@ -93,6 +94,7 @@ export default async function ConfirmDetailsPage({ params, searchParams }: Confi
       saveFailed={error === '1'}
       confirmedAt={confirmation.confirmed_at}
       timezone={timezone}
+      detailsNotes={send?.notes || null}
     />
   )
 }
