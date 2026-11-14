@@ -1,3 +1,5 @@
+import { GET as getBookManifest } from '@/app/api/intake/[projectId]/book/route'
+import { BOOK_NOTES, getBookBlockers } from '@/lib/intake/book-completeness'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -103,6 +105,21 @@ export async function POST(
 
     if (!storagePath || !fileName) {
       return NextResponse.json({ error: 'storagePath and fileName are required' }, { status: 400 })
+    }
+
+    // Recheck at publication time, not just when a browser cached its approval.
+    // Ordinary manually uploaded project files remain unaffected.
+    if (notes === BOOK_NOTES) {
+      const manifestResponse = await getBookManifest(request, { params: Promise.resolve({ projectId }) })
+      if (!manifestResponse.ok) return manifestResponse
+      const blockers = getBookBlockers(await manifestResponse.json())
+      if (blockers.length) return NextResponse.json({ error: `Books are incomplete. ${blockers.join(' ')}` }, { status: 409 })
+      const { data: intake, error: approvalError } = await supabase.from('intakes')
+        .select('books_approved_at').eq('project_id', projectId)
+        .eq('organization_id', membership.organization_id).maybeSingle()
+      if (approvalError || !intake?.books_approved_at) {
+        return NextResponse.json({ error: 'Approve the complete books before publishing them.' }, { status: 409 })
+      }
     }
 
     // Security: the path must live under this org + project, and be the .pdf we minted.

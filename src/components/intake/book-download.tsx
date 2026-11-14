@@ -20,6 +20,7 @@
  * serverless route.
  */
 
+import { BOOK_NOTES, assertCompleteBooks, getBookBlockers } from '@/lib/intake/book-completeness'
 import { reloadPage } from '@/lib/reload-page'
 import { useEffect, useRef, useState } from 'react'
 import { zipSync, type Zippable } from 'fflate'
@@ -52,6 +53,7 @@ interface ManifestSong {
   role: string | null
   notes: string | null
   specialRequest: boolean
+  noMusic: boolean
   files: Record<string, { url: string; zipName: string }>
   missingParts: string[]
 }
@@ -107,7 +109,7 @@ interface PublishRow {
 
 /** Marker on published book files — how re-publishing recognizes (and
  *  replaces) the previous version for an instrument. Keep stable. */
-const BOOK_NOTES = 'Book from confirmed client selections — playlist first, songs in performance order.'
+
 
 export function BookDownload({
   projectId,
@@ -185,6 +187,7 @@ export function BookDownload({
 
   /** Fetch every unique file url once; return bytes keyed by url. */
   async function fetchFiles(m: Manifest, parts: BookPart[]): Promise<Map<string, Uint8Array>> {
+    assertCompleteBooks(m)
     const urls = new Set<string>()
     if (m.cover) urls.add(m.cover.url)
     for (const song of m.songs) {
@@ -248,11 +251,13 @@ export function BookDownload({
     const sources: MergeSource[] = [
       { name: '00 - Playlist.pdf', bytes: await firstPage(m, bp.label, bytesByUrl) },
     ]
+    assertCompleteBooks(m)
     for (const song of m.songs) {
       const f = song.files[bp.part]
       if (!f) continue
       const bytes = bytesByUrl.get(f.url)
-      if (bytes) sources.push({ name: f.zipName, bytes })
+      if (!bytes) throw new Error(`Missing downloaded music for "${song.title}" (${bp.label}). Rebuild before publishing.`)
+      sources.push({ name: f.zipName, bytes })
     }
     return sources
   }
@@ -407,6 +412,12 @@ export function BookDownload({
 
   /** Record (or revoke) the owner's sign-off that the books are ready to send. */
   async function approveBooks(approved: boolean) {
+    if (approved) {
+      const m = await loadManifest(true)
+      if (!m) return
+      const blockers = getBookBlockers(m)
+      if (blockers.length) { toast.error(blockers.join(' ')); return }
+    }
     setBuilding('approve')
     try {
       const res = await fetch(`/api/intake/${projectId}/approve-books`, {
@@ -476,7 +487,7 @@ export function BookDownload({
     }
     setBuilding('publish')
     try {
-      const activeParts = m.parts.filter((bp) => active.some((r) => r.part === bp.part))
+      const activeParts = partsToBuild(m).filter((bp) => active.some((r) => r.part === bp.part))
       const bytesByUrl = await fetchFiles(m, activeParts)
       const supabase = createClient()
       const client = normalizeForFilename(m.header.client)
@@ -571,6 +582,8 @@ export function BookDownload({
     }
   }
 
+  const blockers = manifest ? getBookBlockers(manifest) : []
+
   return (
     <div className="rounded-md border bg-background p-3 space-y-2">
       <div className="flex items-center gap-2">
@@ -592,6 +605,14 @@ export function BookDownload({
           ? 'Each musician gets a single ready-to-play PDF.'
           : 'Each book is a zip: 00 - Playlist.pdf plus every song as "NN - Title - Artist - part.pdf" — sort by filename to combine by number.'}
       </p>
+
+      {blockers.length > 0 && (
+        <div role="alert" className="rounded border border-destructive p-2 text-sm text-destructive">
+          <p className="font-semibold">Books are incomplete. Building, approval and publication are blocked.</p>
+          <ul className="list-disc pl-5">{blockers.map((message, i) => <li key={i}>{message}</li>)}</ul>
+          <p>Explicit no-music and special-request slots remain on the playlist only. This check does not verify matching arrangement editions.</p>
+        </div>
+      )}
 
       {/* Optional score book. Only offered once the manifest confirms at least
           one song actually has a score — the library does not have them for

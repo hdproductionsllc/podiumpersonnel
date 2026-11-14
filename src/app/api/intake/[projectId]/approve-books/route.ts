@@ -1,3 +1,5 @@
+import { GET as getBookManifest } from '../book/route'
+import { getBookBlockers } from '@/lib/intake/book-completeness'
 /**
  * POST /api/intake/[projectId]/approve-books — the owner's sign-off that the
  * assembled books look good and are ready to send (Book Builder pipeline:
@@ -55,6 +57,13 @@ export async function POST(
   if (!intake) return apiError('This project has no client selections yet.', 404)
   if (body.approved && intake.status !== 'confirmed') {
     return apiError('Confirm the client selections first — approval covers the confirmed list.', 409)
+  }
+
+  if (body.approved) {
+    const manifestResponse = await getBookManifest(request, { params: Promise.resolve({ projectId }) })
+    if (!manifestResponse.ok) return manifestResponse
+    const blockers = getBookBlockers(await manifestResponse.json())
+    if (blockers.length) return apiError(`Books are incomplete. ${blockers.join(' ')}`, 409)
   }
 
   const stamp = body.approved ? new Date().toISOString() : null
